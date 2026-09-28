@@ -12,7 +12,6 @@ on:
       - master
     paths-ignore:
       - "**/*.md"
-      - "**/*.yml"
       - "**/*.jpg"
       - "**/*.png"
       - "**/*.py"
@@ -23,19 +22,11 @@ jobs:
 
     steps:
 
-      # ============================================================
-      # SOURCE REPOSITORY
-      # ============================================================
-
       - name: "'src' Depo Kontrolü"
         uses: actions/checkout@v4
         with:
           path: src
           ref: master
-
-      # ============================================================
-      # BUILDS BRANCH
-      # ============================================================
 
       - name: "'build' Depo Kontrolü"
         uses: actions/checkout@v4
@@ -43,17 +34,9 @@ jobs:
           path: builds
           ref: builds
 
-      # ============================================================
-      # ESKİ CS3 DOSYALARINI TEMİZLE
-      # ============================================================
-
       - name: Eski Derlemeleri Temizle
         run: |
           rm -f "$GITHUB_WORKSPACE"/builds/*.cs3
-
-      # ============================================================
-      # JAVA 17
-      # ============================================================
 
       - name: JDK 17 Ayarla
         uses: actions/setup-java@v4
@@ -61,44 +44,45 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      # ============================================================
-      # ANDROID SDK
-      # ============================================================
-
       - name: Android SDK Ayarla
         uses: android-actions/setup-android@v3
         with:
           packages: "platforms;android-35 build-tools;35.0.0 platform-tools"
 
-      # ============================================================
-      # GRADLE CACHE TEMİZLE
-      # ============================================================
-
-      - name: Bozuk Gradle Önbelleğini Temizle
+      - name: Gradle Önbelleğini Temizle
         run: |
           rm -rf ~/.gradle/caches/modules-2/files-2.1/com.github.recloudstream
+          rm -rf ~/.gradle/caches/modules-2/files-2.1/com.github.Blatzar
 
-      # ============================================================
-      # EKLENTİLERİ DERLE
-      # ============================================================
+      - name: CloudStream Gradle Eklentisini Kontrol Et
+        run: |
+          echo "CloudStream Gradle plugin:"
+          echo "com.github.recloudstream:gradle:81b1d42"
 
       - name: Eklentileri Derle
+        working-directory: ${{ github.workspace }}/src
         run: |
-          cd "$GITHUB_WORKSPACE/src"
-
           chmod +x gradlew
 
-          ./gradlew make makePluginsJson
+          ./gradlew make makePluginsJson --refresh-dependencies --stacktrace
 
-          shopt -s globstar
+          shopt -s globstar nullglob
 
-          cp **/build/*.cs3 "$GITHUB_WORKSPACE/builds/"
+          files=(**/build/*.cs3)
+
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "HATA: Hiçbir .cs3 dosyası oluşmadı."
+            exit 1
+          fi
+
+          cp "${files[@]}" "$GITHUB_WORKSPACE/builds/"
+
+          if [ ! -f build/plugins.json ]; then
+            echo "HATA: build/plugins.json oluşmadı."
+            exit 1
+          fi
 
           cp build/plugins.json "$GITHUB_WORKSPACE/builds/plugins.json"
-
-      # ============================================================
-      # SHA256 VE DOSYA BOYUTU KONTROLÜ
-      # ============================================================
 
       - name: Derleme Kontrolü
         run: |
@@ -106,17 +90,19 @@ jobs:
 
           echo ""
           echo "=========================================="
-          echo "CS3 DOSYASI"
+          echo "CS3 DOSYALARI"
           echo "=========================================="
 
           ls -lh *.cs3
 
           echo ""
           echo "=========================================="
-          echo "GERÇEK SHA256"
+          echo "SHA256"
           echo "=========================================="
 
-          sha256sum HDFilmCehennemi.cs3
+          for f in *.cs3; do
+            sha256sum "$f"
+          done
 
           echo ""
           echo "=========================================="
@@ -130,12 +116,11 @@ jobs:
           echo "DOSYA BOYUTLARI"
           echo "=========================================="
 
-          stat -c "%n -> %s bytes" HDFilmCehennemi.cs3
-          stat -c "%n -> %s bytes" plugins.json
+          for f in *.cs3; do
+            stat -c "%n -> %s bytes" "$f"
+          done
 
-      # ============================================================
-      # BUILDS BRANCH'E YÜKLE
-      # ============================================================
+          stat -c "%n -> %s bytes" plugins.json
 
       - name: Derlemeleri Yükle
         run: |
@@ -144,32 +129,11 @@ jobs:
           git config --local user.email "actions@github.com"
           git config --local user.name "GitHub Actions"
 
-          echo ""
-          echo "=========================================="
-          echo "GIT STATUS"
-          echo "=========================================="
-
-          git status
-
-          echo ""
-          echo "=========================================="
-          echo "DOSYALAR EKLENİYOR"
-          echo "=========================================="
-
           git add -A
 
           git status
 
-          echo ""
-          echo "=========================================="
-          echo "COMMIT"
-          echo "=========================================="
-
-          git commit -m "CloudStream eklentilerini güncelle $GITHUB_SHA" || echo "Yeni değişiklik yok."
-
-          echo ""
-          echo "=========================================="
-          echo "PUSH"
-          echo "=========================================="
+          git commit -m "CloudStream eklentilerini güncelle $GITHUB_SHA" \
+            || echo "Yeni değişiklik yok."
 
           git push origin builds
