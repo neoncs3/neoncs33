@@ -1,19 +1,14 @@
-// Source recovered from the public upstream repository pinned by TurkSinema NOTICE.
-// Upstream: https://github.com/Saloo1575/SalooRepo
-// Pinned commit: 184deca182486d85388cffa5caf9ed1f53f387f3
-//
-// Local playback fixes:
-// - Current inline dc_xxx decoder support.
+// Local fixes:
+// - Current dc_xxx inline decoder.
 // - Packed JS fallback.
-// - JSON-LD contentUrl is provisional / last resort.
-// - HLS playlist is actually inspected before emitting.
-// - Short movie streams are rejected.
-// - Alternative players are tried when the first one is short/dead.
-// - Close player receives embed Referer + Origin.
-// - Rapidrame uses the main site origin.
-// - MP4 is not incorrectly marked as M3U8.
-// - newSubtitleFile is only called inside suspend context.
+// - JSON-LD last fallback.
+// - Correct Close embed Referer/Origin.
+// - MP4 => VIDEO.
+// - M3U8/HLS/master.txt => M3U8.
+// - No media probing that can accidentally remove valid sources.
 // - No experimental break/continue in inline lambdas.
+// - Multiple valid candidates can be emitted.
+// - Subtitle extraction supports JWPlayer tracks and <video><track>.
 
 package com.neoncs3
 
@@ -84,6 +79,18 @@ class HDFilmCehennemi : MainAPI() {
         CloudflareInterceptor(cloudflareKiller)
     }
 
+    private val defaultEmbedOrigin =
+        "https://hdfilmcehennemi.mobi"
+
+    private val browserHeaders = mapOf(
+        "User-Agent" to
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+        "Accept" to
+            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language" to
+            "tr-TR,tr;q=0.9,en;q=0.8"
+    )
+
     class CloudflareInterceptor(
         private val cloudflareKiller: CloudflareKiller
     ) : Interceptor {
@@ -95,9 +102,11 @@ class HDFilmCehennemi : MainAPI() {
             val request = chain.request()
             val response = chain.proceed(request)
 
-            val doc = Jsoup.parse(
-                response.peekBody(1024 * 1024).string()
-            )
+            val body = response
+                .peekBody(1024 * 1024)
+                .string()
+
+            val doc = Jsoup.parse(body)
 
             if (
                 doc.html().contains(
@@ -112,13 +121,28 @@ class HDFilmCehennemi : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
-        "${mainUrl}/load/page/sayfano/home/" to "Yeni Eklenen Filmler",
-        "${mainUrl}/load/page/sayfano/home-series/" to "Yeni Eklenen Diziler",
-        "${mainUrl}/load/page/sayfano/categories/tavsiye-filmler-izle3/" to "Tavsiye Filmler",
-        "${mainUrl}/load/page/sayfano/imdb7/" to "IMDB 7+ Filmler",
-        "${mainUrl}/load/page/sayfano/mostCommented/" to "En Çok Yorumlananlar",
-        "${mainUrl}/load/page/sayfano/mostLiked/" to "En Çok Beğenilenler"
+        "${mainUrl}/load/page/sayfano/home/" to
+            "Yeni Eklenen Filmler",
+
+        "${mainUrl}/load/page/sayfano/home-series/" to
+            "Yeni Eklenen Diziler",
+
+        "${mainUrl}/load/page/sayfano/categories/tavsiye-filmler-izle3/" to
+            "Tavsiye Filmler",
+
+        "${mainUrl}/load/page/sayfano/imdb7/" to
+            "IMDB 7+ Filmler",
+
+        "${mainUrl}/load/page/sayfano/mostCommented/" to
+            "En Çok Yorumlananlar",
+
+        "${mainUrl}/load/page/sayfano/mostLiked/" to
+            "En Çok Beğenilenler"
     )
+
+    // -------------------------------------------------------------------------
+    // MAIN PAGE
+    // -------------------------------------------------------------------------
 
     override suspend fun getMainPage(
         page: Int,
@@ -135,11 +159,10 @@ class HDFilmCehennemi : MainAPI() {
             false
         )
 
-        val url =
-            request.data.replace(
-                "sayfano",
-                page.toString()
-            )
+        val url = request.data.replace(
+            "sayfano",
+            page.toString()
+        )
 
         val headers = mapOf(
             "User-Agent" to
@@ -158,37 +181,36 @@ class HDFilmCehennemi : MainAPI() {
         )
 
         if (
-            !doc.toString().contains(
+            doc.toString().contains(
                 "Sayfa Bulunamadı"
             )
         ) {
-
-            val aa: HDFC =
-                objectMapper.readValue(
-                    doc.toString()
-                )
-
-            val document =
-                Jsoup.parse(
-                    aa.html
-                )
-
-            val home =
-                document
-                    .select("a")
-                    .mapNotNull {
-                        it.toSearchResult()
-                    }
-
             return newHomePageResponse(
                 request.name,
-                home
+                emptyList()
             )
         }
 
+        val data: HDFC =
+            objectMapper.readValue(
+                doc.toString()
+            )
+
+        val document =
+            Jsoup.parse(
+                data.html
+            )
+
+        val home =
+            document
+                .select("a")
+                .mapNotNull {
+                    it.toSearchResult()
+                }
+
         return newHomePageResponse(
             request.name,
-            emptyList()
+            home
         )
     }
 
@@ -196,27 +218,40 @@ class HDFilmCehennemi : MainAPI() {
         SearchResponse? {
 
         val title =
-            attr("title")
+            attr("title").trim()
+
+        if (title.isBlank()) {
+            return null
+        }
 
         val href =
             fixUrlNull(
                 attr("href")
             ) ?: return null
 
-        val posterUrl =
+        val poster =
             fixUrlNull(
                 selectFirst("img")
                     ?.attr("data-src")
             )
+                ?: fixUrlNull(
+                    selectFirst("img")
+                        ?.attr("src")
+                )
 
         return newMovieSearchResponse(
             title,
             href,
             TvType.Movie
         ) {
-            this.posterUrl = posterUrl
+            this.posterUrl =
+                poster
         }
     }
+
+    // -------------------------------------------------------------------------
+    // SEARCH
+    // -------------------------------------------------------------------------
 
     override suspend fun quickSearch(
         query: String
@@ -237,20 +272,21 @@ class HDFilmCehennemi : MainAPI() {
             ).parsedSafe<Results>()
                 ?: return emptyList()
 
-        val searchResults =
+        val result =
             mutableListOf<SearchResponse>()
 
-        response.results.forEach { resultHtml ->
+        response.results.forEach { html ->
 
             val document =
                 Jsoup.parse(
-                    resultHtml
+                    html
                 )
 
             val title =
                 document
                     .selectFirst("h4.title")
                     ?.text()
+                    ?.trim()
                     ?: return@forEach
 
             val href =
@@ -260,7 +296,7 @@ class HDFilmCehennemi : MainAPI() {
                         ?.attr("href")
                 ) ?: return@forEach
 
-            val posterUrl =
+            val poster =
                 fixUrlNull(
                     document
                         .selectFirst("img")
@@ -272,14 +308,14 @@ class HDFilmCehennemi : MainAPI() {
                             ?.attr("data-src")
                     )
 
-            searchResults.add(
+            result.add(
                 newMovieSearchResponse(
                     title,
                     href,
                     TvType.Movie
                 ) {
                     this.posterUrl =
-                        posterUrl?.replace(
+                        poster?.replace(
                             "/thumb/",
                             "/list/"
                         )
@@ -287,8 +323,12 @@ class HDFilmCehennemi : MainAPI() {
             )
         }
 
-        return searchResults
+        return result
     }
+
+    // -------------------------------------------------------------------------
+    // LOAD
+    // -------------------------------------------------------------------------
 
     override suspend fun load(
         url: String
@@ -302,43 +342,58 @@ class HDFilmCehennemi : MainAPI() {
 
         val title =
             document
-                .selectFirst("h1.section-title")
+                .selectFirst(
+                    "h1.section-title"
+                )
                 ?.text()
-                ?.substringBefore(" izle")
+                ?.substringBefore(
+                    " izle"
+                )
+                ?.trim()
                 ?: return null
 
         val poster =
             fixUrlNull(
                 document
-                    .select("aside.post-info-poster img.lazyload")
+                    .select(
+                        "aside.post-info-poster img.lazyload"
+                    )
                     .lastOrNull()
                     ?.attr("data-src")
             )
+                ?: fixUrlNull(
+                    document
+                        .select(
+                            "aside.post-info-poster img"
+                        )
+                        .lastOrNull()
+                        ?.attr("src")
+                )
 
         val tags =
             document
-                .select("div.post-info-genres a")
+                .select(
+                    "div.post-info-genres a"
+                )
                 .map {
-                    it.text()
+                    it.text().trim()
                 }
 
         val year =
             document
-                .selectFirst("div.post-info-year-country a")
+                .selectFirst(
+                    "div.post-info-year-country a"
+                )
                 ?.text()
                 ?.trim()
                 ?.toIntOrNull()
 
-        val tvType =
-            if (
-                document
-                    .select("div.seasons")
-                    .isEmpty()
-            ) {
-                TvType.Movie
-            } else {
-                TvType.TvSeries
-            }
+        val isSeries =
+            document
+                .select(
+                    "div.seasons"
+                )
+                .isNotEmpty()
 
         val description =
             document
@@ -359,6 +414,7 @@ class HDFilmCehennemi : MainAPI() {
                         it
                             .selectFirst("strong")
                             ?.text()
+                            ?.trim()
                             ?: return@mapNotNull null
 
                     Actor(
@@ -380,6 +436,7 @@ class HDFilmCehennemi : MainAPI() {
                         it
                             .selectFirst("a")
                             ?.attr("title")
+                            ?.trim()
                             ?: return@mapNotNull null
 
                     val recHref =
@@ -390,7 +447,7 @@ class HDFilmCehennemi : MainAPI() {
                         )
                             ?: return@mapNotNull null
 
-                    val recPosterUrl =
+                    val recPoster =
                         fixUrlNull(
                             it
                                 .selectFirst("img")
@@ -408,7 +465,7 @@ class HDFilmCehennemi : MainAPI() {
                         TvType.TvSeries
                     ) {
                         this.posterUrl =
-                            recPosterUrl
+                            recPoster
                     }
                 }
 
@@ -422,24 +479,19 @@ class HDFilmCehennemi : MainAPI() {
                     "trailer/",
                     ""
                 )
+                ?.takeIf {
+                    it.isNotBlank()
+                }
                 ?.let {
-                    if (
-                        it.isNotEmpty()
-                    ) {
-                        "https://www.youtube.com/watch?v=$it"
-                    } else {
-                        null
-                    }
+                    "https://www.youtube.com/watch?v=$it"
                 }
 
         Log.d(
             "HDCH",
-            "Trailer: $trailer"
+            "Trailer=$trailer"
         )
 
-        return if (
-            tvType == TvType.TvSeries
-        ) {
+        if (isSeries) {
 
             val episodes =
                 document
@@ -463,20 +515,24 @@ class HDFilmCehennemi : MainAPI() {
 
                         val epEpisode =
                             Regex(
-                                """(\d+)\. ?Bölüm"""
+                                """(\d+)\.?\s*Bölüm"""
                             )
-                                .find(epName)
+                                .find(
+                                    epName
+                                )
                                 ?.groupValues
-                                ?.get(1)
+                                ?.getOrNull(1)
                                 ?.toIntOrNull()
 
                         val epSeason =
                             Regex(
-                                """(\d+)\. ?Sezon"""
+                                """(\d+)\.?\s*Sezon"""
                             )
-                                .find(epName)
+                                .find(
+                                    epName
+                                )
                                 ?.groupValues
-                                ?.get(1)
+                                ?.getOrNull(1)
                                 ?.toIntOrNull()
                                 ?: 1
 
@@ -495,7 +551,7 @@ class HDFilmCehennemi : MainAPI() {
                         }
                     }
 
-            newTvSeriesLoadResponse(
+            return newTvSeriesLoadResponse(
                 title,
                 url,
                 TvType.TvSeries,
@@ -525,44 +581,42 @@ class HDFilmCehennemi : MainAPI() {
                     trailer
                 )
             }
+        }
 
-        } else {
+        return newMovieLoadResponse(
+            title,
+            url,
+            TvType.Movie,
+            url
+        ) {
 
-            newMovieLoadResponse(
-                title,
-                url,
-                TvType.Movie,
-                url
-            ) {
+            this.posterUrl =
+                poster
 
-                this.posterUrl =
-                    poster
+            this.year =
+                year
 
-                this.year =
-                    year
+            this.plot =
+                description
 
-                this.plot =
-                    description
+            this.tags =
+                tags
 
-                this.tags =
-                    tags
+            this.recommendations =
+                recommendations
 
-                this.recommendations =
-                    recommendations
+            addActors(
+                actors
+            )
 
-                addActors(
-                    actors
-                )
-
-                addTrailer(
-                    trailer
-                )
-            }
+            addTrailer(
+                trailer
+            )
         }
     }
 
     // -------------------------------------------------------------------------
-    // DECODER
+    // DECODER DATA
     // -------------------------------------------------------------------------
 
     private data class DecodeStep(
@@ -576,22 +630,19 @@ class HDFilmCehennemi : MainAPI() {
         val parts: List<String>
     )
 
-    private val browserHeaders =
-        mapOf(
-            "User-Agent" to
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
-            "Accept" to
-                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language" to
-                "tr-TR,tr;q=0.9,en;q=0.8"
-        )
+    // -------------------------------------------------------------------------
+    // TEXT DECODING
+    // -------------------------------------------------------------------------
 
     private fun decodeText(
         value: String
     ): String {
 
         return value
-            .replace("\\/", "/")
+            .replace(
+                "\\/",
+                "/"
+            )
             .replace(
                 "\\u002F",
                 "/",
@@ -617,14 +668,23 @@ class HDFilmCehennemi : MainAPI() {
                 "\"",
                 ignoreCase = true
             )
+            .replace(
+                "&#x2F;",
+                "/",
+                ignoreCase = true
+            )
             .trim()
     }
+
+    // -------------------------------------------------------------------------
+    // CURRENT INLINE DECODER
+    // -------------------------------------------------------------------------
 
     private fun parseInlineDecoders(
         html: String
     ): List<ParsedDecoder> {
 
-        val decoders =
+        val result =
             mutableListOf<ParsedDecoder>()
 
         val functionRegex =
@@ -633,14 +693,15 @@ class HDFilmCehennemi : MainAPI() {
             )
 
         for (
-            match in functionRegex.findAll(html)
+            functionMatch in
+            functionRegex.findAll(html)
         ) {
 
             val functionName =
-                match.groupValues[1]
+                functionMatch.groupValues[1]
 
             val body =
-                match.groupValues[2]
+                functionMatch.groupValues[2]
 
             val callRegex =
                 Regex(
@@ -651,9 +712,9 @@ class HDFilmCehennemi : MainAPI() {
                 callRegex.find(html)
                     ?: continue
 
-            val parts =
+            val quoted =
                 Regex(
-                    "\\\"([^\\\"]*)\\\""
+                    "\"([^\"]*)\""
                 )
                     .findAll(
                         call.groupValues[1]
@@ -666,7 +727,7 @@ class HDFilmCehennemi : MainAPI() {
                     .toList()
 
             if (
-                parts.isEmpty()
+                quoted.isEmpty()
             ) {
                 continue
             }
@@ -674,37 +735,50 @@ class HDFilmCehennemi : MainAPI() {
             val operations =
                 mutableListOf<Pair<Int, DecodeStep>>()
 
+            // base64
             Regex(
                 """=\s*atob\(\s*result\s*\)"""
             )
-                .findAll(body)
+                .findAll(
+                    body
+                )
                 .forEach {
-                    operations +=
+
+                    operations.add(
                         it.range.first to
                             DecodeStep(
                                 "base64"
                             )
+                    )
                 }
 
+            // reverse
             Regex(
                 """result\.split\(''\)\.reverse\(\)\.join\(''\)"""
             )
-                .findAll(body)
+                .findAll(
+                    body
+                )
                 .forEach {
-                    operations +=
+
+                    operations.add(
                         it.range.first to
                             DecodeStep(
                                 "reverse"
                             )
+                    )
                 }
 
+            // ROT-N
             Regex(
                 """\(o\s*-\s*base\s*\+\s*(\d+)\)\s*%\s*26"""
             )
-                .findAll(body)
+                .findAll(
+                    body
+                )
                 .forEach {
 
-                    operations +=
+                    operations.add(
                         it.range.first to
                             DecodeStep(
                                 "rot",
@@ -712,15 +786,19 @@ class HDFilmCehennemi : MainAPI() {
                                     .toIntOrNull()
                                     ?: 0
                             )
+                    )
                 }
 
+            // Character rotation alternative.
             Regex(
                 """charCodeAt\(0\)\s*\+\s*(\d+)"""
             )
-                .findAll(body)
+                .findAll(
+                    body
+                )
                 .forEach {
 
-                    operations +=
+                    operations.add(
                         it.range.first to
                             DecodeStep(
                                 "rot",
@@ -728,15 +806,19 @@ class HDFilmCehennemi : MainAPI() {
                                     .toIntOrNull()
                                     ?: 0
                             )
+                    )
                 }
 
+            // Character unmix.
             Regex(
                 """charCode\s*-\s*\((\d+)\s*%\s*\(i\s*\+\s*(\d+)\)\)"""
             )
-                .findAll(body)
+                .findAll(
+                    body
+                )
                 .forEach {
 
-                    operations +=
+                    operations.add(
                         it.range.first to
                             DecodeStep(
                                 "unmix",
@@ -747,15 +829,19 @@ class HDFilmCehennemi : MainAPI() {
                                     .toIntOrNull()
                                     ?: 0
                             )
+                    )
                 }
 
+            // Rolling XOR.
             Regex(
                 """(?:var|let|const)\s+acc\s*=\s*(\d+)[\s\S]{0,260}?acc\s*=\s*\(\s*acc\s*\+\s*(\d+)\s*\)\s*%\s*256"""
             )
-                .findAll(body)
+                .findAll(
+                    body
+                )
                 .forEach {
 
-                    operations +=
+                    operations.add(
                         it.range.first to
                             DecodeStep(
                                 "xor",
@@ -766,6 +852,7 @@ class HDFilmCehennemi : MainAPI() {
                                     .toIntOrNull()
                                     ?: 0
                             )
+                    )
                 }
 
             if (
@@ -774,20 +861,21 @@ class HDFilmCehennemi : MainAPI() {
                 continue
             }
 
-            decoders +=
+            result.add(
                 ParsedDecoder(
-                    operations
+                    steps = operations
                         .sortedBy {
                             it.first
                         }
                         .map {
                             it.second
                         },
-                    parts
+                    parts = quoted
                 )
+            )
         }
 
-        return decoders
+        return result
     }
 
     private fun applyDecodeSteps(
@@ -795,7 +883,7 @@ class HDFilmCehennemi : MainAPI() {
         steps: List<DecodeStep>
     ): String {
 
-        var result =
+        var value =
             parts.joinToString("")
 
         for (
@@ -809,7 +897,7 @@ class HDFilmCehennemi : MainAPI() {
                 "base64" -> {
 
                     var padded =
-                        result
+                        value
 
                     while (
                         padded.length % 4 != 0
@@ -817,7 +905,7 @@ class HDFilmCehennemi : MainAPI() {
                         padded += "="
                     }
 
-                    result =
+                    value =
                         runCatching {
 
                             String(
@@ -834,21 +922,26 @@ class HDFilmCehennemi : MainAPI() {
                 }
 
                 "reverse" -> {
-                    result =
-                        result.reversed()
+                    value =
+                        value.reversed()
                 }
 
                 "rot" -> {
 
                     val shift =
-                        ((step.a % 26) + 26) % 26
+                        (
+                            (step.a % 26) +
+                                26
+                            ) % 26
 
-                    result =
+                    value =
                         buildString(
-                            result.length
+                            value.length
                         ) {
 
-                            result.forEach { c ->
+                            for (
+                                c in value
+                            ) {
 
                                 when {
 
@@ -896,28 +989,29 @@ class HDFilmCehennemi : MainAPI() {
 
                 "unmix" -> {
 
+                    val offset =
+                        step.b
+
                     if (
-                        step.b <= 0
+                        offset <= 0
                     ) {
                         return ""
                     }
 
                     val out =
                         StringBuilder(
-                            result.length
+                            value.length
                         )
 
                     for (
-                        i in result.indices
+                        i in value.indices
                     ) {
 
-                        val code =
-                            result[i]
-                                .code
-                                .toLong()
+                        val charCode =
+                            value[i].code.toLong()
 
                         val divisor =
-                            i + step.b
+                            i + offset
 
                         if (
                             divisor <= 0
@@ -925,9 +1019,9 @@ class HDFilmCehennemi : MainAPI() {
                             return ""
                         }
 
-                        val decrypted =
+                        val plain =
                             (
-                                code -
+                                charCode -
                                     (
                                         step.a.toLong() %
                                             divisor
@@ -936,13 +1030,13 @@ class HDFilmCehennemi : MainAPI() {
                                 ) % 256L
 
                         out.append(
-                            decrypted
+                            plain
                                 .toInt()
                                 .toChar()
                         )
                     }
 
-                    result =
+                    value =
                         out.toString()
                 }
 
@@ -953,11 +1047,11 @@ class HDFilmCehennemi : MainAPI() {
 
                     val out =
                         StringBuilder(
-                            result.length
+                            value.length
                         )
 
                     for (
-                        c in result
+                        c in value
                     ) {
 
                         val byte =
@@ -983,31 +1077,31 @@ class HDFilmCehennemi : MainAPI() {
                                 ) % 256
                     }
 
-                    result =
+                    value =
                         out.toString()
                 }
             }
         }
 
-        return result
+        return value
     }
 
     // -------------------------------------------------------------------------
-    // URL / MEDIA HELPERS
+    // URL HELPERS
     // -------------------------------------------------------------------------
 
     private fun isValidVideoUrl(
-        url: String
+        value: String
     ): Boolean {
 
-        val value =
-            url.trim()
+        val url =
+            value.trim()
 
         if (
-            !value.startsWith(
+            !url.startsWith(
                 "https://"
             ) &&
-            !value.startsWith(
+            !url.startsWith(
                 "http://"
             )
         ) {
@@ -1015,27 +1109,48 @@ class HDFilmCehennemi : MainAPI() {
         }
 
         val lower =
-            value.lowercase()
-
-        return lower.contains(".m3u8") ||
-            lower.contains("/hls/") ||
-            lower.contains("/hls2/") ||
-            lower.contains("master.txt") ||
-            lower.endsWith(".mp4") ||
-            lower.contains(".mp4?")
-    }
-
-    private fun isHlsLike(
-        url: String
-    ): Boolean {
-
-        val lower =
             url.lowercase()
 
-        return lower.contains(".m3u8") ||
-            lower.contains("/hls/") ||
-            lower.contains("/hls2/") ||
-            lower.contains("master.txt")
+        return lower.contains(
+            ".m3u8"
+        ) ||
+            lower.contains(
+                "/hls/"
+            ) ||
+            lower.contains(
+                "/hls2/"
+            ) ||
+            lower.contains(
+                "master.txt"
+            ) ||
+            lower.endsWith(
+                ".mp4"
+            ) ||
+            lower.contains(
+                ".mp4?"
+            )
+    }
+
+    private fun cleanUrl(
+        value: String
+    ): String {
+
+        return decodeText(
+            value
+        )
+            .trim()
+            .trim(
+                '"',
+                '\'',
+                '`'
+            )
+            .trimEnd(
+                ')',
+                ']',
+                '}',
+                ';',
+                ','
+            )
     }
 
     private fun originOf(
@@ -1045,7 +1160,9 @@ class HDFilmCehennemi : MainAPI() {
         return runCatching {
 
             val uri =
-                java.net.URI(url)
+                java.net.URI(
+                    url
+                )
 
             val scheme =
                 uri.scheme
@@ -1065,31 +1182,39 @@ class HDFilmCehennemi : MainAPI() {
         }.getOrDefault("")
     }
 
-    private fun resolveMediaOrigin(
+    private fun isRapidramePlayer(
+        source: String,
+        playerUrl: String
+    ): Boolean {
+
+        return source.contains(
+            "rapidrame",
+            ignoreCase = true
+        ) ||
+            playerUrl.contains(
+                "/rplayer/",
+                ignoreCase = true
+            ) ||
+            playerUrl.contains(
+                "/playerr/",
+                ignoreCase = true
+            ) ||
+            playerUrl.contains(
+                "rapidrame_id=",
+                ignoreCase = true
+            )
+    }
+
+    private fun resolvePlayerOrigin(
         source: String,
         playerUrl: String
     ): String {
 
-        val isRapidrame =
-            source.contains(
-                "rapidrame",
-                ignoreCase = true
-            ) ||
-                playerUrl.contains(
-                    "/rplayer/",
-                    ignoreCase = true
-                ) ||
-                playerUrl.contains(
-                    "/playerr/",
-                    ignoreCase = true
-                ) ||
-                playerUrl.contains(
-                    "rapidrame_id=",
-                    ignoreCase = true
-                )
-
         if (
-            isRapidrame
+            isRapidramePlayer(
+                source,
+                playerUrl
+            )
         ) {
             return originOf(
                 mainUrl
@@ -1107,602 +1232,127 @@ class HDFilmCehennemi : MainAPI() {
             return playerOrigin
         }
 
-        return originOf(
-            mainUrl
-        )
+        return defaultEmbedOrigin
+    }
+
+    private fun resolveMediaReferer(
+        source: String,
+        playerUrl: String
+    ): String {
+
+        val origin =
+            resolvePlayerOrigin(
+                source,
+                playerUrl
+            )
+
+        return origin
+            .trimEnd('/') +
+            "/"
     }
 
     private fun mediaHeaders(
-        referer: String,
-        origin: String
+        source: String,
+        playerUrl: String
     ): Map<String, String> {
 
-        return buildMap {
-
-            put(
-                "User-Agent",
-                browserHeaders["User-Agent"].orEmpty()
+        val origin =
+            resolvePlayerOrigin(
+                source,
+                playerUrl
             )
 
-            put(
-                "Accept",
-                "*/*"
-            )
+        val referer =
+            origin
+                .trimEnd('/') +
+                "/"
 
-            put(
-                "Accept-Language",
-                "tr-TR,tr;q=0.9,en;q=0.8"
-            )
+        return mapOf(
+            "User-Agent" to
+                browserHeaders["User-Agent"].orEmpty(),
 
-            if (
-                referer.isNotBlank()
-            ) {
-                put(
-                    "Referer",
-                    referer
-                )
-            }
+            "Accept" to
+                "*/*",
 
-            if (
-                origin.isNotBlank()
-            ) {
-                put(
-                    "Origin",
-                    origin
-                )
-            }
-        }
+            "Accept-Language" to
+                "tr-TR,tr;q=0.9,en;q=0.8",
+
+            "Referer" to
+                referer,
+
+            "Origin" to
+                origin
+        )
     }
 
-    private fun cleanUrl(
-        value: String
-    ): String {
+    private fun mediaTypeForUrl(
+        url: String
+    ): ExtractorLinkType {
 
-        return decodeText(
-            value
-        )
-            .trim()
-            .trimEnd(
-                ')',
-                ']',
-                '}',
-                ';',
-                ','
+        val lower =
+            url.lowercase()
+
+        return if (
+            lower.contains(
+                ".m3u8"
+            ) ||
+            lower.contains(
+                "/hls/"
+            ) ||
+            lower.contains(
+                "/hls2/"
+            ) ||
+            lower.contains(
+                "master.txt"
             )
+        ) {
+            ExtractorLinkType.M3U8
+        } else {
+            ExtractorLinkType.VIDEO
+        }
     }
 
     private fun extractCandidateUrls(
         html: String
-    ): LinkedHashSet<String> {
+    ): List<String> {
 
         val result =
             LinkedHashSet<String>()
 
         val normalized =
-            decodeText(html)
-
-        Regex(
-            """https?://[^\s\"'<>]+(?:\.m3u8|\.mp4|master\.txt)(?:\?[^\s\"'<>]+)?""",
-            RegexOption.IGNORE_CASE
-        )
-            .findAll(normalized)
-            .forEach {
-
-                result +=
-                    cleanUrl(
-                        it.value
-                    )
-            }
-
-        return result
-    }
-
-    // -------------------------------------------------------------------------
-    // HLS PROBE
-    // -------------------------------------------------------------------------
-
-    private data class MediaProbe(
-        val type: ExtractorLinkType,
-        val durationSeconds: Double?,
-        val isVod: Boolean,
-        val isMaster: Boolean
-    )
-
-    /**
-     * Reads #EXTINF durations from an HLS media playlist.
-     */
-    private fun parseHlsDuration(
-        playlist: String
-    ): Double {
-
-        var total =
-            0.0
-
-        Regex(
-            """#EXTINF:([0-9]+(?:\.[0-9]+)?)"""
-        )
-            .findAll(
-                playlist
+            decodeText(
+                html
             )
-            .forEach {
-
-                total +=
-                    it.groupValues[1]
-                        .toDoubleOrNull()
-                        ?: 0.0
-            }
-
-        return total
-    }
-
-    private fun isHlsMaster(
-        playlist: String
-    ): Boolean {
-        return playlist.contains(
-            "#EXT-X-STREAM-INF",
-            ignoreCase = true
-        )
-    }
-
-    private fun findBestHlsVariant(
-        playlist: String,
-        baseUrl: String
-    ): String? {
 
         val regex =
             Regex(
-                """#EXT-X-STREAM-INF:([^\r\n]*)\r?\n\s*([^\s#][^\r\n]*)""",
+                """https?://[^\s\"'<>\\]+(?:\.m3u8|\.mp4|master\.txt)(?:\?[^\s\"'<>\\]+)?""",
                 RegexOption.IGNORE_CASE
             )
 
-        var bestUrl: String? = null
-        var bestBandwidth =
-            -1L
-
         for (
             match in regex.findAll(
-                playlist
+                normalized
             )
         ) {
 
-            val attributes =
-                match.groupValues[1]
-
-            val relativeUrl =
-                match.groupValues[2]
-                    .trim()
-
-            val bandwidth =
-                Regex(
-                    """BANDWIDTH=(\d+)"""
-                )
-                    .find(
-                        attributes
-                    )
-                    ?.groupValues
-                    ?.get(1)
-                    ?.toLongOrNull()
-                    ?: 0L
-
-            val absoluteUrl =
-                runCatching {
-
-                    java.net.URI(
-                        baseUrl
-                    )
-                        .resolve(
-                            relativeUrl
-                        )
-                        .toString()
-
-                }.getOrNull()
-
-            if (
-                absoluteUrl != null &&
-                bandwidth >= bestBandwidth
-            ) {
-
-                bestBandwidth =
-                    bandwidth
-
-                bestUrl =
-                    absoluteUrl
-            }
-        }
-
-        return bestUrl
-    }
-
-    /**
-     * Downloads only the playlist, never the complete MP4.
-     *
-     * For HLS:
-     *   - verifies #EXTM3U
-     *   - follows the best master variant once
-     *   - calculates VOD duration from #EXTINF
-     *
-     * For MP4:
-     *   - only accepts the URL syntactically
-     *   - avoids downloading the complete file in the plugin.
-     */
-    private suspend fun probeMedia(
-        mediaUrl: String,
-        referer: String,
-        origin: String
-    ): MediaProbe? {
-
-        val url =
-            cleanUrl(
-                mediaUrl
-            )
-
-        if (
-            !isValidVideoUrl(
-                url
-            )
-        ) {
-            return null
-        }
-
-        if (
-            isHlsLike(
-                url
-            )
-        ) {
-
-            val headers =
-                mediaHeaders(
-                    referer,
-                    origin
-                )
-
-            val playlist =
-                runCatching {
-
-                    app.get(
-                        url,
-                        headers = headers,
-                        referer = referer,
-                        allowRedirects = true
-                    ).text
-
-                }.getOrNull()
-                    ?: run {
-
-                        Log.w(
-                            "HDFilmCehennemi",
-                            "HLS erişilemedi: $url"
-                        )
-
-                        return null
-                    }
-
-            if (
-                !playlist.contains(
-                    "#EXTM3U",
-                    ignoreCase = true
-                )
-            ) {
-
-                Log.w(
-                    "HDFilmCehennemi",
-                    "HLS playlist değil: $url"
-                )
-
-                return null
-            }
-
-            val master =
-                isHlsMaster(
-                    playlist
+            val url =
+                cleanUrl(
+                    match.value
                 )
 
             if (
-                master
+                isValidVideoUrl(
+                    url
+                )
             ) {
-
-                val variant =
-                    findBestHlsVariant(
-                        playlist,
-                        url
-                    )
-
-                if (
-                    variant != null
-                ) {
-
-                    val variantProbe =
-                        runCatching {
-
-                            app.get(
-                                variant,
-                                headers = headers,
-                                referer = referer,
-                                allowRedirects = true
-                            ).text
-
-                        }.getOrNull()
-
-                    if (
-                        !variantProbe.isNullOrBlank() &&
-                        variantProbe.contains(
-                            "#EXTM3U",
-                            ignoreCase = true
-                        )
-                    ) {
-
-                        val duration =
-                            parseHlsDuration(
-                                variantProbe
-                            )
-
-                        val vod =
-                            variantProbe.contains(
-                                "#EXT-X-ENDLIST",
-                                ignoreCase = true
-                            )
-
-                        Log.d(
-                            "HDFilmCehennemi",
-                            "HLS master -> variant duration=${duration}s vod=$vod url=$url"
-                        )
-
-                        return MediaProbe(
-                            ExtractorLinkType.M3U8,
-                            duration.takeIf {
-                                it > 0.0
-                            },
-                            vod,
-                            true
-                        )
-                    }
-                }
-
-                Log.d(
-                    "HDFilmCehennemi",
-                    "HLS master doğrulandı fakat varyant süresi okunamadı: $url"
-                )
-
-                return MediaProbe(
-                    ExtractorLinkType.M3U8,
-                    null,
-                    false,
-                    true
+                result.add(
+                    url
                 )
             }
-
-            val duration =
-                parseHlsDuration(
-                    playlist
-                )
-
-            val vod =
-                playlist.contains(
-                    "#EXT-X-ENDLIST",
-                    ignoreCase = true
-                )
-
-            Log.d(
-                "HDFilmCehennemi",
-                "HLS media duration=${duration}s vod=$vod url=$url"
-            )
-
-            return MediaProbe(
-                ExtractorLinkType.M3U8,
-                duration.takeIf {
-                    it > 0.0
-                },
-                vod,
-                false
-            )
         }
 
-        if (
-            url.lowercase().endsWith(".mp4") ||
-            url.lowercase().contains(".mp4?")
-        ) {
-
-            Log.d(
-                "HDFilmCehennemi",
-                "Direct MP4 candidate accepted without full download: $url"
-            )
-
-            return MediaProbe(
-                ExtractorLinkType.VIDEO,
-                null,
-                true,
-                false
-            )
-        }
-
-        return null
-    }
-
-    // -------------------------------------------------------------------------
-    // CANDIDATE SCORING
-    // -------------------------------------------------------------------------
-
-    private data class Candidate(
-        val url: String,
-        val source: String,
-        val referer: String,
-        val origin: String,
-        val provisional: Boolean = false
-    )
-
-    /**
-     * Short streams are usually previews/trailers.
-     *
-     * For movies we intentionally reject <= 5 minutes.
-     * Series episodes are allowed down to 60 seconds because some episodes
-     * can legitimately be short.
-     */
-    private fun passesDurationFilter(
-        durationSeconds: Double?,
-        isMovie: Boolean
-    ): Boolean {
-
-        if (
-            durationSeconds == null ||
-            durationSeconds <= 0.0
-        ) {
-            return true
-        }
-
-        return if (
-            isMovie
-        ) {
-            durationSeconds >= 300.0
-        } else {
-            durationSeconds >= 60.0
-        }
-    }
-
-    private fun candidateScore(
-        probe: MediaProbe,
-        provisional: Boolean,
-        isMovie: Boolean
-    ): Int {
-
-        var score = 0
-
-        if (
-            provisional
-        ) {
-            score -= 1000
-        }
-
-        if (
-            probe.type ==
-            ExtractorLinkType.M3U8
-        ) {
-            score += 400
-        }
-
-        if (
-            probe.isVod
-        ) {
-            score += 300
-        }
-
-        val duration =
-            probe.durationSeconds
-
-        if (
-            duration != null &&
-            duration > 0.0
-        ) {
-
-            when {
-
-                isMovie &&
-                    duration >= 3600.0 ->
-                    score += 1200
-
-                isMovie &&
-                    duration >= 1800.0 ->
-                    score += 900
-
-                isMovie &&
-                    duration >= 900.0 ->
-                    score += 700
-
-                duration >= 600.0 ->
-                    score += 500
-
-                duration >= 300.0 ->
-                    score += 300
-
-                duration >= 120.0 ->
-                    score += 50
-
-                else ->
-                    score -= 1000
-            }
-        }
-
-        if (
-            probe.isMaster
-        ) {
-            score += 100
-        }
-
-        return score
-    }
-
-    private suspend fun chooseBestCandidate(
-        candidates: List<Candidate>,
-        isMovie: Boolean
-    ): Pair<Candidate, MediaProbe>? {
-
-        if (
-            candidates.isEmpty()
-        ) {
-            return null
-        }
-
-        var best: Pair<Candidate, MediaProbe>? =
-            null
-
-        var bestScore =
-            Int.MIN_VALUE
-
-        for (
-            candidate in candidates
-        ) {
-
-            val probe =
-                probeMedia(
-                    candidate.url,
-                    candidate.referer,
-                    candidate.origin
-                )
-                    ?: continue
-
-            val passes =
-                passesDurationFilter(
-                    probe.durationSeconds,
-                    isMovie
-                )
-
-            if (
-                !passes
-            ) {
-
-                Log.w(
-                    "HDFilmCehennemi",
-                    "SHORT/preview kaynak atlandı: duration=${probe.durationSeconds}s movie=$isMovie url=${candidate.url}"
-                )
-
-                continue
-            }
-
-            val score =
-                candidateScore(
-                    probe,
-                    candidate.provisional,
-                    isMovie
-                )
-
-            Log.d(
-                "HDFilmCehennemi",
-                "Candidate score=$score duration=${probe.durationSeconds}s vod=${probe.isVod} provisional=${candidate.provisional} url=${candidate.url}"
-            )
-
-            if (
-                score > bestScore
-            ) {
-
-                bestScore =
-                    score
-
-                best =
-                    candidate to
-                        probe
-            }
-        }
-
-        return best
+        return result.toList()
     }
 
     // -------------------------------------------------------------------------
@@ -1711,39 +1361,42 @@ class HDFilmCehennemi : MainAPI() {
 
     private suspend fun addPlayerSubtitles(
         html: String,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        playerUrl: String
+        playerUrl: String,
+        subtitleCallback: (SubtitleFile) -> Unit
     ) {
 
-        val blocks =
+        // JWPlayer tracks array.
+        val tracksMatch =
             Regex(
-                """(?:tracks|captions)\s*[:=]\s*\[([\s\S]*?)\]""",
-                RegexOption.IGNORE_CASE
+                """tracks\s*:\s*(\[[\s\S]*?\])"""
             )
-                .findAll(html)
-                .toList()
+                .find(
+                    html
+                )
 
-        for (
-            blockMatch in blocks
+        if (
+            tracksMatch != null
         ) {
 
             val block =
-                blockMatch
+                tracksMatch
                     .groupValues
                     .getOrNull(1)
-                    ?: continue
+                    .orEmpty()
 
             val trackRegex =
                 Regex(
-                    """(?:file|src)\s*[:=]\s*[\"']([^\"']+)[\"'][\s\S]{0,240}?(?:label|language|srclang)\s*[:=]\s*[\"']([^\"']+)[\"']""",
+                    """\{\s*(?:[^{}]*?)?(?:file|src)\s*:\s*[\"']([^\"']+)[\"'][^{}]*?(?:label|language|srclang)\s*:\s*[\"']([^\"']+)[\"'][^{}]*?\}""",
                     RegexOption.IGNORE_CASE
                 )
 
             for (
-                match in trackRegex.findAll(block)
+                match in trackRegex.findAll(
+                    block
+                )
             ) {
 
-                val rawUrl =
+                val raw =
                     decodeText(
                         match.groupValues[1]
                     )
@@ -1755,7 +1408,7 @@ class HDFilmCehennemi : MainAPI() {
                             playerUrl
                         )
                             .resolve(
-                                rawUrl
+                                raw
                             )
                             .toString()
 
@@ -1764,7 +1417,7 @@ class HDFilmCehennemi : MainAPI() {
                     ) {
 
                         fixUrlNull(
-                            rawUrl
+                            raw
                         )
                     }
 
@@ -1779,6 +1432,7 @@ class HDFilmCehennemi : MainAPI() {
                         .groupValues
                         .getOrNull(2)
                         .orEmpty()
+                        .trim()
                         .ifBlank {
                             "Türkçe"
                         }
@@ -1792,107 +1446,202 @@ class HDFilmCehennemi : MainAPI() {
             }
         }
 
-        Jsoup
-            .parse(html)
-            .select(
+        // HTML5 <video><track>.
+        val document =
+            Jsoup.parse(
+                html
+            )
+
+        for (
+            track in
+            document.select(
                 "video track"
             )
-            .forEach { track ->
+        ) {
 
-                val rawSrc =
-                    track
-                        .attr("src")
-                        .trim()
+            val raw =
+                track
+                    .attr("src")
+                    .trim()
 
-                if (
-                    rawSrc.isBlank()
+            if (
+                raw.isBlank()
+            ) {
+                continue
+            }
+
+            val subtitleUrl =
+                try {
+
+                    java.net.URI(
+                        playerUrl
+                    )
+                        .resolve(
+                            raw
+                        )
+                        .toString()
+
+                } catch (
+                    _: Exception
                 ) {
-                    return@forEach
+
+                    fixUrlNull(
+                        raw
+                    )
                 }
 
-                val subtitleUrl =
-                    try {
+            if (
+                subtitleUrl.isNullOrBlank()
+            ) {
+                continue
+            }
 
-                        java.net.URI(
-                            playerUrl
-                        )
-                            .resolve(
-                                rawSrc
-                            )
-                            .toString()
-
-                    } catch (
-                        _: Exception
-                    ) {
-
-                        fixUrlNull(
-                            rawSrc
+            val language =
+                track
+                    .attr("label")
+                    .ifBlank {
+                        track.attr(
+                            "srclang"
                         )
                     }
+                    .ifBlank {
+                        "Türkçe"
+                    }
 
-                if (
-                    subtitleUrl.isNullOrBlank()
-                ) {
-                    return@forEach
-                }
-
-                val language =
-                    track
-                        .attr("label")
-                        .ifBlank {
-                            track.attr(
-                                "srclang"
-                            )
-                        }
-                        .ifBlank {
-                            "Türkçe"
-                        }
-
-                subtitleCallback(
-                    newSubtitleFile(
-                        language,
-                        subtitleUrl
-                    )
+            subtitleCallback(
+                newSubtitleFile(
+                    language,
+                    subtitleUrl
                 )
-            }
+            )
+        }
     }
 
     // -------------------------------------------------------------------------
-    // PLAYER EXTRACTION
+    // EMIT LINK
+    // -------------------------------------------------------------------------
+
+    private suspend fun emitVideoLink(
+        source: String,
+        playerUrl: String,
+        videoUrl: String,
+        suffix: String,
+        callback: (ExtractorLink) -> Unit
+    ) {
+
+        val clean =
+            cleanUrl(
+                videoUrl
+            )
+
+        if (
+            !isValidVideoUrl(
+                clean
+            )
+        ) {
+            return
+        }
+
+        val type =
+            mediaTypeForUrl(
+                clean
+            )
+
+        val referer =
+            resolveMediaReferer(
+                source,
+                playerUrl
+            )
+
+        val origin =
+            resolvePlayerOrigin(
+                source,
+                playerUrl
+            )
+
+        val linkName =
+            if (
+                suffix.isBlank()
+            ) {
+                source
+            } else {
+                "$source $suffix"
+            }
+
+        Log.d(
+            "HDFilmCehennemi",
+            "VIDEO URL=$clean"
+        )
+
+        Log.d(
+            "HDFilmCehennemi",
+            "VIDEO TYPE=$type"
+        )
+
+        Log.d(
+            "HDFilmCehennemi",
+            "VIDEO REFERER=$referer"
+        )
+
+        Log.d(
+            "HDFilmCehennemi",
+            "VIDEO ORIGIN=$origin"
+        )
+
+        callback(
+            newExtractorLink(
+                source = linkName,
+                name = linkName,
+                url = clean,
+                type = type
+            ) {
+
+                this.referer =
+                    referer
+
+                this.headers =
+                    mapOf(
+                        "User-Agent" to
+                            browserHeaders["User-Agent"].orEmpty(),
+
+                        "Accept" to
+                            "*/*",
+
+                        "Accept-Language" to
+                            "tr-TR,tr;q=0.9,en;q=0.8",
+
+                        "Origin" to
+                            origin
+                    )
+
+                quality =
+                    Qualities.Unknown.value
+            }
+        )
+    }
+
+    // -------------------------------------------------------------------------
+    // PLAYER
     // -------------------------------------------------------------------------
 
     private suspend fun extractFromPlayer(
         source: String,
         playerUrl: String,
         pageUrl: String,
-        isMovie: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
 
         Log.d(
             "HDFilmCehennemi",
-            "Player URL: $playerUrl"
+            "PLAYER=$playerUrl"
         )
 
-        val mediaOrigin =
-            resolveMediaOrigin(
+        val referer =
+            resolveMediaReferer(
                 source,
                 playerUrl
             )
-
-        val mediaReferer =
-            "${mediaOrigin.trimEnd('/')}/"
-
-        Log.d(
-            "HDFilmCehennemi",
-            "Resolved mediaOrigin=$mediaOrigin"
-        )
-
-        Log.d(
-            "HDFilmCehennemi",
-            "Resolved mediaReferer=$mediaReferer"
-        )
 
         val response =
             runCatching {
@@ -1900,7 +1649,7 @@ class HDFilmCehennemi : MainAPI() {
                 app.get(
                     playerUrl,
                     headers = browserHeaders,
-                    referer = mediaReferer,
+                    referer = referer,
                     allowRedirects = true,
                     interceptor = interceptor
                 )
@@ -1910,7 +1659,7 @@ class HDFilmCehennemi : MainAPI() {
 
                     Log.e(
                         "HDFilmCehennemi",
-                        "Player isteği başarısız: $playerUrl"
+                        "Player GET başarısız=$playerUrl"
                     )
 
                     return false
@@ -1925,7 +1674,7 @@ class HDFilmCehennemi : MainAPI() {
 
             Log.e(
                 "HDFilmCehennemi",
-                "Player HTML boş: $playerUrl"
+                "Player HTML boş=$playerUrl"
             )
 
             return false
@@ -1933,76 +1682,34 @@ class HDFilmCehennemi : MainAPI() {
 
         Log.d(
             "HDFilmCehennemi",
-            "Player HTML length=${html.length}"
+            "PLAYER HTML LENGTH=${html.length}"
         )
 
         addPlayerSubtitles(
             html,
-            subtitleCallback,
-            playerUrl
+            playerUrl,
+            subtitleCallback
         )
 
-        val candidates =
-            LinkedHashMap<String, Candidate>()
+        val inlineCandidates =
+            LinkedHashSet<String>()
 
-        fun addCandidate(
-            url: String?,
-            provisional: Boolean
-        ) {
+        // ---------------------------------------------------------
+        // 1) Current inline decoder.
+        // ---------------------------------------------------------
 
-            if (
-                url.isNullOrBlank()
-            ) {
-                return
-            }
-
-            val cleaned =
-                cleanUrl(
-                    url
-                )
-
-            if (
-                !isValidVideoUrl(
-                    cleaned
-                )
-            ) {
-                return
-            }
-
-            if (
-                candidates.containsKey(
-                    cleaned
-                )
-            ) {
-                return
-            }
-
-            candidates[cleaned] =
-                Candidate(
-                    url = cleaned,
-                    source = source,
-                    referer = mediaReferer,
-                    origin = mediaOrigin,
-                    provisional = provisional
-                )
-        }
-
-        // -------------------------------------------------------------
-        // 1) Current inline decoder
-        // -------------------------------------------------------------
-
-        val decoders =
+        val inlineDecoders =
             parseInlineDecoders(
                 html
             )
 
         Log.d(
             "HDFilmCehennemi",
-            "Inline decoder count=${decoders.size}"
+            "INLINE DECODER COUNT=${inlineDecoders.size}"
         )
 
         for (
-            decoder in decoders
+            decoder in inlineDecoders
         ) {
 
             val decoded =
@@ -2015,20 +1722,59 @@ class HDFilmCehennemi : MainAPI() {
 
                 }.getOrDefault("")
 
+            val clean =
+                cleanUrl(
+                    decoded
+                )
+
             Log.d(
                 "HDFilmCehennemi",
-                "Inline decoded=${decoded.take(180)}"
+                "INLINE RESULT=$clean"
             )
 
-            addCandidate(
-                decoded,
-                provisional = false
-            )
+            if (
+                isValidVideoUrl(
+                    clean
+                )
+            ) {
+
+                inlineCandidates.add(
+                    clean
+                )
+            }
         }
 
-        // -------------------------------------------------------------
-        // 2) Packed JavaScript fallback
-        // -------------------------------------------------------------
+        if (
+            inlineCandidates.isNotEmpty()
+        ) {
+
+            var index = 1
+
+            for (
+                videoUrl in
+                inlineCandidates
+            ) {
+
+                emitVideoLink(
+                    source = source,
+                    playerUrl = playerUrl,
+                    videoUrl = videoUrl,
+                    suffix = "Inline $index",
+                    callback = callback
+                )
+
+                index++
+            }
+
+            // The inline decoder is the current primary method.
+            // Once a valid decoded URL exists, do not replace it with
+            // stale JSON-LD.
+            return true
+        }
+
+        // ---------------------------------------------------------
+        // 2) Packed JS fallback.
+        // ---------------------------------------------------------
 
         val unpacked =
             runCatching {
@@ -2049,8 +1795,11 @@ class HDFilmCehennemi : MainAPI() {
 
             Log.d(
                 "HDFilmCehennemi",
-                "Unpacked decoder count=${packedDecoders.size}"
+                "PACKED DECODER COUNT=${packedDecoders.size}"
             )
+
+            val packedCandidates =
+                LinkedHashSet<String>()
 
             for (
                 decoder in packedDecoders
@@ -2066,134 +1815,144 @@ class HDFilmCehennemi : MainAPI() {
 
                     }.getOrDefault("")
 
+                val clean =
+                    cleanUrl(
+                        decoded
+                    )
+
                 Log.d(
                     "HDFilmCehennemi",
-                    "Packed decoded=${decoded.take(180)}"
+                    "PACKED RESULT=$clean"
                 )
 
-                addCandidate(
-                    decoded,
-                    provisional = false
-                )
+                if (
+                    isValidVideoUrl(
+                        clean
+                    )
+                ) {
+
+                    packedCandidates.add(
+                        clean
+                    )
+                }
+            }
+
+            if (
+                packedCandidates.isNotEmpty()
+            ) {
+
+                var index = 1
+
+                for (
+                    videoUrl in
+                    packedCandidates
+                ) {
+
+                    emitVideoLink(
+                        source = source,
+                        playerUrl = playerUrl,
+                        videoUrl = videoUrl,
+                        suffix = "Packed $index",
+                        callback = callback
+                    )
+
+                    index++
+                }
+
+                return true
             }
         }
 
-        // -------------------------------------------------------------
-        // 3) Direct media URLs in HTML
-        // -------------------------------------------------------------
+        // ---------------------------------------------------------
+        // 3) Direct URLs inside HTML.
+        // ---------------------------------------------------------
 
-        for (
-            candidateUrl in extractCandidateUrls(
+        val directCandidates =
+            extractCandidateUrls(
                 html
             )
+
+        if (
+            directCandidates.isNotEmpty()
         ) {
 
-            addCandidate(
-                candidateUrl,
-                provisional = false
-            )
+            var index = 1
+
+            for (
+                videoUrl in
+                directCandidates
+            ) {
+
+                emitVideoLink(
+                    source = source,
+                    playerUrl = playerUrl,
+                    videoUrl = videoUrl,
+                    suffix = "Direct $index",
+                    callback = callback
+                )
+
+                index++
+            }
+
+            return true
         }
 
-        // -------------------------------------------------------------
-        // 4) JSON-LD provisional fallback
-        // -------------------------------------------------------------
+        // ---------------------------------------------------------
+        // 4) JSON-LD last fallback.
+        // ---------------------------------------------------------
 
-        val jsonLdContentUrl =
+        val jsonLdUrl =
             Regex(
                 """[\"']contentUrl[\"']\s*:\s*[\"']([^\"']+)[\"']""",
                 RegexOption.IGNORE_CASE
             )
-                .find(html)
+                .find(
+                    html
+                )
                 ?.groupValues
                 ?.getOrNull(1)
-                ?.let(::decodeText)
+                ?.let(
+                    ::decodeText
+                )
 
         if (
-            !jsonLdContentUrl.isNullOrBlank()
+            !jsonLdUrl.isNullOrBlank()
         ) {
+
+            val clean =
+                cleanUrl(
+                    jsonLdUrl
+                )
 
             Log.d(
                 "HDFilmCehennemi",
-                "JSON-LD provisional=$jsonLdContentUrl"
+                "JSON-LD FALLBACK=$clean"
             )
 
-            addCandidate(
-                jsonLdContentUrl,
-                provisional = true
-            )
-        }
-
-        if (
-            candidates.isEmpty()
-        ) {
-
-            Log.e(
-                "HDFilmCehennemi",
-                "Bu player içinde medya adayı bulunamadı: $playerUrl"
-            )
-
-            return false
-        }
-
-        // JSON-LD is always last, but all candidates are scored/probed.
-        val best =
-            chooseBestCandidate(
-                candidates.values.toList(),
-                isMovie
-            )
-
-        if (
-            best == null
-        ) {
-
-            Log.e(
-                "HDFilmCehennemi",
-                "Geçerli/uygun video kaynağı bulunamadı: $playerUrl"
-            )
-
-            return false
-        }
-
-        val selected =
-            best.first
-
-        val probe =
-            best.second
-
-        Log.d(
-            "HDFilmCehennemi",
-            "SELECTED source=${selected.source} type=${probe.type} duration=${probe.durationSeconds}s vod=${probe.isVod} provisional=${selected.provisional}"
-        )
-
-        callback(
-            newExtractorLink(
-                source = selected.source,
-                name = selected.source,
-                url = selected.url,
-                type = probe.type
+            if (
+                isValidVideoUrl(
+                    clean
+                )
             ) {
 
-                this.referer =
-                    selected.referer
+                emitVideoLink(
+                    source = source,
+                    playerUrl = playerUrl,
+                    videoUrl = clean,
+                    suffix = "JSON-LD",
+                    callback = callback
+                )
 
-                this.headers =
-                    mediaHeaders(
-                        selected.referer,
-                        selected.origin
-                    )
-
-                quality =
-                    Qualities.Unknown.value
+                return true
             }
-        )
+        }
 
-        Log.d(
+        Log.e(
             "HDFilmCehennemi",
-            "VIDEO LINK EMITTED:"
-                    + " ${selected.url}"
+            "VIDEO BULUNAMADI player=$playerUrl page=$pageUrl"
         )
 
-        return true
+        return false
     }
 
     // -------------------------------------------------------------------------
@@ -2207,6 +1966,11 @@ class HDFilmCehennemi : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
 
+        Log.d(
+            "HDFilmCehennemi",
+            "LOAD LINKS=$data"
+        )
+
         val pageDocument =
             runCatching {
 
@@ -2218,291 +1982,295 @@ class HDFilmCehennemi : MainAPI() {
                 ).document
 
             }.getOrNull()
-                ?: return false
+                ?: run {
 
-        val isMovie =
-            pageDocument
-                .select("div.seasons")
-                .isEmpty()
+                    Log.e(
+                        "HDFilmCehennemi",
+                        "Ana video sayfası alınamadı=$data"
+                    )
 
-        Log.d(
-            "HDFilmCehennemi",
-            "loadLinks isMovie=$isMovie data=$data"
-        )
+                    return false
+                }
 
         var found =
             false
 
-        pageDocument
-            .select(
+        val alternativeBlocks =
+            pageDocument.select(
                 "div.alternative-links"
             )
-            .forEach { element ->
-
-                val langCode =
-                    element
-                        .attr("data-lang")
-                        .uppercase()
-                        .ifBlank {
-                            "TR"
-                        }
-
-                element
-                    .select(
-                        "button.alternative-link"
-                    )
-                    .forEach { button ->
-
-                        val source =
-                            "${
-                                button
-                                    .text()
-                                    .replace(
-                                        "(HDrip Xbet)",
-                                        ""
-                                    )
-                                    .trim()
-                            } $langCode"
-                                .trim()
-
-                        val videoId =
-                            button
-                                .attr("data-video")
-                                .trim()
-
-                        if (
-                            videoId.isBlank()
-                        ) {
-                            return@forEach
-                        }
-
-                        val apiGet =
-                            runCatching {
-
-                                app.get(
-                                    "${mainUrl}/video/$videoId/",
-                                    interceptor = interceptor,
-                                    headers = mapOf(
-                                        "Content-Type" to
-                                            "application/json",
-                                        "X-Requested-With" to
-                                            "fetch"
-                                    ),
-                                    referer = data
-                                ).text
-
-                            }.getOrNull()
-                                ?: return@forEach
-
-                        val iframe =
-                            Regex(
-                                """data-src\s*=\s*\\?[\"']([^\"']+)""",
-                                RegexOption.IGNORE_CASE
-                            )
-                                .find(
-                                    apiGet
-                                )
-                                ?.groupValues
-                                ?.getOrNull(1)
-                                ?.let(
-                                    ::decodeText
-                                )
-                                ?: runCatching {
-
-                                    Jsoup.parse(
-                                        apiGet
-                                    )
-                                        .selectFirst(
-                                            "iframe[data-src], iframe[src]"
-                                        )
-                                        ?.let { frame ->
-
-                                            frame
-                                                .attr(
-                                                    "data-src"
-                                                )
-                                                .ifBlank {
-                                                    frame.attr(
-                                                        "src"
-                                                    )
-                                                }
-                                                .trim()
-                                                .takeIf {
-                                                    it.isNotBlank()
-                                                }
-                                        }
-
-                                }.getOrNull()
-                                ?: return@forEach
-
-                        val normalizedIframe =
-                            fixUrlNull(
-                                iframe
-                            ) ?: iframe
-
-                        Log.d(
-                            "HDFilmCehennemi",
-                            "SOURCE=$source"
-                        )
-
-                        Log.d(
-                            "HDFilmCehennemi",
-                            "IFRAME=$normalizedIframe"
-                        )
-
-                        val playerCandidates =
-                            LinkedHashSet<String>()
-
-                        // Primary iframe.
-                        playerCandidates +=
-                            normalizedIframe
-
-                        // -------------------------------------------------
-                        // Rapidrame id
-                        // -------------------------------------------------
-
-                        val rapidrameId =
-                            Regex(
-                                """rapidrame_id=([^&\"']+)""",
-                                RegexOption.IGNORE_CASE
-                            )
-                                .find(
-                                    iframe
-                                )
-                                ?.groupValues
-                                ?.getOrNull(1)
-
-                        if (
-                            !rapidrameId.isNullOrBlank()
-                        ) {
-
-                            playerCandidates +=
-                                "${mainUrl}/rplayer/$rapidrameId/"
-
-                            playerCandidates +=
-                                "${mainUrl}/playerr/$rapidrameId"
-                        }
-
-                        // -------------------------------------------------
-                        // Existing /rplayer or /playerr iframe
-                        // -------------------------------------------------
-
-                        val rplayerMatch =
-                            Regex(
-                                """/(?:rplayer|playerr)/([^/?#]+)""",
-                                RegexOption.IGNORE_CASE
-                            )
-                                .find(
-                                    iframe
-                                )
-
-                        if (
-                            rplayerMatch != null
-                        ) {
-
-                            val id =
-                                rplayerMatch
-                                    .groupValues[1]
-
-                            playerCandidates +=
-                                "${mainUrl}/rplayer/$id/"
-
-                            playerCandidates +=
-                                "${mainUrl}/playerr/$id"
-                        }
-
-                        // -------------------------------------------------
-                        // Mobi nested iframes
-                        // -------------------------------------------------
-
-                        if (
-                            iframe.contains(
-                                "mobi",
-                                ignoreCase = true
-                            )
-                        ) {
-
-                            Jsoup.parse(
-                                apiGet
-                            )
-                                .select(
-                                    "iframe[src], iframe[data-src]"
-                                )
-                                .mapNotNull { frame ->
-
-                                    frame
-                                        .attr(
-                                            "data-src"
-                                        )
-                                        .ifBlank {
-                                            frame.attr(
-                                                "src"
-                                            )
-                                        }
-                                        .takeIf {
-                                            it.isNotBlank()
-                                        }
-
-                                }
-                                .mapNotNull {
-                                    fixUrlNull(it)
-                                }
-                                .forEach {
-                                    playerCandidates +=
-                                        it
-                                }
-                        }
-
-                        // -------------------------------------------------
-                        // Try this source.
-                        //
-                        // Important:
-                        // A short preview / trailer does NOT count as success
-                        // for movies.
-                        // If the player only exposes a short candidate, we keep
-                        // trying other players / alternatives.
-                        // -------------------------------------------------
-
-                        for (
-                            playerUrl in playerCandidates
-                        ) {
-
-                            Log.d(
-                                "HDFilmCehennemi",
-                                "TRY PLAYER=$playerUrl"
-                            )
-
-                            val success =
-                                extractFromPlayer(
-                                    source = source,
-                                    playerUrl = playerUrl,
-                                    pageUrl = data,
-                                    isMovie = isMovie,
-                                    subtitleCallback = subtitleCallback,
-                                    callback = callback
-                                )
-
-                            if (
-                                success
-                            ) {
-
-                                found =
-                                    true
-
-                                break
-                            }
-
-                            Log.w(
-                                "HDFilmCehennemi",
-                                "PLAYER FAILED / SHORT / INVALID -> next=$playerUrl"
-                            )
-                        }
-                    }
-            }
 
         Log.d(
             "HDFilmCehennemi",
-            "loadLinks result=$found"
+            "ALTERNATIVE BLOCKS=${alternativeBlocks.size}"
+        )
+
+        alternativeBlocks.forEach { element ->
+
+            val langCode =
+                element
+                    .attr("data-lang")
+                    .uppercase()
+                    .ifBlank {
+                        "TR"
+                    }
+
+            val buttons =
+                element.select(
+                    "button.alternative-link"
+                )
+
+            buttons.forEach { button ->
+
+                val source =
+                    "${
+                        button
+                            .text()
+                            .replace(
+                                "(HDrip Xbet)",
+                                ""
+                            )
+                            .trim()
+                    } $langCode"
+                        .trim()
+
+                val videoId =
+                    button
+                        .attr("data-video")
+                        .trim()
+
+                if (
+                    videoId.isBlank()
+                ) {
+                    return@forEach
+                }
+
+                Log.d(
+                    "HDFilmCehennemi",
+                    "SOURCE=$source VIDEO_ID=$videoId"
+                )
+
+                val apiHtml =
+                    runCatching {
+
+                        app.get(
+                            "${mainUrl}/video/$videoId/",
+                            headers = mapOf(
+                                "Content-Type" to
+                                    "application/json",
+
+                                "X-Requested-With" to
+                                    "fetch"
+                            ),
+                            referer = data,
+                            interceptor = interceptor
+                        ).text
+
+                    }.getOrNull()
+                        ?: run {
+
+                            Log.e(
+                                "HDFilmCehennemi",
+                                "Video API alınamadı=$videoId"
+                            )
+
+                            return@forEach
+                        }
+
+                val playerCandidates =
+                    LinkedHashSet<String>()
+
+                // -----------------------------------------------------
+                // iframe data-src
+                // -----------------------------------------------------
+
+                val dataSrc =
+                    Regex(
+                        """data-src\s*=\s*\\?[\"']([^\"']+)""",
+                        RegexOption.IGNORE_CASE
+                    )
+                        .find(
+                            apiHtml
+                        )
+                        ?.groupValues
+                        ?.getOrNull(1)
+                        ?.let(
+                            ::decodeText
+                        )
+
+                if (
+                    !dataSrc.isNullOrBlank()
+                ) {
+
+                    val fixed =
+                        fixUrlNull(
+                            dataSrc
+                        )
+
+                    if (
+                        !fixed.isNullOrBlank()
+                    ) {
+                        playerCandidates.add(
+                            fixed
+                        )
+                    } else {
+                        playerCandidates.add(
+                            dataSrc
+                        )
+                    }
+                }
+
+                // -----------------------------------------------------
+                // iframe src/data-src fallback
+                // -----------------------------------------------------
+
+                val apiDocument =
+                    Jsoup.parse(
+                        apiHtml
+                    )
+
+                val frames =
+                    apiDocument.select(
+                        "iframe[data-src], iframe[src]"
+                    )
+
+                for (
+                    frame in frames
+                ) {
+
+                    val frameUrl =
+                        frame
+                            .attr("data-src")
+                            .ifBlank {
+                                frame.attr("src")
+                            }
+                            .trim()
+
+                    if (
+                        frameUrl.isBlank()
+                    ) {
+                        continue
+                    }
+
+                    val fixed =
+                        fixUrlNull(
+                            frameUrl
+                        )
+
+                    if (
+                        !fixed.isNullOrBlank()
+                    ) {
+                        playerCandidates.add(
+                            fixed
+                        )
+                    }
+                }
+
+                // -----------------------------------------------------
+                // rapidrame_id
+                // -----------------------------------------------------
+
+                val rapidrameId =
+                    Regex(
+                        """rapidrame_id=([^&\"']+)""",
+                        RegexOption.IGNORE_CASE
+                    )
+                        .find(
+                            apiHtml
+                        )
+                        ?.groupValues
+                        ?.getOrNull(1)
+
+                if (
+                    !rapidrameId.isNullOrBlank()
+                ) {
+
+                    playerCandidates.add(
+                        "${mainUrl}/rplayer/$rapidrameId/"
+                    )
+
+                    playerCandidates.add(
+                        "${mainUrl}/playerr/$rapidrameId"
+                    )
+                }
+
+                // -----------------------------------------------------
+                // rplayer/playerr already present
+                // -----------------------------------------------------
+
+                val rpMatch =
+                    Regex(
+                        """/(?:rplayer|playerr)/([^/?#]+)""",
+                        RegexOption.IGNORE_CASE
+                    )
+                        .find(
+                            apiHtml
+                        )
+
+                if (
+                    rpMatch != null
+                ) {
+
+                    val id =
+                        rpMatch.groupValues[1]
+
+                    if (
+                        id.isNotBlank()
+                    ) {
+
+                        playerCandidates.add(
+                            "${mainUrl}/rplayer/$id/"
+                        )
+
+                        playerCandidates.add(
+                            "${mainUrl}/playerr/$id"
+                        )
+                    }
+                }
+
+                Log.d(
+                    "HDFilmCehennemi",
+                    "PLAYER CANDIDATES=$playerCandidates"
+                )
+
+                for (
+                    playerUrl in
+                    playerCandidates
+                ) {
+
+                    Log.d(
+                        "HDFilmCehennemi",
+                        "TRY PLAYER=$playerUrl"
+                    )
+
+                    val success =
+                        extractFromPlayer(
+                            source = source,
+                            playerUrl = playerUrl,
+                            pageUrl = data,
+                            subtitleCallback = subtitleCallback,
+                            callback = callback
+                        )
+
+                    if (
+                        success
+                    ) {
+
+                        found =
+                            true
+
+                        // Do not stop the outer alternatives.
+                        // Other language/source buttons can provide useful
+                        // additional playback choices.
+                        break
+                    }
+                }
+            }
+        }
+
+        Log.d(
+            "HDFilmCehennemi",
+            "LOAD LINKS RESULT=$found"
         )
 
         return found
