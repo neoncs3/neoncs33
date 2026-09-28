@@ -27,11 +27,19 @@ jobs:
 
     steps:
 
+      # ============================================================
+      # SOURCE REPOSITORY
+      # ============================================================
+
       - name: "'src' Depo Kontrolü"
         uses: actions/checkout@v4
         with:
           path: src
           ref: master
+
+      # ============================================================
+      # BUILDS BRANCH
+      # ============================================================
 
       - name: "'builds' Depo Kontrolü"
         uses: actions/checkout@v4
@@ -39,12 +47,22 @@ jobs:
           path: builds
           ref: builds
 
+      # ============================================================
+      # ESKİ CS3 DOSYALARINI TEMİZLE
+      # ============================================================
+
       - name: Eski Derlemeleri Temizle
         shell: bash
         run: |
           set -e
+
           rm -f "$GITHUB_WORKSPACE"/builds/*.cs3
+
           echo "Eski .cs3 dosyaları temizlendi."
+
+      # ============================================================
+      # JAVA 17
+      # ============================================================
 
       - name: JDK 17 Ayarla
         uses: actions/setup-java@v4
@@ -53,26 +71,45 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Android SDK Ayarla
-        uses: android-actions/setup-android@v3
+      # ============================================================
+      # ANDROID SDK
+      # ============================================================
 
-      - name: Android SDK Bileşenleri
+      - name: Android SDK Ayarla
+        uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools"
+
+      # ============================================================
+      # ANDROID SDK BİLEŞENLERİ
+      # ============================================================
+
+      - name: Android Platform ve Build Tools
         shell: bash
         run: |
           set -e
-          yes | sdkmanager --licenses >/dev/null || true
+
           sdkmanager \
-            "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
+
+      # ============================================================
+      # GRADLE CACHE TEMİZLE
+      # ============================================================
 
       - name: CloudStream Gradle Cache Temizle
         shell: bash
         run: |
           set -e
+
           rm -rf "$HOME/.gradle/caches/modules-2/files-2.1/com.github.recloudstream"
           rm -rf "$HOME/.gradle/caches/modules-2/files-2.1/com.lagradost.cloudstream3"
+
           echo "CloudStream Gradle cache temizlendi."
+
+      # ============================================================
+      # CLOUDSTREAM GRADLE REPOSITORY
+      # ============================================================
 
       - name: CloudStream Gradle Plugin'i İndir
         shell: bash
@@ -83,7 +120,10 @@ jobs:
 
           rm -rf "$PLUGIN_DIR"
 
-          echo "CloudStream Gradle plugin indiriliyor..."
+          echo ""
+          echo "=========================================="
+          echo "CLOUDSTREAM GRADLE REPOSITORY"
+          echo "=========================================="
 
           git clone \
             https://github.com/recloudstream/gradle.git \
@@ -99,6 +139,10 @@ jobs:
           echo "=========================================="
 
           git rev-parse HEAD
+
+      # ============================================================
+      # CLOUDSTREAM GRADLE PLUGIN MAVEN LOCAL
+      # ============================================================
 
       - name: CloudStream Gradle Plugin'i Maven Local'a Kur
         shell: bash
@@ -142,9 +186,11 @@ jobs:
             echo "$PLUGIN_REPO"
             echo ""
             echo "Mevcut CloudStream Maven dosyaları:"
+
             find "$HOME/.m2/repository/com/lagradost/cloudstream3" \
               -type f \
               -print 2>/dev/null || true
+
             exit 1
           fi
 
@@ -155,6 +201,10 @@ jobs:
             -maxdepth 2 \
             -type f \
             -print
+
+      # ============================================================
+      # ANA CLOUDSTREAM PROJESİNİ DERLE
+      # ============================================================
 
       - name: Eklentileri Derle
         shell: bash
@@ -222,6 +272,10 @@ jobs:
             build/plugins.json \
             "$GITHUB_WORKSPACE/builds/plugins.json"
 
+      # ============================================================
+      # DERLEME KONTROL
+      # ============================================================
+
       - name: Derleme Kontrolü
         shell: bash
         run: |
@@ -269,6 +323,10 @@ jobs:
 
           stat -c "%n -> %s bytes" plugins.json
 
+      # ============================================================
+      # BUILD GIT STATUS
+      # ============================================================
+
       - name: Build Git Durumu
         shell: bash
         run: |
@@ -282,6 +340,10 @@ jobs:
           echo "=========================================="
 
           git status
+
+      # ============================================================
+      # BUILDS BRANCH'E PUSH
+      # ============================================================
 
       - name: Derlemeleri Yükle
         shell: bash
