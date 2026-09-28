@@ -1,9 +1,5 @@
-// Source recovered from the public upstream repository pinned by TurkSinema NOTICE.
-// Upstream: https://github.com/Saloo1575/SalooRepo
-// Pinned commit: 184deca182486d85388cffa5caf9ed1f53f387f3
-// This is the provider source corresponding to the HDFilmCehennemi module.
 
-package com.keyiflerolsun
+package com.nroncs3
 import android.util.Log
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.databind.DeserializationFeature
