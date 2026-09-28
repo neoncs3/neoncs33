@@ -918,7 +918,7 @@ class DiziBoxizle : MainAPI() {
         // VidMoly classic embeds commonly expose:
         // sources: [{ file: "https://.../master.m3u8?..." }]
         private val PROVIDER_SOURCE_PATTERN = Regex(
-            "(?is)\\bsources\\s*:\\s*\\[\\s*\\{\\s*[\"']?file[\"']?[\\s:\=]*[\"']([^\"']+)[\"']"
+            """(?is)\bsources\s*:\s*\[\s*\{\s*["']?file["']?[\s:=]*["']([^"']+)["']"""
         )
 
         // Fallback for variants using src/url/source/hls directly.
