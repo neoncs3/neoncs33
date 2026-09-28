@@ -5,18 +5,15 @@ buildscript {
     repositories {
         google()
         mavenCentral()
-        maven("https://jitpack.io") {
-            metadataSources {
-                mavenPom()
-                artifact()
-            }
-        }
+        maven("https://jitpack.io")
     }
 
     dependencies {
         classpath("com.android.tools.build:gradle:8.7.3")
-        classpath("com.github.recloudstream:gradle:-SNAPSHOT")
-        // 1. Kotlin sürümü 2.1.20'ye yükseltildi
+
+        // SNAPSHOT yerine sabit ve AGP 8.7.3 uyumlu commit
+        classpath("com.github.recloudstream:gradle:81b1d42")
+
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.20")
     }
 }
@@ -25,20 +22,23 @@ allprojects {
     repositories {
         google()
         mavenCentral()
-        maven("https://jitpack.io") {
-            metadataSources {
-                mavenPom()
-                artifact()
-            }
-        }
+        maven("https://jitpack.io")
     }
 }
 
-fun Project.cloudstream(configuration: CloudstreamExtension.() -> Unit) = 
-    extensions.getByName<CloudstreamExtension>("cloudstream").configuration()
+fun Project.cloudstream(
+    configuration: CloudstreamExtension.() -> Unit
+) =
+    extensions
+        .getByName<CloudstreamExtension>("cloudstream")
+        .configuration()
 
-fun Project.android(configuration: BaseExtension.() -> Unit) = 
-    extensions.getByName<BaseExtension>("android").configuration()
+fun Project.android(
+    configuration: BaseExtension.() -> Unit
+) =
+    extensions
+        .getByName<BaseExtension>("android")
+        .configuration()
 
 subprojects {
     apply(plugin = "com.android.library")
@@ -46,7 +46,11 @@ subprojects {
     apply(plugin = "com.lagradost.cloudstream3.gradle")
 
     cloudstream {
-        setRepo(System.getenv("GITHUB_REPOSITORY") ?: "https://github.com/neoncs3/neoncs33")
+        setRepo(
+            System.getenv("GITHUB_REPOSITORY")
+                ?: "https://github.com/neoncs3/neoncs33"
+        )
+
         authors = listOf("neoncs3")
     }
 
@@ -66,13 +70,15 @@ subprojects {
 
         tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
             compilerOptions {
-                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+                jvmTarget.set(
+                    org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+                )
+
                 freeCompilerArgs.addAll(
                     listOf(
                         "-Xno-call-assertions",
                         "-Xno-param-assertions",
                         "-Xno-receiver-assertions",
-                        // 2. Metadata sürüm uyuşmazlığını yok sayan bayrak eklendi
                         "-Xskip-metadata-version-check"
                     )
                 )
