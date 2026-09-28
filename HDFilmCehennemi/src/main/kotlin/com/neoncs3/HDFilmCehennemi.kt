@@ -1130,21 +1130,17 @@ class HDFilmCehennemi : MainAPI() {
                         match.groupValues[1]
                     )
 
-                val subtitleUrl =
-                    runCatching {
+                val subtitleUrl = try {
+    java.net.URI(playerUrl)
+        .resolve(rawUrl)
+        .toString()
+} catch (_: Exception) {
+    fixUrlNull(rawUrl)
+}
 
-                        java.net.URI(
-                            playerUrl
-                        )
-                            .resolve(rawUrl)
-                            .toString()
-
-                    }.getOrElse {
-
-                        fixUrlNull(
-                            rawUrl
-                        ) ?: continue
-                    }
+if (subtitleUrl.isNullOrBlank()) {
+    continue
+}
 
                 val language =
                     match.groupValues
