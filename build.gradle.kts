@@ -3,40 +3,50 @@ import com.android.build.gradle.BaseExtension
 
 buildscript {
     repositories {
+        // GitHub Actions içinde oluşturduğumuz local Maven repository
+        mavenLocal()
+
         google()
         mavenCentral()
+
+        // CloudStream'un diğer bağımlılıkları için
         maven("https://jitpack.io")
     }
 
     dependencies {
         classpath("com.android.tools.build:gradle:8.7.3")
 
-        // SNAPSHOT yerine doğrudan JitPack commit'i
-        classpath("com.github.recloudstream:gradle:32895aedb6")
+        // JitPack yerine Actions'ta local olarak derlediğimiz plugin
+        classpath("com.lagradost.cloudstream3:gradle:local-SNAPSHOT")
 
-        // CloudStream resmi template ile aynı
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.0")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.0")
     }
 }
+
 allprojects {
     repositories {
+        mavenLocal()
+
         google()
         mavenCentral()
+
         maven("https://jitpack.io")
     }
 }
 
 fun Project.cloudstream(
     configuration: CloudstreamExtension.() -> Unit
-) = extensions
-    .getByName<CloudstreamExtension>("cloudstream")
-    .configuration()
+) =
+    extensions
+        .getByName<CloudstreamExtension>("cloudstream")
+        .configuration()
 
 fun Project.android(
     configuration: BaseExtension.() -> Unit
-) = extensions
-    .getByName<BaseExtension>("android")
-    .configuration()
+) =
+    extensions
+        .getByName<BaseExtension>("android")
+        .configuration()
 
 subprojects {
     apply(plugin = "com.android.library")
@@ -48,6 +58,7 @@ subprojects {
             System.getenv("GITHUB_REPOSITORY")
                 ?: "https://github.com/neoncs3/neoncs33"
         )
+
         authors = listOf("neoncs3")
     }
 
