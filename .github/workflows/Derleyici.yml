@@ -1,139 +1,357 @@
 name: CloudStream Derleyici
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: true
+group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+cancel-in-progress: true
 
 on:
-  workflow_dispatch:
+workflow_dispatch:
 
-  push:
-    branches:
-      - master
-    paths-ignore:
-      - "**/*.md"
-      - "**/*.jpg"
-      - "**/*.png"
-      - "**/*.py"
+push:
+branches:
+- master
+paths-ignore:
+- "**/*.md"
+- "**/*.jpg"
+- "**/*.png"
+- "**/*.py"
 
 jobs:
-  CloudStreamDerleyici:
-    runs-on: ubuntu-latest
+CloudStreamDerleyici:
+runs-on: ubuntu-latest
 
-    steps:
+steps:
 
-      - name: "'src' Depo Kontrolü"
-        uses: actions/checkout@v4
-        with:
-          path: src
-          ref: master
+  # ============================================================
+  # SOURCE REPOSITORY
+  # ============================================================
 
-      - name: "'build' Depo Kontrolü"
-        uses: actions/checkout@v4
-        with:
-          path: builds
-          ref: builds
+  - name: "'src' Depo Kontrolü"
+    uses: actions/checkout@v4
+    with:
+      path: src
+      ref: master
 
-      - name: Eski Derlemeleri Temizle
-        run: |
-          rm -f "$GITHUB_WORKSPACE"/builds/*.cs3
+  # ============================================================
+  # BUILDS BRANCH
+  # ============================================================
 
-      - name: JDK 17 Ayarla
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
+  - name: "'build' Depo Kontrolü"
+    uses: actions/checkout@v4
+    with:
+      path: builds
+      ref: builds
 
-      - name: Android SDK Ayarla
-        uses: android-actions/setup-android@v3
-        with:
-          packages: "platforms;android-35 build-tools;35.0.0 platform-tools"
+  # ============================================================
+  # ESKİ CS3 DOSYALARINI TEMİZLE
+  # ============================================================
 
-      - name: Gradle Önbelleğini Temizle
-        run: |
-          rm -rf ~/.gradle/caches/modules-2/files-2.1/com.github.recloudstream
-          rm -rf ~/.gradle/caches/modules-2/files-2.1/com.github.Blatzar
+  - name: Eski Derlemeleri Temizle
+    shell: bash
+    run: |
+      set -e
 
-      - name: CloudStream Gradle Eklentisini Kontrol Et
-        run: |
-          echo "CloudStream Gradle plugin:"
-          echo "com.github.recloudstream:gradle:81b1d42"
+      rm -f "$GITHUB_WORKSPACE"/builds/*.cs3
 
-      - name: Eklentileri Derle
-        working-directory: ${{ github.workspace }}/src
-        run: |
-          chmod +x gradlew
+      echo "Eski .cs3 dosyaları temizlendi."
 
-          ./gradlew make makePluginsJson --refresh-dependencies --stacktrace
+  # ============================================================
+  # JAVA 17
+  # ============================================================
 
-          shopt -s globstar nullglob
+  - name: JDK 17 Ayarla
+    uses: actions/setup-java@v4
+    with:
+      distribution: temurin
+      java-version: "17"
+      cache: gradle
 
-          files=(**/build/*.cs3)
+  # ============================================================
+  # ANDROID SDK
+  # ============================================================
 
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "HATA: Hiçbir .cs3 dosyası oluşmadı."
-            exit 1
-          fi
+  - name: Android SDK Ayarla
+    uses: android-actions/setup-android@v3
 
-          cp "${files[@]}" "$GITHUB_WORKSPACE/builds/"
+  - name: Android Platform ve Build Tools
+    shell: bash
+    run: |
+      set -e
 
-          if [ ! -f build/plugins.json ]; then
-            echo "HATA: build/plugins.json oluşmadı."
-            exit 1
-          fi
+      sdkmanager "platform-tools"
+      sdkmanager "platforms;android-35"
+      sdkmanager "build-tools;35.0.0"
 
-          cp build/plugins.json "$GITHUB_WORKSPACE/builds/plugins.json"
+  # ============================================================
+  # GRADLE ÖNBELLEĞİ
+  # ============================================================
 
-      - name: Derleme Kontrolü
-        run: |
-          cd "$GITHUB_WORKSPACE/builds"
+  - name: CloudStream Gradle Önbelleğini Temizle
+    shell: bash
+    run: |
+      set -e
 
-          echo ""
-          echo "=========================================="
-          echo "CS3 DOSYALARI"
-          echo "=========================================="
+      rm -rf ~/.gradle/caches/modules-2/files-2.1/com.github.recloudstream
+      rm -rf ~/.gradle/caches/modules-2/files-2.1/com.lagradost.cloudstream3
 
-          ls -lh *.cs3
+      echo "Eski CloudStream Gradle cache temizlendi."
 
-          echo ""
-          echo "=========================================="
-          echo "SHA256"
-          echo "=========================================="
+  # ============================================================
+  # CLOUDSTREAM GRADLE PLUGIN
+  # ============================================================
 
-          for f in *.cs3; do
-            sha256sum "$f"
-          done
+  - name: CloudStream Gradle Plugin Kaynak Kodunu İndir
+    shell: bash
+    run: |
+      set -e
 
-          echo ""
-          echo "=========================================="
-          echo "PLUGINS.JSON"
-          echo "=========================================="
+      PLUGIN_DIR="$RUNNER_TEMP/cloudstream-gradle"
 
-          cat plugins.json
+      rm -rf "$PLUGIN_DIR"
 
-          echo ""
-          echo "=========================================="
-          echo "DOSYA BOYUTLARI"
-          echo "=========================================="
+      echo "CloudStream Gradle plugin indiriliyor..."
 
-          for f in *.cs3; do
-            stat -c "%n -> %s bytes" "$f"
-          done
+      git clone --depth 1 \
+        https://github.com/recloudstream/gradle.git \
+        "$PLUGIN_DIR"
 
-          stat -c "%n -> %s bytes" plugins.json
+      cd "$PLUGIN_DIR"
 
-      - name: Derlemeleri Yükle
-        run: |
-          cd "$GITHUB_WORKSPACE/builds"
+      git fetch --depth 1 origin 81b1d42
+      git checkout 81b1d42
 
-          git config --local user.email "actions@github.com"
-          git config --local user.name "GitHub Actions"
+      echo ""
+      echo "=========================================="
+      echo "CLOUDSTREAM GRADLE COMMIT"
+      echo "=========================================="
 
-          git add -A
+      git rev-parse HEAD
 
-          git status
+      echo ""
+      echo "=========================================="
+      echo "PLUGIN GRADLE VERSIYON"
+      echo "=========================================="
 
-          git commit -m "CloudStream eklentilerini güncelle $GITHUB_SHA" \
-            || echo "Yeni değişiklik yok."
+      chmod +x gradlew
 
-          git push origin builds
+      ./gradlew --version
+
+  # ============================================================
+  # CLOUDSTREAM GRADLE PLUGIN'I MAVEN LOCAL'A KUR
+  # ============================================================
+
+  - name: CloudStream Gradle Plugin'i Local Maven'a Kur
+    shell: bash
+    run: |
+      set -e
+
+      PLUGIN_DIR="$RUNNER_TEMP/cloudstream-gradle"
+
+      cd "$PLUGIN_DIR"
+
+      echo ""
+      echo "=========================================="
+      echo "CLOUDSTREAM GRADLE PLUGIN DERLENIYOR"
+      echo "=========================================="
+
+      ./gradlew publishToMavenLocal \
+        --no-daemon \
+        --stacktrace
+
+      echo ""
+      echo "=========================================="
+      echo "LOCAL MAVEN KONTROL"
+      echo "=========================================="
+
+      PLUGIN_REPO="$HOME/.m2/repository/com/lagradost/cloudstream3/gradle/local-SNAPSHOT"
+
+      if [ ! -d "$PLUGIN_REPO" ]; then
+        echo "HATA: CloudStream Gradle plugin local Maven'a kurulamadı."
+        echo ""
+        echo "Beklenen dizin:"
+        echo "$PLUGIN_REPO"
+        echo ""
+        echo "Mevcut CloudStream Maven dosyaları:"
+        find "$HOME/.m2/repository/com/lagradost" \
+          -maxdepth 8 \
+          -type f \
+          -print 2>/dev/null || true
+
+        exit 1
+      fi
+
+      echo "Plugin bulundu:"
+      find "$PLUGIN_REPO" \
+        -maxdepth 2 \
+        -type f \
+        -print
+
+  # ============================================================
+  # ANA CLOUDSTREAM PROJESİNİ DERLE
+  # ============================================================
+
+  - name: Eklentileri Derle
+    shell: bash
+    working-directory: ${{ github.workspace }}/src
+    run: |
+      set -e
+
+      chmod +x gradlew
+
+      echo ""
+      echo "=========================================="
+      echo "ANA CLOUDSTREAM PROJESI"
+      echo "=========================================="
+
+      ./gradlew --version
+
+      echo ""
+      echo "=========================================="
+      echo "CLOUDSTREAM BUILD"
+      echo "=========================================="
+
+      ./gradlew clean make makePluginsJson \
+        --no-daemon \
+        --refresh-dependencies \
+        --stacktrace
+
+      echo ""
+      echo "=========================================="
+      echo "CS3 DOSYALARI ARANIYOR"
+      echo "=========================================="
+
+      shopt -s globstar nullglob
+
+      files=(**/build/*.cs3)
+
+      if [ ${#files[@]} -eq 0 ]; then
+        echo "HATA: Hiçbir .cs3 dosyası oluşturulmadı."
+        exit 1
+      fi
+
+      echo "Bulunan CS3 dosyaları:"
+
+      for file in "${files[@]}"; do
+        echo "$file"
+      done
+
+      echo ""
+      echo "CS3 dosyaları builds klasörüne kopyalanıyor..."
+
+      cp "${files[@]}" "$GITHUB_WORKSPACE/builds/"
+
+      # plugins.json kontrolü
+      if [ ! -f build/plugins.json ]; then
+        echo "HATA: build/plugins.json oluşturulmadı."
+        exit 1
+      fi
+
+      cp build/plugins.json \
+        "$GITHUB_WORKSPACE/builds/plugins.json"
+
+  # ============================================================
+  # DERLEME KONTROL
+  # ============================================================
+
+  - name: Derleme Kontrolü
+    shell: bash
+    run: |
+      set -e
+
+      cd "$GITHUB_WORKSPACE/builds"
+
+      echo ""
+      echo "=========================================="
+      echo "CS3 DOSYALARI"
+      echo "=========================================="
+
+      ls -lh *.cs3
+
+      echo ""
+      echo "=========================================="
+      echo "GERÇEK SHA256"
+      echo "=========================================="
+
+      for file in *.cs3; do
+        sha256sum "$file"
+      done
+
+      echo ""
+      echo "=========================================="
+      echo "PLUGINS.JSON"
+      echo "=========================================="
+
+      if [ ! -f plugins.json ]; then
+        echo "HATA: plugins.json bulunamadı."
+        exit 1
+      fi
+
+      cat plugins.json
+
+      echo ""
+      echo "=========================================="
+      echo "DOSYA BOYUTLARI"
+      echo "=========================================="
+
+      for file in *.cs3; do
+        stat -c "%n -> %s bytes" "$file"
+      done
+
+      stat -c "%n -> %s bytes" plugins.json
+
+  # ============================================================
+  # BUILD GIT STATUS
+  # ============================================================
+
+  - name: Build Git Durumu
+    shell: bash
+    run: |
+      set -e
+
+      cd "$GITHUB_WORKSPACE/builds"
+
+      echo ""
+      echo "=========================================="
+      echo "GIT STATUS"
+      echo "=========================================="
+
+      git status
+
+  # ============================================================
+  # BUILDS BRANCH'E YÜKLE
+  # ============================================================
+
+  - name: Derlemeleri Yükle
+    shell: bash
+    run: |
+      set -e
+
+      cd "$GITHUB_WORKSPACE/builds"
+
+      git config --local user.email "actions@github.com"
+      git config --local user.name "GitHub Actions"
+
+      echo ""
+      echo "=========================================="
+      echo "DOSYALAR EKLENİYOR"
+      echo "=========================================="
+
+      git add -A
+
+      git status
+
+      echo ""
+      echo "=========================================="
+      echo "COMMIT"
+      echo "=========================================="
+
+      git commit \
+        -m "CloudStream eklentilerini güncelle $GITHUB_SHA" \
+        || echo "Yeni değişiklik yok."
+
+      echo ""
+      echo "=========================================="
+      echo "PUSH"
+      echo "=========================================="
+
+      git push origin builds
