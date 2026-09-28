@@ -10,11 +10,14 @@ buildscript {
 
     dependencies {
         classpath("com.android.tools.build:gradle:8.7.3")
-        classpath("com.github.recloudstream:gradle:-SNAPSHOT")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.20")
+
+        // SNAPSHOT yerine doğrudan JitPack commit'i
+        classpath("com.github.recloudstream:gradle:32895aedb6")
+
+        // CloudStream resmi template ile aynı
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.0")
     }
 }
-
 allprojects {
     repositories {
         google()
