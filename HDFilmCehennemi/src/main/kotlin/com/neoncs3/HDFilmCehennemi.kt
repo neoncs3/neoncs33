@@ -400,7 +400,7 @@ class HDFilmCehennemi : MainAPI() {
         )
     }
 
-    private fun addPlayerSubtitles(
+    private suspend fun addPlayerSubtitles(
         html: String,
         subtitleCallback: (SubtitleFile) -> Unit,
     ) {
