@@ -10,10 +10,7 @@ buildscript {
 
     dependencies {
         classpath("com.android.tools.build:gradle:8.7.3")
-
-        // SNAPSHOT yerine sabit ve AGP 8.7.3 uyumlu commit
-        classpath("com.github.recloudstream:gradle:81b1d42")
-
+        classpath("com.github.recloudstream:gradle:-SNAPSHOT")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.20")
     }
 }
@@ -28,17 +25,15 @@ allprojects {
 
 fun Project.cloudstream(
     configuration: CloudstreamExtension.() -> Unit
-) =
-    extensions
-        .getByName<CloudstreamExtension>("cloudstream")
-        .configuration()
+) = extensions
+    .getByName<CloudstreamExtension>("cloudstream")
+    .configuration()
 
 fun Project.android(
     configuration: BaseExtension.() -> Unit
-) =
-    extensions
-        .getByName<BaseExtension>("android")
-        .configuration()
+) = extensions
+    .getByName<BaseExtension>("android")
+    .configuration()
 
 subprojects {
     apply(plugin = "com.android.library")
@@ -50,7 +45,6 @@ subprojects {
             System.getenv("GITHUB_REPOSITORY")
                 ?: "https://github.com/neoncs3/neoncs33"
         )
-
         authors = listOf("neoncs3")
     }
 
