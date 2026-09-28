@@ -1,5 +1,5 @@
 
-package com.nroncs3
+package com.neoncs3
 import android.util.Log
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.databind.DeserializationFeature
