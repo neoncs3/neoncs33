@@ -3,22 +3,15 @@ import com.android.build.gradle.BaseExtension
 
 buildscript {
     repositories {
-        // GitHub Actions içinde oluşturduğumuz local Maven repository
         mavenLocal()
-
         google()
         mavenCentral()
-
-        // CloudStream'un diğer bağımlılıkları için
         maven("https://jitpack.io")
     }
 
     dependencies {
         classpath("com.android.tools.build:gradle:8.7.3")
-
-        // JitPack yerine Actions'ta local olarak derlediğimiz plugin
         classpath("com.lagradost.cloudstream3:gradle:local-SNAPSHOT")
-
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.0")
     }
 }
@@ -26,10 +19,8 @@ buildscript {
 allprojects {
     repositories {
         mavenLocal()
-
         google()
         mavenCentral()
-
         maven("https://jitpack.io")
     }
 }
