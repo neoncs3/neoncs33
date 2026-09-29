@@ -1,12 +1,12 @@
 package com.neoncs3
 
+import android.content.Context
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
-import android.content.Context
 
 @CloudstreamPlugin
-class ClipBoxPlugin: Plugin() {
+class ClipBoxPlugin : Plugin() {
     override fun load(context: Context) {
-        registerMainAPI(HDFilmCehennemi())
+        registerMainAPI(ClipBox())
     }
 }
