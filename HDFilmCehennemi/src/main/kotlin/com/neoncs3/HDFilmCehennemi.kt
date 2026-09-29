@@ -846,7 +846,7 @@ class HDFilmCehennemi : MainAPI() {
     ) {
         val emitted = linkedSetOf<String>()
 
-        fun emitSubtitle(label: String, url: String) {
+        suspend fun emitSubtitle(label: String, url: String) {
             val clean = resolveAbsoluteUrl(url, playerUrl) ?: return
             if (!clean.startsWith("http", ignoreCase = true)) return
             if (!emitted.add(clean)) return
@@ -855,7 +855,7 @@ class HDFilmCehennemi : MainAPI() {
         }
 
         val document = Jsoup.parse(html, playerUrl)
-        document.select("video track[src], track[src]").forEach { track ->
+        for (track in document.select("video track[src], track[src]")) {
             emitSubtitle(
                 track.attr("label").ifBlank { track.attr("srclang") },
                 track.attr("src")
@@ -864,10 +864,10 @@ class HDFilmCehennemi : MainAPI() {
 
         val tracksRegex = Regex(
             "\\{[^{}]{0,2000}?(?:file|src)\\s*:\\s*[\"']([^\"']+)[\"'][^{}]{0,2000}?(?:label|srclang)\\s*:\\s*[\"']([^\"']+)[\"'][^{}]*}",
-            RegexOption.IGNORE_CASE or RegexOption.DOT_MATCHES_ALL
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
         )
 
-        tracksRegex.findAll(html).forEach { match ->
+        for (match in tracksRegex.findAll(html)) {
             emitSubtitle(match.groupValues[2], match.groupValues[1])
         }
     }
