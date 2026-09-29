@@ -7,7 +7,6 @@ import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import com.lagradost.cloudstream3.utils.parseJson
-import dev.wiojelt.turksinema.vendor.bronze_cinestream.com.megix.CineTmdbProvider
 
 /**
  * Reconstructed from the supplied ClipBox.cs3/classes.dex.
