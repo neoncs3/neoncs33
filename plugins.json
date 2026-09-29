@@ -60,22 +60,22 @@
         "name": "FullHDFilmizlesene"
     },
     {
-        "iconUrl": "https://hdfilmcehennemi.nl/favicon.ico",
-        "fileHash": "sha256-c0c9d8483ecaa73d1328b64c31963bcf1c0c03d330c4a37e5d801c6ae8bf0db2",
+        "iconUrl": "https://dizipal1583.com/favicon.ico",
+        "fileHash": "sha256-27ed021ac678db884e24e82cbf4fc82b1fe49bb6e7d62af1b209b203f10415cb",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 37427,
+        "fileSize": 64893,
         "status": 1,
         "language": "tr",
         "authors": [
-            "neoncs3"
+            "DiziPalCloudStream"
         ],
         "tvTypes": [
             "TvSeries"
         ],
         "version": 1,
         "internalName": "HDFilmCehennemi",
-        "description": "T\u00fcrkiye katalog ve b\u00f6l\u00fcm sa\u011flay\u0131c\u0131s\u0131",
+        "description": "DiziPal T\u00fcrkiye katalog ve b\u00f6l\u00fcm sa\u011flay\u0131c\u0131s\u0131",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/HDFilmCehennemi.cs3",
         "name": "HDFilmCehennemi"
     }
