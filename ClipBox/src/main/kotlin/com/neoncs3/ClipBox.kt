@@ -2,6 +2,7 @@ package com.neoncs3
 
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
+import com.lagradost.cloudstream3.ProviderType
 import com.lagradost.cloudstream3.metaproviders.TmdbProvider
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -34,6 +35,8 @@ class ClipBox : TmdbProvider() {
     override var name: String = "ClipBox"
     override var lang: String = "tr"
     override val hasMainPage: Boolean = true
+    override val providerType = ProviderType.DirectProvider
+    override val hasQuickSearch: Boolean = true
     override val supportedTypes: Set<TvType> = setOf(
         TvType.Movie,
         TvType.TvSeries
