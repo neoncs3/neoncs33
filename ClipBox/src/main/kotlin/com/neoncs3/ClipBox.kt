@@ -1,10 +1,10 @@
 package com.neoncs3
 
+import com.lagradost.cloudstream3.ProviderType
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
-import com.lagradost.cloudstream3.ProviderType
-import com.lagradost.cloudstream3.metaproviders.TmdbProvider
 import com.lagradost.cloudstream3.app
+import com.lagradost.cloudstream3.metaproviders.TmdbProvider
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
@@ -12,47 +12,76 @@ import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.json.JSONObject
 
 /**
- * Standalone ClipBox provider.
+ * ClipBox
  *
- * TMDB is used for the catalog/search/home-page metadata through the
- * CloudStream TmdbProvider. ClipBox/VixSrc is used only for playback.
+ * TMDB handles catalog/search/metadata.
+ * VixSrc is used for the actual video stream.
+ *
+ * The original ClipBox DEX uses this flow:
+ *
+ * TMDB ID + IMDb ID
+ *        ->
+ * /api/movie/{id}
+ * /api/tv/{id}/{season}/{episode}
+ *        ->
+ * JSON { "src": "..." }
+ *        ->
+ * VixSrc player page
+ *        ->
+ * url/file + token + expires
+ *        ->
+ * signed HLS URL
  */
 class ClipBox : TmdbProvider() {
 
     companion object {
         private const val VIXSRC_URL = "https://vixsrc.to"
-        private const val USER_AGENT =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 
-        private val PAGE_HEADERS = mapOf(
+        // This matches the original ClipBox binary's request UA.
+        private const val USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
+
+        // Used when requesting the VixSrc API and player pages.
+        private val REQUEST_HEADERS = mapOf(
             "User-Agent" to USER_AGENT,
-            "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
+            "Referer" to "$VIXSRC_URL/",
+            "Accept" to "application/json, text/javascript, */*; q=0.01"
         )
     }
 
     override var name: String = "ClipBox"
     override var lang: String = "tr"
+
+    // Keep ClipBox visible in the provider/source selector.
     override val hasMainPage: Boolean = true
     override val providerType = ProviderType.DirectProvider
     override val hasQuickSearch: Boolean = true
+
     override val supportedTypes: Set<TvType> = setOf(
         TvType.Movie,
         TvType.TvSeries
     )
 
     private data class ClipLinkData(
-        val id: String,
-        val isTv: Boolean,
-        val season: Int? = null,
-        val episode: Int? = null
+        val tmdbId: String?,
+        val imdbId: String?,
+        val season: Int?,
+        val episode: Int?
     )
 
     /**
-     * TmdbProvider implementations can use slightly different dataUrl JSON
-     * layouts between CloudStream versions. Accept the common field names and
-     * also fall back to parsing URLs/plain numeric ids.
+     * TmdbProvider's normal LoadResponse uses TmdbLink JSON:
+     *
+     * {
+     *   "imdbID": "tt....",
+     *   "tmdbID": 12345,
+     *   "episode": 1,
+     *   "season": 1,
+     *   "movieName": "..."
+     * }
+     *
+     * Accept that exact format plus a few compatible variants.
      */
     private fun parseLinkData(data: String): ClipLinkData? {
         val raw = data.trim()
@@ -60,82 +89,96 @@ class ClipBox : TmdbProvider() {
         runCatching {
             val obj = JSONObject(raw)
 
-            val id = sequenceOf(
+            val tmdb = sequenceOf(
+                obj.optString("tmdbID"),
                 obj.optString("tmdbId"),
                 obj.optString("tmdb_id"),
                 obj.optString("id"),
                 obj.optString("mediaId"),
                 obj.optString("media_id")
-            ).firstOrNull { value ->
-                value.isNotBlank() && value != "null" && value.toIntOrNull() != null
+            ).firstOrNull {
+                it.isNotBlank() &&
+                    it != "null" &&
+                    it.toIntOrNull() != null
             }
 
-            val type = sequenceOf(
-                obj.optString("type"),
-                obj.optString("mediaType"),
-                obj.optString("media_type")
-            ).firstOrNull { it.isNotBlank() && it != "null" }
+            val imdb = sequenceOf(
+                obj.optString("imdbID"),
+                obj.optString("imdbId"),
+                obj.optString("imdb_id"),
+                obj.optString("imdb"),
+                obj.optString("externalId")
+            ).firstOrNull {
+                it.isNotBlank() && it != "null"
+            }
 
             val season = sequenceOf(
-                obj.optInt("season", -1),
-                obj.optInt("seasonNumber", -1),
-                obj.optInt("season_number", -1)
-            ).firstOrNull { it >= 0 }
+                obj.optIntOrNull("season"),
+                obj.optIntOrNull("seasonNumber"),
+                obj.optIntOrNull("season_number")
+            ).firstOrNull()
 
             val episode = sequenceOf(
-                obj.optInt("episode", -1),
-                obj.optInt("episodeNumber", -1),
-                obj.optInt("episode_number", -1)
-            ).firstOrNull { it >= 0 }
+                obj.optIntOrNull("episode"),
+                obj.optIntOrNull("episodeNumber"),
+                obj.optIntOrNull("episode_number")
+            ).firstOrNull()
 
-            if (!id.isNullOrBlank()) {
-                val isTv = type?.contains("tv", ignoreCase = true) == true ||
-                    type?.contains("serie", ignoreCase = true) == true ||
-                    season != null || episode != null
-
+            if (tmdb != null || imdb != null) {
                 return ClipLinkData(
-                    id = id,
-                    isTv = isTv,
+                    tmdbId = tmdb,
+                    imdbId = imdb,
                     season = season,
                     episode = episode
                 )
             }
-        }.getOrNull()
+        }
 
+        // Fallback for data that may simply contain a TMDB URL.
         Regex(
-            pattern = "(?:https?:\\/\\/[^\\s]+)?/(movie|tv)/(\\d+)(?:/(\\d+)/(\\d+))?",
+            pattern = """themoviedb\.org/(movie|tv)/(\d+)""",
             options = setOf(RegexOption.IGNORE_CASE)
         ).find(raw)?.let { match ->
-            val kind = match.groupValues[1]
-            val id = match.groupValues[2]
-            val season = match.groupValues.getOrNull(3)?.toIntOrNull()
-            val episode = match.groupValues.getOrNull(4)?.toIntOrNull()
+            val id = match.groupValues.getOrNull(2) ?: return@let
+
             return ClipLinkData(
-                id = id,
-                isTv = kind.equals("tv", ignoreCase = true),
-                season = season,
-                episode = episode
+                tmdbId = id,
+                imdbId = null,
+                season = null,
+                episode = null
             )
         }
 
-        raw.toIntOrNull()?.let { id ->
-            return ClipLinkData(id.toString(), isTv = false)
+        // Fallback for an explicit VixSrc URL.
+        Regex(
+            pattern = """(?:https?://[^/]+)?/(movie|tv)/(\d+)(?:/(\d+)/(\d+))?""",
+            options = setOf(RegexOption.IGNORE_CASE)
+        ).find(raw)?.let { match ->
+            return ClipLinkData(
+                tmdbId = match.groupValues.getOrNull(2),
+                imdbId = null,
+                season = match.groupValues.getOrNull(3)?.toIntOrNull(),
+                episode = match.groupValues.getOrNull(4)?.toIntOrNull()
+            )
         }
 
         return null
     }
 
     /**
-     * Extract a string from a small JSON object. Kept separate so malformed
-     * player responses do not abort the whole provider.
+     * JSONObject has no optIntOrNull on all Android/API combinations used
+     * by CloudStream, so keep this local and version-safe.
      */
-    private fun jsonString(json: String, key: String): String? {
-        return runCatching {
-            JSONObject(json).optString(key, "").takeIf { it.isNotBlank() }
-        }.getOrNull()
+    private fun JSONObject.optIntOrNull(key: String): Int? {
+        if (!has(key) || isNull(key)) return null
+
+        val value = optString(key, "").trim()
+        if (value.isBlank() || value == "null") return null
+
+        return value.toIntOrNull()
     }
 
-    private fun cleanUrl(value: String): String {
+    private fun cleanValue(value: String): String {
         return value
             .replace("\\/", "/")
             .replace("\\u0026", "&")
@@ -145,44 +188,74 @@ class ClipBox : TmdbProvider() {
             .removeSurrounding("'")
     }
 
-    private fun buildPlayerUrl(link: ClipLinkData): String {
-        return if (link.isTv && link.season != null && link.episode != null) {
-            "$VIXSRC_URL/tv/${link.id}/${link.season}/${link.episode}"
-        } else {
-            "$VIXSRC_URL/movie/${link.id}"
+    /**
+     * ClipBox API returns something equivalent to:
+     * { "src": "/movie/..." }
+     *
+     * Keep both JSON parsing and regex fallback because the response format
+     * may differ slightly between VixSrc revisions.
+     */
+    private fun extractSrc(responseText: String): String? {
+        runCatching {
+            JSONObject(responseText)
+                .optString("src", "")
+                .takeIf { it.isNotBlank() }
+        }.getOrNull()?.let {
+            return cleanValue(it)
+        }
+
+        Regex(
+            pattern = """["']?src["']?\s*:\s*["']([^"']+)["']""",
+            options = setOf(RegexOption.IGNORE_CASE)
+        ).find(responseText)?.groupValues?.getOrNull(1)?.let {
+            return cleanValue(it)
+        }
+
+        return null
+    }
+
+    private fun toAbsoluteUrl(value: String): String {
+        val url = cleanValue(value)
+
+        return when {
+            url.startsWith("http://", ignoreCase = true) ||
+                url.startsWith("https://", ignoreCase = true) -> url
+
+            url.startsWith("//") -> "https:$url"
+
+            url.startsWith("/") -> "$VIXSRC_URL$url"
+
+            else -> "$VIXSRC_URL/${url.trimStart('/')}"
         }
     }
 
-    private fun extractStreamUrl(html: String): String? {
-        val patterns = listOf(
-            // JSON/object notation: url: "..." or file: "..."
-            Regex(
-                pattern = "(?:\\\"|')?(?:url|file)(?:\\\"|')?\\s*[:=]\\s*(?:\\\"|')([^\\\"']+)(?:\\\"|')",
-                options = setOf(RegexOption.IGNORE_CASE)
-            ),
-            // Plain assignment / embedded player variables.
-            Regex(
-                pattern = "(?:const|let|var)\\s+(?:url|file)\\s*=\\s*['\\\"]([^'\\\"]+)['\\\"]",
-                options = setOf(RegexOption.IGNORE_CASE)
-            ),
-            // Direct HLS URL anywhere in the document.
-            Regex(
-                pattern = "https?://[^\\\"'<>\\s]+\\.m3u8(?:\\?[^\\\"'<>\\s]*)?",
-                options = setOf(RegexOption.IGNORE_CASE)
-            )
+    /**
+     * Exact URL pattern used by the original ClipBox implementation.
+     */
+    private fun extractVideoUrl(html: String): String? {
+        val pattern = Regex(
+            pattern = """(?:url|file)\s*:\s*['"]([^'"]+)['"]""",
+            options = setOf(RegexOption.IGNORE_CASE)
         )
 
-        for (pattern in patterns) {
-            val match = pattern.find(html) ?: continue
-            val candidate = cleanUrl(
-                match.groupValues.getOrNull(1).takeIf { !it.isNullOrBlank() }
-                    ?: match.value
-            )
-            if (candidate.contains(".m3u8", ignoreCase = true) ||
-                candidate.contains("/hls", ignoreCase = true)
-            ) {
-                return candidate
-            }
+        pattern.find(html)?.groupValues?.getOrNull(1)?.let {
+            return cleanValue(it)
+        }
+
+        // Secondary patterns for quoted JSON/property notation.
+        Regex(
+            pattern = """["'](?:url|file)["']\s*:\s*["']([^"']+)["']""",
+            options = setOf(RegexOption.IGNORE_CASE)
+        ).find(html)?.groupValues?.getOrNull(1)?.let {
+            return cleanValue(it)
+        }
+
+        // Last fallback: an already-complete HLS URL in page HTML.
+        Regex(
+            pattern = """https?://[^"'<>\\s]+\.m3u8(?:\?[^"'<>\\s]*)?""",
+            options = setOf(RegexOption.IGNORE_CASE)
+        ).find(html)?.value?.let {
+            return cleanValue(it)
         }
 
         return null
@@ -191,48 +264,82 @@ class ClipBox : TmdbProvider() {
     private fun extractToken(html: String): String? {
         val patterns = listOf(
             Regex(
-                pattern = "(?:\\\"|')token(?:\\\"|')?\\s*[:=]\\s*['\\\"]([^'\\\"]+)['\\\"]",
+                pattern = """['"]?token['"]?\s*:\s*['"]([^'"]+)['"]""",
                 options = setOf(RegexOption.IGNORE_CASE)
             ),
             Regex(
-                pattern = "(?:\\\"|')token(?:\\\"|')?\\s*[:=]\\s*([^,}\\s]+)",
+                pattern = """['"]?token['"]?\s*=\s*['"]([^'"]+)['"]""",
                 options = setOf(RegexOption.IGNORE_CASE)
             )
         )
 
         for (pattern in patterns) {
-            val match = pattern.find(html) ?: continue
-            val token = match.groupValues.getOrNull(1)?.trim()
-            if (!token.isNullOrBlank()) return cleanUrl(token)
+            pattern.find(html)?.groupValues?.getOrNull(1)?.let {
+                return cleanValue(it)
+            }
         }
+
         return null
     }
 
     private fun extractExpires(html: String): String? {
         val patterns = listOf(
             Regex(
-                pattern = "(?:\\\"|')expires(?:\\\"|')?\\s*[:=]\\s*['\\\"]([^'\\\"]+)['\\\"]",
+                pattern = """['"]?expires['"]?\s*:\s*['"]([^'"]+)['"]""",
                 options = setOf(RegexOption.IGNORE_CASE)
             ),
             Regex(
-                pattern = "(?:\\\"|')expires(?:\\\"|')?\\s*[:=]\\s*([^,}\\s]+)",
+                pattern = """['"]?expires['"]?\s*=\s*['"]([^'"]+)['"]""",
                 options = setOf(RegexOption.IGNORE_CASE)
             )
         )
 
         for (pattern in patterns) {
-            val match = pattern.find(html) ?: continue
-            val expires = match.groupValues.getOrNull(1)?.trim()
-            if (!expires.isNullOrBlank()) return cleanUrl(expires)
+            pattern.find(html)?.groupValues?.getOrNull(1)?.let {
+                return cleanValue(it)
+            }
         }
+
         return null
     }
 
-    private fun appendParameter(url: String, key: String, value: String): String {
-        val separator = if (url.contains('?')) '&' else '?'
+    private fun appendParameter(
+        url: String,
+        key: String,
+        value: String
+    ): String {
+        val separator = if (url.contains("?")) "&" else "?"
         return "$url$separator$key=$value"
     }
 
+    /**
+     * Build the ClipBox/VixSrc API route.
+     *
+     * The original DEX attempts both TMDB and IMDb IDs and removes duplicates.
+     */
+    private fun buildApiPaths(data: ClipLinkData): List<String> {
+        val ids = listOfNotNull(data.tmdbId, data.imdbId).distinct()
+
+        if (ids.isEmpty()) return emptyList()
+
+        return if (data.season != null && data.episode != null) {
+            ids.map { id ->
+                "$VIXSRC_URL/api/tv/$id/${data.season}/${data.episode}"
+            }
+        } else {
+            ids.map { id ->
+                "$VIXSRC_URL/api/movie/$id"
+            }
+        }
+    }
+
+    /**
+     * Ask the VixSrc API first, then resolve its "src" player page.
+     *
+     * This is the important difference from the previous version:
+     * do NOT start with /movie/{id} or /tv/{id}/{season}/{episode}.
+     * ClipBox's original binary first calls the /api/... endpoint.
+     */
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -240,65 +347,155 @@ class ClipBox : TmdbProvider() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val linkData = parseLinkData(data) ?: return false
-        val playerUrl = buildPlayerUrl(linkData)
 
-        val response = runCatching {
-            app.get(
-                url = playerUrl,
-                headers = PAGE_HEADERS
-            )
-        }.getOrNull() ?: return false
+        val apiPaths = buildApiPaths(linkData)
 
-        if (response.code !in 200..399) return false
+        for (apiUrl in apiPaths) {
+            val apiResponse = runCatching {
+                app.get(
+                    url = apiUrl,
+                    headers = REQUEST_HEADERS
+                )
+            }.getOrNull() ?: continue
 
-        val html = response.text
+            if (apiResponse.code !in 200..399) continue
 
-        var streamUrl = extractStreamUrl(html)
+            val src = extractSrc(apiResponse.text) ?: continue
+            val playerUrl = toAbsoluteUrl(src)
 
-        // Current VixSrc players expose url/file together with token/expires.
-        if (streamUrl != null) {
+            val pageResponse = runCatching {
+                app.get(
+                    url = playerUrl,
+                    headers = REQUEST_HEADERS
+                )
+            }.getOrNull() ?: continue
+
+            if (pageResponse.code !in 200..399) continue
+
+            val html = pageResponse.text
+
+            var videoUrl = extractVideoUrl(html) ?: continue
+
             val token = extractToken(html)
             val expires = extractExpires(html)
 
-            if (!token.isNullOrBlank() && !expires.isNullOrBlank() &&
-                !streamUrl.contains("token=", ignoreCase = true)
+            /*
+             * Match the original binary:
+             *
+             * {url}?token={token}&expires={expires}&h=1
+             *
+             * Note: the original ClipBox did NOT append lang=en.
+             */
+            if (!token.isNullOrBlank() &&
+                !expires.isNullOrBlank() &&
+                !videoUrl.contains("token=", ignoreCase = true)
             ) {
-                streamUrl = appendParameter(streamUrl, "token", token)
-                streamUrl = appendParameter(streamUrl, "expires", expires)
-                streamUrl = appendParameter(streamUrl, "h", "1")
-                streamUrl = appendParameter(streamUrl, "lang", "en")
+                videoUrl = appendParameter(videoUrl, "token", token)
+                videoUrl = appendParameter(videoUrl, "expires", expires)
+                videoUrl = appendParameter(videoUrl, "h", "1")
             }
+
+            if (!videoUrl.startsWith("http://", ignoreCase = true) &&
+                !videoUrl.startsWith("https://", ignoreCase = true)
+            ) {
+                videoUrl = toAbsoluteUrl(videoUrl)
+            }
+
+            // Only accept actual stream URLs.
+            if (!videoUrl.contains(".m3u8", ignoreCase = true) &&
+                !videoUrl.contains("/hls", ignoreCase = true)
+            ) {
+                continue
+            }
+
+            newExtractorLink(
+                source = name,
+                name = "ClipBox • VixSrc",
+                url = videoUrl,
+                type = ExtractorLinkType.M3U8
+            ) {
+                // Original ClipBox uses the VixSrc host as the Referer.
+                referer = "$VIXSRC_URL/"
+                headers = mapOf(
+                    "User-Agent" to USER_AGENT
+                )
+                quality = Qualities.Unknown.value
+            }.let(callback)
+
+            return true
         }
 
-        // Final fallback: some pages include the complete signed HLS URL.
-        if (streamUrl == null) {
-            streamUrl = Regex(
-                pattern = "https?://[^\\\"'<>\\s]+\\.m3u8(?:\\?[^\\\"'<>\\s]*)?",
-                options = setOf(RegexOption.IGNORE_CASE)
-            ).find(html)?.value?.let(::cleanUrl)
+        /*
+         * API fallback.
+         * If a future VixSrc revision removes the /api route but leaves the
+         * classic embed page working, try the normal player URL as a fallback.
+         */
+        val fallbackIds = listOfNotNull(
+            linkData.tmdbId,
+            linkData.imdbId
+        ).distinct()
+
+        for (id in fallbackIds) {
+            val playerUrl = if (
+                linkData.season != null &&
+                linkData.episode != null
+            ) {
+                "$VIXSRC_URL/tv/$id/${linkData.season}/${linkData.episode}"
+            } else {
+                "$VIXSRC_URL/movie/$id"
+            }
+
+            val response = runCatching {
+                app.get(
+                    url = playerUrl,
+                    headers = REQUEST_HEADERS
+                )
+            }.getOrNull() ?: continue
+
+            if (response.code !in 200..399) continue
+
+            var videoUrl = extractVideoUrl(response.text) ?: continue
+
+            val token = extractToken(response.text)
+            val expires = extractExpires(response.text)
+
+            if (!token.isNullOrBlank() &&
+                !expires.isNullOrBlank() &&
+                !videoUrl.contains("token=", ignoreCase = true)
+            ) {
+                videoUrl = appendParameter(videoUrl, "token", token)
+                videoUrl = appendParameter(videoUrl, "expires", expires)
+                videoUrl = appendParameter(videoUrl, "h", "1")
+            }
+
+            if (!videoUrl.startsWith("http://", ignoreCase = true) &&
+                !videoUrl.startsWith("https://", ignoreCase = true)
+            ) {
+                videoUrl = toAbsoluteUrl(videoUrl)
+            }
+
+            if (!videoUrl.contains(".m3u8", ignoreCase = true) &&
+                !videoUrl.contains("/hls", ignoreCase = true)
+            ) {
+                continue
+            }
+
+            newExtractorLink(
+                source = name,
+                name = "ClipBox • VixSrc",
+                url = videoUrl,
+                type = ExtractorLinkType.M3U8
+            ) {
+                referer = "$VIXSRC_URL/"
+                headers = mapOf(
+                    "User-Agent" to USER_AGENT
+                )
+                quality = Qualities.Unknown.value
+            }.let(callback)
+
+            return true
         }
 
-        streamUrl = streamUrl?.takeIf {
-            it.startsWith("http://", ignoreCase = true) ||
-                it.startsWith("https://", ignoreCase = true)
-        } ?: return false
-
-        newExtractorLink(
-            source = name,
-            name = "ClipBox • VixSrc",
-            url = streamUrl,
-            type = ExtractorLinkType.M3U8
-        ) {
-            referer = playerUrl
-            headers = mapOf(
-                "User-Agent" to USER_AGENT,
-                "Referer" to playerUrl,
-                "Origin" to VIXSRC_URL,
-                "Accept" to "*/*"
-            )
-            quality = Qualities.Unknown.value
-        }.also(callback)
-
-        return true
+        return false
     }
 }
