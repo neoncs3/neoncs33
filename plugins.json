@@ -1,5 +1,25 @@
 [
     {
+        "iconUrl": "https://dizipal1583.com/favicon.ico",
+        "fileHash": "sha256-6e30085fc35df9f35aa2cc74707d29ef49b61538a61ec4d86616ea404769ebfc",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
+        "fileSize": 10173,
+        "status": 1,
+        "language": "tr",
+        "authors": [
+            "DiziPalCloudStream"
+        ],
+        "tvTypes": [
+            "TvSeries"
+        ],
+        "version": 1,
+        "internalName": "ClipBox",
+        "description": "DiziPal T\u00fcrkiye katalog ve b\u00f6l\u00fcm sa\u011flay\u0131c\u0131s\u0131",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/ClipBox.cs3",
+        "name": "ClipBox"
+    },
+    {
         "iconUrl": "https://diziboxizle.com/favicon.ico",
         "fileHash": "sha256-8ea927332c89de56a336c29af630577beef2af00e817c357a89aa8b3d09a0ef3",
         "apiVersion": 1,
