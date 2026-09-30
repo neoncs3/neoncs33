@@ -170,6 +170,9 @@ class FilmMakinesi : MainAPI() {
 
                 val card = findCard(anchor)
                 val image = findPosterImage(anchor, card)
+                val cardText = (anchor.text() + " " + card?.text().orEmpty())
+                    .replace(Regex("\\s+"), " ")
+                    .trim()
 
                 val title = firstNonBlank(
                     anchor.attr("title"),
@@ -179,9 +182,16 @@ class FilmMakinesi : MainAPI() {
                     slugToTitle(href),
                 ) ?: return@mapNotNull null
 
-                val score = extractRating(
-                    anchor.text() + " " + (card?.text().orEmpty())
-                )
+                val durationMinutes = extractDurationMinutes(cardText)
+
+                // FilmMakinesi bazı listelerde fragmanları gerçek film linki gibi
+                // /film/... altında gösterebiliyor. Fragmanları CloudStream'de
+                // normal film olarak göstermemek için başlık/metin + süre kontrolü.
+                if (isTrailerCandidate(href, title, cardText, durationMinutes)) {
+                    return@mapNotNull null
+                }
+
+                val score = extractRating(cardText)
 
                 if (href.contains("/dizi/", ignoreCase = true)) {
                     newTvSeriesSearchResponse(
@@ -526,6 +536,7 @@ class FilmMakinesi : MainAPI() {
         val rawHtml = normalizeEmbeddedText(response.text)
         var found = false
 
+        // Altyazıları doğrudan sayfadaki track/VTT bağlantılarından al.
         extractSubtitleUrls(rawHtml).forEach { (lang, subtitleUrl) ->
             subtitleCallback(
                 SubtitleFile(
@@ -535,33 +546,15 @@ class FilmMakinesi : MainAPI() {
             )
         }
 
-        val directMedia = extractMediaUrls(rawHtml)
-        directMedia.forEach { mediaUrl ->
-            if (!mediaUrl.startsWith("http", true)) return@forEach
-            val detectedQuality = detectQuality(mediaUrl)
-            callback(
-                newExtractorLink(
-                    source = name,
-                    name = "FilmMakinesi • Direkt",
-                    url = mediaUrl,
-                    type = INFER_TYPE,
-                ) {
-                    referer = data
-                    quality = detectedQuality
-                    headers = mapOf(
-                        "User-Agent" to USER_AGENT,
-                        "Referer" to data,
-                    )
-                }
-            )
-            found = true
-        }
-
+        // ÖNEMLİ:
+        // Film detay sayfasında bulunan trailer/fragman video dosyaları da
+        // HTML içinde .mp4/.m3u8 olarak yer alabiliyor. Bunları gerçek film
+        // akışı sanmamak için doğrudan medya URL'lerini ilk seçenek yapmıyoruz.
+        // Önce iframe/player/provider extractor'ları çözülür.
         val extractorCandidates = LinkedHashSet<String>()
 
         document.select(
-            "iframe[src], iframe[data-src], iframe[data-url], embed[src], " +
-                "video[src], video source[src], source[src]"
+            "iframe[src], iframe[data-src], iframe[data-url], embed[src]"
         ).forEach { element ->
             firstNonBlank(
                 element.attr("src"),
@@ -575,8 +568,8 @@ class FilmMakinesi : MainAPI() {
         extractEmbeddedPageUrls(rawHtml).forEach { extractorCandidates.add(it) }
 
         for (candidate in extractorCandidates) {
-            if (candidate.isBlank()) continue
-            if (candidate == data) continue
+            if (candidate.isBlank() || candidate == data) continue
+            if (isTrailerCandidateUrl(candidate)) continue
 
             val lower = candidate.lowercase()
             val isSitePlayer = lower.contains("filmmakinesi.to") &&
@@ -602,25 +595,74 @@ class FilmMakinesi : MainAPI() {
             }
         }
 
-        // Son çare: HTML'de provider URL'si görünüyorsa doğrudan extractor'a ver.
+        // Player/provider bulunamadıysa HTML içindeki doğrudan medya kaynaklarını
+        // ancak ikinci aşamada kullan. Fragman olarak işaretlenenleri atla.
+        if (!found) {
+            extractMediaUrls(rawHtml)
+                .filterNot { isTrailerCandidateUrl(it) }
+                .forEach { mediaUrl ->
+                    if (!mediaUrl.startsWith("http", true)) return@forEach
+
+                    callback(
+                        newExtractorLink(
+                            source = name,
+                            name = "FilmMakinesi • Direkt",
+                            url = mediaUrl,
+                            type = INFER_TYPE,
+                        ) {
+                            referer = data
+                            quality = detectQuality(mediaUrl)
+                            headers = mapOf(
+                                "User-Agent" to USER_AGENT,
+                                "Referer" to data,
+                            )
+                        }
+                    )
+                    found = true
+                }
+        }
+
+        // Son çare: bilinen harici sağlayıcı URL'leri.
         if (!found) {
             val providerUrls = extractProviderUrls(rawHtml)
+                .filterNot { isTrailerCandidateUrl(it) }
+
             for (provider in providerUrls) {
                 try {
-                    val extracted = loadExtractor(provider, data, subtitleCallback, callback)
+                    val extracted = loadExtractor(
+                        provider,
+                        data,
+                        subtitleCallback,
+                        callback,
+                    )
                     found = extracted || found
                 } catch (error: Throwable) {
-                    Log.w("FILMMAKINESI", "Provider başarısız: $provider", error)
+                    Log.w(
+                        "FILMMAKINESI",
+                        "Provider başarısız: $provider",
+                        error,
+                    )
                 }
             }
         }
 
         Log.d(
             "FILMMAKINESI",
-            "loadLinks data=$data candidates=${extractorCandidates.size} media=${directMedia.size} found=$found",
+            "loadLinks data=$data candidates=${extractorCandidates.size} found=$found",
         )
 
         return found
+    }
+
+    /** Fragman/teaser kaynaklarının yanlışlıkla ana video olarak seçilmesini önler. */
+    private fun isTrailerCandidateUrl(url: String): Boolean {
+        val value = url.lowercase()
+        return value.contains("fragman") ||
+            value.contains("trailer") ||
+            value.contains("teaser") ||
+            value.contains("preview") ||
+            value.contains("youtube.com/watch") ||
+            value.contains("youtu.be/")
     }
 
     private fun normalizeEmbeddedText(text: String): String {
@@ -728,6 +770,48 @@ class FilmMakinesi : MainAPI() {
                 it.contains("youtu.be", true) ||
                 it.contains("vimeo", true)
         }
+    }
+
+    /** Kart üzerindeki film süresini dakika cinsinden çıkarır. */
+    private fun extractDurationMinutes(text: String): Int? {
+        Regex(
+            "(\\d+)\\s*Saat(?:\\s*(\\d+)\\s*Dakika)?",
+            RegexOption.IGNORE_CASE,
+        ).find(text)?.let { match ->
+            val hours = match.groupValues.getOrNull(1)?.toIntOrNull() ?: 0
+            val minutes = match.groupValues.getOrNull(2)?.toIntOrNull() ?: 0
+            return hours * 60 + minutes
+        }
+
+        Regex("(\\d{1,3})\\s*Dakika", RegexOption.IGNORE_CASE)
+            .find(text)?.groupValues?.getOrNull(1)?.toIntOrNull()?.let {
+                return it
+            }
+
+        return null
+    }
+
+    /** Fragman olan liste kartını gerçek film/dizi kartından ayırır. */
+    private fun isTrailerCandidate(
+        url: String,
+        title: String,
+        cardText: String,
+        durationMinutes: Int?,
+    ): Boolean {
+        val combined = "$url $title $cardText".lowercase()
+
+        // Açıkça fragman/trailer olarak işaretlenmiş kartlar.
+        if (combined.contains("fragman") || combined.contains("trailer")) {
+            return true
+        }
+
+        // Dizi bölümleri bu kontrolden etkilenmesin.
+        if (url.contains("/dizi/", ignoreCase = true)) return false
+
+        // Sitedeki fragman kartları kısa video olarak gelebiliyor.
+        // 15 dakikanın altındaki /film/ içerikleri bu listede film olarak
+        // göstermiyoruz; normal uzun metraj filmler korunur.
+        return durationMinutes != null && durationMinutes <= 15
     }
 
     private fun extractYear(text: String): Int? {
