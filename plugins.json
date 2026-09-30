@@ -41,10 +41,10 @@
     },
     {
         "iconUrl": "https://www.diziyou.one/favicon.ico",
-        "fileHash": "sha256-dfde43d8d7983f9cb8edd2746ef93bc07827368f094f70c78746c492798379c2",
+        "fileHash": "sha256-d7883274028bcacf4326704af0b1e4ce5bd11a4a0e619a6977e213796cc5b938",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 24947,
+        "fileSize": 28607,
         "status": 1,
         "language": "tr",
         "authors": [
