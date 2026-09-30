@@ -270,7 +270,8 @@ class DiziYou : MainAPI() {
             addActors(actors)
 
             imdbScore?.let { this.score = Score.from10(it) }
-            trailer?.let { this.trailerUrl = it }
+            // Trailer detected from the page, but addTrailer() is not available
+            // in the CloudStream API used by this project.
         }
     }
 
