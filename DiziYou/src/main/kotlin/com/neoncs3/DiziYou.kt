@@ -26,100 +26,84 @@ class DiziYou : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         if (page > 1) return newHomePageResponse(request.name, emptyList())
 
-        val document = app.get(mainUrl).document
+        val archivePages = listOf(
+            "Yeni Eklenen Diziler" to "$mainUrl/dizi-arsivi/?filtrele=tarih&sirala=DESC",
+            "IMDb 7+ Diziler" to "$mainUrl/dizi-arsivi/?filtrele=imdb&sirala=DESC&yil=&imdb=7",
+            "Aksiyon Dizileri" to "$mainUrl/dizi-arsivi/?filtrele=tarih&sirala=DESC&yil=&imdb=7&kelime=&tur=Aksiyon",
+            "Bilim Kurgu Dizileri" to "$mainUrl/dizi-arsivi/?filtrele=tarih&sirala=DESC&yil=&imdb=7&kelime=&tur=Bilim+Kurgu",
+            "Gerilim Dizileri" to "$mainUrl/dizi-arsivi/?filtrele=tarih&sirala=DESC&yil=&imdb=7&kelime=&tur=Gerilim",
+            "Korku Dizileri" to "$mainUrl/dizi-arsivi/?filtrele=tarih&sirala=DESC&yil=&imdb=7&kelime=&tur=Korku",
+            "Suç Dizileri" to "$mainUrl/dizi-arsivi/?filtrele=tarih&sirala=DESC&yil=&imdb=7&kelime=&tur=Su%C3%A7"
+        )
+
         val home = ArrayList<HomePageList>()
 
-        // 1) Popüler dizilerden son bölümler
-        val recentEpisodes = document.select("div.dsmobil div.listepisodes").mapNotNull { element ->
-            val anchor = element.selectFirst("a") ?: return@mapNotNull null
-            val fullUrl = fixUrlNull(anchor.attr("href")) ?: return@mapNotNull null
+        archivePages.forEach { (title, url) ->
+            val items = runCatching {
+                app.get(url).document.select("div.incontent div#list-series, div.incontent div#list-series-main, div#list-series, div#list-series-main")
+                    .mapNotNull { it.toArchiveSearchResponse() }
+                    .distinctBy { it.url }
+            }.getOrDefault(emptyList())
 
-            val slug = fullUrl
-                .removePrefix("$mainUrl/")
-                .replace(Regex("""-\d+-sezon-\d+-bolum/?$"""), "")
-                .trim('/')
-
-            val href = "$mainUrl/$slug/"
-            val title = anchor.selectFirst("img[alt]")?.attr("alt")?.trim()
-                ?: anchor.text().trim().takeIf { it.isNotEmpty() }
-                ?: return@mapNotNull null
-
-            val poster = fixUrlNull(
-                anchor.selectFirst("img.lazy")?.attr("data-src")
-                    ?: anchor.selectFirst("img")?.attr("data-src")
-                    ?: anchor.selectFirst("img")?.attr("src")
-            )
-
-            newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
-                posterUrl = poster
+            if (items.isNotEmpty()) {
+                home.add(HomePageList(title, items))
             }
-        }.distinctBy { it.url }
-
-        if (recentEpisodes.isNotEmpty()) {
-            home.add(HomePageList("Son Eklenen Bölümler", recentEpisodes))
         }
 
-        // 2) Son eklenen diziler
-        val latestSeries = document.select("div.dsmobil2 div#list-series-main").mapNotNull { element ->
-            val href = fixUrlNull(element.selectFirst("div.cat-img-main a")?.attr("href"))
-                ?: return@mapNotNull null
-            val title = element.selectFirst("div.cat-title-main a")?.text()?.trim()
-                ?: return@mapNotNull null
-            val poster = fixUrlNull(
-                element.selectFirst("div.cat-img-main img")?.attr("data-src")
-                    ?: element.selectFirst("div.cat-img-main img")?.attr("src")
-            )
+        // Ana sayfadaki diğer dizi vitrinleri korunuyor.
+        val document = runCatching { app.get(mainUrl).document }.getOrNull()
 
-            newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
-                posterUrl = poster
+        if (document != null) {
+            val latestSeries = document.select("div.dsmobil2 div#list-series-main")
+                .mapNotNull { it.toArchiveSearchResponse() }
+                .distinctBy { it.url }
+
+            if (latestSeries.isNotEmpty()) {
+                home.add(HomePageList("Son Eklenen Diziler", latestSeries))
             }
-        }.distinctBy { it.url }
 
-        if (latestSeries.isNotEmpty()) {
-            home.add(HomePageList("Son Eklenen Diziler", latestSeries))
-        }
+            val classics = document.select("div.incontent div#list-series-main")
+                .mapNotNull { it.toArchiveSearchResponse() }
+                .distinctBy { it.url }
 
-        // 3) Efsane diziler
-        val classics = document.select("div.incontent div#list-series-main").mapNotNull { element ->
-            val href = fixUrlNull(element.selectFirst("div.cat-img-main a")?.attr("href"))
-                ?: return@mapNotNull null
-            val title = element.selectFirst("div.cat-title-main a")?.text()?.trim()
-                ?: return@mapNotNull null
-            val poster = fixUrlNull(
-                element.selectFirst("div.cat-img-main img")?.attr("data-src")
-                    ?: element.selectFirst("div.cat-img-main img")?.attr("src")
-            )
-
-            newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
-                posterUrl = poster
+            if (classics.isNotEmpty()) {
+                home.add(HomePageList("Efsane Diziler", classics))
             }
-        }.distinctBy { it.url }
 
-        if (classics.isNotEmpty()) {
-            home.add(HomePageList("Efsane Diziler", classics))
-        }
+            val featured = document.select("div.incontentyeni div#list-series-main")
+                .mapNotNull { it.toArchiveSearchResponse() }
+                .distinctBy { it.url }
 
-        // 4) Dikkat çeken diziler
-        val featured = document.select("div.incontentyeni div#list-series-main").mapNotNull { element ->
-            val href = fixUrlNull(element.selectFirst("div.cat-img-main a")?.attr("href"))
-                ?: return@mapNotNull null
-            val title = element.selectFirst("div.cat-title-main a")?.text()?.trim()
-                ?: return@mapNotNull null
-            val poster = fixUrlNull(
-                element.selectFirst("div.cat-img-main img")?.attr("data-src")
-                    ?: element.selectFirst("div.cat-img-main img")?.attr("src")
-            )
-
-            newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
-                posterUrl = poster
+            if (featured.isNotEmpty()) {
+                home.add(HomePageList("Dikkat Çeken Diziler", featured))
             }
-        }.distinctBy { it.url }
-
-        if (featured.isNotEmpty()) {
-            home.add(HomePageList("Dikkat Çeken Diziler", featured))
         }
 
         return newHomePageResponse(home)
+    }
+
+    private fun Element.toArchiveSearchResponse(): SearchResponse? {
+        val anchor = selectFirst("div#categorytitle a[href], div.cat-title-main a[href], a[href]")
+            ?: return null
+
+        val href = fixUrlNull(anchor.attr("href")) ?: return null
+        if (!href.contains("diziyou.one", ignoreCase = true)) return null
+
+        val title = anchor.attr("title").trim().ifEmpty { anchor.text().trim() }
+            .takeIf { it.isNotEmpty() }
+            ?: selectFirst("div#categorytitle, div.cat-title-main")?.text()?.trim()?.takeIf { it.isNotEmpty() }
+            ?: return null
+
+        val image = selectFirst("img")
+        val poster = fixUrlNull(
+            image?.attr("data-src")?.takeIf { it.isNotBlank() }
+                ?: image?.attr("data-lazy-src")?.takeIf { it.isNotBlank() }
+                ?: image?.attr("src")?.takeIf { it.isNotBlank() }
+        )
+
+        return newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
+            posterUrl = poster
+        }
     }
 
     private fun Element.toSearchResponse(): SearchResponse? {
