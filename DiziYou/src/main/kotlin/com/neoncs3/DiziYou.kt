@@ -7,7 +7,7 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
 
-class Diziyou : MainAPI() {
+class DiziYou : MainAPI() {
 
     override var mainUrl = "https://www.diziyou.one"
     override var name = "Diziyou"
@@ -196,17 +196,6 @@ class Diziyou : MainAPI() {
                 ?.getOrNull(1)
                 ?.toIntOrNull()
 
-        val rating = document.selectFirst("span.dizimeta:contains(IMDB)")
-            ?.nextSibling()
-            ?.toString()
-            ?.trim()
-            ?.toRatingInt()
-            ?: Regex("(?:IMDB|IMDb)\\s*:?\\s*([0-9]+(?:\\.[0-9]+)?)")
-                .find(document.text())
-                ?.groupValues
-                ?.getOrNull(1)
-                ?.toRatingInt()
-
         val tags = document.select("div.genres a").map { it.text().trim() }.filter { it.isNotEmpty() }
 
         val actors = document.selectFirst("span.dizimeta:contains(Oyuncular)")
@@ -283,7 +272,6 @@ class Diziyou : MainAPI() {
             plot = description
             this.year = year
             this.tags = tags
-            this.rating = rating
             addActors(actors)
             addTrailer(trailer)
         }
@@ -338,7 +326,7 @@ class Diziyou : MainAPI() {
         // Türkçe altyazı
         if (hasTrSub) {
             subtitleCallback.invoke(
-                SubtitleFile(
+                newSubtitleFile(
                     lang = "Turkish",
                     url = "$storageUrl/subtitles/$itemId/tr.vtt"
                 )
@@ -348,7 +336,7 @@ class Diziyou : MainAPI() {
         // İngilizce altyazı
         if (hasEnSub) {
             subtitleCallback.invoke(
-                SubtitleFile(
+                newSubtitleFile(
                     lang = "English",
                     url = "$storageUrl/subtitles/$itemId/en.vtt"
                 )
@@ -369,7 +357,7 @@ class Diziyou : MainAPI() {
                         "Referer" to "$mainUrl/",
                         "Origin" to mainUrl
                     )
-                    quality = Qualities.FullHD.value
+                    quality = Qualities.P1080.value
                 }
             )
         }
@@ -388,7 +376,7 @@ class Diziyou : MainAPI() {
                         "Referer" to "$mainUrl/",
                         "Origin" to mainUrl
                     )
-                    quality = Qualities.FullHD.value
+                    quality = Qualities.P1080.value
                 }
             )
         }
@@ -407,7 +395,7 @@ class Diziyou : MainAPI() {
                         "Referer" to "$mainUrl/",
                         "Origin" to mainUrl
                     )
-                    quality = Qualities.FullHD.value
+                    quality = Qualities.P1080.value
                 }
             )
         }
