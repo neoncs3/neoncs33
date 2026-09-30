@@ -44,15 +44,16 @@ class DiziYou : MainAPI() {
         "Suç Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Su%C3%A7",
         "Komedi Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Komedi",
         "Dram Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Dram",
-        "Romantik Diziler" to "filtrele=tarih&sirala=DESC&kelime=&tur=Romantik",
-        "Macera Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Macera",
-        "Fantastik Diziler" to "filtrele=tarih&sirala=DESC&kelime=&tur=Fantastik",
         "Gizem Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Gizem",
+        "Macera Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Macera",
+        "Fantazi Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Fantazi",
         "Animasyon Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Animasyon",
         "Aile Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Aile",
-        "Tarih Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Tarih",
+        "Belgesel Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Belgesel",
+        "Politik Diziler" to "filtrele=tarih&sirala=DESC&kelime=&tur=Politik",
         "Savaş Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Sava%C5%9F",
-        "Belgesel Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Belgesel"
+        "Vahşi Batı Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Vah%C5%9Fi+Bat%C4%B1",
+        "Romantik Diziler" to "filtrele=tarih&sirala=DESC&kelime=&tur=Romantik"
     )
 
     override suspend fun getMainPage(
@@ -65,13 +66,26 @@ class DiziYou : MainAPI() {
             val url = archiveUrl(query, page)
 
             val items = runCatching {
-                val document = app.get(url, headers = requestHeaders).document
+                val pageUrls = if (page <= 1) {
+                    listOf(archiveUrl(query, 1), archiveUrl(query, 2))
+                } else {
+                    listOf(url)
+                }
 
-                // Eski koddaki gibi container'ın kendisini değil, container
-                // içindeki bütün gerçek dizi kartlarını/anchor'larını al.
-                document.selectSeriesAnchors()
-                    .mapNotNull { it.toSearchResponse() }
-                    .distinctBy { it.url }
+                val collected = LinkedHashMap<String, SearchResponse>()
+
+                for (pageUrl in pageUrls) {
+                    val document = app.get(pageUrl, headers = requestHeaders).document
+
+                    // Container'ın kendisini değil, bütün gerçek dizi kartlarını/anchor'larını al.
+                    document.selectSeriesAnchors()
+                        .mapNotNull { it.toSearchResponse() }
+                        .forEach { response ->
+                            collected.putIfAbsent(response.url.trimEnd('/'), response)
+                        }
+                }
+
+                collected.values.toList()
             }.onFailure {
                 Log.e("DIZIYOU", "Ana sayfa bölümü yüklenemedi: $sectionName -> $url", it)
             }.getOrDefault(emptyList())
@@ -225,6 +239,10 @@ class DiziYou : MainAPI() {
             if (parent.selectFirst(selector) != null) return parent
         }
         return null
+    }
+
+    private fun firstNonBlank(vararg values: String?): String? {
+        return values.firstOrNull { !it.isNullOrBlank() }?.trim()
     }
 
     private fun slugToTitle(url: String): String {
@@ -580,7 +598,7 @@ class DiziYou : MainAPI() {
 
     private fun isEpisodeUrl(url: String): Boolean {
         return Regex(
-            "-[0-9]+-sezon-[0-9]+-bolum(?:/|\?|$)",
+            "-[0-9]+-sezon-[0-9]+-bolum(?:/|\\?|$)",
             RegexOption.IGNORE_CASE,
         ).containsMatchIn(url)
     }
