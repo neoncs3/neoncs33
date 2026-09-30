@@ -13,6 +13,7 @@ import java.net.URLEncoder
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withTimeoutOrNull
 
 class DiziYou : MainAPI() {
 
@@ -36,18 +37,21 @@ class DiziYou : MainAPI() {
     private val archiveSections = listOf(
         "Yeni Eklenen Diziler" to "filtrele=tarih&sirala=DESC",
         "IMDb 7+ Diziler" to "filtrele=imdb&sirala=DESC&yil=&imdb=7",
-        "Aksiyon Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Aksiyon",
-        "Bilim Kurgu Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Bilim+Kurgu",
-        "Gerilim Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Gerilim",
-        "Korku Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Korku",
-        "Suç Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Su%C3%A7",
-        "Komedi Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Komedi",
-        "Dram Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Dram",
-        "Gizem Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Gizem",
-        "Macera Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Macera",
-        "Fantazi Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Fantazi",
-        "Animasyon Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Animasyon",
-        "Aile Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Aile"
+        "Aile Dizileri" to "tur=Aile",
+        "Aksiyon Dizileri" to "tur=Aksiyon",
+        "Animasyon Dizileri" to "tur=Animasyon",
+        "Belgesel Dizileri" to "tur=Belgesel",
+        "Bilim Kurgu Dizileri" to "tur=Bilim+Kurgu",
+        "Dram Dizileri" to "tur=Dram",
+        "Fantazi Dizileri" to "tur=Fantazi",
+        "Gerilim Dizileri" to "tur=Gerilim",
+        "Gizem Dizileri" to "tur=Gizem",
+        "Komedi Dizileri" to "tur=Komedi",
+        "Korku Dizileri" to "tur=Korku",
+        "Macera Dizileri" to "tur=Macera",
+        "Savaş Dizileri" to "tur=Sava%C5%9F",
+        "Suç Dizileri" to "tur=Su%C3%A7",
+        "Vahşi Batı Dizileri" to "tur=Vah%C5%9Fi+Bat%C4%B1"
     )
 
     override suspend fun getMainPage(
@@ -56,45 +60,78 @@ class DiziYou : MainAPI() {
     ): HomePageResponse {
         val home = ArrayList<HomePageList>()
 
-        // Her CloudStream sayfasında yalnızca o arşiv sayfasını çekiyoruz.
-        // 4 isteklik küçük gruplar halinde paralel çalıştırmak, çok sayıdaki
-        // kategori yüzünden 120 saniyelik timecut oluşmasını önler.
-        val sectionResults = coroutineScope {
-            val batches = archiveSections.chunked(4)
-            val output = ArrayList<Pair<String, List<SearchResponse>>>()
+        // Önce gerçek ana sayfadaki hazır vitrinleri alıyoruz.
+        // Böylece CloudStream'de DiziYou'nun kendi ana sayfasına yakın bir düzen oluşur.
+        if (page <= 1) {
+            runCatching {
+                val document = app.get(mainUrl, headers = requestHeaders).document
 
-            for (batch in batches) {
-                val results = batch.map { (sectionName, query) ->
+                val latest = document.select("div.dsmobil2 div#list-series-main")
+                    .mapNotNull { it.toSearchResponse() }
+                    .distinctBy { it.url }
+
+                if (latest.isNotEmpty()) {
+                    home.add(HomePageList("Son Eklenen Diziler", latest))
+                }
+
+                val featured = document.select("div.incontentyeni div#list-series-main")
+                    .mapNotNull { it.toSearchResponse() }
+                    .distinctBy { it.url }
+
+                if (featured.isNotEmpty()) {
+                    home.add(HomePageList("Dikkat Çeken Diziler", featured))
+                }
+
+                val classics = document.select("div.incontent div#list-series-main")
+                    .mapNotNull { it.toSearchResponse() }
+                    .distinctBy { it.url }
+
+                if (classics.isNotEmpty()) {
+                    home.add(HomePageList("Efsane Diziler", classics))
+                }
+            }.onFailure {
+                Log.e("DIZIYOU", "Ana sayfa vitrinleri yüklenemedi", it)
+            }
+        }
+
+        // Türleri ayrı ayrı arşivden al. ÖNEMLİ: Her kart doğrudan #list-series
+        // / #list-series-main elemanından okunuyor; tüm sayfanın <a> etiketlerini
+        // taramıyoruz. Bu, Üye Ol, Üye Girişi, alfabe ve footer bağlantılarının
+        // dizi kartı sanılmasını engeller.
+        // 17 türü tek tek arka arkaya çağırmak ana sayfayı gereksiz yavaşlatır.
+        // En fazla 4 istek aynı anda çalışır; her istek 12 saniye ile sınırlıdır.
+        for (batch in archiveSections.chunked(4)) {
+            val results = coroutineScope {
+                batch.map { (sectionName, query) ->
                     async {
                         val url = archiveUrl(query, page)
-                        val items = runCatching {
-                            app.get(url, headers = requestHeaders).document
-                                .selectSeriesAnchors()
-                                .mapNotNull { it.toSearchResponse() }
-                                .distinctBy { it.url }
-                        }.onFailure { error ->
-                            Log.e("DIZIYOU", "$sectionName yüklenemedi: $url", error)
-                        }.getOrDefault(emptyList())
+                        val items = withTimeoutOrNull(12_000L) {
+                            runCatching {
+                                app.get(url, headers = requestHeaders).document
+                                    .selectSeriesCards()
+                                    .mapNotNull { it.toSearchResponse() }
+                                    .distinctBy { it.url }
+                            }.onFailure { error ->
+                                Log.e("DIZIYOU", "$sectionName yüklenemedi: $url", error)
+                            }.getOrDefault(emptyList())
+                        } ?: run {
+                            Log.w("DIZIYOU", "$sectionName zaman aşımına uğradı: $url")
+                            emptyList()
+                        }
 
                         sectionName to items
                     }
                 }.awaitAll()
-
-                output.addAll(results)
             }
 
-            output
-        }
-
-        for ((sectionName, items) in sectionResults) {
-            Log.d("DIZIYOU", "$sectionName / sayfa $page -> ${items.size} dizi")
-            if (items.isNotEmpty()) {
-                home.add(HomePageList(sectionName, items))
+            for ((sectionName, items) in results) {
+                Log.d("DIZIYOU", "$sectionName / sayfa $page -> ${items.size} dizi")
+                if (items.isNotEmpty()) {
+                    home.add(HomePageList(sectionName, items))
+                }
             }
         }
 
-        // Sayfa 2, 3, 4... CloudStream tarafından ayrıca çağrılır; burada
-        // tarayıcıdaki /page/N yapısına karşılık gelen doğru arşiv sayfası yüklenir.
         return newHomePageResponse(
             home,
             hasNext = home.isNotEmpty(),
@@ -110,60 +147,62 @@ class DiziYou : MainAPI() {
     }
 
     /**
-     * #list-series / #list-series-main çoğu zaman bütün grid'i sarıyor.
-     * Bu container'ı tek kart sanmak yerine içindeki gerçek linkleri topluyoruz.
+     * DiziYou kartları aynı HTML ID'sini birden fazla kartta kullanabiliyor.
+     * Jsoup tüm eşleşmeleri döndürdüğü için bunları tek tek kart olarak işleriz.
      */
-    private fun Document.selectSeriesAnchors(): List<Element> {
-        val result = LinkedHashMap<String, Element>()
-
-        select("a[href]").forEach { anchor ->
-            val href = fixUrlNull(anchor.attr("href")) ?: return@forEach
-            if (!isSeriesUrl(href)) return@forEach
-
-            val hasPoster = anchor.selectFirst("img, picture img") != null ||
-                ancestorHasImage(anchor)
-            val text = anchor.text().trim()
-            val title = anchor.attr("title").trim()
-
-            // Menü / alfabe / footer bağlantılarını ele. Gerçek dizi kartında
-            // genellikle poster bulunur; bazı temalarda başlık + kart container'ı yeterlidir.
-            val inCard = anchor.closest(
-                "div#list-series-main, div#list-series, div.cat-item, div.category-item, article, li"
-            ) != null
-
-            if (!hasPoster && !inCard) return@forEach
-            if (text.length < 2 && title.length < 2) return@forEach
-
-            result.putIfAbsent(href.trimEnd('/'), anchor)
+    private fun Document.selectSeriesCards(): List<Element> {
+        val cards = select(
+            "div.incontent div#list-series, " +
+                "div.incontent div#list-series-main, " +
+                "div.dsmobil2 div#list-series, " +
+                "div.dsmobil2 div#list-series-main, " +
+                "div.incontentyeni div#list-series, " +
+                "div.incontentyeni div#list-series-main"
+        ).filter { card ->
+            val anchor = card.selectFirst("div#categorytitle a[href], div.cat-title-main a[href], a[href]")
+                ?: return@filter false
+            val href = fixUrlNull(anchor.attr("href")) ?: return@filter false
+            isSeriesUrl(href) && card.selectFirst("img") != null
         }
 
-        return result.values.toList()
-    }
-
-    private fun ancestorHasImage(element: Element): Boolean {
-        var parent: Element? = element.parent()
-        repeat(5) {
-            val current = parent ?: return false
-            if (current.selectFirst("img, picture img") != null) return true
-            parent = current.parent()
+        if (cards.isNotEmpty()) {
+            return cards
+                .distinctBy {
+                    val anchor = it.selectFirst("div#categorytitle a[href], div.cat-title-main a[href], a[href]")
+                    fixUrlNull(anchor?.attr("href"))?.trimEnd('/') ?: it.outerHtml()
+                }
         }
-        return false
+
+        // Tema değişmişse sadece posterli ve root-level gerçek dizi bağlantılarını
+        // tek tek al. Artık ancestorHasImage kullanılmıyor; bu kritik düzeltmedir.
+        return select("a[href]")
+            .mapNotNull { anchor ->
+                val href = fixUrlNull(anchor.attr("href")) ?: return@mapNotNull null
+                if (!isSeriesUrl(href)) return@mapNotNull null
+                if (anchor.selectFirst("img") == null) return@mapNotNull null
+                anchor
+            }
+            .distinctBy { it.attr("href").trimEnd('/') }
     }
 
     private fun Element.toSearchResponse(): SearchResponse? {
         val anchor = selectFirst("div#categorytitle a[href]")
+            ?: selectFirst("div.cat-title-main a[href]")
             ?: selectFirst("a[href]")
             ?: return null
 
         val href = fixUrlNull(anchor.attr("href")) ?: return null
         if (!isSeriesUrl(href)) return null
 
-        val posterElement = selectFirst("img") ?: anchor.selectFirst("img")
+        // Afişi yalnızca BU kartın içinden al. Ebeveynlerdeki başka kartın
+        // posterini kesinlikle kullanma.
+        val posterElement = selectFirst("img, picture img") ?: anchor.selectFirst("img")
         val poster = posterElement?.let { image ->
             firstNonBlank(
                 image.attr("data-src"),
                 image.attr("data-lazy-src"),
                 image.attr("data-original"),
+                image.attr("data-lazy"),
                 image.attr("src"),
             )?.let(::fixUrlNull)
         }
@@ -172,15 +211,31 @@ class DiziYou : MainAPI() {
             selectFirst("div.cat-title-main span")?.text(),
             selectFirst("div.cat-title-main")?.text(),
             selectFirst("div#categorytitle a")?.text(),
+            anchor.attr("title"),
             anchor.text(),
             posterElement?.attr("alt"),
-            anchor.attr("title"),
-        ) ?: return null
+        )?.replace(Regex("\\s+"), " ")
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: return null
 
-        val score = extractImdbScore(text())
+        // Menü metni yanlışlıkla kart içine sızmışsa bunu kabul etme.
+        if (isInvalidCardTitle(title)) return null
+
+        val scoreText = buildString {
+            append(text())
+            append(' ')
+            append(selectFirst("[data-imdb]")?.attr("data-imdb").orEmpty())
+            append(' ')
+            append(selectFirst("[data-score]")?.attr("data-score").orEmpty())
+            append(' ')
+            append(selectFirst(".imdb, .imdb-score, .rating")?.text().orEmpty())
+        }
+
+        val score = extractImdbScore(scoreText)
 
         return newTvSeriesSearchResponse(
-            title.trim(),
+            title,
             href,
             TvType.TvSeries,
         ) {
@@ -188,6 +243,37 @@ class DiziYou : MainAPI() {
             score?.let { this.score = Score.from10(it) }
         }
     }
+
+    private fun isInvalidCardTitle(title: String): Boolean {
+        val value = title
+            .replace(Regex("\\s+"), " ")
+            .trim()
+            .lowercase()
+
+        return value in setOf(
+            "diziyou",
+            "üye ol",
+            "üye girişi",
+            "üye girişi yap",
+            "anasayfa",
+            "menü",
+            "dizi arşivi",
+            "son eklenen diziler",
+            "son eklenen bölümler",
+            "imdb 7+",
+            "imdb puanı",
+            "giriş yap",
+            "kayıt ol",
+            "parolamı unuttum"
+        )
+    }
+
+    private fun firstNonBlank(vararg values: String?): String? {
+        return values.firstOrNull { !it.isNullOrBlank() }?.trim()
+    }
+
+    // Arama kodu için geriye dönük uyumluluk.
+    private fun Document.selectSeriesAnchors(): List<Element> = selectSeriesCards()
 
     override suspend fun search(query: String): List<SearchResponse> {
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
@@ -570,20 +656,64 @@ class DiziYou : MainAPI() {
     }
 
     private fun isSeriesUrl(url: String): Boolean {
-        if (!url.contains("diziyou.one", ignoreCase = true)) return false
+        val normalized = url
+            .trim()
+            .lowercase()
+            .substringBefore('#')
+            .removePrefix("https://")
+            .removePrefix("http://")
+            .removePrefix("www.")
+            .trimEnd('/')
+
+        val base = mainUrl
+            .lowercase()
+            .removePrefix("https://")
+            .removePrefix("http://")
+            .removePrefix("www.")
+            .trimEnd('/')
+
+        if (!(normalized == base || normalized.startsWith("$base/"))) return false
+        if (normalized == base) return false
+
+        val path = normalized.substringAfter(base, "")
+
+        // Diziyou dizi sayfaları root-level slug kullanıyor. Alt dizinli URL'ler
+        // arşiv, kategori, hesap veya WordPress sayfalarıdır.
+        if (!path.startsWith("/") || path.count { it == '/' } > 1) return false
+
         if (isEpisodeUrl(url)) return false
 
-        val value = url.trimEnd('/').lowercase()
-        return value != mainUrl.trimEnd('/').lowercase() &&
-            !value.contains("/dizi-arsivi") &&
-            !value.contains("/kategori/") &&
-            !value.contains("/etiket/") &&
-            !value.contains("/iletisim") &&
-            !value.contains("/gizlilik") &&
-            !value.contains("/hakkimizda")
+        val excluded = setOf(
+            "dizi-arsivi",
+            "film-arsivi",
+            "imdb-7",
+            "son-eklenen-diziler",
+            "son-eklenen-bolumler",
+            "uye-ol",
+            "uye-girisi",
+            "giris-yap",
+            "kayit-ol",
+            "iletisim",
+            "gizlilik",
+            "gizlilik-politikasi",
+            "hakkimizda",
+            "dmca",
+            "wp-login.php",
+            "wp-admin",
+            "feed",
+            "sitemap.xml",
+            "robots.txt"
+        )
+
+        val slug = path.trim('/').substringBefore('?')
+        if (slug in excluded) return false
+        if (slug.isBlank()) return false
+
+        return !slug.contains(".xml") &&
+            !slug.contains(".jpg") &&
+            !slug.contains(".png") &&
+            !slug.contains(".css") &&
+            !slug.contains(".js")
     }
 
-    private fun firstNonBlank(vararg values: String?): String? {
-        return values.firstOrNull { !it.isNullOrBlank() }?.trim()
-    }
 }
