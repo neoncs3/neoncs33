@@ -60,6 +60,26 @@
         "name": "DiziYou"
     },
     {
+        "iconUrl": "https://dizipal1583.com/favicon.ico",
+        "fileHash": "sha256-dd36981a59788843555b73ef3b0d34cc203d92b824e6299feaf90fbe7244fd4e",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
+        "fileSize": 32597,
+        "status": 1,
+        "language": "tr",
+        "authors": [
+            "FilmMakinas\u0131"
+        ],
+        "tvTypes": [
+            "TvSeries"
+        ],
+        "version": 2,
+        "internalName": "FilmMakinesi",
+        "description": "DiziPal T\u00fcrkiye katalog ve b\u00f6l\u00fcm sa\u011flay\u0131c\u0131s\u0131",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/FilmMakinesi.cs3",
+        "name": "FilmMakinesi"
+    },
+    {
         "iconUrl": "https://www.google.com/s2/favicons?domain=www.fullhdfilmizlesene.de&sz=%size%",
         "fileHash": "sha256-dfed55ba77aa2775b5964f81c7e25363b0ff31671750abb3e584c7b88a2a60ba",
         "apiVersion": 1,
