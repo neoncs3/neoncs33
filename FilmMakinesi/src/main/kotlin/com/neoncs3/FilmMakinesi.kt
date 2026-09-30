@@ -738,14 +738,39 @@ class FilmMakinesi : MainAPI() {
                 candidates.entries.joinToString(" | ") { "${it.value}: ${it.key}" }
         )
 
-        // 5) Önce provider extractor'ı dene; başarısızsa player HTML'ini aç.
+        // 5) Önce FilmMakinesi'nin kendi CloseLoad player'ını çöz.
+        // Bu player gerçek m3u8 adresini JavaScript/obfuscation içinden üretir.
+        val closeLoadCandidates = candidates.entries
+            .filter { it.key.contains("closeload.filmmakinesi", true) }
+
+        for ((playerUrl, playerLabel) in closeLoadCandidates) {
+            Log.d("FILMMAKINESI", "CloseLoad deneniyor: $playerUrl")
+            val closeLoaded = runCatching {
+                CloseLoadExtractor().getUrl(
+                    url = playerUrl,
+                    referer = data,
+                    subtitleCallback = subtitleCallback,
+                    callback = callback,
+                )
+                true
+            }.getOrElse { error ->
+                Log.e("FILMMAKINESI", "CloseLoad çözülemedi: $playerUrl", error)
+                false
+            }
+
+            if (closeLoaded) return true
+        }
+
+        // 6) Diğer provider extractor'larını dene; başarısızsa player HTML'ini aç.
         for ((playerUrl, playerLabel) in candidates) {
+            if (playerUrl.contains("closeload.filmmakinesi", true)) continue
+
             Log.d("FILMMAKINESI", "Deneniyor: $playerLabel -> $playerUrl")
 
             val externalLoaded = runCatching {
                 loadExtractor(
                     playerUrl,
-                    "$mainUrl/",
+                    data,
                     subtitleCallback,
                     callback,
                 )
@@ -871,7 +896,8 @@ class FilmMakinesi : MainAPI() {
             lower.contains("streamtape") ||
             lower.contains("vidhide") ||
             lower.contains("lulustream") ||
-            lower.contains("ok.ru")
+            lower.contains("ok.ru") ||
+            lower.contains("closeload.filmmakinesi")
     }
 
     /** Fragman/teaser kaynaklarının yanlışlıkla ana video olarak seçilmesini önler. */
@@ -1225,3 +1251,176 @@ class FilmMakinesi : MainAPI() {
                 "Chrome/154.0 Safari/537.36"
     }
 }
+
+/**
+ * FilmMakinesi CloseLoad player çözümleyicisi.
+ * Eski FilmMakinesi sağlayıcısındaki doğrulanmış akış:
+ *   player -> packed javascript -> Base64 -> reverse -> Base64 -> m3u8
+ */
+private class CloseLoadExtractor : ExtractorApi() {
+    override val name = "CloseLoad"
+    override val mainUrl = "https://closeload.filmmakinesi.de"
+    override val requiresReferer = true
+
+    override suspend fun getUrl(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit,
+    ) {
+        val extRef = referer ?: "https://filmmakinesi.to/"
+
+        Log.d("FILMMAKINESI", "CloseLoad URL -> $url")
+
+        val response = app.get(
+            url,
+            headers = mapOf(
+                "User-Agent" to USER_AGENT,
+                "Referer" to extRef,
+                "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+            ),
+        )
+
+        response.document.select("track[src]").forEach { track ->
+            val src = fixUrlNull(track.attr("src"))
+            if (!src.isNullOrBlank()) {
+                subtitleCallback(
+                    SubtitleFile(
+                        lang = track.attr("label").ifBlank { track.attr("srclang").ifBlank { "Turkish" } },
+                        url = src,
+                    )
+                )
+            }
+        }
+
+        val scripts = response.document.select("script")
+            .map { it.data().ifBlank { it.html() }.trim() }
+            .filter { it.isNotBlank() }
+
+        val unpackedScripts = buildList {
+            for (script in scripts) {
+                add(script)
+                runCatching { getAndUnpack(script) }
+                    .getOrNull()
+                    ?.takeIf { it.isNotBlank() && it != script }
+                    ?.let(::add)
+            }
+        }
+
+        val encodedCandidates = LinkedHashSet<String>()
+
+        for (script in unpackedScripts) {
+            // Eski player'ın gerçek veri değişkenini önce hedefle.
+            Regex(
+                "return\\s+result\\s*}var\\s+.*?=\\s*\\(\\\"([^\\\"]+)\\\"\\)",
+                RegexOption.IGNORE_CASE,
+            ).find(script)?.groupValues?.getOrNull(1)?.let(encodedCandidates::add)
+
+            Regex(
+                "(?:=|\\()\\s*\\\"([A-Za-z0-9+/=_-]{80,})\\\"\\s*\\)?",
+                RegexOption.IGNORE_CASE,
+            ).findAll(script).forEach { match ->
+                match.groupValues.getOrNull(1)?.let(encodedCandidates::add)
+            }
+        }
+
+        fun normalizeBase64(value: String): String {
+            var v = value.trim()
+                .replace("\\/", "/")
+                .replace("\\u003d", "=", ignoreCase = true)
+                .replace("\\u002b", "+", ignoreCase = true)
+                .replace("\\u002f", "/", ignoreCase = true)
+            v = v.filter { !it.isWhitespace() }
+            val pad = (4 - (v.length % 4)) % 4
+            return v + "=".repeat(pad)
+        }
+
+        fun decodeCloseLoad(value: String): List<String> {
+            val results = LinkedHashSet<String>()
+            val original = value.trim().removeSurrounding("\"")
+            val normalized = normalizeBase64(original)
+
+            runCatching {
+                val first = Base64.decode(normalized, Base64.DEFAULT).reversedArray()
+                val second = Base64.decode(first, Base64.DEFAULT)
+                val text = second.toString(Charsets.UTF_8)
+                text.split("|")
+                    .map { it.trim() }
+                    .filter { it.startsWith("http", true) && (it.contains(".m3u8", true) || it.contains(".mp4", true)) }
+                    .forEach(results::add)
+                if (text.contains("http", true)) {
+                    Regex("https?://[^\\s|\\\"'<>]+", RegexOption.IGNORE_CASE)
+                        .findAll(text)
+                        .map { it.value.trimEnd(')', ']', '}', ';', ',') }
+                        .filter { it.contains(".m3u8", true) || it.contains(".mp4", true) }
+                        .forEach(results::add)
+                }
+            }
+
+            // Bazı sürümlerde ikinci aşamada tekrar Base64 gerekir.
+            runCatching {
+                val firstDecoded = Base64.decode(normalized, Base64.DEFAULT).reversedArray()
+                    .toString(Charsets.UTF_8)
+                val secondNormalized = normalizeBase64(firstDecoded)
+                val secondDecoded = Base64.decode(secondNormalized, Base64.DEFAULT)
+                    .toString(Charsets.UTF_8)
+                Regex("https?://[^\\s|\\\"'<>]+", RegexOption.IGNORE_CASE)
+                    .findAll(secondDecoded)
+                    .map { it.value.trimEnd(')', ']', '}', ';', ',') }
+                    .filter { it.contains(".m3u8", true) || it.contains(".mp4", true) }
+                    .forEach(results::add)
+            }
+
+            return results.toList()
+        }
+
+        val mediaUrls = LinkedHashSet<String>()
+
+        for (encoded in encodedCandidates) {
+            decodeCloseLoad(encoded).forEach(mediaUrls::add)
+        }
+
+        // Şifreli değişken yakalanamadıysa unpack edilmiş script içinde açık medya ara.
+        for (script in unpackedScripts) {
+            Regex(
+                "https?://[^\\s\\\"'<>]+\\.(?:m3u8|mp4)(?:\\?[^\\s\\\"'<>]*)?",
+                RegexOption.IGNORE_CASE,
+            ).findAll(script)
+                .map { it.value.trimEnd(')', ']', '}', ';', ',') }
+                .forEach(mediaUrls::add)
+        }
+
+        val cleanMedia = mediaUrls
+            .map { it.replace("\\/", "/") }
+            .filter { !it.contains("fragman", true) && !it.contains("trailer", true) }
+            .distinct()
+
+        if (cleanMedia.isEmpty()) {
+            throw ErrorLoadingException("CloseLoad m3u8 bulunamadı")
+        }
+
+        cleanMedia.forEach { mediaUrl ->
+            callback(
+                newExtractorLink(
+                    source = name,
+                    name = name,
+                    url = mediaUrl,
+                    type = INFER_TYPE,
+                ) {
+                    referer = url
+                    quality = if (mediaUrl.contains("1080", true)) {
+                        Qualities.P1080.value
+                    } else {
+                        Qualities.Unknown.value
+                    }
+                    headers = mapOf(
+                        "User-Agent" to USER_AGENT,
+                        "Referer" to url,
+                        "Origin" to mainUrl,
+                    )
+                }
+            )
+        }
+    }
+}
+
