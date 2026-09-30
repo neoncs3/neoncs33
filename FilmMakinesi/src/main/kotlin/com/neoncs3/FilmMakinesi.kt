@@ -8,7 +8,6 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.INFER_TYPE
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.loadExtractor
-import com.lagradost.cloudstream3.utils.newSubtitleFile
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -529,7 +528,7 @@ class FilmMakinesi : MainAPI() {
 
         extractSubtitleUrls(rawHtml).forEach { (lang, subtitleUrl) ->
             subtitleCallback(
-                newSubtitleFile(
+                SubtitleFile(
                     lang = lang,
                     url = subtitleUrl,
                 )
