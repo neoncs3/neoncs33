@@ -270,7 +270,7 @@ class DiziYou : MainAPI() {
             addActors(actors)
 
             imdbScore?.let { this.score = Score.from10(it) }
-            trailer?.let { addTrailer(it) }
+            trailer?.let { this.trailerUrl = it }
         }
     }
 
