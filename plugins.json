@@ -1,25 +1,5 @@
 [
     {
-        "iconUrl": "https://dizipal1583.com/favicon.ico",
-        "fileHash": "sha256-3956c6cb6815413061ac7846590da7e9720b480738af70b134faa4660b0fecf9",
-        "apiVersion": 1,
-        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 11612,
-        "status": 1,
-        "language": "tr",
-        "authors": [
-            "DiziPalCloudStream"
-        ],
-        "tvTypes": [
-            "TvSeries"
-        ],
-        "version": 1,
-        "internalName": "ClipBox",
-        "description": "DiziPal T\u00fcrkiye katalog ve b\u00f6l\u00fcm sa\u011flay\u0131c\u0131s\u0131",
-        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/ClipBox.cs3",
-        "name": "ClipBox"
-    },
-    {
         "iconUrl": "https://diziboxizle.com/favicon.ico",
         "fileHash": "sha256-8ea927332c89de56a336c29af630577beef2af00e817c357a89aa8b3d09a0ef3",
         "apiVersion": 1,
@@ -58,6 +38,26 @@
         "description": "DiziPal T\u00fcrkiye katalog ve b\u00f6l\u00fcm sa\u011flay\u0131c\u0131s\u0131",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/DiziKorea.cs3",
         "name": "DiziKorea"
+    },
+    {
+        "iconUrl": "https://www.diziyou.one/favicon.ico",
+        "fileHash": "sha256-7a933cf4bf9f35a6a287bbd4f04327abebd0378d3277f84f41de575ae0be8bab",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
+        "fileSize": 20435,
+        "status": 1,
+        "language": "tr",
+        "authors": [
+            "neoncs3"
+        ],
+        "tvTypes": [
+            "TvSeries"
+        ],
+        "version": 1,
+        "internalName": "DiziYou",
+        "description": "katalog ve b\u00f6l\u00fcm sa\u011flay\u0131c\u0131s\u0131",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/DiziYou.cs3",
+        "name": "DiziYou"
     },
     {
         "iconUrl": "https://www.google.com/s2/favicons?domain=www.fullhdfilmizlesene.de&sz=%size%",
