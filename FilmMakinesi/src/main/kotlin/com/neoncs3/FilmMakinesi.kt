@@ -530,282 +530,348 @@ class FilmMakinesi : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
-        Log.d("FILMMAKINESI", "loadLinks data=$data")
+        Log.d("FILMMAKINESI", "loadLinks -> $data")
 
         val pageResponse = runCatching {
             app.get(data, headers = requestHeaders)
         }.getOrNull() ?: return false
 
         val document = pageResponse.document
-        var found = false
+        val rawHtml = normalizeEmbeddedText(pageResponse.text)
+        val candidates = LinkedHashMap<String, String>()
 
-        /*
-         * FilmMakinesi'nin oynatma alanı özellikle div.player-div içinde tutuluyor.
-         * Site sayfasındaki fragman iframe'i ayrı olduğu için burada yalnızca
-         * player-div kaynaklarını topluyoruz. Eski çalışan FilmMakinesi eklentisi
-         * de aynı yöntemi kullanıyordu.
-         */
-        val playerCandidates = LinkedHashSet<String>()
+        fun addCandidate(raw: String?, label: String) {
+            val value = raw?.trim()?.takeIf { it.isNotBlank() } ?: return
+            val fixed = runCatching { fixUrlNull(value) }.getOrNull() ?: return
+            if (fixed.isBlank()) return
+            if (sameUrl(fixed, data)) return
+            if (isTrailerCandidateUrl(fixed)) return
+            candidates.putIfAbsent(fixed.substringBefore('#'), label)
+        }
 
-        document.select("div.player-div iframe, div.player-div embed, div.player-div [data-src], div.player-div [data-url]")
-            .forEach { element ->
+        // 1) FilmMakinesi'nin asıl oynatıcı alanı.
+        document.select(
+            "div.player-div iframe, div.player-div embed, div.player-div video, " +
+                "div.player-div source, div.player-div [data-src], div.player-div [data-url], " +
+                "div.player-div [data-iframe], div.player-div [data-player], div.player-div [data-embed]"
+        ).forEach { element ->
+            val surrounding = element.parent()?.text().orEmpty()
+            val label = when {
+                surrounding.contains("rapid", true) -> "FilmMakinesi • Rapid"
+                surrounding.contains("dublaj", true) -> "FilmMakinesi • Dublaj"
+                else -> "FilmMakinesi • FLM Player"
+            }
+            addCandidate(
                 firstNonBlank(
                     element.attr("data-src"),
                     element.attr("data-url"),
-                    element.attr("src"),
+                    element.attr("data-iframe"),
+                    element.attr("data-player"),
                     element.attr("data-embed"),
-                    element.attr("data-player-src"),
-                )?.let { raw ->
-                    fixUrlNull(raw)?.let { candidate ->
-                        if (!isTrailerCandidateUrl(candidate)) {
-                            playerCandidates.add(candidate)
-                        }
-                    }
-                }
-            }
-
-        /*
-         * Tema değişirse player-div bulunamayabilir. Yalnızca class/id'sinde
-         * player geçen iframe'leri ikinci planda tara; YouTube/Vimeo/fragmanları
-         * burada da dışarıda bırak.
-         */
-        if (playerCandidates.isEmpty()) {
-            document.select("iframe[src], iframe[data-src], iframe[data-url]")
-                .forEach { iframe ->
-                    if (isTrailerElement(iframe)) return@forEach
-
-                    val candidate = firstNonBlank(
-                        iframe.attr("data-src"),
-                        iframe.attr("data-url"),
-                        iframe.attr("src"),
-                    )?.let(::fixUrlNull) ?: return@forEach
-
-                    if (isTrailerCandidateUrl(candidate)) return@forEach
-
-                    val marker = (
-                        iframe.id() + " " +
-                            iframe.classNames().joinToString(" ")
-                        ).lowercase()
-
-                    if (marker.contains("player") || marker.contains("stream") || marker.contains("watch")) {
-                        playerCandidates.add(candidate)
-                    }
-                }
+                    element.attr("src"),
+                ),
+                label,
+            )
         }
 
-        if (playerCandidates.isEmpty()) {
-            Log.w("FILMMAKINESI", "Gerçek player iframe bulunamadı: $data")
+        // 2) FLM Player / Dublaj / Rapid düğmeleri.
+        document.select(
+            "a, button, [role='button'], [onclick], [data-src], [data-url], [data-link], " +
+                "[data-href], [data-video], [data-iframe], [data-embed], [data-player], " +
+                "[data-target], [data-value], [data-id], [data-file], [data-play]"
+        ).forEach { element ->
+            val marker = (
+                element.text() + " " +
+                    element.attr("title") + " " +
+                    element.attr("aria-label") + " " +
+                    element.id() + " " +
+                    element.classNames().joinToString(" ")
+                ).replace(Regex("\\s+"), " ").trim()
+
+            val likelyPlayer = marker.contains("flm", true) ||
+                marker.contains("rapid", true) ||
+                marker.contains("dublaj", true) ||
+                marker.contains("player", true) ||
+                marker.contains("izle", true) ||
+                marker.contains("stream", true) ||
+                marker.contains("1080", true) ||
+                marker.contains("720", true)
+
+            if (!likelyPlayer && element.attr("onclick").isBlank()) return@forEach
+
+            val label = when {
+                marker.contains("rapid", true) -> "FilmMakinesi • Rapid"
+                marker.contains("dublaj", true) -> "FilmMakinesi • Dublaj"
+                else -> "FilmMakinesi • FLM Player"
+            }
+
+            val attributes = listOf(
+                "href",
+                "src",
+                "data-src",
+                "data-url",
+                "data-link",
+                "data-href",
+                "data-video",
+                "data-iframe",
+                "data-embed",
+                "data-player",
+                "data-player-src",
+                "data-embed-url",
+                "data-video-url",
+                "data-file",
+                "data-play",
+                "data-target",
+                "data-value",
+                "data-id",
+                "onclick",
+            )
+
+            for (attributeName in attributes) {
+                val rawValue = element.attr(attributeName).trim()
+                if (rawValue.isBlank()) continue
+
+                val decoded = normalizeEmbeddedText(rawValue)
+
+                // Mutlak URL'ler.
+                Regex("https?://[^\\s\\\"'<>]+", RegexOption.IGNORE_CASE)
+                    .findAll(decoded)
+                    .forEach { match ->
+                        val url = match.value.trimEnd(')', ']', '}', ';', ',')
+                        val lower = url.lowercase()
+                        if (
+                            lower.contains("/player") ||
+                            lower.contains("/embed") ||
+                            lower.contains("/watch") ||
+                            lower.contains("/stream") ||
+                            lower.contains("/video") ||
+                            lower.contains("filmmakinesi.to") && (
+                                lower.contains("ajax") ||
+                                    lower.contains("source") ||
+                                    lower.contains("play") ||
+                                    lower.contains("load")
+                                ) ||
+                            isKnownProviderHost(url)
+                        ) {
+                            addCandidate(url, label)
+                        }
+                    }
+
+                // Göreli player/ajax URL'leri.
+                Regex(
+                    """(?:^|[=:"'`()\s])((?:/)+(?:player|embed|watch|stream|video|ajax/player|ajax/embed|ajax/video)[^\s"'<>]*)""",
+                    RegexOption.IGNORE_CASE,
+                ).findAll(decoded)
+                    .map { it.groupValues[1] }
+                    .forEach { relative ->
+                        addCandidate(relative, label)
+                    }
+            }
+        }
+
+        // 3) Script içindeki URL'leri, özellikle FLM/Rapid/Dublaj düğmesinin yakınında,
+        //    doğrudan çıkar. Bu, statik HTML'de iframe bulunmadığında önemlidir.
+        val scriptBlocks = document.select("script")
+            .map { it.data().ifBlank { it.html() } }
+            .filter { it.isNotBlank() }
+
+        for (script in scriptBlocks) {
+            val decodedScript = normalizeEmbeddedText(script)
+            val labelWindows = listOf(
+                "flm" to "FilmMakinesi • FLM Player",
+                "rapid" to "FilmMakinesi • Rapid",
+                "dublaj" to "FilmMakinesi • Dublaj",
+                "player" to "FilmMakinesi • FLM Player",
+            )
+
+            for ((keyword, label) in labelWindows) {
+                var cursor = 0
+                while (true) {
+                    val index = decodedScript.indexOf(keyword, cursor, ignoreCase = true)
+                    if (index < 0) break
+
+                    val startWindow = maxOf(0, index - 1800)
+                    val endWindow = minOf(decodedScript.length, index + 2200)
+                    val window = decodedScript.substring(startWindow, endWindow)
+
+                    Regex("https?://[^\\s\\\"'<>]+", RegexOption.IGNORE_CASE)
+                        .findAll(window)
+                        .map { it.value.trimEnd(')', ']', '}', ';', ',') }
+                        .forEach { url ->
+                            if (
+                                url.contains("/player", true) ||
+                                url.contains("/embed", true) ||
+                                url.contains("/watch", true) ||
+                                url.contains("/stream", true) ||
+                                url.contains("/video", true) ||
+                                isKnownProviderHost(url)
+                            ) {
+                                addCandidate(url, label)
+                            }
+                        }
+
+                    Regex(
+                        """(?:^|[=:"'`()\s])((?:/)+(?:player|embed|watch|stream|video|ajax/player|ajax/embed|ajax/video)[^\s"'<>]*)""",
+                        RegexOption.IGNORE_CASE,
+                    ).findAll(window)
+                        .map { it.groupValues[1] }
+                        .forEach { relative -> addCandidate(relative, label) }
+
+                    cursor = index + keyword.length
+                }
+            }
+        }
+
+        // 4) HTML/JSON içindeki açıkça player ile ilişkili m3u8/mp4 kaynakları.
+        extractPlayerContextMedia(rawHtml).forEach {
+            addCandidate(it, "FilmMakinesi • FLM Player")
+        }
+
+        if (candidates.isEmpty()) {
+            Log.w("FILMMAKINESI", "Oyuncatıcı adayı bulunamadı: $data")
             return false
         }
 
-        Log.d("FILMMAKINESI", "player candidates=${playerCandidates.size}")
+        Log.d(
+            "FILMMAKINESI",
+            "Bulunan player adayları: ${candidates.size} -> " +
+                candidates.entries.joinToString(" | ") { "${it.value}: ${it.key}" }
+        )
 
-        /*
-         * Her player'ı ayrı ayrı deniyoruz. FilmMakinesi'nde FLM Player, Dublaj
-         * ve Rapid gibi birden fazla kaynak bulunabildiği için ilk kaynak
-         * başarısız olursa diğerine geçiyoruz.
-         */
-        for (playerUrl in playerCandidates) {
-            if (playerUrl.isBlank()) continue
-            if (sameUrl(playerUrl, data)) continue
+        // 5) Önce provider extractor'ı dene; başarısızsa player HTML'ini aç.
+        for ((playerUrl, playerLabel) in candidates) {
+            Log.d("FILMMAKINESI", "Deneniyor: $playerLabel -> $playerUrl")
 
-            Log.d("FILMMAKINESI", "player iframe = $playerUrl")
-
-            // 1) Önce CloudStream'in mevcut extractor'larını dene.
-            val extracted = runCatching {
+            val externalLoaded = runCatching {
                 loadExtractor(
                     playerUrl,
                     "$mainUrl/",
                     subtitleCallback,
                     callback,
                 )
-            }.getOrElse {
-                Log.w("FILMMAKINESI", "loadExtractor hata: $playerUrl", it)
-                false
+            }.getOrDefault(false)
+
+            if (externalLoaded) {
+                Log.d("FILMMAKINESI", "Extractor başarılı: $playerUrl")
+                return true
             }
 
-            if (extracted) {
-                found = true
-                break
-            }
-
-            /*
-             * 2) Player'ın kendi HTML/JS kaynağını incele.
-             * Bazı FilmMakinesi player'larında gerçek video adresi iframe'in
-             * içinde doğrudan, bazılarında packed JS içinde bulunuyor.
-             */
             val playerResponse = runCatching {
-                app.get(playerUrl, referer = "$mainUrl/")
+                app.get(
+                    playerUrl,
+                    headers = mapOf(
+                        "User-Agent" to USER_AGENT,
+                        "Accept" to "*/*",
+                        "Referer" to "$mainUrl/",
+                        "Accept-Language" to "tr-TR,tr;q=0.9,en;q=0.8",
+                    )
+                )
             }.getOrNull() ?: continue
 
             val playerDocument = playerResponse.document
             val playerHtml = normalizeEmbeddedText(playerResponse.text)
 
-            // Player içindeki açık altyazılar.
-            playerDocument.select("track[src], track[data-src]").forEach { track ->
-                if (isTrailerElement(track)) return@forEach
+            // Player içindeki ikinci seviye iframe/provider.
+            val nestedCandidates = LinkedHashSet<String>()
+            playerDocument.select(
+                "iframe[src], iframe[data-src], iframe[data-url], [data-iframe], [data-embed], [data-player], [data-video]"
+            ).forEach { element ->
+                firstNonBlank(
+                    element.attr("src"),
+                    element.attr("data-src"),
+                    element.attr("data-url"),
+                    element.attr("data-iframe"),
+                    element.attr("data-embed"),
+                    element.attr("data-player"),
+                    element.attr("data-video"),
+                )?.let { raw ->
+                    fixUrlNull(raw)?.let { nested ->
+                        if (!isTrailerCandidateUrl(nested)) nestedCandidates.add(nested)
+                    }
+                }
+            }
 
-                val subtitleUrl = firstNonBlank(
-                    track.attr("src"),
-                    track.attr("data-src"),
-                )?.let(::fixUrlNull) ?: return@forEach
-
-                subtitleCallback(
-                    SubtitleFile(
-                        lang = firstNonBlank(
-                            track.attr("label"),
-                            track.attr("srclang"),
-                        )?.let(::subtitleLanguage) ?: "Subtitle",
-                        url = subtitleUrl,
+            for (nested in nestedCandidates) {
+                val nestedLoaded = runCatching {
+                    loadExtractor(
+                        nested,
+                        playerUrl,
+                        subtitleCallback,
+                        callback,
                     )
+                }.getOrDefault(false)
+
+                if (nestedLoaded) return true
+            }
+
+            // Player sayfasında doğrudan HLS/MP4 varsa kullan.
+            val mediaUrls = LinkedHashSet<String>()
+            mediaUrls.addAll(extractDirectPlayerMedia(playerHtml))
+
+            playerDocument.select("script").forEach { scriptElement ->
+                val script = scriptElement.data().ifBlank { scriptElement.html() }
+                if (script.isBlank()) return@forEach
+
+                val unpacked = runCatching { getAndUnpack(script) }
+                    .getOrDefault(script)
+
+                mediaUrls.addAll(
+                    extractDirectPlayerMedia(normalizeEmbeddedText(unpacked))
                 )
             }
 
-            // 3) Player sayfasındaki doğrudan m3u8/mp4.
-            val directMedia = extractDirectPlayerMedia(playerHtml)
-            for (mediaUrl in directMedia) {
+            mediaUrls.addAll(decodeLegacyPlayerMedia(playerHtml))
+
+            for (mediaUrl in mediaUrls.distinct().filterNot { isTrailerCandidateUrl(it) }) {
                 callback(
                     newExtractorLink(
                         source = name,
-                        name = "FilmMakinesi • Player",
+                        name = playerLabel,
                         url = mediaUrl,
                         type = INFER_TYPE,
                     ) {
                         referer = playerUrl
+                        quality = detectQuality(mediaUrl)
                         headers = mapOf(
                             "User-Agent" to USER_AGENT,
                             "Referer" to playerUrl,
+                            "Origin" to originFromUrl(playerUrl),
                         )
-                        quality = detectQuality(mediaUrl)
                     }
                 )
                 found = true
             }
 
-            if (found) break
-
-            // 4) Packed JavaScript içindeki kaynakları çıkar.
-            val scripts = playerDocument.select("script")
-                .map { it.data().ifBlank { it.html() } }
-                .filter { it.isNotBlank() }
-
-            for (script in scripts) {
-                val unpacked = runCatching { getAndUnpack(script) }.getOrDefault(script)
-                val mediaUrls = extractDirectPlayerMedia(normalizeEmbeddedText(unpacked))
-
-                for (mediaUrl in mediaUrls) {
-                    callback(
-                        newExtractorLink(
-                            source = name,
-                            name = "FilmMakinesi • FLM",
-                            url = mediaUrl,
-                            type = INFER_TYPE,
-                        ) {
-                            referer = playerUrl
-                            headers = mapOf(
-                                "User-Agent" to USER_AGENT,
-                                "Referer" to playerUrl,
-                            )
-                            quality = detectQuality(mediaUrl)
-                        }
-                    )
-                    found = true
-                }
-
-                if (found) break
-            }
-
-            if (found) break
-
-            // 5) Eski FilmMakinesi CloseLoad tarzı çift Base64 + reverse şifrelemeyi
-            // de dene. Böyle bir veri varsa gerçek m3u8 doğrudan çözülebilir.
-            val decodedMedia = decodeLegacyPlayerMedia(playerHtml)
-            for (mediaUrl in decodedMedia) {
-                callback(
-                    newExtractorLink(
-                        source = name,
-                        name = "FilmMakinesi • FLM Decoded",
-                        url = mediaUrl,
-                        type = INFER_TYPE,
-                    ) {
-                        referer = playerUrl
-                        headers = mapOf(
-                            "User-Agent" to USER_AGENT,
-                            "Referer" to playerUrl,
-                        )
-                        quality = detectQuality(mediaUrl)
-                    }
-                )
-                found = true
-            }
-
-            if (found) break
+            if (found) return true
         }
 
-        Log.d("FILMMAKINESI", "loadLinks result=$found")
-        return found
+        Log.w("FILMMAKINESI", "Film/Dizi için gerçek video kaynağı çözülemedi: $data")
+        return false
     }
 
-    /** Player HTML/JS içindeki gerçek video URL'lerini alır; fragmanı dışarıda bırakır. */
-    private fun extractDirectPlayerMedia(html: String): List<String> {
-        val normalized = normalizeEmbeddedText(html)
-        val patterns = listOf(
-            Regex("https?://[^\"'<>\\s]+\\.m3u8(?:\\?[^\"'<>\\s]*)?", RegexOption.IGNORE_CASE),
-            Regex("https?://[^\"'<>\\s]+\\.mp4(?:\\?[^\"'<>\\s]*)?", RegexOption.IGNORE_CASE),
-            Regex("[\"'](?:file|source|src|video|url|hls|contentUrl)[\"']?\\s*[:=]\\s*[\"'](https?://[^\"']+)[\"']", RegexOption.IGNORE_CASE),
-        )
 
-        return patterns
-            .flatMap { pattern ->
-                pattern.findAll(normalized).map { it.groupValues.last() }.toList()
-            }
-            .map { it.replace("\\/", "/") }
-            .distinct()
-            .filterNot { isTrailerCandidateUrl(it) }
-            .filter { it.contains(".m3u8", true) || it.contains(".mp4", true) }
+    private fun originFromUrl(url: String): String {
+        return runCatching {
+            val uri = URI(url)
+            val scheme = uri.scheme ?: "https"
+            val host = uri.host ?: return@runCatching "$mainUrl/"
+            "$scheme://$host"
+        }.getOrDefault("$mainUrl/")
     }
 
-    /** Eski FilmMakinesi CloseLoad benzeri obfuscation için gerçek medya URL'si çıkarır. */
-    private fun decodeLegacyPlayerMedia(html: String): List<String> {
-        val result = LinkedHashSet<String>()
-
-        val quoted = Regex("[\"']([A-Za-z0-9+/=_-]{24,})[\"']")
-            .findAll(html)
-            .map { it.groupValues[1] }
-            .distinct()
-            .take(100)
-            .toList()
-
-        for (candidate in quoted) {
-            val first = runCatching {
-                Base64.decode(candidate, Base64.DEFAULT)
-            }.getOrNull() ?: continue
-
-            val variants = listOf(
-                first.reversedArray(),
-                first,
-            )
-
-            for (variant in variants) {
-                val decoded = runCatching {
-                    Base64.decode(variant, Base64.DEFAULT).toString(Charsets.UTF_8)
-                }.getOrNull() ?: continue
-
-                val pieces = decoded.split('|', ';', '\n')
-                for (piece in pieces) {
-                    val clean = piece.trim().replace("\\/", "/")
-                    if (
-                        clean.startsWith("http", true) &&
-                        (clean.contains(".m3u8", true) || clean.contains(".mp4", true)) &&
-                        !isTrailerCandidateUrl(clean)
-                    ) {
-                        result.add(clean)
-                    }
-                }
-            }
-        }
-
-        return result.toList()
+    private fun isKnownProviderHost(url: String): Boolean {
+        val lower = url.lowercase()
+        return lower.contains("vidmoly") ||
+            lower.contains("filemoon") ||
+            lower.contains("streamwish") ||
+            lower.contains("dood") ||
+            lower.contains("voe") ||
+            lower.contains("vudeo") ||
+            lower.contains("mixdrop") ||
+            lower.contains("streamtape") ||
+            lower.contains("vidhide") ||
+            lower.contains("lulustream") ||
+            lower.contains("ok.ru")
     }
 
     /** Fragman/teaser kaynaklarının yanlışlıkla ana video olarak seçilmesini önler. */
