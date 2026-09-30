@@ -723,8 +723,8 @@ class FilmMakinesi : MainAPI() {
         }
 
         // 4) HTML/JSON içindeki açıkça player ile ilişkili m3u8/mp4 kaynakları.
-        extractPlayerContextMedia(rawHtml).forEach {
-            addCandidate(it, "FilmMakinesi • FLM Player")
+        extractDirectMediaWithContext(rawHtml).forEach { mediaUrl ->
+            addCandidate(mediaUrl, "FilmMakinesi • FLM Player")
         }
 
         if (candidates.isEmpty()) {
@@ -806,7 +806,7 @@ class FilmMakinesi : MainAPI() {
 
             // Player sayfasında doğrudan HLS/MP4 varsa kullan.
             val mediaUrls = LinkedHashSet<String>()
-            mediaUrls.addAll(extractDirectPlayerMedia(playerHtml))
+            mediaUrls.addAll(extractDirectMediaWithContext(playerHtml))
 
             playerDocument.select("script").forEach { scriptElement ->
                 val script = scriptElement.data().ifBlank { scriptElement.html() }
@@ -816,12 +816,12 @@ class FilmMakinesi : MainAPI() {
                     .getOrDefault(script)
 
                 mediaUrls.addAll(
-                    extractDirectPlayerMedia(normalizeEmbeddedText(unpacked))
+                    extractDirectMediaWithContext(normalizeEmbeddedText(unpacked))
                 )
             }
 
-            mediaUrls.addAll(decodeLegacyPlayerMedia(playerHtml))
 
+            var found = false
             for (mediaUrl in mediaUrls.distinct().filterNot { isTrailerCandidateUrl(it) }) {
                 callback(
                     newExtractorLink(
