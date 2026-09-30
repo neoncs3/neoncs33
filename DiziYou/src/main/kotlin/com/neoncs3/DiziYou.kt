@@ -3,36 +3,29 @@ package com.neoncs3
 import android.util.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
-import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
-import com.lagradost.cloudstream3.utils.*
+import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.INFER_TYPE
+import com.lagradost.cloudstream3.utils.Qualities
+import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.net.URLEncoder
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 
 class DiziYou : MainAPI() {
 
     override var mainUrl = "https://www.diziyou.one"
-    override var name = "Diziyou"
+    override var name = "DiziYou"
     override var lang = "tr"
     override val hasMainPage = true
     override val hasQuickSearch = true
     override val supportedTypes = setOf(TvType.TvSeries)
 
-    // Cloudflare / yavaş ana sayfa yüklemelerinde yardımcı olur.
-    override var sequentialMainPage = true
-    override var sequentialMainPageDelay = 250L
-    override var sequentialMainPageScrollDelay = 250L
-
-    private val storageUrl = "https://storage.diziyou.one"
-
-    private val requestHeaders = mapOf(
-        "User-Agent" to USER_AGENT,
-        "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer" to "$mainUrl/",
-    )
-
     /**
-     * Ana sayfa bölümleri. Tür filtrelerinde IMDb 7 filtresi özellikle
-     * kullanılmaz; böylece türün bütün dizileri gelir.
+     * Diziyou arşivindeki bölümlerin sırası.
+     * "Son Eklenen Bölümler" özellikle yoktur.
      */
     private val archiveSections = listOf(
         "Yeni Eklenen Diziler" to "filtrele=tarih&sirala=DESC",
@@ -48,12 +41,7 @@ class DiziYou : MainAPI() {
         "Macera Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Macera",
         "Fantazi Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Fantazi",
         "Animasyon Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Animasyon",
-        "Aile Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Aile",
-        "Belgesel Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Belgesel",
-        "Politik Diziler" to "filtrele=tarih&sirala=DESC&kelime=&tur=Politik",
-        "Savaş Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Sava%C5%9F",
-        "Vahşi Batı Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Vah%C5%9Fi+Bat%C4%B1",
-        "Romantik Diziler" to "filtrele=tarih&sirala=DESC&kelime=&tur=Romantik"
+        "Aile Dizileri" to "filtrele=tarih&sirala=DESC&kelime=&tur=Aile"
     )
 
     override suspend fun getMainPage(
@@ -62,61 +50,45 @@ class DiziYou : MainAPI() {
     ): HomePageResponse {
         val home = ArrayList<HomePageList>()
 
-        for ((sectionName, query) in archiveSections) {
-            val url = archiveUrl(query, page)
+        // Her CloudStream sayfasında yalnızca o arşiv sayfasını çekiyoruz.
+        // 4 isteklik küçük gruplar halinde paralel çalıştırmak, çok sayıdaki
+        // kategori yüzünden 120 saniyelik timecut oluşmasını önler.
+        val sectionResults = coroutineScope {
+            val batches = archiveSections.chunked(4)
+            val output = ArrayList<Pair<String, List<SearchResponse>>>()
 
-            val items = runCatching {
-                val pageUrls = if (page <= 1) {
-                    listOf(archiveUrl(query, 1), archiveUrl(query, 2))
-                } else {
-                    listOf(url)
-                }
+            for (batch in batches) {
+                val results = batch.map { (sectionName, query) ->
+                    async {
+                        val url = archiveUrl(query, page)
+                        val items = runCatching {
+                            app.get(url, headers = requestHeaders).document
+                                .selectSeriesAnchors()
+                                .mapNotNull { it.toSearchResponse() }
+                                .distinctBy { it.url }
+                        }.onFailure { error ->
+                            Log.e("DIZIYOU", "$sectionName yüklenemedi: $url", error)
+                        }.getOrDefault(emptyList())
 
-                val collected = LinkedHashMap<String, SearchResponse>()
+                        sectionName to items
+                    }
+                }.awaitAll()
 
-                for (pageUrl in pageUrls) {
-                    val document = app.get(pageUrl, headers = requestHeaders).document
+                output.addAll(results)
+            }
 
-                    // Container'ın kendisini değil, bütün gerçek dizi kartlarını/anchor'larını al.
-                    document.selectSeriesAnchors()
-                        .mapNotNull { it.toSearchResponse() }
-                        .forEach { response ->
-                            collected.putIfAbsent(response.url.trimEnd('/'), response)
-                        }
-                }
+            output
+        }
 
-                collected.values.toList()
-            }.onFailure {
-                Log.e("DIZIYOU", "Ana sayfa bölümü yüklenemedi: $sectionName -> $url", it)
-            }.getOrDefault(emptyList())
-
+        for ((sectionName, items) in sectionResults) {
             Log.d("DIZIYOU", "$sectionName / sayfa $page -> ${items.size} dizi")
-
             if (items.isNotEmpty()) {
                 home.add(HomePageList(sectionName, items))
             }
         }
 
-        // Site ana sayfasında ayrıca bulunan vitrinleri de ekle. Bunlar
-        // arşiv türlerinden bağımsızdır.
-        if (page == 1) {
-            runCatching {
-                val document = app.get(mainUrl, headers = requestHeaders).document
-
-                val latest = document.selectSeriesAnchors()
-                    .mapNotNull { it.toSearchResponse() }
-                    .distinctBy { it.url }
-
-                if (latest.isNotEmpty()) {
-                    home.add(0, HomePageList("Ana Sayfa - Son Eklenenler", latest))
-                }
-            }.onFailure {
-                Log.e("DIZIYOU", "Ana sayfa vitrini okunamadı", it)
-            }
-        }
-
-        // Tarayıcıdaki sayfa geçişleri CloudStream'de de çalışsın.
-        // Son sayfada boş sonuç dönerse hasNext zaten false olur.
+        // Sayfa 2, 3, 4... CloudStream tarafından ayrıca çağrılır; burada
+        // tarayıcıdaki /page/N yapısına karşılık gelen doğru arşiv sayfası yüklenir.
         return newHomePageResponse(
             home,
             hasNext = home.isNotEmpty(),
@@ -132,38 +104,29 @@ class DiziYou : MainAPI() {
     }
 
     /**
-     * DiziYou'da aynı kart yapısı farklı bölümlerde kullanılabiliyor.
-     * Bu yüzden yalnızca tek bir #list-series elemanı seçmek yerine bütün
-     * posterli ve gerçek dizi bağlantılarını topluyoruz.
+     * #list-series / #list-series-main çoğu zaman bütün grid'i sarıyor.
+     * Bu container'ı tek kart sanmak yerine içindeki gerçek linkleri topluyoruz.
      */
     private fun Document.selectSeriesAnchors(): List<Element> {
         val result = LinkedHashMap<String, Element>()
 
-        val candidates = select(
-            "div#list-series-main a[href], " +
-                "div#list-series a[href], " +
-                "div.incontent a[href], " +
-                "article a[href], " +
-                "a[href]"
-        )
-
-        for (anchor in candidates) {
-            val href = fixUrlNull(anchor.attr("href")) ?: continue
-            if (!isSeriesUrl(href)) continue
+        select("a[href]").forEach { anchor ->
+            val href = fixUrlNull(anchor.attr("href")) ?: return@forEach
+            if (!isSeriesUrl(href)) return@forEach
 
             val hasPoster = anchor.selectFirst("img, picture img") != null ||
-                findInParents(anchor, "img, picture img") != null
-            val inSeriesCard = anchor.closest(
-                "div#list-series-main, div#list-series, article, div.category-item, div.cat-item"
-            ) != null
-
+                ancestorHasImage(anchor)
             val text = anchor.text().trim()
             val title = anchor.attr("title").trim()
 
-            // Menü ve alfabetik navigasyon linklerini alma. Gerçek kartta
-            // poster veya bilinen kart container'ı bulunmalı.
-            if (!hasPoster && !inSeriesCard) continue
-            if (text.length < 2 && title.length < 2) continue
+            // Menü / alfabe / footer bağlantılarını ele. Gerçek dizi kartında
+            // genellikle poster bulunur; bazı temalarda başlık + kart container'ı yeterlidir.
+            val inCard = anchor.closest(
+                "div#list-series-main, div#list-series, div.cat-item, div.category-item, article, li"
+            ) != null
+
+            if (!hasPoster && !inCard) return@forEach
+            if (text.length < 2 && title.length < 2) return@forEach
 
             result.putIfAbsent(href.trimEnd('/'), anchor)
         }
@@ -171,548 +134,450 @@ class DiziYou : MainAPI() {
         return result.values.toList()
     }
 
-    private fun Element.toSearchResponse(): SearchResponse? {
-        val anchor = if (tagName().equals("a", ignoreCase = true)) {
-            this
-        } else {
-            selectFirst("a[href]") ?: return null
+    private fun ancestorHasImage(element: Element): Boolean {
+        var parent: Element? = element.parent()
+        repeat(5) {
+            val current = parent ?: return false
+            if (current.selectFirst("img, picture img") != null) return true
+            parent = current.parent()
         }
+        return false
+    }
+
+    private fun Element.toSearchResponse(): SearchResponse? {
+        val anchor = selectFirst("div#categorytitle a[href]")
+            ?: selectFirst("a[href]")
+            ?: return null
 
         val href = fixUrlNull(anchor.attr("href")) ?: return null
         if (!isSeriesUrl(href)) return null
 
-        val image = anchor.selectFirst("img, picture img")
-            ?: findInParents(anchor, "img, picture img")
-
-        val poster = image?.let { img ->
+        val posterElement = selectFirst("img") ?: anchor.selectFirst("img")
+        val poster = posterElement?.let { image ->
             firstNonBlank(
-                img.attr("data-src"),
-                img.attr("data-lazy-src"),
-                img.attr("data-original"),
-                img.attr("src"),
+                image.attr("data-src"),
+                image.attr("data-lazy-src"),
+                image.attr("data-original"),
+                image.attr("src"),
             )?.let(::fixUrlNull)
         }
 
-        val card = findInParents(
-            anchor,
-            "div#list-series-main, div#list-series, div#categorytitle, div.cat-title-main, article, li, div"
-        )
-
         val title = firstNonBlank(
-            anchor.attr("title"),
+            selectFirst("div.cat-title-main span")?.text(),
+            selectFirst("div.cat-title-main")?.text(),
+            selectFirst("div#categorytitle a")?.text(),
             anchor.text(),
-            card?.selectFirst("div#categorytitle, div.cat-title-main, h1, h2, h3, h4, .title")?.text(),
-            image?.attr("alt"),
-        )?.replace(Regex("\\s+"), " ")?.trim()
-            ?.takeIf { it.isNotBlank() }
-            ?: slugToTitle(href)
+            posterElement?.attr("alt"),
+            anchor.attr("title"),
+        ) ?: return null
 
-        val scoreText = buildString {
-            append(anchor.text())
-            append(' ')
-            append(anchor.attr("title"))
-            append(' ')
-            append(anchor.attr("aria-label"))
-            append(' ')
-            append(anchor.attr("data-imdb"))
-            append(' ')
-            append(anchor.attr("data-score"))
-            append(' ')
-            append(anchor.attr("data-rating"))
-            append(' ')
-            append(card?.text().orEmpty())
-        }
+        val score = extractImdbScore(text())
 
-        val imdbScore = extractImdbScore(scoreText)
-
-        return newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
+        return newTvSeriesSearchResponse(
+            title.trim(),
+            href,
+            TvType.TvSeries,
+        ) {
             posterUrl = poster
-            imdbScore?.let { this.score = Score.from10(it) }
+            score?.let { this.score = Score.from10(it) }
         }
-    }
-
-    private fun findInParents(element: Element, selector: String): Element? {
-        var current: Element? = element
-        repeat(8) {
-            current = current?.parent()
-            val parent = current ?: return null
-            if (parent.selectFirst(selector) != null) return parent
-        }
-        return null
-    }
-
-    private fun firstNonBlank(vararg values: String?): String? {
-        return values.firstOrNull { !it.isNullOrBlank() }?.trim()
-    }
-
-    private fun slugToTitle(url: String): String {
-        return url.trimEnd('/')
-            .substringAfterLast('/')
-            .replace(Regex("[-_]+"), " ")
-            .replace(Regex("\\s+"), " ")
-            .trim()
-            .replaceFirstChar { it.uppercase() }
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val document = app.get("$mainUrl/?s=${query.trim().replace(" ", "+")}").document
+        val encoded = URLEncoder.encode(query.trim(), "UTF-8")
+        val urls = listOf(
+            "$mainUrl/?s=$encoded",
+            "$mainUrl/?s=${encoded.replace("+", "%20")}",
+        )
 
-        val results = document.select("div.incontent div#list-series")
-            .mapNotNull { it.toSearchResponse() }
-
-        if (results.isNotEmpty()) return results.distinctBy { it.url }
-
-        // Tema yapısı değişirse daha genel fallback.
-        return document.select("a[href]")
-            .filter { anchor ->
-                anchor.selectFirst("img") != null &&
-                    anchor.text().trim().isNotEmpty() &&
-                    anchor.attr("href").contains("$mainUrl/")
+        for (url in urls) {
+            val results = runCatching {
+                app.get(url).document
+                    .selectSeriesAnchors()
+                    .mapNotNull { it.toSearchResponse() }
+                    .distinctBy { it.url }
+            }.getOrElse {
+                emptyList()
             }
-            .mapNotNull { anchor ->
-                val title = anchor.attr("title").trim().ifEmpty { anchor.text().trim() }
-                if (title.isEmpty()) return@mapNotNull null
-                val href = fixUrlNull(anchor.attr("href")) ?: return@mapNotNull null
-                val poster = fixUrlNull(
-                    anchor.selectFirst("img")?.attr("data-src")
-                        ?: anchor.selectFirst("img")?.attr("src")
-                )
 
-                val imdbScore = extractImdbScore(anchor.parent() ?: anchor)
+            if (results.isNotEmpty()) return results
+        }
 
-                newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
-                    posterUrl = poster
-                    this.score = Score.from10(imdbScore)
-                }
-            }
-            .distinctBy { it.url }
+        return emptyList()
     }
 
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
         val document = app.get(url).document
+        val pageText = document.text()
 
-        val title = document.selectFirst("h1")?.text()?.trim()
-            ?: document.selectFirst("h1.entry-title")?.text()?.trim()
+        val title = document.selectFirst("h1")
+            ?.text()
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
             ?: return null
 
         val poster = fixUrlNull(
-            document.selectFirst("div.category_image img")?.attr("data-src")
-                ?: document.selectFirst("div.category_image img")?.attr("src")
-                ?: document.selectFirst("meta[property='og:image']")?.attr("content")
+            firstNonBlank(
+                document.selectFirst("div.category_image img")?.attr("data-src"),
+                document.selectFirst("div.category_image img")?.attr("src"),
+                document.selectFirst("meta[property='og:image']")?.attr("content"),
+            )
         )
 
-        val description = document.selectFirst("div.diziyou_desc")?.ownText()?.trim()
-            ?: document.selectFirst("meta[name='description']")?.attr("content")?.trim()
+        val description = firstNonBlank(
+            document.selectFirst("div.diziyou_desc")?.ownText()?.trim(),
+            document.selectFirst("div.diziyou_desc")?.text()?.trim(),
+            document.selectFirst("meta[name='description']")?.attr("content")?.trim(),
+        )
 
-        val year = document.selectFirst("span.dizimeta:contains(Yapım Yılı)")
-            ?.nextSibling()
+        val year = document.selectFirst(
+            "span.dizimeta:contains(Yapım Yılı)"
+        )?.nextSibling()
             ?.toString()
             ?.trim()
             ?.toIntOrNull()
-            ?: Regex("Yapım Yılı\\s*:?\\s*(\\d{4})")
-                .find(document.text())
-                ?.groupValues
-                ?.getOrNull(1)
-                ?.toIntOrNull()
+            ?: Regex("(?:Yapım Yılı|Yıl)\\s*[:]?\\s*(19|20)\\d{2}", RegexOption.IGNORE_CASE)
+                .find(pageText)
+                ?.value
+                ?.let { Regex("\\d{4}").find(it)?.value?.toIntOrNull() }
 
-        val tags = document.select("div.genres a").map { it.text().trim() }.filter { it.isNotEmpty() }
+        val tags = document.select("div.genres a")
+            .map { it.text().trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
 
-        val actors = document.selectFirst("span.dizimeta:contains(Oyuncular)")
-            ?.nextSibling()
+        val imdbScore = document.selectFirst(
+            "span.dizimeta:contains(IMDB)"
+        )?.nextSibling()
             ?.toString()
             ?.trim()
-            ?.split(",")
-            ?.map { it.trim() }
-            ?.filter { it.isNotEmpty() }
-            ?.map { Actor(it) }
+            ?.replace(',', '.')
+            ?.toFloatOrNull()
+            ?: extractImdbScore(pageText)
 
-        // IMDb puanı: Diziyou detay sayfasında "IMDb: 7.8" veya
-        // bazı eski sayfalarda "IMDB : 6.8" biçiminde bulunabiliyor.
-        val imdbScore = extractImdbScore(document.text())
+        val actors = extractActors(document, pageText)
+        val trailer = document.selectFirst("iframe.trailer-video")?.attr("src")
+            ?.takeIf { it.isNotBlank() }
+            ?.let(::fixUrlNull)
 
-        // Fragman için tema değişikliklerine karşı birkaç farklı selector kullan.
-        val trailer = findTrailerUrl(document)
+        val episodes = extractEpisodes(document)
 
-        val episodes = document.select("div.bolumust").mapNotNull { element ->
-            val rawName = element.selectFirst("div.baslik")?.ownText()?.trim()
-                ?: element.selectFirst("div.baslik")?.text()?.trim()
-                ?: return@mapNotNull null
-
-            val episodeHref = element.closest("a")?.attr("href")
-                ?.let(::fixUrlNull)
-                ?: element.selectFirst("a[href]")?.attr("href")?.let(::fixUrlNull)
-                ?: return@mapNotNull null
-
-            val season = Regex("(\\d+)\\.\\s*Sezon", RegexOption.IGNORE_CASE)
-                .find(rawName)
-                ?.groupValues
-                ?.getOrNull(1)
-                ?.toIntOrNull()
-                ?: 1
-
-            val episode = Regex("(\\d+)\\.\\s*Bölüm", RegexOption.IGNORE_CASE)
-                .find(rawName)
-                ?.groupValues
-                ?.getOrNull(1)
-                ?.toIntOrNull()
-
-            val displayName = element.selectFirst("div.bolumismi")?.text()?.trim()
-                ?.replace(Regex("[()]"), "")
-                ?.trim()
-                ?.takeIf { it.isNotEmpty() }
-                ?: rawName
-
-            newEpisode(episodeHref) {
-                name = displayName
-                this.season = season
-                this.episode = episode
-            }
-        }
-
-        // Fallback: tema yapısı değişirse bölüm URL'lerini doğrudan href üzerinden bul.
-        val finalEpisodes = if (episodes.isNotEmpty()) {
-            episodes.distinctBy { it.data }
-        } else {
-            document.select("a[href*='-sezon-'][href*='-bolum-']")
-                .mapNotNull { anchor ->
-                    val href = fixUrlNull(anchor.attr("href")) ?: return@mapNotNull null
-                    val text = anchor.text().trim()
-                    val season = Regex("(\\d+)\\.\\s*Sezon", RegexOption.IGNORE_CASE)
-                        .find(text)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 1
-                    val episode = Regex("(\\d+)\\.\\s*Bölüm", RegexOption.IGNORE_CASE)
-                        .find(text)?.groupValues?.getOrNull(1)?.toIntOrNull()
-
-                    newEpisode(href) {
-                        name = text.ifEmpty { "${season}. Sezon ${episode ?: 0}. Bölüm" }
-                        this.season = season
-                        this.episode = episode
-                    }
-                }
-                .distinctBy { it.data }
-        }
-
-        return newTvSeriesLoadResponse(title, url, TvType.TvSeries, finalEpisodes) {
+        return newTvSeriesLoadResponse(
+            title,
+            url,
+            TvType.TvSeries,
+            episodes,
+        ) {
             posterUrl = poster
             plot = description
             this.year = year
             this.tags = tags
             addActors(actors)
-            this.score = Score.from10(imdbScore)
-            addTrailer(trailer)
+
+            imdbScore?.takeIf { it in 0f..10f }?.let {
+                this.score = Score.from10(it)
+            }
+
+            // addTrailer() suspend olduğu için doğrudan TrailerData ekliyoruz.
+            // Bu, farklı CloudStream pre-release API sürümlerinde daha uyumludur.
+            trailer?.let {
+                trailers.add(
+                    TrailerData(
+                        extractorUrl = it,
+                        referer = null,
+                        raw = false,
+                    )
+                )
+            }
         }
     }
 
+    /**
+     * Diziyou sayfasındaki gerçek oyuncu alanı:
+     * span.dizimeta:contains(Oyuncular) + text node
+     */
+    private fun extractActors(
+        document: Document,
+        pageText: String,
+    ): List<Actor>? {
+        val raw = document.selectFirst(
+            "span.dizimeta:contains(Oyuncular)"
+        )?.nextSibling()
+            ?.toString()
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: Regex(
+                "Oyuncular\\s*[:：]?\\s*(.*?)(?=\\s+(?:Tür|Tur|Yapım Yılı|IMDB|Bölümler)\\b|$)",
+                setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
+            ).find(pageText)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+            ?: return null
+
+        val cleaned = raw
+            .replace("Oyuncular:", "", ignoreCase = true)
+            .replace(Regex("\\s+"), " ")
+            .trim(' ', ':', '-')
+
+        if (cleaned.isBlank()) return null
+
+        return cleaned.split(',')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinctBy { it.lowercase() }
+            .map { Actor(it) }
+            .takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * Diziyou'nun gerçek bölüm HTML yapısı div.bolumust.
+     * Link div'in üstündeki/çevresindeki <a> elementinden alınır.
+     */
+    private fun extractEpisodes(document: Document): List<Episode> {
+        val exact = document.select("div.bolumust")
+            .mapNotNull { block ->
+                val anchor = block.closest("a")
+                    ?: block.parent()?.selectFirst("a[href]")
+                    ?: return@mapNotNull null
+
+                val href = fixUrlNull(anchor.attr("href"))
+                    ?: return@mapNotNull null
+
+                val episodeInfo = block.selectFirst("div.baslik")
+                    ?.ownText()
+                    ?.trim()
+                    ?: block.text().trim()
+
+                val season = Regex(
+                    "(\\d+)\\.\\s*Sezon",
+                    RegexOption.IGNORE_CASE,
+                ).find(episodeInfo)
+                    ?.groupValues
+                    ?.getOrNull(1)
+                    ?.toIntOrNull()
+                    ?: Regex(
+                        "-(\\d+)-sezon-",
+                        RegexOption.IGNORE_CASE,
+                    ).find(href)
+                        ?.groupValues
+                        ?.getOrNull(1)
+                        ?.toIntOrNull()
+                    ?: 1
+
+                val episode = Regex(
+                    "(\\d+)\\.\\s*Bölüm",
+                    RegexOption.IGNORE_CASE,
+                ).find(episodeInfo)
+                    ?.groupValues
+                    ?.getOrNull(1)
+                    ?.toIntOrNull()
+                    ?: Regex(
+                        "-(\\d+)-bolum(?:/|$)",
+                        RegexOption.IGNORE_CASE,
+                    ).find(href)
+                        ?.groupValues
+                        ?.getOrNull(1)
+                        ?.toIntOrNull()
+                    ?: return@mapNotNull null
+
+                val episodeName = block.selectFirst("div.bolumismi")
+                    ?.text()
+                    ?.replace(Regex("[()]"), "")
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                    ?: episodeInfo.ifBlank { "$episode. Bölüm" }
+
+                newEpisode(href) {
+                    name = episodeName
+                    this.season = season
+                    this.episode = episode
+                    posterUrl = block.selectFirst("img")?.let { image ->
+                        firstNonBlank(
+                            image.attr("data-src"),
+                            image.attr("src"),
+                        )?.let(::fixUrlNull)
+                    }
+                }
+            }
+            .distinctBy { it.data }
+            .sortedWith(
+                compareBy<Episode> { it.season ?: 0 }
+                    .thenBy { it.episode ?: 0 }
+            )
+
+        if (exact.isNotEmpty()) return exact
+
+        // Fallback: doğrudan URL'den gerçek bölüm linklerini yakala.
+        return document.select("a[href]")
+            .mapNotNull { anchor ->
+                val href = fixUrlNull(anchor.attr("href")) ?: return@mapNotNull null
+                val match = Regex(
+                    "-(\\d+)-sezon-(\\d+)-bolum(?:/|$)",
+                    RegexOption.IGNORE_CASE,
+                ).find(href) ?: return@mapNotNull null
+
+                val season = match.groupValues[1].toIntOrNull() ?: return@mapNotNull null
+                val episode = match.groupValues[2].toIntOrNull() ?: return@mapNotNull null
+                val label = anchor.text().trim().ifBlank { "$episode. Bölüm" }
+
+                newEpisode(href) {
+                    name = label
+                    this.season = season
+                    this.episode = episode
+                }
+            }
+            .distinctBy { it.data }
+            .sortedWith(
+                compareBy<Episode> { it.season ?: 0 }
+                    .thenBy { it.episode ?: 0 }
+            )
+    }
+
+    /**
+     * Diziyou player yapısı:
+     * iframe#diziyouPlayer -> /.../<itemId>.html
+     * span.diziyouOption -> dil / ses seçenekleri
+     */
+    @Suppress("DEPRECATION")
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
+        callback: (ExtractorLink) -> Unit,
     ): Boolean {
-        Log.d("DIZIYOU", "episode url = $data")
+        Log.d("DIZIYOU", "episode data = $data")
 
-        val document = app.get(data).document
-
-        // Player iframe: mevcut sitede #diziyouPlayer kullanılıyor.
-        val playerSrc = document.selectFirst("iframe#diziyouPlayer")?.attr("src")?.trim()
-            ?: document.select("iframe[src]")
-                .mapNotNull { it.attr("src").trim().takeIf(String::isNotEmpty) }
-                .firstOrNull { it.contains("diziyou", ignoreCase = true) || it.contains("player", ignoreCase = true) }
-
-        if (playerSrc.isNullOrEmpty()) {
-            Log.d("DIZIYOU", "player iframe bulunamadı")
+        val document = runCatching {
+            app.get(data).document
+        }.getOrElse {
+            Log.e("DIZIYOU", "Bölüm sayfası açılamadı: $data", it)
             return false
         }
 
-        val itemId = extractItemId(playerSrc)
-        if (itemId.isNullOrEmpty()) {
-            Log.d("DIZIYOU", "itemId bulunamadı: $playerSrc")
-            return false
-        }
+        val player = document.selectFirst("iframe#diziyouPlayer")
+            ?: document.selectFirst("iframe[src*='diziyou']")
+            ?: document.selectFirst("iframe")
+            ?: return false
+
+        val playerSrc = fixUrlNull(
+            firstNonBlank(
+                player.attr("src"),
+                player.attr("data-src"),
+            )
+        ) ?: return false
+
+        val itemId = playerSrc
+            .trimEnd('/')
+            .substringAfterLast('/')
+            .substringBefore(".html")
+            .substringBefore('?')
+            .takeIf { it.isNotBlank() }
+            ?: return false
 
         Log.d("DIZIYOU", "itemId = $itemId")
 
-        val optionIds = document.select(".diziyouOption, [id^=turkce], [id^=ingilizce]")
-            .map { it.id() }
-            .toSet()
+        val storage = mainUrl.replace("www.", "storage.")
+        val streams = LinkedHashMap<String, String>()
 
-        val hasTrSub = optionIds.contains("turkceAltyazili") ||
-            document.text().contains("Türkçe Altyazılı", ignoreCase = true)
-        val hasEnSub = optionIds.contains("ingilizceAltyazili") ||
-            document.text().contains("İngilizce Altyazılı", ignoreCase = true)
-
-        // Dublaj için yalnızca player seçeneğini kullan; sitenin alt bölümündeki
-        // genel "Türkçe dublaj" metni yanlış pozitif üretmesin.
-        val hasDub = optionIds.contains("turkceDublaj") ||
-            document.select("#turkceDublaj, [data-id='turkceDublaj']").isNotEmpty()
-
-        val originalStream = "$storageUrl/episodes/$itemId/play.m3u8"
-        val dubStream = "$storageUrl/episodes/${itemId}_tr/play.m3u8"
-
-        // Türkçe altyazı
-        if (hasTrSub) {
-            subtitleCallback.invoke(
-                newSubtitleFile(
-                    lang = "Turkish",
-                    url = "$storageUrl/subtitles/$itemId/tr.vtt"
-                )
-            )
-        }
-
-        // İngilizce altyazı
-        if (hasEnSub) {
-            subtitleCallback.invoke(
-                newSubtitleFile(
-                    lang = "English",
-                    url = "$storageUrl/subtitles/$itemId/en.vtt"
-                )
-            )
-        }
-
-        // Orijinal dil HLS
-        if (hasTrSub || hasEnSub) {
-            callback.invoke(
-                newExtractorLink(
-                    source = this.name,
-                    name = "Orijinal Dil 1080p",
-                    url = originalStream,
-                    type = INFER_TYPE
-                ) {
-                    referer = "$mainUrl/"
-                    headers = mapOf(
-                        "Referer" to "$mainUrl/",
-                        "Origin" to mainUrl
+        // Diziyou'da seçenekler span.diziyouOption + id üzerinden geliyor.
+        document.select("span.diziyouOption").forEach { option ->
+            when (option.attr("id")) {
+                "turkceAltyazili" -> {
+                    subtitleCallback(
+                        SubtitleFile(
+                            lang = "Turkish",
+                            url = fixUrl("$storage/subtitles/$itemId/tr.vtt"),
+                        )
                     )
-                    quality = Qualities.P1080.value
+                    streams["Orijinal Dil"] =
+                        "$storage/episodes/$itemId/play.m3u8"
                 }
-            )
-        }
 
-        // Türkçe dublaj HLS
-        if (hasDub) {
-            callback.invoke(
-                newExtractorLink(
-                    source = this.name,
-                    name = "Türkçe Dublaj 1080p",
-                    url = dubStream,
-                    type = INFER_TYPE
-                ) {
-                    referer = "$mainUrl/"
-                    headers = mapOf(
-                        "Referer" to "$mainUrl/",
-                        "Origin" to mainUrl
+                "ingilizceAltyazili" -> {
+                    subtitleCallback(
+                        SubtitleFile(
+                            lang = "English",
+                            url = fixUrl("$storage/subtitles/$itemId/en.vtt"),
+                        )
                     )
-                    quality = Qualities.P1080.value
+                    streams["Orijinal Dil"] =
+                        "$storage/episodes/$itemId/play.m3u8"
                 }
-            )
-        }
 
-        // Seçenek sınıfları değiştiyse en azından orijinal akışı dene.
-        if (!hasTrSub && !hasEnSub && !hasDub) {
-            callback.invoke(
-                newExtractorLink(
-                    source = this.name,
-                    name = "Orijinal Dil 1080p",
-                    url = originalStream,
-                    type = INFER_TYPE
-                ) {
-                    referer = "$mainUrl/"
-                    headers = mapOf(
-                        "Referer" to "$mainUrl/",
-                        "Origin" to mainUrl
-                    )
-                    quality = Qualities.P1080.value
+                "turkceDublaj" -> {
+                    streams["Türkçe Dublaj"] =
+                        "$storage/episodes/${itemId}_tr/play.m3u8"
                 }
-            )
-        }
-
-        return true
-    }
-
-
-    private fun extractImdbScore(element: Element): Float? {
-        val candidates = ArrayList<String>()
-
-        // IMDb puanı kartın kendi metninde olabilir.
-        candidates += element.text()
-
-        // Bazı tema sürümlerinde puan ayrı bir .imdb/.rating alanında tutuluyor.
-        element.select("[class*=imdb], [id*=imdb], [class*=rating], [class*=puan], [data-imdb], [data-score], [data-rating], [aria-label]")
-            .forEach { node ->
-                candidates += node.text()
-                candidates += node.attr("data-imdb")
-                candidates += node.attr("data-score")
-                candidates += node.attr("data-rating")
-                candidates += node.attr("aria-label")
-                candidates += node.attr("title")
-            }
-
-        // Puan bazen kartın bir üst kapsayıcısında, IMDb etiketiyle birlikte bulunuyor.
-        element.parent()?.let { parent ->
-            val parentText = parent.text()
-            if (parentText.contains("IMDb", true) || parentText.contains("IMDB", true)) {
-                candidates += parentText
             }
         }
 
-        candidates.asSequence().mapNotNull { extractImdbScore(it) }.firstOrNull()?.let {
-            return it
+        // Eski sayfalarda seçenek görünmezse orijinal HLS'i yine dene.
+        if (streams.isEmpty()) {
+            streams["Orijinal Dil"] =
+                "$storage/episodes/$itemId/play.m3u8"
         }
 
-        return null
+        for ((streamName, streamUrl) in streams) {
+            callback(
+                newExtractorLink(
+                    source = this.name,
+                    name = streamName,
+                    url = streamUrl,
+                    type = INFER_TYPE,
+                ) {
+                    referer = "$mainUrl/"
+                    quality = Qualities.Unknown.value
+                    headers = mapOf(
+                        "Referer" to "$mainUrl/",
+                        "User-Agent" to USER_AGENT,
+                    )
+                }
+            )
+        }
+
+        return streams.isNotEmpty()
     }
 
     private fun extractImdbScore(text: String): Float? {
-        if (text.isBlank()) return null
-
-        // IMDb: 8.2 / IMDB 8,2 / IMDb Puanı: 8.2
-        val explicit = Regex(
-            "(?:IMDb|IMDB)\\s*(?:Puanı|Puani|Rating|Score)?\\s*[:：\\-]?[\\s★]*([0-9]+(?:[.,][0-9]+)?)",
+        val score = Regex(
+            "(?:IMDb|IMDB)\\s*[:★]?\\s*([0-9]+(?:[.,][0-9]+)?)",
             RegexOption.IGNORE_CASE,
-        )
-            .find(text)
+        ).find(text)
             ?.groupValues
             ?.getOrNull(1)
             ?.replace(',', '.')
             ?.toFloatOrNull()
 
-        if (explicit != null && explicit in 0f..10f) return explicit
-
-        // Canlı sitedeki kartlarda puan başlığın yanında doğrudan 8.2 şeklinde geliyor.
-        val standalone = Regex("(?<![0-9])([0-9](?:[.,][0-9])?|10(?:[.,]0)?)(?![0-9])")
-            .findAll(text)
-            .mapNotNull { it.groupValues.getOrNull(1)?.replace(',', '.')?.toFloatOrNull() }
-            .firstOrNull { it in 0f..10f }
-
-        if (standalone != null && (text.contains("IMDb", true) || text.contains("IMDB", true))) {
-            return standalone
-        }
-
-        // Eski kartlarda puan (8.3) şeklinde gösterilebiliyor.
-        return Regex("\\(([0-9]+(?:[.,][0-9]+)?)\\)")
-            .findAll(text)
-            .mapNotNull { it.groupValues.getOrNull(1)?.replace(',', '.')?.toFloatOrNull() }
-            .firstOrNull { it in 0f..10f }
+        return score?.takeIf { it in 0f..10f }
     }
 
     private fun isEpisodeUrl(url: String): Boolean {
-        return Regex(
-            "-[0-9]+-sezon-[0-9]+-bolum(?:/|\\?|$)",
-            RegexOption.IGNORE_CASE,
-        ).containsMatchIn(url)
+        return url.contains("diziyou.one", ignoreCase = true) &&
+            Regex(
+                "-[0-9]+-sezon-[0-9]+-bolum(?:/|$)",
+                RegexOption.IGNORE_CASE,
+            ).containsMatchIn(url)
     }
 
     private fun isSeriesUrl(url: String): Boolean {
+        if (!url.contains("diziyou.one", ignoreCase = true)) return false
         if (isEpisodeUrl(url)) return false
 
-        val clean = url.trimEnd('/')
-            .lowercase()
-            .removePrefix("https://")
-            .removePrefix("http://")
-            .removePrefix("www.")
-
-        val base = mainUrl.trimEnd('/')
-            .lowercase()
-            .removePrefix("https://")
-            .removePrefix("http://")
-            .removePrefix("www.")
-
-        if (!(clean == base || clean.startsWith("$base/"))) return false
-        if (clean == base) return false
-
-        val excludedPrefixes = listOf(
-            "$base/dizi-arsivi",
-            "$base/film-arsivi",
-            "$base/kategori/",
-            "$base/category/",
-            "$base/etiket/",
-            "$base/tag/",
-            "$base/oyuncu/",
-            "$base/yonetmen/",
-            "$base/page/",
-            "$base/wp-",
-            "$base/iletisim",
-            "$base/gizlilik",
-            "$base/hakkimizda",
-        )
-
-        if (excludedPrefixes.any { clean.startsWith(it) }) return false
-        if (clean.endsWith(".xml") || clean.endsWith(".jpg") || clean.endsWith(".png") ||
-            clean.endsWith(".css") || clean.endsWith(".js")) return false
-
-        return true
+        val value = url.trimEnd('/').lowercase()
+        return value != mainUrl.trimEnd('/').lowercase() &&
+            !value.contains("/dizi-arsivi") &&
+            !value.contains("/kategori/") &&
+            !value.contains("/etiket/") &&
+            !value.contains("/iletisim") &&
+            !value.contains("/gizlilik") &&
+            !value.contains("/hakkimizda")
     }
 
-    private fun findTrailerUrl(document: org.jsoup.nodes.Document): String? {
-        // En doğrudan Diziyou trailer iframe'i.
-        val directIframe = document.select(
-            "iframe.trailer-video, iframe#trailer, .trailer iframe, .fragman iframe, " +
-                "[class*=trailer] iframe, [class*=fragman] iframe"
-        ).asSequence()
-            .mapNotNull { iframe ->
-                sequenceOf(
-                    iframe.attr("src"),
-                    iframe.attr("data-src"),
-                    iframe.attr("data-lazy-src"),
-                    iframe.attr("data-url"),
-                    iframe.attr("data-embed")
-                ).firstOrNull { it.isNotBlank() }
-            }
-            .mapNotNull(::fixUrlNull)
-            .firstOrNull { isTrailerHost(it) }
-
-        if (directIframe != null) return directIframe
-
-        // "Fragmanı izle" bağlantısı iframe dışında bir anchor olarak gelirse.
-        val trailerLink = document.select("a[href]").asSequence()
-            .filter { anchor ->
-                val text = anchor.text().trim()
-                text.contains("Fragman", ignoreCase = true) ||
-                    anchor.attr("class").contains("trailer", ignoreCase = true) ||
-                    anchor.attr("id").contains("trailer", ignoreCase = true)
-            }
-            .mapNotNull { anchor -> fixUrlNull(anchor.attr("href")) }
-            .firstOrNull { isTrailerHost(it) || it.contains("embed", ignoreCase = true) }
-
-        if (trailerLink != null) return trailerLink
-
-        // Son fallback: sayfadaki YouTube/Vimeo iframe bağlantılarından ilkini kullan.
-        return document.select("iframe[src], iframe[data-src], iframe[data-url]").asSequence()
-            .mapNotNull { iframe ->
-                sequenceOf(
-                    iframe.attr("src"),
-                    iframe.attr("data-src"),
-                    iframe.attr("data-url")
-                ).firstOrNull { it.isNotBlank() }
-            }
-            .mapNotNull(::fixUrlNull)
-            .firstOrNull { isTrailerHost(it) }
-    }
-
-    private fun isTrailerHost(url: String): Boolean {
-        return url.contains("youtube.com", ignoreCase = true) ||
-            url.contains("youtu.be", ignoreCase = true) ||
-            url.contains("youtube-nocookie.com", ignoreCase = true) ||
-            url.contains("vimeo.com", ignoreCase = true)
-    }
-
-    private fun extractItemId(playerSrc: String): String? {
-        val clean = playerSrc.substringBefore('#').substringBefore('?').trimEnd('/')
-
-        // Örn: .../ABC123.html
-        Regex("/([^/]+)\\.html$")
-            .find(clean)
-            ?.groupValues
-            ?.getOrNull(1)
-            ?.takeIf { it.isNotBlank() }
-            ?.let { return it }
-
-        // Örn: .../ABC123/
-        clean.substringAfterLast('/')
-            .takeIf { it.isNotBlank() && !it.contains('.') }
-            ?.let { return it }
-
-        return null
+    private fun firstNonBlank(vararg values: String?): String? {
+        return values.firstOrNull { !it.isNullOrBlank() }?.trim()
     }
 }
