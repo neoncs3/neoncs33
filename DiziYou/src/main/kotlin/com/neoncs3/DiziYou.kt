@@ -36,22 +36,7 @@ class DiziYou : MainAPI() {
      */
     private val archiveSections = listOf(
         "Yeni Eklenen Diziler" to "filtrele=tarih&sirala=DESC",
-        "IMDb 7+ Diziler" to "filtrele=imdb&sirala=DESC&yil=&imdb=7",
-        "Aile Dizileri" to "tur=Aile",
-        "Aksiyon Dizileri" to "tur=Aksiyon",
-        "Animasyon Dizileri" to "tur=Animasyon",
-        "Belgesel Dizileri" to "tur=Belgesel",
-        "Bilim Kurgu Dizileri" to "tur=Bilim+Kurgu",
-        "Dram Dizileri" to "tur=Dram",
-        "Fantazi Dizileri" to "tur=Fantazi",
-        "Gerilim Dizileri" to "tur=Gerilim",
-        "Gizem Dizileri" to "tur=Gizem",
-        "Komedi Dizileri" to "tur=Komedi",
-        "Korku Dizileri" to "tur=Korku",
-        "Macera Dizileri" to "tur=Macera",
-        "Savaş Dizileri" to "tur=Sava%C5%9F",
-        "Suç Dizileri" to "tur=Su%C3%A7",
-        "Vahşi Batı Dizileri" to "tur=Vah%C5%9Fi+Bat%C4%B1"
+        "IMDb 7+ Diziler" to "filtrele=imdb&sirala=DESC&yil=&imdb=7"
     )
 
     override suspend fun getMainPage(
@@ -98,9 +83,9 @@ class DiziYou : MainAPI() {
         // / #list-series-main elemanından okunuyor; tüm sayfanın <a> etiketlerini
         // taramıyoruz. Bu, Üye Ol, Üye Girişi, alfabe ve footer bağlantılarının
         // dizi kartı sanılmasını engeller.
-        // 17 türü tek tek arka arkaya çağırmak ana sayfayı gereksiz yavaşlatır.
-        // En fazla 4 istek aynı anda çalışır; her istek 12 saniye ile sınırlıdır.
-        for (batch in archiveSections.chunked(4)) {
+        // Yalnızca çalışan arşiv bölümleri çağrılır.
+        // En fazla 2 istek aynı anda çalışır; her istek 12 saniye ile sınırlıdır.
+        for (batch in archiveSections.chunked(2)) {
             val results = coroutineScope {
                 batch.map { (sectionName, query) ->
                     async {
