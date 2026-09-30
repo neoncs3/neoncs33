@@ -23,6 +23,12 @@ class DiziYou : MainAPI() {
     override val hasQuickSearch = true
     override val supportedTypes = setOf(TvType.TvSeries)
 
+    private val requestHeaders = mapOf(
+        "User-Agent" to USER_AGENT,
+        "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer" to "$mainUrl/",
+    )
+
     /**
      * Diziyou arşivindeki bölümlerin sırası.
      * "Son Eklenen Bölümler" özellikle yoktur.
