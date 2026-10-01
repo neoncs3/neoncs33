@@ -510,19 +510,31 @@ class AsyaFilmIzle : MainAPI() {
 
     private fun extractQuotedUrls(text: String): List<String> {
         val result = LinkedHashSet<String>()
+
+        // Keep these patterns deliberately simple. Android's ICU regex engine can
+        // reject some complex Java regex constructs; a regex failure must never
+        // abort loadLinks().
         val patterns = listOf(
-            Regex("""(?is)(?:file|src|source|url|hls|stream|playlist|video|streamUrl|playUrl)[\\s:=]+[\"']([^\"']+)[\"']"""),
-            Regex("""(?is)[\"'](?:file|src|source|url|hls|stream|playlist|video|streamUrl|playUrl)[\"']\\s*:\\s*[\"']([^\"']+)[\"']"""),
-            Regex("""(?is)(?:fetch|\\$\\.get|\\$\\.ajax|axios\\.get|XMLHttpRequest\\.open)\\s*\\(\\s*[\"']([^\"']+)[\"']"""),
-            Regex("""(?is)(?:m3u8|mp4|m3u)[^\"'<>\\s]{0,600}""", RegexOption.IGNORE_CASE)
+            Regex("""(?i)(?:file|src|source|url|hls|stream|playlist|video|streamUrl|playUrl)\s*[:=]\s*["']([^"']+)["']"""),
+            Regex("""(?i)["'](?:file|src|source|url|hls|stream|playlist|video|streamUrl|playUrl)["']\s*:\s*["']([^"']+)["']"""),
+            Regex("""(?i)(?:fetch|\$\.(?:get|ajax)|axios\.get|XMLHttpRequest\.open)\s*\(\s*["']([^"']+)["']"""),
+            Regex("""(?i)https?://[^"'<>\s]+(?:\.m3u8|\.mp4|\.m3u)(?:\?[^"'<>\s]*)?"""),
+            Regex("""(?i)https?://[^"'<>\s]+/(?:hls|hls2)/[^"'<>\s]+"""),
+            Regex("""(?i)https?://[^"'<>\s]+/master\.txt(?:\?[^"'<>\s]*)?""")
         )
 
         for (pattern in patterns) {
-            pattern.findAll(text).forEach { match ->
-                val candidate = normalizeUrl(match.groupValues.last())
-                if (candidate.startsWith("http://") || candidate.startsWith("https://") ||
-                    candidate.startsWith("/") || candidate.startsWith("//")) {
-                    result.add(candidate)
+            runCatching {
+                pattern.findAll(text).forEach { match ->
+                    val candidate = normalizeUrl(match.groupValues.last())
+                    if (
+                        candidate.startsWith("http://") ||
+                        candidate.startsWith("https://") ||
+                        candidate.startsWith("/") ||
+                        candidate.startsWith("//")
+                    ) {
+                        result.add(candidate)
+                    }
                 }
             }
         }
