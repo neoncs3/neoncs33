@@ -1,12 +1,13 @@
-package com.Kayracs3
+package com.neoncs3
 
+import android.content.Context
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
-import android.content.Context
 
 @CloudstreamPlugin
-class HDFilmCehennemiPlugin: Plugin() {
+class AsyaFilmIzlePlugin : Plugin() {
     override fun load(context: Context) {
-        registerMainAPI(HDFilmCehennemi())
+        super.load(context)
+        registerMainAPI(AsyaFilmIzle())
     }
 }
