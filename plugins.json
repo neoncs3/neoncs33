@@ -1,5 +1,25 @@
 [
     {
+        "iconUrl": "https://asyafilmizle.com//favicon.ico",
+        "fileHash": "sha256-fd900a0b18c594f7349dc1a837e16c2aa4b0956a4353cb5fddfff7679cd3dfcd",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
+        "fileSize": 27313,
+        "status": 1,
+        "language": "tr",
+        "authors": [
+            "AsyaFilmIzle"
+        ],
+        "tvTypes": [
+            "TvSeries"
+        ],
+        "version": 1,
+        "internalName": "AsyaFilmIzle",
+        "description": "DiziPal T\u00fcrkiye katalog ve b\u00f6l\u00fcm sa\u011flay\u0131c\u0131s\u0131",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/AsyaFilmIzle.cs3",
+        "name": "AsyaFilmIzle"
+    },
+    {
         "iconUrl": "https://diziboxizle.com/favicon.ico",
         "fileHash": "sha256-8ea927332c89de56a336c29af630577beef2af00e817c357a89aa8b3d09a0ef3",
         "apiVersion": 1,
