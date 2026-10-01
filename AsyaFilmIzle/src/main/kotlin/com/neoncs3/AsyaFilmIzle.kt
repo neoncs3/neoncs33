@@ -565,17 +565,11 @@ class AsyaFilmIzle : MainAPI() {
     }
 
     private fun iframeHeaders(referer: String): Map<String, String> {
-        val origin = runCatching {
-            val uri = URI(referer)
-            "${uri.scheme}://${uri.host}"
-        }.getOrDefault(mainUrl)
-
         return mapOf(
             "User-Agent" to chromeUserAgent,
             "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
             "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
             "Referer" to referer,
-            "Origin" to origin,
             "Sec-Fetch-Dest" to "iframe",
             "Sec-Fetch-Mode" to "navigate",
             "Sec-Fetch-Site" to "cross-site",
