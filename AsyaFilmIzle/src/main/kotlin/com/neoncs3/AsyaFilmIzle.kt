@@ -516,11 +516,17 @@ class AsyaFilmIzle : MainAPI() {
     }
 
     private fun iframeHeaders(referer: String): Map<String, String> {
+        val origin = runCatching {
+            val uri = URI(referer)
+            "${uri.scheme}://${uri.host}"
+        }.getOrDefault(mainUrl)
+
         return mapOf(
             "User-Agent" to chromeUserAgent,
             "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
             "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
             "Referer" to referer,
+            "Origin" to origin,
             "Sec-Fetch-Dest" to "iframe",
             "Sec-Fetch-Mode" to "navigate",
             "Sec-Fetch-Site" to "cross-site",
@@ -688,19 +694,35 @@ class AsyaFilmIzle : MainAPI() {
         // Some anti-hotlink setups reject the first header profile. Retry without
         // the browser fetch metadata while keeping the real page Referer.
         val finalResponse = if (iframeResponse == null || !iframeResponse.isSuccessful) {
-            runCatching {
-                app.get(
-                    iframe,
-                    headers = mapOf(
-                        "User-Agent" to chromeUserAgent,
-                        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                        "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
-                        "Referer" to pageUrl
-                    ),
-                    referer = pageUrl,
-                    allowRedirects = true
+            val fallbackHeaders = listOf(
+                mapOf(
+                    "User-Agent" to chromeUserAgent,
+                    "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+                    "Referer" to pageUrl,
+                    "Origin" to runCatching {
+                        val uri = URI(pageUrl)
+                        "${uri.scheme}://${uri.host}"
+                    }.getOrDefault(mainUrl)
+                ),
+                mapOf(
+                    "User-Agent" to chromeUserAgent,
+                    "Accept" to "*/*",
+                    "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+                    "Referer" to pageUrl
                 )
-            }.getOrNull()
+            )
+
+            fallbackHeaders.firstNotNullOfOrNull { headers ->
+                runCatching {
+                    app.get(
+                        iframe,
+                        headers = headers,
+                        referer = pageUrl,
+                        allowRedirects = true
+                    ).takeIf { it.isSuccessful }
+                }.getOrNull()
+            }
         } else {
             iframeResponse
         }
