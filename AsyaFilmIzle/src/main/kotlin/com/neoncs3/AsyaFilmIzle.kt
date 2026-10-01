@@ -452,7 +452,7 @@ class AsyaFilmIzle : MainAPI() {
         return result.toList()
     }
 
-    private fun addDirectMedia(
+    private suspend fun addDirectMedia(
         url: String,
         referer: String,
         callback: (ExtractorLink) -> Unit
@@ -462,10 +462,9 @@ class AsyaFilmIzle : MainAPI() {
                 source = "AsyaFilmİzle",
                 name = if (url.contains(".m3u8", true)) "Katre HLS" else "Katre MP4",
                 url = url,
-                referer = referer,
-                quality = qualityFrom(url)
+                type = if (url.contains(".m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
             ) {
-                this.type = if (url.contains(".m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                this.quality = qualityFrom(url)
                 this.headers = mapOf(
                     "User-Agent" to USER_AGENT,
                     "Referer" to referer,
@@ -475,7 +474,7 @@ class AsyaFilmIzle : MainAPI() {
         )
     }
 
-    private fun extractSubtitleFromUrl(
+    private suspend fun extractSubtitleFromUrl(
         iframeUrl: String,
         subtitleCallback: (SubtitleFile) -> Unit
     ) {
@@ -551,18 +550,20 @@ class AsyaFilmIzle : MainAPI() {
                 val body = iframeResponse.text
                 val directUrls = mediaUrls(body) + decodeBase64Candidates(body)
 
-                directUrls.distinct().forEach { media ->
+                for (media in directUrls.distinct()) {
                     addDirectMedia(media, iframe, callback)
                     found = true
                 }
 
-                iframeResponse.document
+                val subtitleUrls = iframeResponse.document
                     .select("track[src], source[src], video[src]")
                     .mapNotNull { absolute(it.attr("src")) }
                     .filter { it.contains(".vtt", true) || it.contains(".srt", true) }
-                    .forEach { sub ->
-                        subtitleCallback(newSubtitleFile("Türkçe", sub))
-                    }
+                    .distinct()
+
+                for (sub in subtitleUrls) {
+                    subtitleCallback(newSubtitleFile("Türkçe", sub))
+                }
             }
 
             // Try a native CloudStream extractor too. This covers providers whose
@@ -582,7 +583,7 @@ class AsyaFilmIzle : MainAPI() {
 
         // Some pages expose a direct source without using an iframe.
         val directPageUrls = mediaUrls(pageResponse.text) + decodeBase64Candidates(pageResponse.text)
-        directPageUrls.distinct().forEach { media ->
+        for (media in directPageUrls.distinct()) {
             addDirectMedia(media, data, callback)
             found = true
         }
