@@ -20,91 +20,11 @@
         "name": "DiziBoxizle"
     },
     {
-        "iconUrl": "https://dizikorea3.com//favicon.ico",
-        "fileHash": "sha256-6eeb0a07c1f1e260c4bca530f6a691f4d5d471b0855650bcfd24ffbc286fc5d2",
-        "apiVersion": 1,
-        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 23868,
-        "status": 1,
-        "language": "tr",
-        "authors": [
-            "DiziKorea"
-        ],
-        "tvTypes": [
-            "TvSeries"
-        ],
-        "version": 1,
-        "internalName": "DiziKorea",
-        "description": "DiziPal T\u00fcrkiye katalog ve b\u00f6l\u00fcm sa\u011flay\u0131c\u0131s\u0131",
-        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/DiziKorea.cs3",
-        "name": "DiziKorea"
-    },
-    {
-        "iconUrl": "https://www.diziyou.one/favicon.ico",
-        "fileHash": "sha256-baccb40f26e83aa611cdac33665c68c742b52b5d36c6b0036d71bd1ea97629f6",
-        "apiVersion": 1,
-        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 28094,
-        "status": 1,
-        "language": "tr",
-        "authors": [
-            "neoncs3"
-        ],
-        "tvTypes": [
-            "TvSeries"
-        ],
-        "version": 1,
-        "internalName": "DiziYou",
-        "description": "katalog ve b\u00f6l\u00fcm sa\u011flay\u0131c\u0131s\u0131",
-        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/DiziYou.cs3",
-        "name": "DiziYou"
-    },
-    {
         "iconUrl": "https://dizipal1583.com/favicon.ico",
-        "fileHash": "sha256-dbb05acd2f16ed8c4de0f5d7d655ce2ca06df88170c2ae80ce396ba8784bcafd",
+        "fileHash": "sha256-c121395450fd5b7bb18e3eaa18bb3b7c96dd9452970606590b5c7f94d194aecb",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 40479,
-        "status": 1,
-        "language": "tr",
-        "authors": [
-            "FilmMakinas\u0131"
-        ],
-        "tvTypes": [
-            "TvSeries"
-        ],
-        "version": 2,
-        "internalName": "FilmMakinesi",
-        "description": "DiziPal T\u00fcrkiye katalog ve b\u00f6l\u00fcm sa\u011flay\u0131c\u0131s\u0131",
-        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/FilmMakinesi.cs3",
-        "name": "FilmMakinesi"
-    },
-    {
-        "iconUrl": "https://www.google.com/s2/favicons?domain=www.fullhdfilmizlesene.de&sz=%size%",
-        "fileHash": "sha256-dfed55ba77aa2775b5964f81c7e25363b0ff31671750abb3e584c7b88a2a60ba",
-        "apiVersion": 1,
-        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 30200,
-        "status": 1,
-        "language": "tr",
-        "authors": [
-            "neoncs3"
-        ],
-        "tvTypes": [
-            "Movie"
-        ],
-        "version": 4,
-        "internalName": "FullHDFilmizlesene",
-        "description": "Sinema zevkini evinize kadar getirdik. T\u00fcrkiye'nin lider Film sitesinde, en yeni filmleri Full HD izleyin.",
-        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/FullHDFilmizlesene.cs3",
-        "name": "FullHDFilmizlesene"
-    },
-    {
-        "iconUrl": "https://dizipal1583.com/favicon.ico",
-        "fileHash": "sha256-27ed021ac678db884e24e82cbf4fc82b1fe49bb6e7d62af1b209b203f10415cb",
-        "apiVersion": 1,
-        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 64893,
+        "fileSize": 64846,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -114,9 +34,9 @@
             "TvSeries"
         ],
         "version": 1,
-        "internalName": "HDFilmCehennemi",
+        "internalName": "Dramadizilerim",
         "description": "DiziPal T\u00fcrkiye katalog ve b\u00f6l\u00fcm sa\u011flay\u0131c\u0131s\u0131",
-        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/HDFilmCehennemi.cs3",
-        "name": "HDFilmCehennemi"
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/Dramadizilerim.cs3",
+        "name": "Dramadizilerim"
     }
 ]
