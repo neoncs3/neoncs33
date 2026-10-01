@@ -289,11 +289,19 @@ class AsyaFilmIzle : MainAPI() {
             .distinct()
     }
 
-    private fun parseEpisodes(document: Document, poster: String?): List<Episode> {
+    private suspend fun parseEpisodes(
+        document: Document,
+        poster: String?,
+        seriesUrl: String
+    ): List<Episode> {
         val result = ArrayList<Episode>()
         val seen = HashSet<String>()
 
-        fun addEpisode(rawUrl: String?, displayText: String?, fallbackTitle: String? = null) {
+        fun addEpisode(
+            rawUrl: String?,
+            displayText: String?,
+            fallbackTitle: String? = null
+        ) {
             val href = absolute(rawUrl) ?: return
             if (!href.contains("/bolum/", true)) return
             if (!seen.add(href)) return
@@ -330,7 +338,11 @@ class AsyaFilmIzle : MainAPI() {
                 append(link.attr("title"))
                 append(" ")
                 append(link.attr("aria-label"))
-                val card = link.closest("article, li, .item, .episode, .episode-item, .post, .card, div")
+
+                val card = link.closest(
+                    "article, li, .item, .episode, .episode-item, .post, .card, div"
+                )
+
                 if (card != null) {
                     append(" ")
                     append(card.text())
@@ -355,22 +367,137 @@ class AsyaFilmIzle : MainAPI() {
             }
         }
 
-        // Also scan raw HTML for episode URLs. This catches links in hidden
-        // season containers or JSON/script fragments that are not exposed by
-        // the normal <a> selector.
+        // Scan the complete HTML for hidden episode URLs.
         val html = document.html()
-        Regex("""(?i)(?:https?:)?//[^"']*?/bolum/[^"'\s<>]+|/bolum/[^"'\s<>]+""")
-            .findAll(html)
-            .forEach { match ->
-                val raw = match.value
-                    .replace("\\/", "/")
-                    .replace("&amp;", "&")
-                    .trimEnd('\\', '"', '\'', '>', '<')
-                addEpisode(raw, raw)
+
+        Regex(
+            """(?i)(?:https?:)?//[^"']*?/bolum/[^"'\\s<>]+|/bolum/[^"'\\s<>]+"""
+        ).findAll(html).forEach { match ->
+            val raw = match.value
+                .replace("\\/", "/")
+                .replace("&amp;", "&")
+                .trimEnd('\\', '"', '\'', '>', '<')
+
+            addEpisode(raw, raw)
+        }
+
+        /*
+         * AsyaFilmIzle initially renders only a limited number of episodes.
+         * Older episodes are exposed by the site's "Daha Fazla" control.
+         *
+         * Episode URLs follow:
+         * /bolum/{series-slug}-{season}-sezon-{episode}-bolum/
+         *
+         * We therefore verify missing episode numbers against the real episode
+         * URL and add them only when the target page identifies that episode.
+         */
+        val seriesSlug = seriesUrl
+            .trimEnd('/')
+            .substringAfterLast("/dizi/")
+            .substringBefore('?')
+            .trim('/')
+
+        if (seriesSlug.isNotBlank()) {
+            suspend fun probeEpisode(season: Int, episode: Int) {
+                if (season <= 0 || episode <= 0) return
+
+                val candidate =
+                    "$mainUrl/bolum/$seriesSlug-$season-sezon-$episode-bolum/"
+
+                val response = runCatching {
+                    app.get(
+                        candidate,
+                        headers = siteHeaders,
+                        referer = seriesUrl,
+                        allowRedirects = true
+                    )
+                }.getOrNull() ?: return
+
+                if (!response.isSuccessful) return
+
+                val episodePageText = response.document.text()
+                val episodeTitle = response.document
+                    .selectFirst("h1")
+                    ?.text()
+                    ?.trim()
+                    .orEmpty()
+
+                val identifiesEpisode =
+                    episodeTitle.contains("Bölüm $episode", true) &&
+                        episodeTitle.contains("Sezon $season", true)
+
+                if (!identifiesEpisode) return
+
+                addEpisode(
+                    candidate,
+                    "$episodeTitle $episodePageText"
+                )
             }
 
+            /*
+             * For seasons already visible, fill all missing numbers from 1 to
+             * the highest visible episode. For a 11..25 initial list this means
+             * only 1..10 are requested because 11..25 are already present.
+             */
+            val existingBySeason = result
+                .mapNotNull { episode ->
+                    val season = episode.season
+                    val number = episode.episode
+                    if (season != null && number != null) season to number else null
+                }
+                .groupBy({ it.first }, { it.second })
+
+            for ((season, episodeNumbers) in existingBySeason) {
+                val maxVisible = episodeNumbers.maxOrNull() ?: continue
+                val upperBound = minOf(maxVisible, 100)
+
+                for (episode in 1..upperBound) {
+                    if (
+                        result.any {
+                            it.season == season && it.episode == episode
+                        }
+                    ) continue
+
+                    probeEpisode(season, episode)
+                }
+            }
+
+            /*
+             * Multi-season pages can render only the selected season. Detect
+             * season buttons from the page text and retrieve seasons that are
+             * not represented in the initial episode list.
+             */
+            val detectedSeasons = Regex(
+                """(?i)\\bsezon\\s+(\\d+)\\b"""
+            ).findAll(document.text())
+                .mapNotNull { it.groupValues[1].toIntOrNull() }
+                .filter { it in 1..20 }
+                .toSortedSet()
+
+            for (season in detectedSeasons) {
+                if (existingBySeason.containsKey(season)) continue
+
+                var foundAny = false
+                var consecutiveMisses = 0
+
+                for (episode in 1..50) {
+                    val before = result.size
+
+                    probeEpisode(season, episode)
+
+                    if (result.size > before) {
+                        foundAny = true
+                        consecutiveMisses = 0
+                    } else if (foundAny) {
+                        consecutiveMisses++
+                        if (consecutiveMisses >= 5) break
+                    }
+                }
+            }
+        }
+
         return result
-            .distinctBy { "${it.season ?: 0}-${it.episode ?: 0}-${it.data}" }
+            .distinctBy { "\${it.season ?: 0}-\${it.episode ?: 0}-\${it.data}" }
             .sortedWith(
                 compareBy<Episode> { it.season ?: 0 }
                     .thenBy { it.episode ?: 0 }
@@ -417,7 +544,7 @@ class AsyaFilmIzle : MainAPI() {
         val directors = collectDirectors(document)
 
         if (url.contains("/dizi/", true)) {
-            val episodes = parseEpisodes(document, poster)
+            val episodes = parseEpisodes(document, poster, url)
             return newTvSeriesLoadResponse(
                 name = title,
                 url = url,
