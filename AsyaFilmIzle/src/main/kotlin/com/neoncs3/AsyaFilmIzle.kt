@@ -371,7 +371,7 @@ class AsyaFilmIzle : MainAPI() {
         val html = document.html()
 
         Regex(
-            """(?i)(?:https?:)?//[^"']*?/bolum/[^"'\\s<>]+|/bolum/[^"'\\s<>]+"""
+            """(?i)(?:https?:)?//[^"']*?/bolum/[^"'\s<>]+|/bolum/[^"'\s<>]+"""
         ).findAll(html).forEach { match ->
             val raw = match.value
                 .replace("\\/", "/")
@@ -468,7 +468,7 @@ class AsyaFilmIzle : MainAPI() {
              * not represented in the initial episode list.
              */
             val detectedSeasons = Regex(
-                """(?i)\\bsezon\\s+(\\d+)\\b"""
+                """(?i)\bsezon\s+(\d+)\b"""
             ).findAll(document.text())
                 .mapNotNull { it.groupValues[1].toIntOrNull() }
                 .filter { it in 1..20 }
@@ -497,7 +497,7 @@ class AsyaFilmIzle : MainAPI() {
         }
 
         return result
-            .distinctBy { "\${it.season ?: 0}-\${it.episode ?: 0}-\${it.data}" }
+            .distinctBy { "${it.season ?: 0}-${it.episode ?: 0}-${it.data}" }
             .sortedWith(
                 compareBy<Episode> { it.season ?: 0 }
                     .thenBy { it.episode ?: 0 }
