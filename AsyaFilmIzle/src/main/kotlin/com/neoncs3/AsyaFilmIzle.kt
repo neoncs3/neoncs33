@@ -742,8 +742,9 @@ class AsyaFilmIzle : MainAPI() {
                     }
                     .filter {
                         it.contains("/rplayer/", true) ||
-                            it.contains("yabancidizim.com", true) ||
-                            it.contains("embed", true)
+                        it.contains("ksdpictures.site", true)
+                        it.contains("yabancidizim.com", true) ||
+                        it.contains("embed", true)
                     }
                     .forEach(iframes::add)
 
