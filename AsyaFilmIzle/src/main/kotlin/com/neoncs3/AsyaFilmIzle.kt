@@ -1160,7 +1160,8 @@ class AsyaFilmIzle : MainAPI() {
                         apiResponse.text,
                         iframe,
                         subtitleCallback,
-                        callback
+                        callback,
+                        subtitleSeen
                     )
                 ) {
                     found = true
@@ -1275,7 +1276,8 @@ class AsyaFilmIzle : MainAPI() {
                     html,
                     data,
                     subtitleCallback,
-                    callback
+                    callback,
+                    subtitleSeen
                 )
             ) {
                 found = true
