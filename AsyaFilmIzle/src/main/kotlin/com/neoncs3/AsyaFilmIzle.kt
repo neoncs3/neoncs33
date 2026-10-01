@@ -85,35 +85,28 @@ class AsyaFilmIzle : MainAPI() {
 
     private fun extractEpisodeNumbers(text: String, url: String): Pair<Int, Int>? {
         val source = "$text $url"
+            .replace("&nbsp;", " ", ignoreCase = true)
+            .replace("\\n", " ")
+            .trim()
 
-        val direct = Regex(
-            """(?ix)
-            sezon[-\s_]*(\d+)[-/\s_]*(?:bolum|bölüm)[-\s_]*(\d+)
-            |
-            (\d+)\.?[-\s]*(?:sezon|season)[-\s]*(\d+)\.?[-\s]*(?:bolum|bölüm|episode)[-\s]*(\d+)
-            |
-            (?:s|season)[-\s]*(\d+)[-_]?e[-\s]*(\d+)
-            """
-        ).find(source)
+        val patterns = listOf(
+            Regex("""(?ix)(?:sezon|season)\s*[._-]?\s*(\d+)\D{0,30}?(?:bölüm|bolum|episode)\s*[._-]?\s*(\d+)"""),
+            Regex("""(?ix)(?:bölüm|bolum|episode)\s*[._-]?\s*(\d+)\D{0,30}?(?:sezon|season)\s*[._-]?\s*(\d+)"""),
+            Regex("""(?ix)\bs\s*(\d+)\s*[-_.]?\s*e\s*(\d+)\b"""),
+            Regex("""(?ix)\b(\d+)\s*[-_.]?\s*(?:sezon|season)\D{0,30}?(?:bölüm|bolum|episode)\s*(\d+)\b""")
+        )
 
-        if (direct != null) {
-            val g = direct.groupValues
-            val pairs = listOf(
-                g.getOrNull(1)?.toIntOrNull() to g.getOrNull(2)?.toIntOrNull(),
-                g.getOrNull(3)?.toIntOrNull() to g.getOrNull(4)?.toIntOrNull(),
-                g.getOrNull(6)?.toIntOrNull() to g.getOrNull(7)?.toIntOrNull()
-            )
-            pairs.firstOrNull { it.first != null && it.second != null }?.let {
-                return it.first!! to it.second!!
+        for (regex in patterns) {
+            val match = regex.find(source) ?: continue
+            val first = match.groupValues.getOrNull(1)?.toIntOrNull() ?: continue
+            val second = match.groupValues.getOrNull(2)?.toIntOrNull() ?: continue
+
+            return if (regex.pattern.contains("bölüm|bolum|episode).*sezon")) {
+                second to first
+            } else {
+                first to second
             }
         }
-
-        Regex("""(?i)(?:sezon|season)[-\s]*(\d+).{0,25}?(?:bolum|bölüm|episode)[-\s]*(\d+)""")
-            .find(source)?.let {
-                val season = it.groupValues[1].toIntOrNull() ?: 1
-                val episode = it.groupValues[2].toIntOrNull() ?: 1
-                return season to episode
-            }
 
         return null
     }
@@ -295,21 +288,29 @@ class AsyaFilmIzle : MainAPI() {
         val result = ArrayList<Episode>()
         val seen = HashSet<String>()
 
-        document.select("a[href*='/bolum/']").forEach { link ->
-            val href = absolute(link.attr("href")) ?: return@forEach
-            if (!seen.add(href)) return@forEach
+        fun addEpisode(rawUrl: String?, displayText: String?, fallbackTitle: String? = null) {
+            val href = absolute(rawUrl) ?: return
+            if (!href.contains("/bolum/", true)) return
+            if (!seen.add(href)) return
 
-            val text = "${link.text()} ${link.attr("title")} $href"
-            val numbers = extractEpisodeNumbers(text, href) ?: return@forEach
+            val text = listOf(displayText, fallbackTitle, href)
+                .filterNot { it.isNullOrBlank() }
+                .joinToString(" ")
+
+            val numbers = extractEpisodeNumbers(text, href) ?: return
             val season = numbers.first
             val episode = numbers.second
 
-            val runtimeText = link.closest("article, .item, .episode, li, div")?.text()
-                ?.takeIf { it != link.text() }
-                ?: link.text()
+            val runtimeText = displayText.orEmpty()
+            val cleanName = when {
+                runtimeText.contains("Bölüm", true) -> runtimeText
+                    .replace(Regex("(?i)\\s+"), " ")
+                    .trim()
+                else -> "Bölüm $episode"
+            }
 
             result += newEpisode(href) {
-                name = "Bölüm $episode"
+                name = cleanName.takeIf { it.isNotBlank() } ?: "Bölüm $episode"
                 this.season = season
                 this.episode = episode
                 posterUrl = poster
@@ -317,10 +318,64 @@ class AsyaFilmIzle : MainAPI() {
             }
         }
 
-        return result.sortedWith(
-            compareBy<Episode> { it.season ?: 0 }
-                .thenBy { it.episode ?: 0 }
-        )
+        // Normal episode links.
+        document.select("a[href*='/bolum/'], a[href*='/episode/']").forEach { link ->
+            val href = link.attr("href")
+                .ifBlank { link.attr("data-href") }
+                .ifBlank { link.attr("data-url") }
+                .ifBlank { link.attr("data-src") }
+
+            val context = buildString {
+                append(link.text())
+                append(" ")
+                append(link.attr("title"))
+                append(" ")
+                append(link.attr("aria-label"))
+                val card = link.closest("article, li, .item, .episode, .episode-item, .post, .card, div")
+                if (card != null) {
+                    append(" ")
+                    append(card.text())
+                }
+            }
+
+            addEpisode(href, context)
+        }
+
+        // Some versions place the episode URL in data attributes instead of href.
+        document.select("[data-href], [data-url], [data-src]").forEach { element ->
+            val candidates = listOf(
+                element.attr("data-href"),
+                element.attr("data-url"),
+                element.attr("data-src")
+            )
+
+            candidates.forEach { raw ->
+                if (raw.contains("/bolum/", true)) {
+                    addEpisode(raw, element.text() + " " + element.attr("title"))
+                }
+            }
+        }
+
+        // Final fallback: search the raw HTML for /bolum/ URLs.
+        if (result.isEmpty()) {
+            val html = document.html()
+            Regex("""(?i)(?:https?:)?//[^"']*?/bolum/[^"'\s<>]+|/bolum/[^"'\s<>]+""")
+                .findAll(html)
+                .forEach { match ->
+                    val raw = match.value
+                        .replace("\\/", "/")
+                        .replace("&amp;", "&")
+                        .trimEnd('\\', '"', '\'', '>', '<')
+                    addEpisode(raw, raw)
+                }
+        }
+
+        return result
+            .distinctBy { "${it.season ?: 0}-${it.episode ?: 0}-${it.data}" }
+            .sortedWith(
+                compareBy<Episode> { it.season ?: 0 }
+                    .thenBy { it.episode ?: 0 }
+            )
     }
 
     override suspend fun load(url: String): LoadResponse? {
