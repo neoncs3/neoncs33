@@ -1,12 +1,13 @@
 package com.neoncs3
 
-import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
-import com.lagradost.cloudstream3.plugins.Plugin
 import android.content.Context
+import com.lagradost.cloudstream3.plugins.Plugin
+import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 
 @CloudstreamPlugin
-class DramadizilerimPlugin: Plugin() {
+class DramadizilerimPlugin : Plugin() {
     override fun load(context: Context) {
-        registerMainAPI(HDFilmCehennemi())
+        super.load(context)
+        registerMainAPI(Dramadizilerim())
     }
 }
