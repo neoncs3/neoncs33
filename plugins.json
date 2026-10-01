@@ -20,15 +20,15 @@
         "name": "DiziBoxizle"
     },
     {
-        "iconUrl": "https://dizipal1583.com/favicon.ico",
-        "fileHash": "sha256-c121395450fd5b7bb18e3eaa18bb3b7c96dd9452970606590b5c7f94d194aecb",
+        "iconUrl": "https://www.dramadizilerim.com/favicon.ico",
+        "fileHash": "sha256-2f22e1f6f2bb1ba5ebf72bcde46a5c5b3f81ed10211205ada5f8b345f708a903",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 64846,
+        "fileSize": 64900,
         "status": 1,
         "language": "tr",
         "authors": [
-            "DiziPalCloudStream"
+            "Dramadizilerim"
         ],
         "tvTypes": [
             "TvSeries"
