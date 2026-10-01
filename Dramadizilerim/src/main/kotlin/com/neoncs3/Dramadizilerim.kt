@@ -60,7 +60,7 @@ class Dramadizilerim : MainAPI() {
                     val normalized = normalizeSearch(item.title)
                     val wanted = normalizeSearch(query)
                     if (normalized.contains(wanted) || wanted.contains(normalized)) {
-                        found[item.url] = item.toSearchResponse()
+                        found[item.url] = item.toSearchResponse(this@Dramadizilerim)
                     }
                 }
             }
@@ -79,7 +79,7 @@ class Dramadizilerim : MainAPI() {
         val url = request.data.replace("{page}", page.toString())
         val doc = app.get(url, headers = browserHeaders).document
 
-        val results = parseCards(doc).map { it.toSearchResponse() }
+        val results = parseCards(doc).map { it.toSearchResponse(this) }
         val hasNext = hasNextPage(doc, page)
 
         return newHomePageResponse(request.name, results, hasNext)
@@ -130,12 +130,11 @@ class Dramadizilerim : MainAPI() {
 
                 val season = Regex("(?:[?&])s=(\\d+)").find(fullUrl)?.groupValues?.get(1)?.toIntOrNull() ?: 1
 
-                Episode(
-                    data = fullUrl,
-                    episode = ep,
-                    season = season,
-                    name = "Bölüm $ep"
-                )
+                newEpisode(fullUrl) {
+                    this.episode = ep
+                    this.season = season
+                    this.name = "Bölüm $ep"
+                }
             }
             .distinctBy { "${it.season}-${it.episode}-${it.data}" }
             .sortedWith(compareBy<Episode> { it.season ?: 1 }.thenBy { it.episode ?: 0 })
@@ -146,7 +145,7 @@ class Dramadizilerim : MainAPI() {
                 posterUrl = poster
                 this.plot = plot
                 this.year = year
-                rating = imdb?.let { (it * 10).toInt() }
+                score = imdb?.let { Score.from10(it) }
             }
             return response
         }
@@ -160,7 +159,7 @@ class Dramadizilerim : MainAPI() {
             posterUrl = poster
             this.plot = plot
             this.year = year
-            rating = imdb?.let { (it * 10).toInt() }
+            score = imdb?.let { Score.from10(it) }
         }
     }
 
@@ -232,9 +231,12 @@ class Dramadizilerim : MainAPI() {
                 // 2b) Embed sorgusundaki subtitle URL'si.
                 parseQuery(iframeUrl)["sub"]?.let { encoded ->
                     decodeB64Url(encoded)?.takeIf { it.startsWith("http") }?.let { subUrl ->
-                        runCatching {
-                            subtitleCallback(newSubtitleFile("Türkçe", subUrl))
-                        }
+                        subtitleCallback(
+                            newSubtitleFile(
+                                "Türkçe",
+                                subUrl
+                            )
+                        )
                     }
                 }
 
@@ -304,12 +306,12 @@ class Dramadizilerim : MainAPI() {
         val poster: String?,
         val type: TvType = TvType.TvSeries
     ) {
-        fun toSearchResponse(): SearchResponse {
+        fun toSearchResponse(api: MainAPI): SearchResponse {
             return when (type) {
-                TvType.Movie -> newMovieSearchResponse(title, url, TvType.Movie) {
+                TvType.Movie -> api.newMovieSearchResponse(title, url, TvType.Movie) {
                     posterUrl = poster
                 }
-                else -> newTvSeriesSearchResponse(title, url, TvType.TvSeries) {
+                else -> api.newTvSeriesSearchResponse(title, url, TvType.TvSeries) {
                     posterUrl = poster
                 }
             }
