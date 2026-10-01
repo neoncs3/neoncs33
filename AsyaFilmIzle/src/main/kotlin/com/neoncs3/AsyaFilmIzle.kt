@@ -7,11 +7,9 @@ import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URI
-import java.net.URLEncoder
-import kotlin.math.roundToInt
+import java.net.URLDecoder
 
 class AsyaFilmIzle : MainAPI() {
-
     override var mainUrl = "https://asyafilmizle.com"
     override var name = "AsyaFilmİzle"
     override var lang = "tr"
@@ -21,6 +19,7 @@ class AsyaFilmIzle : MainAPI() {
         TvType.Movie,
         TvType.TvSeries
     )
+
     override val mainPage = mainPageOf(
         "https://asyafilmizle.com/diziler/" to "Yeni Diziler",
         "https://asyafilmizle.com/filmler/" to "Filmler",
@@ -32,13 +31,18 @@ class AsyaFilmIzle : MainAPI() {
         "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
     )
 
+    private val chromeUserAgent =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
+
     private fun absolute(url: String?): String? {
         if (url.isNullOrBlank()) return null
+        val value = url.trim()
         return when {
-            url.startsWith("http://") || url.startsWith("https://") -> url
-            url.startsWith("//") -> "https:$url"
-            url.startsWith("/") -> mainUrl + url
-            else -> "$mainUrl/$url"
+            value.startsWith("http://", true) || value.startsWith("https://", true) -> value
+            value.startsWith("//") -> "https:$value"
+            value.startsWith("/") -> mainUrl + value
+            else -> "$mainUrl/$value"
         }
     }
 
@@ -47,15 +51,16 @@ class AsyaFilmIzle : MainAPI() {
         return absolute(
             img.attr("data-src")
                 .ifBlank { img.attr("data-lazy-src") }
-                .ifBlank { img.attr("src") }
                 .ifBlank { img.attr("data-original") }
+                .ifBlank { img.attr("src") }
         )
     }
 
     private fun scoreFrom(text: String?): Score? {
         if (text.isNullOrBlank()) return null
-        val value = Regex("""(?<!\d)(10(?:[.,]0)?|[0-9](?:[.,][0-9])?)(?!\d)""")
-            .findAll(text)
+        val value = Regex(
+            """(?<!\d)(10(?:[.,]0)?|[0-9](?:[.,][0-9])?)(?!\d)"""
+        ).findAll(text)
             .mapNotNull { it.groupValues[1].replace(',', '.').toDoubleOrNull() }
             .firstOrNull { it in 0.0..10.0 }
             ?: return null
@@ -65,9 +70,7 @@ class AsyaFilmIzle : MainAPI() {
     private fun yearFrom(text: String?): Int? {
         if (text.isNullOrBlank()) return null
         return Regex("""\b(19|20)\d{2}\b""")
-            .find(text)
-            ?.value
-            ?.toIntOrNull()
+            .find(text)?.value?.toIntOrNull()
     }
 
     private fun qualityFrom(url: String): Int {
@@ -81,27 +84,39 @@ class AsyaFilmIzle : MainAPI() {
     }
 
     private fun extractEpisodeNumbers(text: String, url: String): Pair<Int, Int>? {
-    val source = "$text $url"
+        val source = "$text $url"
 
-    val patterns = listOf(
-        Regex("""(?i)(\d+)\s*\.?\s*(?:sezon|season)\s*(\d+)\s*\.?\s*(?:bolum|bölüm|episode)"""),
-        Regex("""(?i)(?:sezon|season)\s*(\d+).*?(?:bolum|bölüm|episode)\s*(\d+)"""),
-        Regex("""(?i)(?:s)(\d+)[\s._-]*e(\d+)""")
-    )
+        val direct = Regex(
+            """(?ix)
+            sezon[-\s_]*(\d+)[-/\s_]*(?:bolum|bölüm)[-\s_]*(\d+)
+            |
+            (\d+)\.?[-\s]*(?:sezon|season)[-\s]*(\d+)\.?[-\s]*(?:bolum|bölüm|episode)[-\s]*(\d+)
+            |
+            (?:s|season)[-\s]*(\d+)[-_]?e[-\s]*(\d+)
+            """
+        ).find(source)
 
-    for (pattern in patterns) {
-        val match = pattern.find(source) ?: continue
-        val groups = match.groupValues
-
-        if (groups.size >= 3) {
-            val season = groups[1].toIntOrNull() ?: continue
-            val episode = groups[2].toIntOrNull() ?: continue
-            return season to episode
+        if (direct != null) {
+            val g = direct.groupValues
+            val pairs = listOf(
+                g.getOrNull(1)?.toIntOrNull() to g.getOrNull(2)?.toIntOrNull(),
+                g.getOrNull(3)?.toIntOrNull() to g.getOrNull(4)?.toIntOrNull(),
+                g.getOrNull(6)?.toIntOrNull() to g.getOrNull(7)?.toIntOrNull()
+            )
+            pairs.firstOrNull { it.first != null && it.second != null }?.let {
+                return it.first!! to it.second!!
+            }
         }
-    }
 
-    return null
-}
+        Regex("""(?i)(?:sezon|season)[-\s]*(\d+).{0,25}?(?:bolum|bölüm|episode)[-\s]*(\d+)""")
+            .find(source)?.let {
+                val season = it.groupValues[1].toIntOrNull() ?: 1
+                val episode = it.groupValues[2].toIntOrNull() ?: 1
+                return season to episode
+            }
+
+        return null
+    }
 
     private fun parseSearchCard(card: Element): SearchResponse? {
         val link = card.selectFirst("a[href*='/dizi/'], a[href*='/film/']")
@@ -109,7 +124,7 @@ class AsyaFilmIzle : MainAPI() {
             ?: return null
 
         val url = absolute(link.attr("href")) ?: return null
-        if (!url.contains("/dizi/") && !url.contains("/film/")) return null
+        if (!url.contains("/dizi/", true) && !url.contains("/film/", true)) return null
 
         val title = link.selectFirst("img")?.attr("alt")
             ?.trim()
@@ -118,19 +133,19 @@ class AsyaFilmIzle : MainAPI() {
             ?.takeIf { it.isNotBlank() }
             ?: card.selectFirst("h1,h2,h3,h4,.title,.name")?.text()?.trim()
             ?: link.text().trim()
+
         if (title.isBlank()) return null
 
         val poster = posterFrom(card)
         val score = scoreFrom(card.text())
-        val type = if (url.contains("/dizi/")) TvType.TvSeries else TvType.Movie
-
-        return when (type) {
-            TvType.Movie -> newMovieSearchResponse(title, url) {
-                this.posterUrl = poster
+        return if (url.contains("/film/", true)) {
+            newMovieSearchResponse(title, url) {
+                posterUrl = poster
                 this.score = score
             }
-            else -> newTvSeriesSearchResponse(title, url) {
-                this.posterUrl = poster
+        } else {
+            newTvSeriesSearchResponse(title, url) {
+                posterUrl = poster
                 this.score = score
             }
         }
@@ -142,7 +157,7 @@ class AsyaFilmIzle : MainAPI() {
 
         document.select("a[href*='/dizi/'], a[href*='/film/']").forEach { link ->
             val href = absolute(link.attr("href")) ?: return@forEach
-            if (!href.contains("/dizi/") && !href.contains("/film/")) return@forEach
+            if (!href.contains("/dizi/", true) && !href.contains("/film/", true)) return@forEach
             if (!seen.add(href)) return@forEach
 
             val title = link.selectFirst("img")?.attr("alt")
@@ -150,17 +165,16 @@ class AsyaFilmIzle : MainAPI() {
                 ?.removeSuffix(" izle")
                 ?.removeSuffix(" İzle")
                 ?.takeIf { it.isNotBlank() }
-                ?: link.selectFirst("h1,h2,h3,h4,.title,.name")?.text()?.trim()
+                ?: link.selectFirst(".title,.name,h1,h2,h3,h4")?.text()?.trim()
                 ?: link.text().trim()
 
             if (title.isBlank()) return@forEach
 
-            val card = link.closest("article, .item, .post, .card, li, div")
-            val poster = posterFrom(card ?: link)
-            val score = scoreFrom((card ?: link).text())
-            val type = if (href.contains("/dizi/")) TvType.TvSeries else TvType.Movie
+            val card = link.closest("article, .item, .post, .card, .film, .dizi, li, div") ?: link
+            val poster = posterFrom(card)
+            val score = scoreFrom(card.text())
 
-            val item = if (type == TvType.Movie) {
+            results += if (href.contains("/film/", true)) {
                 newMovieSearchResponse(title, href) {
                     posterUrl = poster
                     this.score = score
@@ -171,7 +185,6 @@ class AsyaFilmIzle : MainAPI() {
                     this.score = score
                 }
             }
-            results.add(item)
         }
 
         return results
@@ -184,25 +197,18 @@ class AsyaFilmIzle : MainAPI() {
             else -> "${request.data}/page/$page/"
         }
 
-        val response = app.get(
-            pageUrl,
-            headers = siteHeaders,
-            referer = mainUrl
-        )
+        val response = runCatching {
+            app.get(pageUrl, headers = siteHeaders, referer = mainUrl, allowRedirects = true)
+        }.getOrNull() ?: return null
 
         if (!response.isSuccessful) return null
-
         val results = parseListing(response.document)
-        return newHomePageResponse(
-            request,
-            results,
-            hasNext = results.isNotEmpty()
-        )
+        return newHomePageResponse(request, results, hasNext = results.isNotEmpty())
     }
 
-    private suspend fun searchPage(query: String, candidate: String): List<SearchResponse> {
+    private suspend fun searchPage(candidate: String): List<SearchResponse> {
         val response = runCatching {
-            app.get(candidate, headers = siteHeaders, referer = mainUrl)
+            app.get(candidate, headers = siteHeaders, referer = mainUrl, allowRedirects = true)
         }.getOrNull() ?: return emptyList()
 
         if (!response.isSuccessful) return emptyList()
@@ -212,7 +218,7 @@ class AsyaFilmIzle : MainAPI() {
     override suspend fun search(query: String, page: Int): SearchResponseList? {
         if (page > 1) return null
 
-        val encoded = URLEncoder.encode(query.trim(), "UTF-8")
+        val encoded = java.net.URLEncoder.encode(query.trim(), "UTF-8")
         val candidates = listOf(
             "$mainUrl/?s=$encoded",
             "$mainUrl/arama/?q=$encoded",
@@ -224,7 +230,7 @@ class AsyaFilmIzle : MainAPI() {
         val merged = ArrayList<SearchResponse>()
 
         for (url in candidates) {
-            searchPage(query, url).forEach { item ->
+            searchPage(url).forEach { item ->
                 if (seen.add(item.url)) merged.add(item)
             }
             if (merged.isNotEmpty()) break
@@ -238,34 +244,33 @@ class AsyaFilmIzle : MainAPI() {
     }
 
     private fun parseGenres(document: Document): List<String> {
-        return document.select("a").mapNotNull { a ->
-            val href = a.attr("href")
-            val text = a.text().trim()
-            if (href.contains("/tur/") && text.isNotBlank()) text else null
-        }.distinct().filter {
-            !it.equals("Kore Dizileri", true) &&
-                !it.equals("Çin Dizileri", true) &&
-                !it.equals("Japon Dizileri", true) &&
-                !it.equals("Tayland Dizileri", true)
-        }
+        return document.select("a[href*='/tur/']")
+            .map { it.text().trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .filterNot {
+                it.equals("Kore Dizileri", true) ||
+                    it.equals("Çin Dizileri", true) ||
+                    it.equals("Japon Dizileri", true) ||
+                    it.equals("Tayland Dizileri", true)
+            }
     }
 
     private fun parseTrailer(document: Document): String? {
-        val trailerLink = document.select("a").firstOrNull {
+        val direct = document.select("a").firstOrNull {
             it.text().contains("Fragman", true) ||
-                it.attr("href").contains("youtube", true) ||
+                it.attr("href").contains("youtube.com", true) ||
                 it.attr("href").contains("youtu.be", true)
-        }
+        }?.attr("href")?.trim()
 
-        val direct = trailerLink?.attr("href").takeIf { !it.isNullOrBlank() }
-        if (!direct.isNullOrBlank() && (direct.startsWith("http") || direct.startsWith("//"))) {
+        if (!direct.isNullOrBlank() && (direct.startsWith("http", true) || direct.startsWith("//"))) {
             return absolute(direct)
         }
 
         val dataLink = document.select("[data-trailer], [data-trailer-url], [data-video], [data-url]")
-            .mapNotNull {
+            .flatMap { element ->
                 listOf("data-trailer", "data-trailer-url", "data-video", "data-url")
-                    .firstNotNullOfOrNull { key -> it.attr(key).takeIf(String::isNotBlank) }
+                    .mapNotNull { key -> element.attr(key).takeIf(String::isNotBlank) }
             }
             .firstOrNull()
 
@@ -299,20 +304,17 @@ class AsyaFilmIzle : MainAPI() {
             val season = numbers.first
             val episode = numbers.second
 
-            val runtimeText = link.closest("article, .item, .episode, li, div")
-                ?.text()
+            val runtimeText = link.closest("article, .item, .episode, li, div")?.text()
                 ?.takeIf { it != link.text() }
                 ?: link.text()
 
-            result.add(
-                newEpisode(href) {
-                    name = "Bölüm $episode"
-                    this.season = season
-                    this.episode = episode
-                    posterUrl = poster
-                    runTime = getDurationFromString(runtimeText)
-                }
-            )
+            result += newEpisode(href) {
+                name = "Bölüm $episode"
+                this.season = season
+                this.episode = episode
+                posterUrl = poster
+                runTime = getDurationFromString(runtimeText)
+            }
         }
 
         return result.sortedWith(
@@ -322,11 +324,10 @@ class AsyaFilmIzle : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val response = app.get(
-            url,
-            headers = siteHeaders,
-            referer = mainUrl
-        )
+        val response = runCatching {
+            app.get(url, headers = siteHeaders, referer = mainUrl, allowRedirects = true)
+        }.getOrNull() ?: return null
+
         if (!response.isSuccessful) return null
 
         val document = response.document
@@ -336,12 +337,13 @@ class AsyaFilmIzle : MainAPI() {
             ?: return null
 
         val pageText = document.text()
-        val poster = document.select("img[src], img[data-src], img[data-lazy-src]")
+        val poster = document.select("img[src], img[data-src], img[data-lazy-src], img[data-original]")
             .mapNotNull {
                 absolute(
                     it.attr("src")
                         .ifBlank { it.attr("data-src") }
                         .ifBlank { it.attr("data-lazy-src") }
+                        .ifBlank { it.attr("data-original") }
                 )
             }
             .firstOrNull { it.contains("image.tmdb.org", true) }
@@ -360,10 +362,9 @@ class AsyaFilmIzle : MainAPI() {
         val actors = collectActors(document)
         val directors = collectDirectors(document)
 
-        if (url.contains("/dizi/")) {
+        if (url.contains("/dizi/", true)) {
             val episodes = parseEpisodes(document, poster)
-
-            val response = newTvSeriesLoadResponse(
+            return newTvSeriesLoadResponse(
                 name = title,
                 url = url,
                 type = TvType.TvSeries,
@@ -386,11 +387,7 @@ class AsyaFilmIzle : MainAPI() {
                     }
                 }
             }
-
-            return response
         }
-
-        val duration = getDurationFromString(pageText)
 
         return newMovieLoadResponse(
             name = title,
@@ -402,7 +399,7 @@ class AsyaFilmIzle : MainAPI() {
             this.year = year
             this.plot = plot
             this.score = score
-            this.duration = duration
+            this.duration = getDurationFromString(pageText)
             tags = genres
             if (trailer != null) addTrailer(trailer)
             addActors(actors)
@@ -418,19 +415,61 @@ class AsyaFilmIzle : MainAPI() {
         }
     }
 
+    private fun normalizeUrl(value: String): String {
+        return value
+            .replace("\\/", "/")
+            .replace("\\u002F", "/", ignoreCase = true)
+            .replace("\\u003A", ":", ignoreCase = true)
+            .replace("&amp;", "&")
+            .trim()
+    }
+
+    private fun looksLikeMedia(url: String): Boolean {
+        return url.contains(".m3u8", true) ||
+            url.contains(".mp4", true) ||
+            url.contains(".m3u", true)
+    }
+
     private fun mediaUrls(text: String): List<String> {
+        val input = normalizeUrl(text)
+        val result = LinkedHashSet<String>()
+
         val patterns = listOf(
-            Regex("""https?://[^"'\\s<>]+?\.m3u8(?:\?[^"'\\s<>]+)?""", RegexOption.IGNORE_CASE),
-            Regex("""https?://[^"'\\s<>]+?\.mp4(?:\?[^"'\\s<>]+)?""", RegexOption.IGNORE_CASE),
-            Regex("""https?://[^"'\\s<>]+?\.m3u(?:\?[^"'\\s<>]+)?""", RegexOption.IGNORE_CASE)
+            Regex("""https?://[^\"'\\s<>]+?\.m3u8(?:\?[^\"'\\s<>]*)?""", RegexOption.IGNORE_CASE),
+            Regex("""https?://[^\"'\\s<>]+?\.mp4(?:\?[^\"'\\s<>]*)?""", RegexOption.IGNORE_CASE),
+            Regex("""https?://[^\"'\\s<>]+?\.m3u(?:\?[^\"'\\s<>]*)?""", RegexOption.IGNORE_CASE),
+            Regex("""[\"'](https?://[^\"']+)[\"']""", RegexOption.IGNORE_CASE)
         )
 
-        val result = LinkedHashSet<String>()
-        for (pattern in patterns) {
-            pattern.findAll(text).forEach {
-                result.add(it.value.replace("\\/", "/"))
+        patterns.forEach { pattern ->
+            pattern.findAll(input).forEach { match ->
+                val url = normalizeUrl(match.groupValues.last())
+                if (looksLikeMedia(url)) result.add(url)
             }
         }
+
+        return result.toList()
+    }
+
+    private fun extractQuotedUrls(text: String): List<String> {
+        val result = LinkedHashSet<String>()
+        val patterns = listOf(
+            Regex("""(?is)(?:file|src|source|url|hls|stream|playlist|video|streamUrl|playUrl)[\\s:=]+[\"']([^\"']+)[\"']"""),
+            Regex("""(?is)[\"'](?:file|src|source|url|hls|stream|playlist|video|streamUrl|playUrl)[\"']\\s*:\\s*[\"']([^\"']+)[\"']"""),
+            Regex("""(?is)(?:fetch|\\$\\.get|\\$\\.ajax|axios\\.get|XMLHttpRequest\\.open)\\s*\\(\\s*[\"']([^\"']+)[\"']"""),
+            Regex("""(?is)(?:m3u8|mp4|m3u)[^\"'<>\\s]{0,600}""", RegexOption.IGNORE_CASE)
+        )
+
+        for (pattern in patterns) {
+            pattern.findAll(text).forEach { match ->
+                val candidate = normalizeUrl(match.groupValues.last())
+                if (candidate.startsWith("http://") || candidate.startsWith("https://") ||
+                    candidate.startsWith("/") || candidate.startsWith("//")) {
+                    result.add(candidate)
+                }
+            }
+        }
+
         return result.toList()
     }
 
@@ -441,10 +480,11 @@ class AsyaFilmIzle : MainAPI() {
         tokenRegex.findAll(text).forEach { match ->
             val token = match.groupValues[1]
             runCatching {
-                val decoded = base64Decode(token)
+                val decoded = normalizeUrl(base64Decode(token))
                 mediaUrls(decoded).forEach(result::add)
+                extractQuotedUrls(decoded).forEach(result::add)
                 if (decoded.startsWith("http://") || decoded.startsWith("https://")) {
-                    result.add(decoded.trim())
+                    result.add(decoded)
                 }
             }
         }
@@ -452,66 +492,14 @@ class AsyaFilmIzle : MainAPI() {
         return result.toList()
     }
 
-    private suspend fun addDirectMedia(
-        url: String,
-        referer: String,
-        callback: (ExtractorLink) -> Unit
-    ) {
-        callback(
-            newExtractorLink(
-                source = "AsyaFilmİzle",
-                name = if (url.contains(".m3u8", true)) "Katre HLS" else "Katre MP4",
-                url = url,
-                type = if (url.contains(".m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
-            ) {
-                this.quality = qualityFrom(url)
-                this.headers = mapOf(
-                    "User-Agent" to USER_AGENT,
-                    "Referer" to referer,
-                    "Origin" to URI(referer).let { "${it.scheme}://${it.host}" }
-                )
-            }
-        )
-    }
-
-    private fun browserHeaders(referer: String): Map<String, String> {
-        val origin = runCatching {
-            val uri = URI(referer)
-            "${uri.scheme}://${uri.host}"
-        }.getOrDefault(mainUrl)
-
-        return mapOf(
-            "User-Agent" to USER_AGENT,
-            "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Referer" to referer,
-            "Origin" to origin,
-            "Sec-Fetch-Dest" to "iframe",
-            "Sec-Fetch-Mode" to "navigate",
-            "Sec-Fetch-Site" to "cross-site",
-            "Upgrade-Insecure-Requests" to "1"
-        )
-    }
-
-    private fun extractScriptSources(text: String): List<String> {
+    private fun decodeUrlCandidates(text: String): List<String> {
         val result = LinkedHashSet<String>()
+        val encodedRegex = Regex("""(?:https?%3A%2F%2F|https?://)[^\"'\\s<>]{20,1000}""", RegexOption.IGNORE_CASE)
 
-        val patterns = listOf(
-            Regex("""(?is)(?:file|src|source|url|hls|stream|playlist|video)[\\s:=]+["'](https?://[^"'\\s<>]+)["']"""),
-            Regex("""(?is)(?:file|src|source|url|hls|stream|playlist|video)[\\s:=]+["']((?:/|//)[^"'\\s<>]+)["']"""),
-            Regex("""(?is)(?:fetch|\$\.get|\$\.ajax|axios\.get|XMLHttpRequest\\.open)\s*\(\s*["']([^"']+)["']"""),
-            Regex("""(?is)https?:\\/\\/[^"'\\s<>]+""")
-        )
-
-        for (pattern in patterns) {
-            pattern.findAll(text).forEach { match ->
-                val value = match.groupValues.last()
-                    .replace("\\\\/", "/")
-                    .replace("\\/", "/")
-                    .trim()
-                if (value.isNotBlank()) {
-                    result.add(value)
-                }
+        encodedRegex.findAll(text).forEach { match ->
+            runCatching {
+                val decoded = normalizeUrl(URLDecoder.decode(match.value, "UTF-8"))
+                if (looksLikeMedia(decoded)) result.add(decoded)
             }
         }
 
@@ -519,13 +507,71 @@ class AsyaFilmIzle : MainAPI() {
     }
 
     private fun absoluteFor(base: String, value: String): String? {
-        if (value.isBlank()) return null
-        if (value.startsWith("http://") || value.startsWith("https://")) return value
-        if (value.startsWith("//")) return "https:$value"
+        val cleaned = normalizeUrl(value)
+        if (cleaned.isBlank()) return null
+        if (cleaned.startsWith("http://", true) || cleaned.startsWith("https://", true)) return cleaned
+        if (cleaned.startsWith("//")) return "https:$cleaned"
 
-        return runCatching {
-            URI(base).resolve(value).toString()
-        }.getOrNull()
+        return runCatching { URI(base).resolve(cleaned).toString() }.getOrNull()
+    }
+
+    private fun iframeHeaders(referer: String): Map<String, String> {
+        return mapOf(
+            "User-Agent" to chromeUserAgent,
+            "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Referer" to referer,
+            "Sec-Fetch-Dest" to "iframe",
+            "Sec-Fetch-Mode" to "navigate",
+            "Sec-Fetch-Site" to "cross-site",
+            "Upgrade-Insecure-Requests" to "1",
+            "Cache-Control" to "no-cache",
+            "Pragma" to "no-cache"
+        )
+    }
+
+    private fun playerHeaders(referer: String): Map<String, String> {
+        val origin = runCatching {
+            val uri = URI(referer)
+            "${uri.scheme}://${uri.host}"
+        }.getOrDefault(mainUrl)
+
+        return mapOf(
+            "User-Agent" to chromeUserAgent,
+            "Referer" to referer,
+            "Origin" to origin,
+            "Accept" to "*/*",
+            "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
+        )
+    }
+
+    private suspend fun addDirectMedia(
+        url: String,
+        referer: String,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        val mediaUrl = normalizeUrl(url)
+        if (!looksLikeMedia(mediaUrl)) return
+
+        callback(
+            newExtractorLink(
+                source = "AsyaFilmİzle",
+                name = when {
+                    mediaUrl.contains(".m3u8", true) -> "Katre HLS"
+                    mediaUrl.contains(".m3u", true) -> "Katre M3U"
+                    else -> "Katre MP4"
+                },
+                url = mediaUrl,
+                type = if (mediaUrl.contains(".m3u8", true) || mediaUrl.contains(".m3u", true)) {
+                    ExtractorLinkType.M3U8
+                } else {
+                    ExtractorLinkType.VIDEO
+                }
+            ) {
+                quality = qualityFrom(mediaUrl)
+                headers = playerHeaders(referer)
+            }
+        )
     }
 
     private suspend fun extractSubtitleFromUrl(
@@ -535,149 +581,219 @@ class AsyaFilmIzle : MainAPI() {
         runCatching {
             val uri = URI(iframeUrl)
             val query = uri.rawQuery.orEmpty()
-
             val encoded = query.split("&")
                 .mapNotNull {
                     val parts = it.split("=", limit = 2)
                     if (parts.size == 2 && parts[0].equals("sub", true)) parts[1] else null
                 }
                 .firstOrNull()
+                ?: return@runCatching
 
-            if (!encoded.isNullOrBlank()) {
-                val decoded = runCatching { base64Decode(encoded) }.getOrElse { encoded }
-                if (decoded.startsWith("http")) {
-                    subtitleCallback(
-                        newSubtitleFile(
-                            "Türkçe",
-                            decoded
-                        )
-                    )
+            val decoded = runCatching { URLDecoder.decode(encoded, "UTF-8") }
+                .getOrElse { encoded }
+                .let { value ->
+                    runCatching { base64Decode(value) }.getOrElse { value }
                 }
+
+            if (decoded.startsWith("http", true)) {
+                subtitleCallback(newSubtitleFile("Türkçe", decoded))
             }
         }
+    }
+
+    private fun findIframeUrls(document: Document, baseUrl: String): List<String> {
+        val result = LinkedHashSet<String>()
+
+        document.select("iframe[src], iframe[data-src], iframe[data-lazy-src]").forEach { iframe ->
+            val raw = iframe.attr("src")
+                .ifBlank { iframe.attr("data-src") }
+                .ifBlank { iframe.attr("data-lazy-src") }
+
+            absoluteFor(baseUrl, raw)?.let { result.add(it) }
+        }
+
+        return result.toList()
+    }
+
+    private suspend fun extractFromResponseText(
+        baseUrl: String,
+        body: String,
+        iframeReferer: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        var found = false
+
+        val candidates = LinkedHashSet<String>()
+        candidates.addAll(mediaUrls(body))
+        candidates.addAll(decodeBase64Candidates(body))
+        candidates.addAll(decodeUrlCandidates(body))
+        candidates.addAll(extractQuotedUrls(body))
+
+        for (raw in candidates) {
+            val url = absoluteFor(baseUrl, raw) ?: continue
+            if (!looksLikeMedia(url)) continue
+            addDirectMedia(url, iframeReferer, callback)
+            found = true
+        }
+
+        val document = runCatching { org.jsoup.Jsoup.parse(body, baseUrl) }.getOrNull()
+        if (document != null) {
+            document.select("track[src], source[src], video[src]")
+                .mapNotNull { absoluteFor(baseUrl, it.attr("src")) }
+                .filter { it.contains(".vtt", true) || it.contains(".srt", true) }
+                .distinct()
+                .forEach { sub ->
+                    try {
+                        subtitleCallback(newSubtitleFile("Türkçe", sub))
+                    } catch (_: Throwable) { }
+                }
+        }
+
+        return found
     }
 
     private suspend fun processIframe(
         iframe: String,
         pageUrl: String,
         subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
+        callback: (ExtractorLink) -> Unit,
+        depth: Int = 0,
+        visited: MutableSet<String> = LinkedHashSet()
     ): Boolean {
-        var found = false
+        if (depth > 2) return false
+        if (!visited.add(iframe)) return false
 
+        var found = false
         extractSubtitleFromUrl(iframe, subtitleCallback)
 
-        // First let any native CloudStream extractor have a chance.
+        // First let installed CloudStream extractors try the player URL.
         runCatching {
-            if (loadExtractor(
+            if (loadExtractor(iframe, pageUrl, subtitleCallback, callback)) {
+                found = true
+            }
+        }
+
+        fun responseHeaders(): Map<String, String> = iframeHeaders(pageUrl)
+
+        val iframeResponse = runCatching {
+            app.get(
+                iframe,
+                headers = responseHeaders(),
+                referer = pageUrl,
+                allowRedirects = true
+            )
+        }.getOrNull()
+
+        // Some anti-hotlink setups reject the first header profile. Retry without
+        // the browser fetch metadata while keeping the real page Referer.
+        val finalResponse = if (iframeResponse == null || !iframeResponse.isSuccessful) {
+            runCatching {
+                app.get(
                     iframe,
-                    pageUrl,
+                    headers = mapOf(
+                        "User-Agent" to chromeUserAgent,
+                        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                        "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+                        "Referer" to pageUrl
+                    ),
+                    referer = pageUrl,
+                    allowRedirects = true
+                )
+            }.getOrNull()
+        } else {
+            iframeResponse
+        }
+
+        if (finalResponse == null) return found
+
+        if (finalResponse.isSuccessful) {
+            val body = finalResponse.text
+
+            if (extractFromResponseText(
+                    iframe,
+                    body,
+                    iframe,
                     subtitleCallback,
                     callback
                 )
             ) {
                 found = true
             }
-        }
 
-        val iframeResponse = runCatching {
-            app.get(
-                iframe,
-                headers = browserHeaders(pageUrl),
-                referer = pageUrl,
-                allowRedirects = true
-            )
-        }.getOrNull()
+            val document = finalResponse.document
 
-        if (iframeResponse == null) return found
-
-        if (iframeResponse.isSuccessful) {
-            val body = iframeResponse.text
-
-            val directUrls = (
-                mediaUrls(body) +
-                    decodeBase64Candidates(body) +
-                    extractScriptSources(body)
-                ).mapNotNull { absoluteFor(iframe, it) }
-                .filter {
-                    it.contains(".m3u8", true) ||
-                        it.contains(".mp4", true) ||
-                        it.contains(".m3u", true)
-                }
-                .distinct()
-
-            for (media in directUrls) {
-                addDirectMedia(media, iframe, callback)
-                found = true
-            }
-
-            iframeResponse.document
-                .select("track[src], source[src], video[src]")
-                .mapNotNull { absoluteFor(iframe, it.attr("src")) }
-                .filter { it.contains(".vtt", true) || it.contains(".srt", true) }
-                .distinct()
-                .forEach { sub ->
-                    runCatching {
-                        subtitleCallback(newSubtitleFile("Türkçe", sub))
-                    }
-                }
-
-            // Fetch external player JS files as well. Some versions of the player
-            // keep the media endpoint in an external script instead of the iframe HTML.
-            val scriptUrls = iframeResponse.document
-                .select("script[src]")
-                .mapNotNull { absoluteFor(iframe, it.attr("src")) }
-                .distinct()
-
-            for (scriptUrl in scriptUrls) {
-                val js = runCatching {
-                    app.get(
-                        scriptUrl,
-                        headers = browserHeaders(iframe),
-                        referer = iframe,
-                        allowRedirects = true
-                    )
-                }.getOrNull()
-
-                if (js != null && js.isSuccessful) {
-                    val jsUrls = (
-                        mediaUrls(js.text) +
-                            extractScriptSources(js.text)
-                        ).mapNotNull { absoluteFor(scriptUrl, it) }
-                        .filter {
-                            it.contains(".m3u8", true) ||
-                                it.contains(".mp4", true) ||
-                                it.contains(".m3u", true)
-                        }
-                        .distinct()
-
-                    for (media in jsUrls) {
-                        addDirectMedia(media, iframe, callback)
+            // Follow nested player iframes, including KSD/Katre style embeds.
+            findIframeUrls(document, iframe)
+                .filterNot { it == iframe }
+                .take(8)
+                .forEach { nested ->
+                    if (processIframe(
+                            nested,
+                            iframe,
+                            subtitleCallback,
+                            callback,
+                            depth + 1,
+                            visited
+                        )
+                    ) {
                         found = true
                     }
                 }
+
+            // Inspect external JS files. A number of Katre versions put the media
+            // endpoint in player JavaScript rather than directly in the HTML.
+            val scriptUrls = document.select("script[src]")
+                .mapNotNull { absoluteFor(iframe, it.attr("src")) }
+                .distinct()
+                .take(12)
+
+            for (scriptUrl in scriptUrls) {
+                val jsResponse = runCatching {
+                    app.get(
+                        scriptUrl,
+                        headers = iframeHeaders(iframe),
+                        referer = iframe,
+                        allowRedirects = true
+                    )
+                }.getOrNull() ?: continue
+
+                if (!jsResponse.isSuccessful) continue
+
+                if (extractFromResponseText(
+                        scriptUrl,
+                        jsResponse.text,
+                        iframe,
+                        subtitleCallback,
+                        callback
+                    )
+                ) {
+                    found = true
+                }
             }
 
-            // Also follow obvious AJAX/fetch endpoints exposed by the player page.
-            val apiCandidates = extractScriptSources(body)
+            // Follow obvious player API endpoints discovered in the HTML/JS.
+            val apiCandidates = extractQuotedUrls(body)
                 .mapNotNull { absoluteFor(iframe, it) }
                 .filter {
-                    !it.contains(".m3u8", true) &&
-                        !it.contains(".mp4", true) &&
+                    !looksLikeMedia(it) &&
                         !it.contains(".js", true) &&
-                        (it.contains(".php", true) ||
-                            it.contains("/api/", true) ||
-                            it.contains("ajax", true) ||
-                            it.contains("source", true) ||
-                            it.contains("video", true))
+                        (
+                            it.contains(".php", true) ||
+                                it.contains("/api/", true) ||
+                                it.contains("ajax", true) ||
+                                it.contains("source", true) ||
+                                it.contains("video", true)
+                            )
                 }
                 .distinct()
+                .take(8)
 
-            for (api in apiCandidates.take(6)) {
+            for (api in apiCandidates) {
                 val apiResponse = runCatching {
                     app.get(
                         api,
-                        headers = browserHeaders(iframe),
+                        headers = iframeHeaders(iframe),
                         referer = iframe,
                         allowRedirects = true
                     )
@@ -685,26 +801,31 @@ class AsyaFilmIzle : MainAPI() {
 
                 if (!apiResponse.isSuccessful) continue
 
-                val apiUrls = (
-                    mediaUrls(apiResponse.text) +
-                        decodeBase64Candidates(apiResponse.text) +
-                        extractScriptSources(apiResponse.text)
-                    ).mapNotNull { absoluteFor(api, it) }
-                    .filter {
-                        it.contains(".m3u8", true) ||
-                            it.contains(".mp4", true) ||
-                            it.contains(".m3u", true)
-                    }
-                    .distinct()
-
-                for (media in apiUrls) {
-                    addDirectMedia(media, iframe, callback)
+                if (extractFromResponseText(
+                        api,
+                        apiResponse.text,
+                        iframe,
+                        subtitleCallback,
+                        callback
+                    )
+                ) {
                     found = true
                 }
             }
         }
 
         return found
+    }
+
+    private fun isPossiblePlayer(url: String): Boolean {
+        val lower = url.lowercase()
+        return lower.contains("embed") ||
+            lower.contains("player") ||
+            lower.contains("rplayer") ||
+            lower.contains("dzembed") ||
+            lower.contains("ksdpictures.site") ||
+            lower.contains("katre") ||
+            lower.contains("yabancidizim.com")
     }
 
     override suspend fun loadLinks(
@@ -716,8 +837,8 @@ class AsyaFilmIzle : MainAPI() {
         var found = false
         val iframes = LinkedHashSet<String>()
 
-        // If CloudStream gives us the player URL directly, handle it as an embed.
-        if (data.contains("yabancidizim.com/rplayer/", true)) {
+        // CloudStream may already pass the player URL directly.
+        if (isPossiblePlayer(data)) {
             iframes.add(data)
         } else {
             val pageResponse = runCatching {
@@ -732,47 +853,54 @@ class AsyaFilmIzle : MainAPI() {
             if (pageResponse != null && pageResponse.isSuccessful) {
                 val document = pageResponse.document
 
-                document.select("iframe[src], iframe[data-src], iframe[data-lazy-src]")
-                    .mapNotNull {
-                        absolute(
-                            it.attr("src")
-                                .ifBlank { it.attr("data-src") }
-                                .ifBlank { it.attr("data-lazy-src") }
-                        )
-                    }
-                    .filter {
-                        it.contains("/rplayer/", true) ||
-                        it.contains("ksdpictures.site", true)
-                        it.contains("yabancidizim.com", true) ||
-                        it.contains("embed", true)
-                    }
+                findIframeUrls(document, data)
+                    .filter(::isPossiblePlayer)
                     .forEach(iframes::add)
 
-                val directPageUrls = (
-                    mediaUrls(pageResponse.text) +
-                        decodeBase64Candidates(pageResponse.text) +
-                        extractScriptSources(pageResponse.text)
-                    ).mapNotNull { absoluteFor(data, it) }
-                    .filter {
-                        it.contains(".m3u8", true) ||
-                            it.contains(".mp4", true) ||
-                            it.contains(".m3u", true)
-                    }
-                    .distinct()
+                // Also allow non-standard iframe attributes and player URLs hidden
+                // in page scripts/data attributes.
+                document.select("[data-src], [data-lazy-src], [data-embed], [data-player], [data-video], [data-url]")
+                    .forEach { element ->
+                        val values = listOf(
+                            element.attr("data-src"),
+                            element.attr("data-lazy-src"),
+                            element.attr("data-embed"),
+                            element.attr("data-player"),
+                            element.attr("data-video"),
+                            element.attr("data-url")
+                        )
 
-                for (media in directPageUrls) {
-                    addDirectMedia(media, data, callback)
+                        values.mapNotNull { absoluteFor(data, it) }
+                            .filter(::isPossiblePlayer)
+                            .forEach(iframes::add)
+                    }
+
+                if (extractFromResponseText(
+                        data,
+                        pageResponse.text,
+                        data,
+                        subtitleCallback,
+                        callback
+                    )
+                ) {
                     found = true
                 }
             }
         }
 
+        // Known current AsyaFilmIzle player form. This is deliberately added as a
+        // fallback only when the page exposes a KSD embed so a future player change
+        // does not disable all native/external extractors.
+        if (data.contains("ksdpictures.site", true) || data.contains("dzembed.php", true)) {
+            iframes.add(data)
+        }
+
         for (iframe in iframes) {
             if (processIframe(
-                    iframe,
-                    data,
-                    subtitleCallback,
-                    callback
+                    iframe = iframe,
+                    pageUrl = data,
+                    subtitleCallback = subtitleCallback,
+                    callback = callback
                 )
             ) {
                 found = true
