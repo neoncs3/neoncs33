@@ -101,7 +101,7 @@ class AsyaFilmIzle : MainAPI() {
             val first = match.groupValues.getOrNull(1)?.toIntOrNull() ?: continue
             val second = match.groupValues.getOrNull(2)?.toIntOrNull() ?: continue
 
-            return if (regex.pattern.contains("bölüm|bolum|episode).*sezon")) {
+            return if (regex == patterns[1]) {
                 second to first
             } else {
                 first to second
@@ -302,15 +302,9 @@ class AsyaFilmIzle : MainAPI() {
             val episode = numbers.second
 
             val runtimeText = displayText.orEmpty()
-            val cleanName = when {
-                runtimeText.contains("Bölüm", true) -> runtimeText
-                    .replace(Regex("(?i)\\s+"), " ")
-                    .trim()
-                else -> "Bölüm $episode"
-            }
 
             result += newEpisode(href) {
-                name = cleanName.takeIf { it.isNotBlank() } ?: "Bölüm $episode"
+                name = "Bölüm $episode"
                 this.season = season
                 this.episode = episode
                 posterUrl = poster
@@ -356,19 +350,19 @@ class AsyaFilmIzle : MainAPI() {
             }
         }
 
-        // Final fallback: search the raw HTML for /bolum/ URLs.
-        if (result.isEmpty()) {
-            val html = document.html()
-            Regex("""(?i)(?:https?:)?//[^"']*?/bolum/[^"'\s<>]+|/bolum/[^"'\s<>]+""")
-                .findAll(html)
-                .forEach { match ->
-                    val raw = match.value
-                        .replace("\\/", "/")
-                        .replace("&amp;", "&")
-                        .trimEnd('\\', '"', '\'', '>', '<')
-                    addEpisode(raw, raw)
-                }
-        }
+        // Also scan raw HTML for episode URLs. This catches links in hidden
+        // season containers or JSON/script fragments that are not exposed by
+        // the normal <a> selector.
+        val html = document.html()
+        Regex("""(?i)(?:https?:)?//[^"']*?/bolum/[^"'\s<>]+|/bolum/[^"'\s<>]+""")
+            .findAll(html)
+            .forEach { match ->
+                val raw = match.value
+                    .replace("\\/", "/")
+                    .replace("&amp;", "&")
+                    .trimEnd('\\', '"', '\'', '>', '<')
+                addEpisode(raw, raw)
+            }
 
         return result
             .distinctBy { "${it.season ?: 0}-${it.episode ?: 0}-${it.data}" }
