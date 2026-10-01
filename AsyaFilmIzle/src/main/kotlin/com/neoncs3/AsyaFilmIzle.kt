@@ -474,6 +474,60 @@ class AsyaFilmIzle : MainAPI() {
         )
     }
 
+    private fun browserHeaders(referer: String): Map<String, String> {
+        val origin = runCatching {
+            val uri = URI(referer)
+            "${uri.scheme}://${uri.host}"
+        }.getOrDefault(mainUrl)
+
+        return mapOf(
+            "User-Agent" to USER_AGENT,
+            "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Referer" to referer,
+            "Origin" to origin,
+            "Sec-Fetch-Dest" to "iframe",
+            "Sec-Fetch-Mode" to "navigate",
+            "Sec-Fetch-Site" to "cross-site",
+            "Upgrade-Insecure-Requests" to "1"
+        )
+    }
+
+    private fun extractScriptSources(text: String): List<String> {
+        val result = LinkedHashSet<String>()
+
+        val patterns = listOf(
+            Regex("""(?is)(?:file|src|source|url|hls|stream|playlist|video)[\\s:=]+["'](https?://[^"'\\s<>]+)["']"""),
+            Regex("""(?is)(?:file|src|source|url|hls|stream|playlist|video)[\\s:=]+["']((?:/|//)[^"'\\s<>]+)["']"""),
+            Regex("""(?is)(?:fetch|\$\.get|\$\.ajax|axios\.get|XMLHttpRequest\\.open)\s*\(\s*["']([^"']+)["']"""),
+            Regex("""(?is)https?:\\/\\/[^"'\\s<>]+""")
+        )
+
+        for (pattern in patterns) {
+            pattern.findAll(text).forEach { match ->
+                val value = match.groupValues.last()
+                    .replace("\\\\/", "/")
+                    .replace("\\/", "/")
+                    .trim()
+                if (value.isNotBlank()) {
+                    result.add(value)
+                }
+            }
+        }
+
+        return result.toList()
+    }
+
+    private fun absoluteFor(base: String, value: String): String? {
+        if (value.isBlank()) return null
+        if (value.startsWith("http://") || value.startsWith("https://")) return value
+        if (value.startsWith("//")) return "https:$value"
+
+        return runCatching {
+            URI(base).resolve(value).toString()
+        }.getOrNull()
+    }
+
     private suspend fun extractSubtitleFromUrl(
         iframeUrl: String,
         subtitleCallback: (SubtitleFile) -> Unit
@@ -503,89 +557,225 @@ class AsyaFilmIzle : MainAPI() {
         }
     }
 
+    private suspend fun processIframe(
+        iframe: String,
+        pageUrl: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        var found = false
+
+        extractSubtitleFromUrl(iframe, subtitleCallback)
+
+        // First let any native CloudStream extractor have a chance.
+        runCatching {
+            if (loadExtractor(
+                    iframe,
+                    pageUrl,
+                    subtitleCallback,
+                    callback
+                )
+            ) {
+                found = true
+            }
+        }
+
+        val iframeResponse = runCatching {
+            app.get(
+                iframe,
+                headers = browserHeaders(pageUrl),
+                referer = pageUrl,
+                allowRedirects = true
+            )
+        }.getOrNull()
+
+        if (iframeResponse == null) return found
+
+        if (iframeResponse.isSuccessful) {
+            val body = iframeResponse.text
+
+            val directUrls = (
+                mediaUrls(body) +
+                    decodeBase64Candidates(body) +
+                    extractScriptSources(body)
+                ).mapNotNull { absoluteFor(iframe, it) }
+                .filter {
+                    it.contains(".m3u8", true) ||
+                        it.contains(".mp4", true) ||
+                        it.contains(".m3u", true)
+                }
+                .distinct()
+
+            for (media in directUrls) {
+                addDirectMedia(media, iframe, callback)
+                found = true
+            }
+
+            iframeResponse.document
+                .select("track[src], source[src], video[src]")
+                .mapNotNull { absoluteFor(iframe, it.attr("src")) }
+                .filter { it.contains(".vtt", true) || it.contains(".srt", true) }
+                .distinct()
+                .forEach { sub ->
+                    runCatching {
+                        subtitleCallback(newSubtitleFile("Türkçe", sub))
+                    }
+                }
+
+            // Fetch external player JS files as well. Some versions of the player
+            // keep the media endpoint in an external script instead of the iframe HTML.
+            val scriptUrls = iframeResponse.document
+                .select("script[src]")
+                .mapNotNull { absoluteFor(iframe, it.attr("src")) }
+                .distinct()
+
+            for (scriptUrl in scriptUrls) {
+                val js = runCatching {
+                    app.get(
+                        scriptUrl,
+                        headers = browserHeaders(iframe),
+                        referer = iframe,
+                        allowRedirects = true
+                    )
+                }.getOrNull()
+
+                if (js != null && js.isSuccessful) {
+                    val jsUrls = (
+                        mediaUrls(js.text) +
+                            extractScriptSources(js.text)
+                        ).mapNotNull { absoluteFor(scriptUrl, it) }
+                        .filter {
+                            it.contains(".m3u8", true) ||
+                                it.contains(".mp4", true) ||
+                                it.contains(".m3u", true)
+                        }
+                        .distinct()
+
+                    for (media in jsUrls) {
+                        addDirectMedia(media, iframe, callback)
+                        found = true
+                    }
+                }
+            }
+
+            // Also follow obvious AJAX/fetch endpoints exposed by the player page.
+            val apiCandidates = extractScriptSources(body)
+                .mapNotNull { absoluteFor(iframe, it) }
+                .filter {
+                    !it.contains(".m3u8", true) &&
+                        !it.contains(".mp4", true) &&
+                        !it.contains(".js", true) &&
+                        (it.contains(".php", true) ||
+                            it.contains("/api/", true) ||
+                            it.contains("ajax", true) ||
+                            it.contains("source", true) ||
+                            it.contains("video", true))
+                }
+                .distinct()
+
+            for (api in apiCandidates.take(6)) {
+                val apiResponse = runCatching {
+                    app.get(
+                        api,
+                        headers = browserHeaders(iframe),
+                        referer = iframe,
+                        allowRedirects = true
+                    )
+                }.getOrNull() ?: continue
+
+                if (!apiResponse.isSuccessful) continue
+
+                val apiUrls = (
+                    mediaUrls(apiResponse.text) +
+                        decodeBase64Candidates(apiResponse.text) +
+                        extractScriptSources(apiResponse.text)
+                    ).mapNotNull { absoluteFor(api, it) }
+                    .filter {
+                        it.contains(".m3u8", true) ||
+                            it.contains(".mp4", true) ||
+                            it.contains(".m3u", true)
+                    }
+                    .distinct()
+
+                for (media in apiUrls) {
+                    addDirectMedia(media, iframe, callback)
+                    found = true
+                }
+            }
+        }
+
+        return found
+    }
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val pageResponse = runCatching {
-            app.get(
-                data,
-                headers = siteHeaders,
-                referer = mainUrl
-            )
-        }.getOrNull()
-
-        if (pageResponse == null || !pageResponse.isSuccessful) return false
-
-        val document = pageResponse.document
-        val iframe = document.selectFirst("iframe[src], iframe[data-src]")
-            ?.let {
-                absolute(
-                    it.attr("src")
-                        .ifBlank { it.attr("data-src") }
-                )
-            }
-
         var found = false
+        val iframes = LinkedHashSet<String>()
 
-        if (iframe != null) {
-            extractSubtitleFromUrl(iframe, subtitleCallback)
-
-            val iframeResponse = runCatching {
+        // If CloudStream gives us the player URL directly, handle it as an embed.
+        if (data.contains("yabancidizim.com/rplayer/", true)) {
+            iframes.add(data)
+        } else {
+            val pageResponse = runCatching {
                 app.get(
-                    iframe,
-                    headers = mapOf(
-                        "User-Agent" to USER_AGENT,
-                        "Referer" to data,
-                        "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
-                    ),
-                    referer = data,
+                    data,
+                    headers = siteHeaders,
+                    referer = mainUrl,
                     allowRedirects = true
                 )
             }.getOrNull()
 
-            if (iframeResponse != null && iframeResponse.isSuccessful) {
-                val body = iframeResponse.text
-                val directUrls = mediaUrls(body) + decodeBase64Candidates(body)
+            if (pageResponse != null && pageResponse.isSuccessful) {
+                val document = pageResponse.document
 
-                for (media in directUrls.distinct()) {
-                    addDirectMedia(media, iframe, callback)
-                    found = true
-                }
+                document.select("iframe[src], iframe[data-src], iframe[data-lazy-src]")
+                    .mapNotNull {
+                        absolute(
+                            it.attr("src")
+                                .ifBlank { it.attr("data-src") }
+                                .ifBlank { it.attr("data-lazy-src") }
+                        )
+                    }
+                    .filter {
+                        it.contains("/rplayer/", true) ||
+                            it.contains("yabancidizim.com", true) ||
+                            it.contains("embed", true)
+                    }
+                    .forEach(iframes::add)
 
-                val subtitleUrls = iframeResponse.document
-                    .select("track[src], source[src], video[src]")
-                    .mapNotNull { absolute(it.attr("src")) }
-                    .filter { it.contains(".vtt", true) || it.contains(".srt", true) }
+                val directPageUrls = (
+                    mediaUrls(pageResponse.text) +
+                        decodeBase64Candidates(pageResponse.text) +
+                        extractScriptSources(pageResponse.text)
+                    ).mapNotNull { absoluteFor(data, it) }
+                    .filter {
+                        it.contains(".m3u8", true) ||
+                            it.contains(".mp4", true) ||
+                            it.contains(".m3u", true)
+                    }
                     .distinct()
 
-                for (sub in subtitleUrls) {
-                    subtitleCallback(newSubtitleFile("Türkçe", sub))
-                }
-            }
-
-            // Try a native CloudStream extractor too. This covers providers whose
-            // embed is not readable as plain HTML but is supported by a known extractor.
-            runCatching {
-                if (loadExtractor(
-                        iframe,
-                        data,
-                        subtitleCallback,
-                        callback
-                    )
-                ) {
+                for (media in directPageUrls) {
+                    addDirectMedia(media, data, callback)
                     found = true
                 }
             }
         }
 
-        // Some pages expose a direct source without using an iframe.
-        val directPageUrls = mediaUrls(pageResponse.text) + decodeBase64Candidates(pageResponse.text)
-        for (media in directPageUrls.distinct()) {
-            addDirectMedia(media, data, callback)
-            found = true
+        for (iframe in iframes) {
+            if (processIframe(
+                    iframe,
+                    data,
+                    subtitleCallback,
+                    callback
+                )
+            ) {
+                found = true
+            }
         }
 
         return found
