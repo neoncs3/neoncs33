@@ -422,9 +422,12 @@ class AsyaFilmIzle : MainAPI() {
                     ?.trim()
                     .orEmpty()
 
+                val titleNumbers = extractEpisodeNumbers(episodeTitle, "")
+                    ?: extractEpisodeNumbers(episodePageText, candidate)
+
                 val identifiesEpisode =
-                    episodeTitle.contains("Bölüm $episode", true) &&
-                        episodeTitle.contains("Sezon $season", true)
+                    titleNumbers?.first == season &&
+                        titleNumbers.second == episode
 
                 if (!identifiesEpisode) return
 
