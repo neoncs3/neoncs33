@@ -22,8 +22,13 @@ class AsyaFilmIzle : MainAPI() {
 
     override val mainPage = mainPageOf(
         "https://asyafilmizle.com/diziler/" to "Yeni Diziler",
-        "https://asyafilmizle.com/filmler/" to "Filmler",
-        "https://asyafilmizle.com/tur/kore/" to "Kore Dizileri"
+        "https://asyafilmizle.com/tur/kore/" to "Kore Dizileri",
+        "https://asyafilmizle.com/tur/aksiyon/" to "Aksiyon",
+        "https://asyafilmizle.com/tur/bilim-kurgu/" to "Bilim Kurgu",
+        "https://asyafilmizle.com/tur/fantastik/" to "Fantastik",
+        "https://asyafilmizle.com/tur/gerilim/" to "Gerilim",
+        "https://asyafilmizle.com/tur/komedi/" to "Komedi",
+        "https://asyafilmizle.com/tur/romantik/" to "Romantik"
     )
 
     private val siteHeaders = mapOf(
