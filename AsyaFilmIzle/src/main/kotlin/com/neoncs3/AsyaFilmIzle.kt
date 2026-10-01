@@ -81,27 +81,27 @@ class AsyaFilmIzle : MainAPI() {
     }
 
     private fun extractEpisodeNumbers(text: String, url: String): Pair<Int, Int>? {
-        val source = "$text $url"
-        val match = Regex(
-            """(?i)(?:sezon[-\s_]*(\d+)[-/\s]*(?:bolum|bölüm)[-\s_]*(\d+)|(\d+)\.?[-\s]*(?:sezon|season)[-\s]*(\d+)\.?[-\s]*(?:bolum|bölüm|episode)[-\s]*(\d+)|(?:s|season)[-\s]*(\d+)[-_]?e[-\s]*(\d+))"""
-        ).find(source)
+    val source = "$text $url"
 
-        if (match != null) {
-            val values = match.groupValues.drop(1).mapNotNull { it.toIntOrNull() }
-            when {
-                values.size >= 2 -> return values[0] to values[1]
-            }
+    val patterns = listOf(
+        Regex("""(?i)(\d+)\s*\.?\s*(?:sezon|season)\s*(\d+)\s*\.?\s*(?:bolum|bölüm|episode)"""),
+        Regex("""(?i)(?:sezon|season)\s*(\d+).*?(?:bolum|bölüm|episode)\s*(\d+)"""),
+        Regex("""(?i)(?:s)(\d+)[\s._-]*e(\d+)""")
+    )
+
+    for (pattern in patterns) {
+        val match = pattern.find(source) ?: continue
+        val groups = match.groupValues
+
+        if (groups.size >= 3) {
+            val season = groups[1].toIntOrNull() ?: continue
+            val episode = groups[2].toIntOrNull() ?: continue
+            return season to episode
         }
-
-        val compact = Regex("""(?i)(?:sezon|season)[-\s]*(\d+).{0,25}?(?:bolum|bölüm|episode)[-\s]*(\d+)""")
-            .find(source)
-        if (compact != null) {
-            return (compact.groupValues[1].toIntOrNull() ?: 1) to
-                (compact.groupValues[2].toIntOrNull() ?: 1)
-        }
-
-        return null
     }
+
+    return null
+}
 
     private fun parseSearchCard(card: Element): SearchResponse? {
         val link = card.selectFirst("a[href*='/dizi/'], a[href*='/film/']")
