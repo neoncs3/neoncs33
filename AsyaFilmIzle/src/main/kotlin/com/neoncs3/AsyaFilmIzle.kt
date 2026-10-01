@@ -289,7 +289,7 @@ class AsyaFilmIzle : MainAPI() {
             .distinct()
     }
 
-    private suspend fun parseEpisodes(
+    private fun parseEpisodes(
         document: Document,
         poster: String?,
         seriesUrl: String
@@ -382,14 +382,15 @@ class AsyaFilmIzle : MainAPI() {
         }
 
         /*
-         * AsyaFilmIzle initially renders only a limited number of episodes.
-         * Older episodes are exposed by the site's "Daha Fazla" control.
+         * The site lazy-loads older episodes behind "Daha Fazla".
+         * Do not request every missing episode page here. That caused a
+         * significant delay when opening a series.
          *
-         * Episode URLs follow:
+         * The site's episode URL format is stable:
          * /bolum/{series-slug}-{season}-sezon-{episode}-bolum/
          *
-         * We therefore verify missing episode numbers against the real episode
-         * URL and add them only when the target page identifies that episode.
+         * For single-season series, the page also exposes the total episode
+         * count in "Dizi Bilgileri", so missing episodes can be created locally.
          */
         val seriesSlug = seriesUrl
             .trimEnd('/')
@@ -398,107 +399,104 @@ class AsyaFilmIzle : MainAPI() {
             .trim('/')
 
         if (seriesSlug.isNotBlank()) {
-            suspend fun probeEpisode(season: Int, episode: Int) {
-                if (season <= 0 || episode <= 0) return
+            val pageText = document.text()
 
-                val candidate =
-                    "$mainUrl/bolum/$seriesSlug-$season-sezon-$episode-bolum/"
+            val totalEpisodes = Regex(
+                "(?i)Bölümler\\s+(\\d+)"
+            ).find(pageText)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.toIntOrNull()
 
-                val response = runCatching {
-                    app.get(
-                        candidate,
-                        headers = siteHeaders,
-                        referer = seriesUrl,
-                        allowRedirects = true
-                    )
-                }.getOrNull() ?: return
-
-                if (!response.isSuccessful) return
-
-                val episodePageText = response.document.text()
-                val episodeTitle = response.document
-                    .selectFirst("h1")
-                    ?.text()
-                    ?.trim()
-                    .orEmpty()
-
-                val titleNumbers = extractEpisodeNumbers(episodeTitle, "")
-                    ?: extractEpisodeNumbers(episodePageText, candidate)
-
-                val identifiesEpisode =
-                    titleNumbers?.first == season &&
-                        titleNumbers.second == episode
-
-                if (!identifiesEpisode) return
-
-                addEpisode(
-                    candidate,
-                    "$episodeTitle $episodePageText"
-                )
-            }
-
-            /*
-             * For seasons already visible, fill all missing numbers from 1 to
-             * the highest visible episode. For a 11..25 initial list this means
-             * only 1..10 are requested because 11..25 are already present.
-             */
-            val existingBySeason = result
-                .mapNotNull { episode ->
-                    val season = episode.season
-                    val number = episode.episode
-                    if (season != null && number != null) season to number else null
-                }
-                .groupBy({ it.first }, { it.second })
-
-            for ((season, episodeNumbers) in existingBySeason) {
-                val maxVisible = episodeNumbers.maxOrNull() ?: continue
-                val upperBound = minOf(maxVisible, 100)
-
-                for (episode in 1..upperBound) {
-                    if (
-                        result.any {
-                            it.season == season && it.episode == episode
-                        }
-                    ) continue
-
-                    probeEpisode(season, episode)
-                }
-            }
-
-            /*
-             * Multi-season pages can render only the selected season. Detect
-             * season buttons from the page text and retrieve seasons that are
-             * not represented in the initial episode list.
-             */
             val detectedSeasons = Regex(
-                """(?i)\bsezon\s+(\d+)\b"""
-            ).findAll(document.text())
+                "(?i)Sezon\\s+(\\d+)"
+            ).findAll(pageText)
                 .mapNotNull { it.groupValues[1].toIntOrNull() }
                 .filter { it in 1..20 }
                 .toSortedSet()
 
-            for (season in detectedSeasons) {
-                if (existingBySeason.containsKey(season)) continue
+            val visibleBySeason = result
+                .mapNotNull { episode ->
+                    val season = episode.season
+                    val number = episode.episode
+                    if (season != null && number != null) {
+                        season to number
+                    } else {
+                        null
+                    }
+                }
+                .groupBy({ it.first }, { it.second })
+                .mapValues { (_, values) -> values.toSet() }
 
-                var foundAny = false
-                var consecutiveMisses = 0
+            fun addGeneratedEpisode(season: Int, episode: Int) {
+                if (season <= 0 || episode <= 0) return
+                if (result.any {
+                        it.season == season && it.episode == episode
+                    }
+                ) return
 
-                for (episode in 1..50) {
-                    val before = result.size
+                val candidate =
+                    "$mainUrl/bolum/$seriesSlug-$season-sezon-$episode-bolum/"
 
-                    probeEpisode(season, episode)
+                result += newEpisode(candidate) {
+                    name = "Bölüm $episode"
+                    this.season = season
+                    this.episode = episode
+                    posterUrl = poster
+                }
+            }
 
-                    if (result.size > before) {
-                        foundAny = true
-                        consecutiveMisses = 0
-                    } else if (foundAny) {
-                        consecutiveMisses++
-                        if (consecutiveMisses >= 5) break
+            // Single-season series: fill the complete 1..N range instantly.
+            if (detectedSeasons.size <= 1) {
+                val season = detectedSeasons.firstOrNull()
+                    ?: visibleBySeason.keys.firstOrNull()
+                    ?: 1
+
+                val maxKnown = visibleBySeason[season]?.maxOrNull() ?: 0
+                val count = totalEpisodes ?: maxKnown
+
+                if (count > 0) {
+                    for (episode in 1..minOf(count, 100)) {
+                        addGeneratedEpisode(season, episode)
+                    }
+                }
+            } else {
+                // For every season already present, fill gaps up to its
+                // currently visible highest episode without network requests.
+                for ((season, numbers) in visibleBySeason) {
+                    val maxKnown = numbers.maxOrNull() ?: 0
+
+                    for (episode in 1..minOf(maxKnown, 100)) {
+                        addGeneratedEpisode(season, episode)
+                    }
+                }
+
+                /*
+                 * Current AsyaFilmIzle multi-season pages expose the latest
+                 * season first. With exactly two seasons, the total episode
+                 * count allows the hidden first season count to be recovered:
+                 * total = hidden season + visible season.
+                 */
+                if (detectedSeasons.size == 2 && totalEpisodes != null) {
+                    val visibleSeason = visibleBySeason.keys.maxOrNull()
+                    val hiddenSeason = detectedSeasons.firstOrNull {
+                        it != visibleSeason
+                    }
+
+                    if (visibleSeason != null && hiddenSeason != null) {
+                        val visibleCount =
+                            visibleBySeason[visibleSeason]?.maxOrNull() ?: 0
+
+                        val hiddenCount = (totalEpisodes - visibleCount)
+                            .coerceAtLeast(0)
+
+                        for (episode in 1..minOf(hiddenCount, 100)) {
+                            addGeneratedEpisode(hiddenSeason, episode)
+                        }
                     }
                 }
             }
         }
-
         return result
             .distinctBy { "${it.season ?: 0}-${it.episode ?: 0}-${it.data}" }
             .sortedWith(
