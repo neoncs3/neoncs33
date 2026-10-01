@@ -474,9 +474,15 @@ class AsyaFilmIzle : MainAPI() {
     }
 
     private fun looksLikeMedia(url: String): Boolean {
-        return url.contains(".m3u8", true) ||
-            url.contains(".mp4", true) ||
-            url.contains(".m3u", true)
+        val lower = url.lowercase()
+        return lower.contains(".m3u8") ||
+            lower.contains(".mp4") ||
+            lower.contains(".m3u") ||
+            lower.contains("/hls/") ||
+            lower.contains("/hls2/") ||
+            lower.contains("/stream/") ||
+            lower.contains("/video/") && lower.contains("master") ||
+            lower.contains("/master.txt")
     }
 
     private fun mediaUrls(text: String): List<String> {
@@ -487,6 +493,8 @@ class AsyaFilmIzle : MainAPI() {
             Regex("""https?://[^\"'\\s<>]+?\.m3u8(?:\?[^\"'\\s<>]*)?""", RegexOption.IGNORE_CASE),
             Regex("""https?://[^\"'\\s<>]+?\.mp4(?:\?[^\"'\\s<>]*)?""", RegexOption.IGNORE_CASE),
             Regex("""https?://[^\"'\\s<>]+?\.m3u(?:\?[^\"'\\s<>]*)?""", RegexOption.IGNORE_CASE),
+            Regex("""https?://[^\"'\\s<>]+?/hls(?:2)?/[^\"'\\s<>]+(?:\?[^\"'\\s<>]*)?""", RegexOption.IGNORE_CASE),
+            Regex("""https?://[^\"'\\s<>]+?/master\.txt(?:\?[^\"'\\s<>]*)?""", RegexOption.IGNORE_CASE),
             Regex("""[\"'](https?://[^\"']+)[\"']""", RegexOption.IGNORE_CASE)
         )
 
@@ -606,12 +614,21 @@ class AsyaFilmIzle : MainAPI() {
             newExtractorLink(
                 source = "AsyaFilmİzle",
                 name = when {
-                    mediaUrl.contains(".m3u8", true) -> "Katre HLS"
-                    mediaUrl.contains(".m3u", true) -> "Katre M3U"
+                    mediaUrl.contains(".m3u8", true) ||
+                        mediaUrl.contains(".m3u", true) ||
+                        mediaUrl.contains("/hls/", true) ||
+                        mediaUrl.contains("/hls2/", true) ||
+                        mediaUrl.contains("/master.txt", true) -> "Katre HLS"
                     else -> "Katre MP4"
                 },
                 url = mediaUrl,
-                type = if (mediaUrl.contains(".m3u8", true) || mediaUrl.contains(".m3u", true)) {
+                type = if (
+                    mediaUrl.contains(".m3u8", true) ||
+                    mediaUrl.contains(".m3u", true) ||
+                    mediaUrl.contains("/hls/", true) ||
+                    mediaUrl.contains("/hls2/", true) ||
+                    mediaUrl.contains("/master.txt", true)
+                ) {
                     ExtractorLinkType.M3U8
                 } else {
                     ExtractorLinkType.VIDEO
