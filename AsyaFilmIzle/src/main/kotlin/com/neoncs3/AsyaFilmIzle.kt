@@ -652,30 +652,222 @@ class AsyaFilmIzle : MainAPI() {
         )
     }
 
+    private fun looksLikeSubtitle(url: String): Boolean {
+        val lower = url.lowercase()
+        return lower.contains(".vtt") ||
+            lower.contains(".srt") ||
+            lower.contains(".ass") ||
+            lower.contains(".ssa") ||
+            lower.contains(".ttml") ||
+            lower.contains(".dfxp") ||
+            lower.contains("webvtt") ||
+            lower.contains("/subtitle") ||
+            lower.contains("/subtitles") ||
+            lower.contains("/caption") ||
+            lower.contains("/captions")
+    }
+
+    private fun subtitleLanguage(value: String): String {
+        val lower = value.lowercase()
+        return when {
+            lower.contains("turk") ||
+                lower.contains("türk") ||
+                lower.contains("turkish") ||
+                lower.contains("turkce") ||
+                lower.contains("tr-") ||
+                lower.contains("_tr") -> "Türkçe"
+            lower.contains("english") ||
+                lower.contains("ingiliz") ||
+                lower.contains("en-") ||
+                lower.contains("_en") -> "English"
+            else -> "Türkçe"
+        }
+    }
+
+    private fun subtitleUrls(text: String, baseUrl: String): List<Pair<String, String>> {
+        val result = LinkedHashMap<String, String>()
+        val input = normalizeUrl(text)
+
+        fun addCandidate(raw: String?, label: String = "Türkçe") {
+            if (raw.isNullOrBlank()) return
+            val cleaned = normalizeUrl(raw.trim())
+                .trimEnd('\\', '"', '\'', '>', '<', ',', ';')
+            val absolute = absoluteFor(baseUrl, cleaned) ?: return
+            if (!looksLikeSubtitle(absolute)) return
+            result.putIfAbsent(absolute, subtitleLanguage(label))
+        }
+
+        val directRegex = Regex(
+            """https?://[^"'<>\s]+(?:\.vtt|\.srt|\.ass|\.ssa|\.ttml|\.dfxp|\.webvtt)(?:\?[^"'<>\s]*)?""",
+            RegexOption.IGNORE_CASE
+        )
+        directRegex.findAll(input).forEach { match ->
+            addCandidate(match.value)
+        }
+
+        val fieldRegex = Regex(
+            """(?i)(?:subtitle|subtitles|caption|captions|subtitleUrl|subtitle_url|captionUrl|caption_url|track|file)\s*[:=]\s*["']([^"']+)["']"""
+        )
+        fieldRegex.findAll(input).forEach { match ->
+            val label = match.groupValues[0]
+            addCandidate(match.groupValues[1], label)
+        }
+
+        val quotedRegex = Regex(
+            """["']([^"']+(?:\.vtt|\.srt|\.ass|\.ssa|\.ttml|\.dfxp|\.webvtt)(?:\?[^"']*)?)["']""",
+            RegexOption.IGNORE_CASE
+        )
+        quotedRegex.findAll(input).forEach { match ->
+            addCandidate(match.groupValues[1])
+        }
+
+        // HLS master manifests expose subtitle tracks as:
+        // #EXT-X-MEDIA:TYPE=SUBTITLES,...,URI="..."
+        input.lineSequence()
+            .filter { it.contains("TYPE=SUBTITLES", true) }
+            .forEach { line ->
+                Regex("""(?i)URI\s*=\s*["']([^"']+)["']""")
+                    .findAll(line)
+                    .forEach { match ->
+                        val labelMatch = Regex("""(?i)(?:NAME|LANGUAGE)\s*=\s*["']([^"']+)["']""")
+                            .find(line)
+                        addCandidate(
+                            match.groupValues[1],
+                            labelMatch?.groupValues?.getOrNull(1) ?: "Türkçe"
+                        )
+                    }
+            }
+
+        val encodedRegex = Regex(
+            """(?:https?%3A%2F%2F|https?://)[^"'<>\s]{10,1200}""",
+            RegexOption.IGNORE_CASE
+        )
+        encodedRegex.findAll(input).forEach { match ->
+            runCatching {
+                val decoded = URLDecoder.decode(match.value, "UTF-8")
+                addCandidate(decoded)
+            }
+        }
+
+        return result.map { it.key to it.value }
+    }
+
+    private suspend fun emitSubtitle(
+        rawUrl: String,
+        label: String,
+        baseUrl: String,
+        referer: String,
+        seen: MutableSet<String>,
+        subtitleCallback: (SubtitleFile) -> Unit
+    ) {
+        val url = absoluteFor(baseUrl, rawUrl) ?: return
+        if (!looksLikeSubtitle(url)) return
+        if (!seen.add(url)) return
+
+        runCatching {
+            subtitleCallback(
+                newSubtitleFile(
+                    subtitleLanguage(label),
+                    url
+                ) {
+                    headers = playerHeaders(referer)
+                }
+            )
+        }
+    }
+
     private suspend fun extractSubtitleFromUrl(
         iframeUrl: String,
-        subtitleCallback: (SubtitleFile) -> Unit
+        subtitleCallback: (SubtitleFile) -> Unit,
+        seen: MutableSet<String>
     ) {
         runCatching {
             val uri = URI(iframeUrl)
             val query = uri.rawQuery.orEmpty()
-            val encoded = query.split("&")
-                .mapNotNull {
-                    val parts = it.split("=", limit = 2)
-                    if (parts.size == 2 && parts[0].equals("sub", true)) parts[1] else null
-                }
-                .firstOrNull()
-                ?: return@runCatching
 
-            val decoded = runCatching { URLDecoder.decode(encoded, "UTF-8") }
-                .getOrElse { encoded }
-                .let { value ->
-                    runCatching { base64Decode(value) }.getOrElse { value }
-                }
+            val names = setOf(
+                "sub",
+                "subtitle",
+                "subtitles",
+                "caption",
+                "captions",
+                "vtt",
+                "srt",
+                "track"
+            )
 
-            if (decoded.startsWith("http", true)) {
-                subtitleCallback(newSubtitleFile("Türkçe", decoded))
+            query.split("&").forEach { item ->
+                val parts = item.split("=", limit = 2)
+                if (parts.size != 2 || !names.contains(parts[0].lowercase())) return@forEach
+
+                var decoded = runCatching {
+                    URLDecoder.decode(parts[1], "UTF-8")
+                }.getOrElse { parts[1] }
+
+                decoded = runCatching {
+                    base64Decode(decoded)
+                }.getOrElse { decoded }
+
+                emitSubtitle(
+                    rawUrl = decoded,
+                    label = parts[0],
+                    baseUrl = iframeUrl,
+                    referer = iframeUrl,
+                    seen = seen,
+                    subtitleCallback = subtitleCallback
+                )
             }
+        }
+    }
+
+    private suspend fun extractSubtitlesFromManifest(
+        manifestUrl: String,
+        referer: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        seen: MutableSet<String>,
+        depth: Int = 0
+    ) {
+        if (depth > 1) return
+
+        val response = runCatching {
+            app.get(
+                manifestUrl,
+                headers = playerHeaders(referer),
+                referer = referer,
+                allowRedirects = true
+            )
+        }.getOrNull() ?: return
+
+        if (!response.isSuccessful) return
+
+        val body = response.text
+
+        subtitleUrls(body, manifestUrl).forEach { (url, label) ->
+            emitSubtitle(
+                rawUrl = url,
+                label = label,
+                baseUrl = manifestUrl,
+                referer = referer,
+                seen = seen,
+                subtitleCallback = subtitleCallback
+            )
+        }
+
+        val nestedManifests = mediaUrls(body)
+            .filter { it.contains(".m3u8", true) }
+            .distinct()
+            .take(2)
+
+        for (nested in nestedManifests) {
+            val absolute = absoluteFor(manifestUrl, nested) ?: continue
+            if (absolute == manifestUrl) continue
+            extractSubtitlesFromManifest(
+                manifestUrl = absolute,
+                referer = referer,
+                subtitleCallback = subtitleCallback,
+                seen = seen,
+                depth = depth + 1
+            )
         }
     }
 
@@ -698,34 +890,98 @@ class AsyaFilmIzle : MainAPI() {
         body: String,
         iframeReferer: String,
         subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
+        callback: (ExtractorLink) -> Unit,
+        subtitleSeen: MutableSet<String>
     ): Boolean {
         var found = false
 
-        val candidates = LinkedHashSet<String>()
-        candidates.addAll(mediaUrls(body))
-        candidates.addAll(decodeBase64Candidates(body))
-        candidates.addAll(decodeUrlCandidates(body))
-        candidates.addAll(extractQuotedUrls(body))
+        // 1) Subtitle URLs can live directly in HTML/JSON/JS.
+        subtitleUrls(body, baseUrl).forEach { (url, label) ->
+            emitSubtitle(
+                rawUrl = url,
+                label = label,
+                baseUrl = baseUrl,
+                referer = iframeReferer,
+                seen = subtitleSeen,
+                subtitleCallback = subtitleCallback
+            )
+        }
 
-        for (raw in candidates) {
+        // 2) Base64/URL-encoded player data may contain subtitle URLs.
+        val decodedBodies = ArrayList<String>()
+        runCatching {
+            decodeBase64Candidates(body).forEach { decodedBodies.add(it) }
+        }
+        decodedBodies.forEach { decoded ->
+            subtitleUrls(decoded, baseUrl).forEach { (url, label) ->
+                emitSubtitle(
+                    rawUrl = url,
+                    label = label,
+                    baseUrl = baseUrl,
+                    referer = iframeReferer,
+                    seen = subtitleSeen,
+                    subtitleCallback = subtitleCallback
+                )
+            }
+        }
+
+        // 3) Direct media URLs.
+        val mediaCandidates = LinkedHashSet<String>()
+        mediaCandidates.addAll(mediaUrls(body))
+        mediaCandidates.addAll(decodeBase64Candidates(body))
+        mediaCandidates.addAll(decodeUrlCandidates(body))
+        mediaCandidates.addAll(extractQuotedUrls(body))
+
+        for (raw in mediaCandidates) {
             val url = absoluteFor(baseUrl, raw) ?: continue
             if (!looksLikeMedia(url)) continue
+
             addDirectMedia(url, iframeReferer, callback)
             found = true
         }
 
+        // 4) Fetch HLS manifests and read EXT-X-MEDIA subtitle tracks.
+        mediaCandidates
+            .mapNotNull { absoluteFor(baseUrl, it) }
+            .filter {
+                it.contains(".m3u8", true) ||
+                    it.contains("/hls/", true) ||
+                    it.contains("/hls2/", true) ||
+                    it.contains("/master.txt", true)
+            }
+            .distinct()
+            .take(4)
+            .forEach { manifest ->
+                extractSubtitlesFromManifest(
+                    manifestUrl = manifest,
+                    referer = iframeReferer,
+                    subtitleCallback = subtitleCallback,
+                    seen = subtitleSeen
+                )
+            }
+
+        // 5) Standard HTML5 <track> elements.
         val document = runCatching { org.jsoup.Jsoup.parse(body, baseUrl) }.getOrNull()
         if (document != null) {
-            document.select("track[src], source[src], video[src]")
-                .mapNotNull { absoluteFor(baseUrl, it.attr("src")) }
-                .filter { it.contains(".vtt", true) || it.contains(".srt", true) }
-                .distinct()
-                .forEach { sub ->
-                    try {
-                        subtitleCallback(newSubtitleFile("Türkçe", sub))
-                    } catch (_: Throwable) { }
+            document.select("track[src], source[src], video[src]").forEach { element ->
+                val raw = element.attr("src")
+                val url = absoluteFor(baseUrl, raw) ?: return@forEach
+
+                if (looksLikeSubtitle(url)) {
+                    val label = element.attr("label")
+                        .ifBlank { element.attr("srclang") }
+                        .ifBlank { "Türkçe" }
+
+                    emitSubtitle(
+                        rawUrl = url,
+                        label = label,
+                        baseUrl = baseUrl,
+                        referer = iframeReferer,
+                        seen = subtitleSeen,
+                        subtitleCallback = subtitleCallback
+                    )
                 }
+            }
         }
 
         return found
@@ -737,13 +993,14 @@ class AsyaFilmIzle : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
         depth: Int = 0,
-        visited: MutableSet<String> = LinkedHashSet()
+        visited: MutableSet<String> = LinkedHashSet(),
+        subtitleSeen: MutableSet<String> = LinkedHashSet()
     ): Boolean {
         if (depth > 2) return false
         if (!visited.add(iframe)) return false
 
         var found = false
-        extractSubtitleFromUrl(iframe, subtitleCallback)
+        extractSubtitleFromUrl(iframe, subtitleCallback, subtitleSeen)
 
         // First let installed CloudStream extractors try the player URL.
         runCatching {
@@ -809,7 +1066,8 @@ class AsyaFilmIzle : MainAPI() {
                     body,
                     iframe,
                     subtitleCallback,
-                    callback
+                    callback,
+                    subtitleSeen
                 )
             ) {
                 found = true
@@ -828,7 +1086,8 @@ class AsyaFilmIzle : MainAPI() {
                             subtitleCallback,
                             callback,
                             depth + 1,
-                            visited
+                            visited,
+                            subtitleSeen
                         )
                     ) {
                         found = true
@@ -859,7 +1118,8 @@ class AsyaFilmIzle : MainAPI() {
                         jsResponse.text,
                         iframe,
                         subtitleCallback,
-                        callback
+                        callback,
+                        subtitleSeen
                     )
                 ) {
                     found = true
@@ -931,6 +1191,7 @@ class AsyaFilmIzle : MainAPI() {
         var found = false
         val playerUrls = LinkedHashSet<String>()
         val visited = LinkedHashSet<String>()
+        val subtitleSeen = LinkedHashSet<String>()
 
         fun addPlayer(raw: String?, base: String) {
             if (raw.isNullOrBlank()) return
@@ -1041,7 +1302,7 @@ class AsyaFilmIzle : MainAPI() {
         for (playerUrl in playerUrls) {
             if (!visited.add(playerUrl)) continue
 
-            extractSubtitleFromUrl(playerUrl, subtitleCallback)
+            extractSubtitleFromUrl(playerUrl, subtitleCallback, subtitleSeen)
 
             // Native CloudStream extractor first.
             runCatching {
@@ -1057,7 +1318,8 @@ class AsyaFilmIzle : MainAPI() {
                     subtitleCallback = subtitleCallback,
                     callback = callback,
                     depth = 0,
-                    visited = LinkedHashSet()
+                    visited = LinkedHashSet(),
+                    subtitleSeen = subtitleSeen
                 )
             ) {
                 found = true
