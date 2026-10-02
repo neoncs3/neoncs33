@@ -20,7 +20,7 @@ import java.net.URLEncoder
 
 class FilmModu : MainAPI() {
 
-    override var mainUrl = "https://www.filmmodu.vip"
+    override var mainUrl = "https://www.filmmodu.one"
     override var name = "FilmModu"
     override var lang = "tr"
     override val hasMainPage = true
@@ -106,6 +106,11 @@ class FilmModu : MainAPI() {
 
         return newMovieSearchResponse(title, href, TvType.Movie) {
             posterUrl = poster
+            posterHeaders = mapOf(
+                "User-Agent" to USER_AGENT,
+                "Referer" to mainUrl + "/",
+                "Accept" to "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+            )
             rating?.let { score = Score.from10(it) }
         }
     }
@@ -179,6 +184,11 @@ class FilmModu : MainAPI() {
 
         return newMovieLoadResponse(title, url, TvType.Movie, url) {
             posterUrl = poster
+            posterHeaders = mapOf(
+                "User-Agent" to USER_AGENT,
+                "Referer" to mainUrl + "/",
+                "Accept" to "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+            )
             this.plot = plot
             this.year = year
             this.tags = tags
