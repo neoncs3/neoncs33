@@ -588,76 +588,140 @@ class WebDramaTurkey : MainAPI() {
         sourceName: String,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
+        depth: Int = 0,
     ): Boolean {
-        if (iframeUrl.contains("dtpasn.asia", true) ||
-            iframeUrl.contains("dtpasn.com", true)
+        if (depth > 2) return false
+
+        val normalized = fixUrlNull(
+            iframeUrl
+                .trim()
+                .replace("\\/","/")
+                .replace("&amp;","&")
+        ) ?: return false
+
+        var emitted = false
+
+        fun emitLink(link: ExtractorLink) {
+            emitted = true
+            callback(link)
+        }
+
+        // Siteye özel oynatıcı
+        if (normalized.contains("dtpasn.asia", true) ||
+            normalized.contains("dtpasn.com", true)
         ) {
-            var emitted = false
-            WebDramaTurkeyExtractor().getUrl(
-                iframeUrl,
-                referer,
-                subtitleCallback,
-            ) {
-                emitted = true
-                callback(it)
+            runCatching {
+                WebDramaTurkeyExtractor().getUrl(
+                    normalized,
+                    referer,
+                    subtitleCallback
+                ) { link -> emitLink(link) }
             }
-            if (emitted) return true
         }
 
-        if (iframeUrl.contains("vkvideo.ru", true) || iframeUrl.contains("vk.com", true)) {
-            var emitted = false
-            WebDramaTurkeyVkExtractor().getUrl(iframeUrl, referer, subtitleCallback) {
-                emitted = true
-                callback(it)
+        // Özel VK ve Abstream çözücüleri
+        if (!emitted && normalized.contains("vkvideo.ru", true) || normalized.contains("vk.com", true)) {
+            runCatching {
+                WebDramaTurkeyVkExtractor().getUrl(
+                    normalized,
+                    referer,
+                    subtitleCallback
+                ) { link -> emitLink(link) }
             }
-            if (emitted) return true
         }
 
-        if (iframeUrl.contains("abstream.to", true)) {
-            var emitted = false
-            WebDramaTurkeyAbstreamExtractor().getUrl(iframeUrl, referer, subtitleCallback) {
-                emitted = true
-                callback(it)
+        if (!emitted && normalized.contains("abstream.to", true)) {
+            runCatching {
+                WebDramaTurkeyAbstreamExtractor().getUrl(
+                    normalized,
+                    referer,
+                    subtitleCallback
+                ) { link -> emitLink(link) }
             }
-            if (emitted) return true
         }
 
-        val loaded = runCatching {
-            loadExtractor(
-                iframeUrl,
-                referer,
-                subtitleCallback,
-                callback,
-            )
-        }.getOrDefault(false)
+        // CloudStream'in yerleşik extractor'ları. Sadece gerçekten link üretirse başarılı say.
+        if (!emitted &&
+            !normalized.contains("dtpasn.asia", true) &&
+            !normalized.contains("dtpasn.com", true) &&
+            !normalized.contains("vkvideo.ru", true) &&
+            !normalized.contains("vk.com", true) &&
+            !normalized.contains("abstream.to", true)
+        ) {
+            runCatching {
+                loadExtractor(
+                    normalized,
+                    referer,
+                    subtitleCallback
+                ) { link -> emitLink(link) }
+            }
+        }
 
-        if (loaded) return true
+        if (emitted) return true
 
-        return runCatching {
-            val iframeResponse = app.get(
-                iframeUrl,
+        // Oynatıcı sayfasını doğrudan incele.
+        val response = runCatching {
+            app.get(
+                normalized,
                 headers = mapOf(
                     "User-Agent" to USER_AGENT,
                     "Referer" to referer,
+                    "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                 ),
                 referer = referer,
                 allowRedirects = true,
             )
+        }.getOrNull() ?: return false
 
-            if (!iframeResponse.isSuccessful) return@runCatching false
-            val html = iframeResponse.text
+        if (!response.isSuccessful) return false
 
-            Regex(
-                """["'](https?://[^"']+\.(?:m3u8|mp4|mpd)[^"']*)["']""",
-                RegexOption.IGNORE_CASE
-            ).findAll(html).forEach { match ->
-                val stream = match.groupValues[1]
-                val type = when {
-                    stream.contains(".m3u8", true) -> ExtractorLinkType.M3U8
-                    stream.contains(".mpd", true) -> ExtractorLinkType.DASH
-                    else -> ExtractorLinkType.VIDEO
+        val html = response.text
+
+        // HTML/JS içindeki doğrudan medya adresleri
+        val directCandidates = linkedSetOf<String>()
+
+        Regex(
+            """https?://[^"'<>s]+(?:\\/[^"'<>s]*)*.(?:m3u8|mp4|mpd)(?:?[^"'<>s]*)?""",
+            RegexOption.IGNORE_CASE
+        ).findAll(html)
+            .map { it.value.replace("\\/","/").replace("\u0026","&") }
+            .forEach { directCandidates += it }
+
+        Regex(
+            """["'](?:file|src|url|source|videoSource|securedLink)["']?s*[:=]s*["']([^"']+)["']""",
+            RegexOption.IGNORE_CASE
+        ).findAll(html)
+            .map { it.groupValues[1].replace("\\/","/").replace("\u0026","&") }
+            .filter {
+                it.contains(".m3u8", true) ||
+                it.contains(".mp4", true) ||
+                it.contains(".mpd", true)
+            }
+            .forEach { raw ->
+                fixUrlNull(raw)?.let { directCandidates += it }
+            }
+
+        response.document.select("video[src], source[src], source[data-src]").forEach { el ->
+            val raw = el.attr("data-src").ifBlank { el.attr("src") }
+            fixUrlNull(raw)?.let { candidate ->
+                if (
+                    candidate.contains(".m3u8", true) ||
+                    candidate.contains(".mp4", true) ||
+                    candidate.contains(".mpd", true)
+                ) {
+                    directCandidates += candidate
                 }
+            }
+        }
 
+        directCandidates.forEach { stream ->
+            val type = when {
+                stream.contains(".mpd", true) -> ExtractorLinkType.DASH
+                stream.contains(".m3u8", true) -> ExtractorLinkType.M3U8
+                else -> ExtractorLinkType.VIDEO
+            }
+
+            runCatching {
                 callback(
                     newExtractorLink(
                         source = name,
@@ -666,30 +730,56 @@ class WebDramaTurkey : MainAPI() {
                         type = type,
                     ) {
                         quality = Qualities.Unknown.value
-                        this.referer = iframeUrl
-                        headers = mapOf(
-                            "User-Agent" to USER_AGENT,
-                            "Referer" to iframeUrl,
-                        )
+                        this.referer = normalized
                     }
                 )
+                emitted = true
             }
+        }
 
-            Regex(
-                """["'](?:subtitle|subtitles|captions?)["']\s*[:=]\s*["']([^"']+(?:\.vtt|\.srt)[^"']*)["']""",
-                RegexOption.IGNORE_CASE
-            ).findAll(html).forEach { match ->
-                fixUrlNull(match.groupValues[1])?.let { subtitle ->
-                    runCatching {
-                        subtitleCallback(SubtitleFile("Türkçe", subtitle))
-                    }
+        // Alt oynatıcı iframe'leri: ilk iframe çalışmazsa diğerlerini de dene.
+        if (!emitted) {
+            val nestedFrames = response.document
+                .select("iframe[src], iframe[data-src]")
+                .mapNotNull { frame ->
+                    val raw = frame.attr("data-src").ifBlank { frame.attr("src") }
+                    fixUrlNull(raw)
+                }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .filterNot { it == normalized }
+
+            for (nested in nestedFrames) {
+                if (
+                    resolveIframe(
+                        nested,
+                        normalized,
+                        sourceName,
+                        subtitleCallback,
+                        callback,
+                        depth + 1,
+                    )
+                ) {
+                    emitted = true
+                    break
+                }
+            }
+        }
+
+        // Altyazıları doğrudan sayfadan bul.
+        Regex(
+            """https?://[^"'<>s]+(?:\\/[^"'<>s]*)*.(?:vtt|srt)(?:?[^"'<>s]*)?""",
+            RegexOption.IGNORE_CASE
+        ).findAll(html)
+            .map { it.value.replace("\\/","/").replace("\u0026","&") }
+            .distinct()
+            .forEach { sub ->
+                runCatching {
+                    subtitleCallback(SubtitleFile("Türkçe", sub))
                 }
             }
 
-            html.contains(".m3u8", true) ||
-                html.contains(".mp4", true) ||
-                html.contains(".mpd", true)
-        }.getOrDefault(false)
+        return emitted
     }
 
     private fun isContentUrl(url: String): Boolean {
