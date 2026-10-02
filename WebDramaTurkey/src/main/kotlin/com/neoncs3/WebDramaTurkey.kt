@@ -539,8 +539,7 @@ class WebDramaTurkey : MainAPI() {
                             sourceName,
                             subtitleCallback,
                             callback,
-                        )
-                        if (found) break
+                        ) || found
                     }
                     continue
                 }
@@ -612,9 +611,6 @@ class WebDramaTurkey : MainAPI() {
                         found = true
                     }
                 }
-
-                // Bu kaynak çalıştıysa diğer kaynaklara dokunma.
-                if (found) break
 
                 Regex(
                     """["'](?:subtitle|subtitles|captions?)["']\s*[:=]\s*["']([^"']+(?:\.vtt|\.srt)[^"']*)["']""",
