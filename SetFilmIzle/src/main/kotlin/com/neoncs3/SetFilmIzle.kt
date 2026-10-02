@@ -211,7 +211,6 @@ class SetFilmIzle : MainAPI() {
                 episodes,
             ) {
                 posterUrl = poster
-                posterHeaders = pageHeaders(mainUrl + "/")
                 this.plot = plot
                 this.year = year
                 rating?.let { score = Score.from10(it) }
@@ -225,7 +224,6 @@ class SetFilmIzle : MainAPI() {
             buildLinkData(document, pageUrl),
         ) {
             posterUrl = poster
-            posterHeaders = pageHeaders(mainUrl + "/")
             this.plot = plot
             this.year = year
             rating?.let { score = Score.from10(it) }
@@ -355,12 +353,8 @@ class SetFilmIzle : MainAPI() {
         }
 
         if (fastplayUrl.isNullOrBlank()) {
-            return loadExtractor(
-                bridgeUrl,
-                pageUrl,
-                subtitleCallback,
-                callback,
-            )
+            Log.d(tag, "FastPlay bağlantısı çözülemedi: " + bridgeUrl)
+            return false
         }
 
         fastplayUrl = normalizeUrl(
@@ -506,7 +500,6 @@ class SetFilmIzle : MainAPI() {
             }
 
             posterUrl = poster
-            posterHeaders = pageHeaders(mainUrl + "/")
         }
 
         return newTvSeriesLoadResponse(
@@ -516,7 +509,6 @@ class SetFilmIzle : MainAPI() {
             listOf(episode),
         ) {
             posterUrl = poster
-            posterHeaders = pageHeaders(mainUrl + "/")
             plot = pagePlot(document)
             year = pageYear(document)
             pageRating(document)?.let { score = Score.from10(it) }
@@ -583,7 +575,6 @@ class SetFilmIzle : MainAPI() {
             season = numbers.first.takeIf { it > 0 } ?: defaultSeason
             episode = numbers.second
             posterUrl = poster
-            posterHeaders = pageHeaders(mainUrl + "/")
         }
     }
 
@@ -630,13 +621,11 @@ class SetFilmIzle : MainAPI() {
             if (isSeries) {
                 results += newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
                     posterUrl = poster
-                    posterHeaders = pageHeaders(mainUrl + "/")
                     rating?.let { score = Score.from10(it) }
                 }
             } else {
                 results += newMovieSearchResponse(title, href, TvType.Movie) {
                     posterUrl = poster
-                    posterHeaders = pageHeaders(mainUrl + "/")
                     rating?.let { score = Score.from10(it) }
                 }
             }
