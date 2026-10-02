@@ -439,6 +439,7 @@ class WebDramaTurkey : MainAPI() {
                 ?: button.text().trim().takeIf { it.isNotBlank() }
                 ?: "Alternatif"
 
+            Log.d(WDT_TAG, "Kaynak deneniyor: " + sourceName + " | embedId=" + embedId)
             val ajaxResponse = runCatching {
                 app.post(
                     "$mainUrl/ajax/embed",
@@ -453,6 +454,7 @@ class WebDramaTurkey : MainAPI() {
                 )
             }.getOrNull() ?: continue
 
+            Log.d(WDT_TAG, "AJAX HTTP=" + ajaxResponse.code + " | source=" + sourceName)
             if (!ajaxResponse.isSuccessful) continue
             val ajaxText = ajaxResponse.text
 
@@ -470,6 +472,7 @@ class WebDramaTurkey : MainAPI() {
                     ?.replace("\\/", "/")
                     ?.let(::fixUrlNull)
 
+            Log.d(WDT_TAG, "video.php=" + videoPhpUrl + " | source=" + sourceName)
             if (videoPhpUrl.isNullOrBlank()) {
                 val fallbackIframe = Regex(
                     """(?:src|iframe)[^"']*["'](https?://[^"']+)["']""",
@@ -513,6 +516,7 @@ class WebDramaTurkey : MainAPI() {
                     RegexOption.IGNORE_CASE
                 ).find(videoHtml)?.groupValues?.getOrNull(1)?.let(::fixUrlNull)
 
+            Log.d(WDT_TAG, "iframe=" + iframeUrl + " | source=" + sourceName)
             if (!iframeUrl.isNullOrBlank()) {
                 found = resolveIframe(
                     iframeUrl,
@@ -579,6 +583,7 @@ class WebDramaTurkey : MainAPI() {
             }
         }
 
+        Log.d(WDT_TAG, "loadLinks sonucu found=" + found)
         return found
     }
 
@@ -643,19 +648,19 @@ class WebDramaTurkey : MainAPI() {
         }
 
         // CloudStream'in yerleşik extractor'ları. Sadece gerçekten link üretirse başarılı say.
-        if (!emitted &&
-            !normalized.contains("dtpasn.asia", true) &&
-            !normalized.contains("dtpasn.com", true) &&
-            !normalized.contains("vkvideo.ru", true) &&
-            !normalized.contains("vk.com", true) &&
-            !normalized.contains("abstream.to", true)
-        ) {
+        if (!emitted) {
             runCatching {
+                Log.d(WDT_TAG, "Yerleşik extractor deneniyor: " + normalized)
                 loadExtractor(
                     normalized,
                     referer,
                     subtitleCallback
-                ) { link -> emitLink(link) }
+                ) { link ->
+                    Log.d(WDT_TAG, "Yerleşik extractor link üretti: " + link.url)
+                    emitLink(link)
+                }
+            }.onFailure {
+                Log.d(WDT_TAG, "Yerleşik extractor hata: " + it.message)
             }
         }
 
