@@ -59,7 +59,7 @@ jobs:
 
           git add -A
 
-          git commit --author="keyiflerolsun <keyiflerolsun@users.noreply.github.com>" \
+          git commit --author="neoncs3 <neoncs3@users.noreply.github.com>" \
             -m "♻️ Domain Değişikliği" \
             -m "🔄 Otomatik domain güncellemeleri yapıldı."
           BRANCH="domain-degisikligi"
