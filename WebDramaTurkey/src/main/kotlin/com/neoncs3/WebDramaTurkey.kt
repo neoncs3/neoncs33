@@ -715,9 +715,27 @@ class WebDramaTurkey : MainAPI() {
             }
         }
 
-        // Bazı WebDramaTurkey player'ları gerçek medya URL'sini
-        // "const qualities = [...]" içinde tutuyor ve kalite URL'sini
-        // bir redirect ile gerçek m3u8/mp4 adresine çeviriyor.
+        // Önce CloudStream'in yerleşik extractor'larını kullan.
+        // Vidmoly/Filemoon/VK/OK gibi sağlayıcılarda bunlar gerekli özel
+        // başlık, redirect ve manifest işlemlerini zaten yapabiliyor.
+        if (!emitted) {
+            runCatching {
+                Log.d(WDT_TAG, "Yerleşik extractor deneniyor: " + normalized)
+                loadExtractor(
+                    normalized,
+                    referer,
+                    subtitleCallback
+                ) { link ->
+                    Log.d(WDT_TAG, "Yerleşik extractor link üretti: " + link.url)
+                    emitLink(link)
+                }
+            }.onFailure {
+                Log.d(WDT_TAG, "Yerleşik extractor hata: " + it.message)
+            }
+        }
+
+        // Yerleşik extractor link üretmediyse WDT'nin qualities -> redirect
+        // akışını dene.
         if (!emitted) {
             runCatching {
                 emitted = resolveQualityPlayer(
@@ -731,9 +749,6 @@ class WebDramaTurkey : MainAPI() {
                 Log.d(WDT_TAG, "qualities çözümleme hatası: " + it.message)
             }
         }
-
-        // CloudStream'in yerleşik extractor'ları. Sadece gerçekten link üretirse başarılı say.
-        if (!emitted) {
             runCatching {
                 Log.d(WDT_TAG, "Yerleşik extractor deneniyor: " + normalized)
                 loadExtractor(
