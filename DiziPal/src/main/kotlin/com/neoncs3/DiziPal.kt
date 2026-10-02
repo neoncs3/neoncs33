@@ -388,7 +388,7 @@ class DiziPal : MainAPI() {
         return found
     }
 
-    private fun loadEpisode(
+    private suspend fun loadEpisode(
         url: String,
         document: Document,
     ): LoadResponse {
