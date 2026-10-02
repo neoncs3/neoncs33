@@ -701,6 +701,23 @@ class WebDramaTurkey : MainAPI() {
             }
         }
 
+        // Bazı WebDramaTurkey player'ları gerçek medya URL'sini
+        // "const qualities = [...]" içinde tutuyor ve kalite URL'sini
+        // bir redirect ile gerçek m3u8/mp4 adresine çeviriyor.
+        if (!emitted) {
+            runCatching {
+                emitted = resolveQualityPlayer(
+                    normalized,
+                    referer,
+                    sourceName,
+                    subtitleCallback,
+                    callback
+                ) || emitted
+            }.onFailure {
+                Log.d(WDT_TAG, "qualities çözümleme hatası: " + it.message)
+            }
+        }
+
         // CloudStream'in yerleşik extractor'ları. Sadece gerçekten link üretirse başarılı say.
         if (!emitted) {
             runCatching {
@@ -841,6 +858,183 @@ class WebDramaTurkey : MainAPI() {
             }
 
         return emitted
+    }
+
+    private suspend fun resolveQualityPlayer(
+        playerUrl: String,
+        referer: String,
+        sourceName: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit,
+    ): Boolean {
+        val response = app.get(
+            playerUrl,
+            headers = mapOf(
+                "User-Agent" to USER_AGENT,
+                "Referer" to referer,
+                "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            ),
+            referer = referer,
+            allowRedirects = true,
+        )
+
+        if (!response.isSuccessful) return false
+
+        val html = response.text
+        var emitted = false
+
+        // WebDramaTurkey'nin bazı player'larında:
+        // const qualities = [{"name":"720p","url":"/..."}...];
+        val qualitiesBlock = Regex(
+            """const\\s+qualities\\s*=\\s*(\\[.*?\\]);""",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        ).find(html)?.groupValues?.getOrNull(1)
+
+        val qualityUrls = linkedSetOf<String>()
+        if (!qualitiesBlock.isNullOrBlank()) {
+            Regex(
+                """["']url["']\\s*:\\s*["']([^"']+)["']""",
+                RegexOption.IGNORE_CASE
+            ).findAll(qualitiesBlock).forEach { match ->
+                val raw = match.groupValues[1]
+                    .replace("\\/","/")
+                    .replace("\u0026","&")
+                absolutizePlayerUrl(raw, playerUrl)?.let { qualityUrls += it }
+            }
+        }
+
+        // Bazı sürümlerde qualities anahtarı tek satırda/JSON biçiminde farklı yazılabiliyor.
+        Regex(
+            """["']url["']\\s*:\\s*["']([^"']+(?:m3u8|mp4|mpd)[^"']*)["']""",
+            RegexOption.IGNORE_CASE
+        ).findAll(html).forEach { match ->
+            val raw = match.groupValues[1]
+                .replace("\\/","/")
+                .replace("\u0026","&")
+            absolutizePlayerUrl(raw, playerUrl)?.let { qualityUrls += it }
+        }
+
+        // Son kaliteyi önce dene; ardından diğerleri.
+        val ordered = qualityUrls.toList().asReversed()
+
+        for (qualityUrl in ordered) {
+            Log.d(WDT_TAG, "Quality redirect deneniyor: " + qualityUrl)
+
+            val redirect = runCatching {
+                app.get(
+                    qualityUrl,
+                    headers = mapOf(
+                        "User-Agent" to USER_AGENT,
+                        "Referer" to playerUrl,
+                    ),
+                    referer = playerUrl,
+                    allowRedirects = false,
+                )
+            }.getOrNull()
+
+            val location = redirect?.headers?.get("Location")
+                ?.replace("\\/","/")
+                ?.replace("\u0026","&")
+                ?.let { absolutizePlayerUrl(it, playerUrl) }
+
+            val finalUrl = when {
+                !location.isNullOrBlank() -> location
+                qualityUrl.contains(".m3u8", true) ||
+                    qualityUrl.contains(".mp4", true) ||
+                    qualityUrl.contains(".mpd", true) -> qualityUrl
+                else -> null
+            }
+
+            if (!finalUrl.isNullOrBlank()) {
+                val type = when {
+                    finalUrl.contains(".mpd", true) -> ExtractorLinkType.DASH
+                    finalUrl.contains(".m3u8", true) -> ExtractorLinkType.M3U8
+                    else -> ExtractorLinkType.VIDEO
+                }
+
+                callback(
+                    newExtractorLink(
+                        source = name,
+                        name = "$name - $sourceName",
+                        url = finalUrl,
+                        type = type,
+                    ) {
+                        quality = Qualities.Unknown.value
+                        this.referer = playerUrl
+                        headers = mapOf(
+                            "User-Agent" to USER_AGENT,
+                            "Referer" to playerUrl,
+                        )
+                    }
+                )
+
+                Log.d(WDT_TAG, "Gerçek medya URL bulundu: " + finalUrl)
+                emitted = true
+                break
+            }
+        }
+
+        // Player sayfasında doğrudan m3u8/mp4/mpd bulunuyorsa ayrıca dene.
+        if (!emitted) {
+            Regex(
+                """https?://[^"'<>\\s]+\\.(?:m3u8|mp4|mpd)(?:\\?[^"'<()>\\s]*)?""",
+                RegexOption.IGNORE_CASE
+            ).findAll(html)
+                .map { it.value.replace("\\/","/").replace("\u0026","&") }
+                .distinct()
+                .forEach { stream ->
+                    val type = when {
+                        stream.contains(".mpd", true) -> ExtractorLinkType.DASH
+                        stream.contains(".m3u8", true) -> ExtractorLinkType.M3U8
+                        else -> ExtractorLinkType.VIDEO
+                    }
+
+                    callback(
+                        newExtractorLink(
+                            source = name,
+                            name = "$name - $sourceName",
+                            url = stream,
+                            type = type,
+                        ) {
+                            quality = Qualities.Unknown.value
+                            this.referer = playerUrl
+                            headers = mapOf(
+                                "User-Agent" to USER_AGENT,
+                                "Referer" to playerUrl,
+                            )
+                        }
+                    )
+                    emitted = true
+                }
+        }
+
+        // Altyazı
+        Regex(
+            """https?://[^"'<>\s]+\\.(?:vtt|srt)(?:\\?[^"'<>\s]*)?""",
+            RegexOption.IGNORE_CASE
+        ).findAll(html)
+            .map { it.value.replace("\\/","/").replace("\u0026","&") }
+            .distinct()
+            .forEach { subtitle ->
+                runCatching { subtitleCallback(SubtitleFile("Türkçe", subtitle)) }
+            }
+
+        return emitted
+    }
+
+    private fun absolutizePlayerUrl(raw: String, base: String): String? {
+        val value = raw.trim()
+        if (value.isBlank()) return null
+
+        if (value.startsWith("http://", true) || value.startsWith("https://", true)) {
+            return value
+        }
+
+        if (value.startsWith("//")) return "https:$value"
+
+        return runCatching {
+            java.net.URI(base).resolve(value).toString()
+        }.getOrNull()
     }
 
     private fun isContentUrl(url: String): Boolean {
