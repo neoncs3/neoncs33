@@ -41,7 +41,15 @@ class DiziPal : MainAPI() {
     override val mainPage = mainPageOf(
         "$mainUrl/yabanci-dizi-izle" to "Diziler",
         "$mainUrl/hd-film-izle" to "Filmler",
-        "$mainUrl/anime" to "Anime",
+        "$mainUrl/kanal/exxen" to "Exxen",
+        "$mainUrl/kanal/disney" to "Disney+",
+        "$mainUrl/kanal/netflix" to "Netflix",
+        "$mainUrl/kanal/amazon" to "Amazon",
+        "$mainUrl/kanal/apple-tv" to "Apple TV+",
+        "$mainUrl/kanal/max" to "Max",
+        "$mainUrl/kanal/hulu" to "Hulu",
+        "$mainUrl/kanal/tod" to "TOD",
+        "$mainUrl/kanal/tabii" to "tabii",
     )
 
     override suspend fun getMainPage(
@@ -730,12 +738,28 @@ class DiziPal : MainAPI() {
         )
             .find(text)
 
-        return imdb
+        val imdbScore = imdb
             ?.groupValues
             ?.getOrNull(1)
             ?.replace(',', '.')
             ?.toDoubleOrNull()
             ?.takeIf { it in 0.0..10.0 }
+
+        if (imdbScore != null) return imdbScore
+
+        // Kanal/listing kartlarında puan çoğu zaman "2026 7.7 Başlık"
+        // şeklinde IMDb etiketi olmadan gösteriliyor.
+        val yearScore = Regex(
+            """(?<!\d)(?:19|20)\d{2}\s+([0-9](?:[.,][0-9])?)(?!\d)"""
+        )
+            .find(text)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.replace(',', '.')
+            ?.toDoubleOrNull()
+            ?.takeIf { it in 0.0..10.0 }
+
+        return yearScore
     }
 
     private fun cleanCardTitle(
@@ -1021,46 +1045,145 @@ class DiziPal : MainAPI() {
         var found = false
         val seen = HashSet<String>()
 
-        val regex = Regex(
-            """"file"\s*:\s*"([^"]+)"\s*,\s*"label"\s*:\s*"([^"]+)"""",
-            RegexOption.IGNORE_CASE,
-        )
+        fun register(rawUrl: String?, rawLang: String? = null) {
+            var url = normalizeUrl(rawUrl, referer)
+            if (url.isBlank() || !url.startsWith("http", true)) return
 
-        regex.findAll(text).forEach { match ->
-            val url = cleanUrl(match.groupValues[1])
-            val label = decodeJsonText(match.groupValues[2])
+            url = cleanUrl(url)
+            if (url.isBlank() || !seen.add(url)) return
 
-            if (!url.startsWith("http", true)) return@forEach
-
+            val lower = url.lowercase()
             val subtitleLike =
-                url.endsWith(".srt", true) ||
-                    url.endsWith(".vtt", true) ||
-                    url.contains("subtitle", true) ||
-                    url.contains("subtitles", true)
+                lower.endsWith(".srt") ||
+                    lower.endsWith(".vtt") ||
+                    lower.endsWith(".ass") ||
+                    lower.endsWith(".ssa") ||
+                    lower.contains("subtitle") ||
+                    lower.contains("subtitles") ||
+                    lower.contains("/subs/") ||
+                    lower.contains("/sub/") ||
+                    lower.contains("caption") ||
+                    lower.contains("captions") ||
+                    lower.contains("sub.php") ||
+                    lower.contains("subtitle.php")
 
-            if (!subtitleLike) return@forEach
-            if (!seen.add(url)) return@forEach
+            if (!subtitleLike) return
 
-            if (emitSubtitle(url, label.ifBlank { "Türkçe" }, referer, subtitleCallback)) {
+            val lang = decodeJsonText(rawLang.orEmpty()).trim()
+                .ifBlank { languageFromSubtitleUrl(url) }
+
+            if (emitSubtitle(
+                    url,
+                    lang.ifBlank { "Türkçe" },
+                    referer,
+                    subtitleCallback,
+                )
+            ) {
                 found = true
             }
         }
 
-        val alternate = Regex(
-            """(?i)"(?:subtitle|sub|captions?)"\s*:\s*"([^"]+)""""
-        )
+        // Common DPlayer/JSON layouts:
+        // {"file":"...vtt","label":"Türkçe"}
+        Regex(
+            """"file"\s*:\s*"([^"]+)"\s*,\s*"label"\s*:\s*"([^"]+)"""",
+            RegexOption.IGNORE_CASE,
+        ).findAll(text).forEach { match ->
+            register(
+                match.groupValues[1],
+                match.groupValues[2],
+            )
+        }
 
-        alternate.findAll(text).forEach { match ->
-            val url = cleanUrl(match.groupValues[1])
-            if (!url.startsWith("http", true)) return@forEach
-            if (!seen.add(url)) return@forEach
+        // Some versions use label before file.
+        Regex(
+            """"label"\s*:\s*"([^"]+)"\s*,\s*"file"\s*:\s*"([^"]+)"""",
+            RegexOption.IGNORE_CASE,
+        ).findAll(text).forEach { match ->
+            register(
+                match.groupValues[2],
+                match.groupValues[1],
+            )
+        }
 
-            if (emitSubtitle(url, "Türkçe", referer, subtitleCallback)) {
-                found = true
+        // tracks/captions/subtitle objects can use url/src instead of file.
+        Regex(
+            """(?is)"(?:track|tracks|caption|captions|subtitle|subtitles?)"\s*:\s*(?:\[[^\]]*\]|\{[^}]*\})"""
+        ).findAll(text).forEach { block ->
+            val value = block.value
+
+            Regex(
+                """(?i)"(?:file|src|url|source)"\s*:\s*"([^"]+)""""
+            ).findAll(value).forEach { urlMatch ->
+                val label = Regex(
+                    """(?i)"(?:label|lang|language|name)"\s*:\s*"([^"]+)""""
+                ).find(value)?.groupValues?.getOrNull(1)
+
+                register(urlMatch.groupValues[1], label)
             }
+        }
+
+        // Scalar subtitle fields.
+        Regex(
+            """(?i)"(?:subtitle|subtitles?|caption|captions?|subtitle_url|subtitleUrl|caption_url|captionUrl|sub_url|subUrl)"\s*:\s*"([^"]+)""""
+        ).findAll(text).forEach { match ->
+            register(match.groupValues[1])
+        }
+
+        // Bare subtitle URLs, including protocol-relative and extensionless
+        // subtitle endpoints used by some player revisions.
+        Regex(
+            """(?i)(?:(?:https?:)?//|/)[^"'<>\\s]+(?:\.srt|\.vtt|\.ass|\.ssa)(?:\?[^"'<>\\s]*)?"""
+        ).findAll(text).forEach { match ->
+            register(match.value)
+        }
+
+        Regex(
+            """(?i)(?:(?:https?:)?//)[^"'<>\\s]*(?:subtitle|subtitles|caption|captions|sub\.php|subtitle\.php)[^"'<>\\s]*"""
+        ).findAll(text).forEach { match ->
+            register(match.value)
+        }
+
+        // HTML <track> elements that survived Jsoup parsing.
+        runCatching {
+            org.jsoup.Jsoup.parse(text)
+                .select("track[src], track[data-src], track[kind='subtitles'], track[kind='captions']")
+                .forEach { track ->
+                    val rawUrl = track.attr("src")
+                        .ifBlank { track.attr("data-src") }
+
+                    register(
+                        rawUrl,
+                        track.attr("label")
+                            .ifBlank { track.attr("srclang") }
+                            .ifBlank { track.attr("lang") },
+                    )
+                }
         }
 
         return found
+    }
+
+    private fun languageFromSubtitleUrl(
+        url: String,
+    ): String {
+        val value = url.lowercase()
+
+        return when {
+            Regex("""(?:^|[^a-z])(?:tr|tur|turkish)(?:[^a-z]|$)""")
+                .containsMatchIn(value) -> "Türkçe"
+
+            Regex("""(?:^|[^a-z])(?:en|eng|english)(?:[^a-z]|$)""")
+                .containsMatchIn(value) -> "English"
+
+            Regex("""(?:^|[^a-z])(?:de|ger|german)(?:[^a-z]|$)""")
+                .containsMatchIn(value) -> "Deutsch"
+
+            Regex("""(?:^|[^a-z])(?:fr|fre|french)(?:[^a-z]|$)""")
+                .containsMatchIn(value) -> "Français"
+
+            else -> "Altyazı"
+        }
     }
 
     private data class EncryptedConfig(
