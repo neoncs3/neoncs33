@@ -1192,7 +1192,7 @@ class DiziPal : MainAPI() {
             .replace("\\u0026", "&")
             .replace("&amp;", "&")
             .replace("&quot;", "\"")
-            .trim('"', '\\'')
+            .trim('"', '\'')
 
         return when {
             url.startsWith("//") ->
@@ -1227,7 +1227,7 @@ class DiziPal : MainAPI() {
             .replace("\\u0026", "&")
             .replace("\\u002F", "/")
             .replace("&amp;", "&")
-            .trim('"', '\\'', ')', ']', '}', ',', ';')
+            .trim('"', '\'', ')', ']', '}', ',', ';')
     }
 
     private fun String.decodeEscapes(): String {
