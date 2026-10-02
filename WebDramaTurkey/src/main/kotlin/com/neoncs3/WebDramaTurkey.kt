@@ -759,14 +759,14 @@ class WebDramaTurkey : MainAPI() {
         val directCandidates = linkedSetOf<String>()
 
         Regex(
-            """https?://[^"'<>s]+(?:\\/[^"'<>s]*)*.(?:m3u8|mp4|mpd)(?:?[^"'<>s]*)?""",
+            """https?://[^"'<>\\s]+(?:\\/[^"'<>\\s]*)*\\.(?:m3u8|mp4|mpd)(?:\\?[^"'<>\\s]*)?""",
             RegexOption.IGNORE_CASE
         ).findAll(html)
             .map { it.value.replace("\\/","/").replace("\u0026","&") }
             .forEach { directCandidates += it }
 
         Regex(
-            """["'](?:file|src|url|source|videoSource|securedLink)["']?s*[:=]s*["']([^"']+)["']""",
+            """["'](?:file|src|url|source|videoSource|securedLink)["']?\\s*[:=]\\s*["']([^"']+)["']""",
             RegexOption.IGNORE_CASE
         ).findAll(html)
             .map { it.groupValues[1].replace("\\/","/").replace("\u0026","&") }
@@ -846,7 +846,7 @@ class WebDramaTurkey : MainAPI() {
 
         // Altyazıları doğrudan sayfadan bul.
         Regex(
-            """https?://[^"'<>s]+(?:\\/[^"'<>s]*)*.(?:vtt|srt)(?:?[^"'<>s]*)?""",
+            """https?://[^"'<>\\s]+(?:\\/[^"'<>\\s]*)*\\.(?:vtt|srt)(?:\\?[^"'<>\\s]*)?""",
             RegexOption.IGNORE_CASE
         ).findAll(html)
             .map { it.value.replace("\\/","/").replace("\u0026","&") }
@@ -883,44 +883,32 @@ class WebDramaTurkey : MainAPI() {
         val html = response.text
         var emitted = false
 
-        // WebDramaTurkey'nin bazı player'larında:
-        // const qualities = [{"name":"720p","url":"/..."}...];
+        // Bazı player'larda gerçek medya adresleri:
+        // const qualities = [{ "name": "720p", "url": "/redirect/..." }, ...];
+        val qualityUrls = linkedSetOf<String>()
+
         val qualitiesBlock = Regex(
-            """const\\s+qualities\\s*=\\s*(\\[.*?\\]);""",
+            """(?:const|let|var)\\s+qualities\\s*=\\s*(\\[.*?\\])\\s*;""",
             setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
         ).find(html)?.groupValues?.getOrNull(1)
 
-        val qualityUrls = linkedSetOf<String>()
-        if (!qualitiesBlock.isNullOrBlank()) {
-            Regex(
-                """["']url["']\\s*:\\s*["']([^"']+)["']""",
-                RegexOption.IGNORE_CASE
-            ).findAll(qualitiesBlock).forEach { match ->
-                val raw = match.groupValues[1]
-                    .replace("\\/","/")
-                    .replace("\u0026","&")
-                absolutizePlayerUrl(raw, playerUrl)?.let { qualityUrls += it }
-            }
-        }
+        val qualitySource = qualitiesBlock ?: html
 
-        // Bazı sürümlerde qualities anahtarı tek satırda/JSON biçiminde farklı yazılabiliyor.
         Regex(
-            """["']url["']\\s*:\\s*["']([^"']+(?:m3u8|mp4|mpd)[^"']*)["']""",
+            """["'](?:url|file|src)["']\\s*:\\s*["']([^"']+)["']""",
             RegexOption.IGNORE_CASE
-        ).findAll(html).forEach { match ->
+        ).findAll(qualitySource).forEach { match ->
             val raw = match.groupValues[1]
                 .replace("\\/","/")
-                .replace("\u0026","&")
+                .replace("\\u0026","&")
             absolutizePlayerUrl(raw, playerUrl)?.let { qualityUrls += it }
         }
 
-        // Son kaliteyi önce dene; ardından diğerleri.
-        val ordered = qualityUrls.toList().asReversed()
+        // En yüksek kalite genellikle dizinin sonunda geliyor.
+        for (qualityUrl in qualityUrls.toList().asReversed()) {
+            Log.d(WDT_TAG, "Quality URL: " + qualityUrl)
 
-        for (qualityUrl in ordered) {
-            Log.d(WDT_TAG, "Quality redirect deneniyor: " + qualityUrl)
-
-            val redirect = runCatching {
+            val redirectResponse = runCatching {
                 app.get(
                     qualityUrl,
                     headers = mapOf(
@@ -932,46 +920,47 @@ class WebDramaTurkey : MainAPI() {
                 )
             }.getOrNull()
 
-            val location = redirect?.headers?.get("Location")
+            val location = redirectResponse?.headers?.get("Location")
                 ?.replace("\\/","/")
-                ?.replace("\u0026","&")
-                ?.let { absolutizePlayerUrl(it, playerUrl) }
+                ?.replace("\\u0026","&")
 
             val finalUrl = when {
-                !location.isNullOrBlank() -> location
+                !location.isNullOrBlank() ->
+                    absolutizePlayerUrl(location, playerUrl)
                 qualityUrl.contains(".m3u8", true) ||
                     qualityUrl.contains(".mp4", true) ||
-                    qualityUrl.contains(".mpd", true) -> qualityUrl
+                    qualityUrl.contains(".mpd", true) ->
+                    qualityUrl
                 else -> null
             }
 
-            if (!finalUrl.isNullOrBlank()) {
-                val type = when {
-                    finalUrl.contains(".mpd", true) -> ExtractorLinkType.DASH
-                    finalUrl.contains(".m3u8", true) -> ExtractorLinkType.M3U8
-                    else -> ExtractorLinkType.VIDEO
-                }
+            if (finalUrl.isNullOrBlank()) continue
 
-                callback(
-                    newExtractorLink(
-                        source = name,
-                        name = "$name - $sourceName",
-                        url = finalUrl,
-                        type = type,
-                    ) {
-                        quality = Qualities.Unknown.value
-                        this.referer = playerUrl
-                        headers = mapOf(
-                            "User-Agent" to USER_AGENT,
-                            "Referer" to playerUrl,
-                        )
-                    }
-                )
-
-                Log.d(WDT_TAG, "Gerçek medya URL bulundu: " + finalUrl)
-                emitted = true
-                break
+            val type = when {
+                finalUrl.contains(".mpd", true) -> ExtractorLinkType.DASH
+                finalUrl.contains(".m3u8", true) -> ExtractorLinkType.M3U8
+                else -> ExtractorLinkType.VIDEO
             }
+
+            callback(
+                newExtractorLink(
+                    source = name,
+                    name = "$name - $sourceName",
+                    url = finalUrl,
+                    type = type,
+                ) {
+                    quality = Qualities.Unknown.value
+                    this.referer = playerUrl
+                    headers = mapOf(
+                        "User-Agent" to USER_AGENT,
+                        "Referer" to playerUrl,
+                    )
+                }
+            )
+
+            Log.d(WDT_TAG, "Gerçek medya URL bulundu: " + finalUrl)
+            emitted = true
+            break
         }
 
         // Player sayfasında doğrudan m3u8/mp4/mpd bulunuyorsa ayrıca dene.
