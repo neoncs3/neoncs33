@@ -408,7 +408,252 @@ class WebDramaTurkey : MainAPI() {
         }
     }
 
-    override suspend fun loadLinks(\n        data: String,\n        isCasting: Boolean,\n        subtitleCallback: (SubtitleFile) -> Unit,\n        callback: (ExtractorLink) -> Unit,\n    ): Boolean {\n        Log.d(WDT_TAG, "loadLinks: $data")\n\n        val document = runCatching {\n            app.get(\n                data,\n                headers = pageHeaders,\n                referer = "$mainUrl/",\n                allowRedirects = true,\n            ).document\n        }.getOrNull() ?: return false\n\n        // Aynı loadLinks çağrısında bütün alternatifleri tüketme.\n        // İlk gerçekten medya linki üreten kaynak bulunduğunda dur.\n        var found = false\n\n        // Sayfada doğrudan bırakılmış gerçek player iframe/video adresleri.\n        // Navigation/footer bağlantılarını özellikle taramıyoruz.\n        val directPlayerCandidates = linkedSetOf<String>()\n\n        document.select(\n            "iframe[src], iframe[data-src], video[src], video[data-src], source[src], source[data-src]"\n        ).forEach { element ->\n            val raw = sequenceOf(\n                element.attr("data-src"),\n                element.attr("src"),\n                element.attr("data-url")\n            ).firstOrNull { it.isNotBlank() }.orEmpty()\n\n            if (\n                raw.contains("vidmoly", true) ||\n                raw.contains("filemoon", true) ||\n                raw.contains("ok.ru", true) ||\n                raw.contains("odnoklassniki", true) ||\n                raw.contains("vk.com", true) ||\n                raw.contains("vkvideo.ru", true) ||\n                raw.contains("abstream", true) ||\n                raw.contains("upn", true) ||\n                raw.contains("abyss", true) ||\n                raw.contains("moly", true) ||\n                raw.contains("moon", true) ||\n                raw.contains("p2p", true)\n            ) {\n                fixUrlNull(raw)?.let { directPlayerCandidates += it }\n            }\n        }\n\n        for (playerUrl in directPlayerCandidates) {\n            Log.d(WDT_TAG, "Doğrudan player adayı deneniyor: $playerUrl")\n            if (\n                resolveIframe(\n                    playerUrl,\n                    data,\n                    "Doğrudan Kaynak",\n                    subtitleCallback,\n                    callback,\n                )\n            ) {\n                found = true\n                break\n            }\n        }\n\n        // Asıl WDT kaynak akışı: data-embed -> AJAX -> video.php -> iframe/player.\n        if (!found) {\n            val buttons = document\n                .select("button[data-embed], a[data-embed], .dropdown-source[data-embed], [data-embed]")\n                .filter { it.attr("data-embed").trim().isNotBlank() }\n                .distinctBy { it.attr("data-embed").trim() }\n\n            for (button in buttons) {\n                val embedId = button.attr("data-embed").trim()\n                val sourceName = button.selectFirst("span.name")?.text()?.trim()\n                    ?: button.text().trim().takeIf { it.isNotBlank() }\n                    ?: "Alternatif"\n\n                Log.d(WDT_TAG, "Kaynak deneniyor: " + sourceName + " | embedId=" + embedId)\n\n                val ajaxResponse = runCatching {\n                    app.post(\n                        "$mainUrl/ajax/embed",\n                        headers = mapOf(\n                            "User-Agent" to USER_AGENT,\n                            "X-Requested-With" to "XMLHttpRequest",\n                            "Referer" to data,\n                            "Accept" to "*/*",\n                        ),\n                        referer = data,\n                        data = mapOf("id" to embedId),\n                    )\n                }.getOrNull() ?: continue\n\n                Log.d(WDT_TAG, "AJAX HTTP=" + ajaxResponse.code + " | source=" + sourceName)\n                if (!ajaxResponse.isSuccessful) continue\n\n                val ajaxText = ajaxResponse.text\n\n                val videoPhpUrl = Regex(\n                    """src\s*=\s*["']([^"']+)["']""",\n                    RegexOption.IGNORE_CASE\n                ).find(ajaxText)?.groupValues?.getOrNull(1)\n                    ?.replace("\\/", "/")\n                    ?.replace("&amp;", "&")\n                    ?.let(::fixUrlNull)\n                    ?: Regex(\n                        """(?:https?:)?//[^\s"'<>]*video\.php\?[^\s"'<>]+""",\n                        RegexOption.IGNORE_CASE\n                    ).find(ajaxText)?.value\n                        ?.replace("\\/", "/")\n                        ?.let(::fixUrlNull)\n\n                Log.d(WDT_TAG, "video.php=" + videoPhpUrl + " | source=" + sourceName)\n\n                if (videoPhpUrl.isNullOrBlank()) {\n                    val fallbackIframe = Regex(\n                        """(?:src|iframe)[^"']*["'](https?://[^"']+)["']""",\n                        RegexOption.IGNORE_CASE\n                    ).find(ajaxText)?.groupValues?.getOrNull(1)\n\n                    if (!fallbackIframe.isNullOrBlank()) {\n                        found = resolveIframe(\n                            fallbackIframe,\n                            data,\n                            sourceName,\n                            subtitleCallback,\n                            callback,\n                        )\n                        if (found) break\n                    }\n                    continue\n                }\n\n                val videoResponse = runCatching {\n                    app.get(\n                        videoPhpUrl,\n                        headers = mapOf(\n                            "User-Agent" to USER_AGENT,\n                            "Referer" to data,\n                        ),\n                        referer = data,\n                        allowRedirects = true,\n                    )\n                }.getOrNull() ?: continue\n\n                if (!videoResponse.isSuccessful) continue\n\n                val videoHtml = videoResponse.text\n\n                val iframeUrl = Regex(\n                    """<iframe[^>]+(?:id=["']main-iframe["'][^>]+)?src=["']([^"']+)["']""",\n                    RegexOption.IGNORE_CASE\n                ).find(videoHtml)?.groupValues?.getOrNull(1)?.let(::fixUrlNull)\n                    ?: Regex(\n                        """src=["'](https?://[^"']+)["']""",\n                        RegexOption.IGNORE_CASE\n                    ).find(videoHtml)?.groupValues?.getOrNull(1)?.let(::fixUrlNull)\n\n                Log.d(WDT_TAG, "iframe=" + iframeUrl + " | source=" + sourceName)\n\n                if (!iframeUrl.isNullOrBlank()) {\n                    found = resolveIframe(\n                        iframeUrl,\n                        videoPhpUrl,\n                        sourceName,\n                        subtitleCallback,\n                        callback,\n                    )\n                }\n\n                // video.php içinde medya adresi bulunuyorsa doğrudan kullan.\n                if (!found) {\n                    Regex(\n                        """["'](https?://[^"']+\.(?:m3u8|mp4|mpd)[^"']*)["']""",\n                        RegexOption.IGNORE_CASE\n                    ).findAll(videoHtml).forEach { match ->\n                        val stream = match.groupValues[1]\n                        val type = when {\n                            stream.contains(".mpd", true) -> ExtractorLinkType.DASH\n                            stream.contains(".m3u8", true) -> ExtractorLinkType.M3U8\n                            else -> ExtractorLinkType.VIDEO\n                        }\n                        callback(\n                            newExtractorLink(\n                                source = name,\n                                name = "$name - $sourceName",\n                                url = stream,\n                                type = type,\n                            ) {\n                                quality = Qualities.Unknown.value\n                                referer = videoPhpUrl\n                                headers = mapOf(\n                                    "User-Agent" to USER_AGENT,\n                                    "Referer" to videoPhpUrl,\n                                )\n                            }\n                        )\n                        found = true\n                    }\n                }\n\n                // Bu kaynak çalıştıysa diğer kaynaklara dokunma.\n                if (found) break\n\n                Regex(\n                    """["'](?:subtitle|subtitles|captions?)["']\s*[:=]\s*["']([^"']+(?:\.vtt|\.srt)[^"']*)["']""",\n                    RegexOption.IGNORE_CASE\n                ).findAll(videoHtml).forEach { match ->\n                    fixUrlNull(match.groupValues[1])?.let { subtitle ->\n                        runCatching {\n                            subtitleCallback(SubtitleFile("Türkçe", subtitle))\n                        }\n                    }\n                }\n            }\n        }\n\n        // Kaynak düğmesi bulunamazsa iframe fallback.\n        if (!found) {\n            for (iframe in document.select("iframe[src], iframe[data-src]")) {\n                val raw = iframe.attr("data-src").ifBlank { iframe.attr("src") }\n                val iframeUrl = fixUrlNull(raw) ?: continue\n\n                if (resolveIframe(\n                        iframeUrl,\n                        data,\n                        "Alternatif",\n                        subtitleCallback,\n                        callback,\n                    )\n                ) {\n                    found = true\n                    break\n                }\n            }\n        }\n\n        Log.d(WDT_TAG, "loadLinks sonucu found=" + found)\n        return found\n    }\n\n    private suspend fun resolveIframe(
+    override suspend fun loadLinks(
+        data: String,
+        isCasting: Boolean,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit,
+    ): Boolean {
+        Log.d(WDT_TAG, "loadLinks: $data")
+
+        val document = runCatching {
+            app.get(
+                data,
+                headers = pageHeaders,
+                referer = "$mainUrl/",
+                allowRedirects = true,
+            ).document
+        }.getOrNull() ?: return false
+
+        // Aynı loadLinks çağrısında bütün alternatifleri tüketme.
+        // İlk gerçekten medya linki üreten kaynak bulunduğunda dur.
+        var found = false
+
+        // Sayfada doğrudan bırakılmış gerçek player iframe/video adresleri.
+        // Navigation/footer bağlantılarını özellikle taramıyoruz.
+        val directPlayerCandidates = linkedSetOf<String>()
+
+        document.select(
+            "iframe[src], iframe[data-src], video[src], video[data-src], source[src], source[data-src]"
+        ).forEach { element ->
+            val raw = sequenceOf(
+                element.attr("data-src"),
+                element.attr("src"),
+                element.attr("data-url")
+            ).firstOrNull { it.isNotBlank() }.orEmpty()
+
+            if (
+                raw.contains("vidmoly", true) ||
+                raw.contains("filemoon", true) ||
+                raw.contains("ok.ru", true) ||
+                raw.contains("odnoklassniki", true) ||
+                raw.contains("vk.com", true) ||
+                raw.contains("vkvideo.ru", true) ||
+                raw.contains("abstream", true) ||
+                raw.contains("upn", true) ||
+                raw.contains("abyss", true) ||
+                raw.contains("moly", true) ||
+                raw.contains("moon", true) ||
+                raw.contains("p2p", true)
+            ) {
+                fixUrlNull(raw)?.let { directPlayerCandidates += it }
+            }
+        }
+
+        for (playerUrl in directPlayerCandidates) {
+            Log.d(WDT_TAG, "Doğrudan player adayı deneniyor: $playerUrl")
+            if (
+                resolveIframe(
+                    playerUrl,
+                    data,
+                    "Doğrudan Kaynak",
+                    subtitleCallback,
+                    callback,
+                )
+            ) {
+                found = true
+                break
+            }
+        }
+
+        // Asıl WDT kaynak akışı: data-embed -> AJAX -> video.php -> iframe/player.
+        if (!found) {
+            val buttons = document
+                .select("button[data-embed], a[data-embed], .dropdown-source[data-embed], [data-embed]")
+                .filter { it.attr("data-embed").trim().isNotBlank() }
+                .distinctBy { it.attr("data-embed").trim() }
+
+            for (button in buttons) {
+                val embedId = button.attr("data-embed").trim()
+                val sourceName = button.selectFirst("span.name")?.text()?.trim()
+                    ?: button.text().trim().takeIf { it.isNotBlank() }
+                    ?: "Alternatif"
+
+                Log.d(WDT_TAG, "Kaynak deneniyor: " + sourceName + " | embedId=" + embedId)
+
+                val ajaxResponse = runCatching {
+                    app.post(
+                        "$mainUrl/ajax/embed",
+                        headers = mapOf(
+                            "User-Agent" to USER_AGENT,
+                            "X-Requested-With" to "XMLHttpRequest",
+                            "Referer" to data,
+                            "Accept" to "*/*",
+                        ),
+                        referer = data,
+                        data = mapOf("id" to embedId),
+                    )
+                }.getOrNull() ?: continue
+
+                Log.d(WDT_TAG, "AJAX HTTP=" + ajaxResponse.code + " | source=" + sourceName)
+                if (!ajaxResponse.isSuccessful) continue
+
+                val ajaxText = ajaxResponse.text
+
+                val videoPhpUrl = Regex(
+                    """src\s*=\s*["']([^"']+)["']""",
+                    RegexOption.IGNORE_CASE
+                ).find(ajaxText)?.groupValues?.getOrNull(1)
+                    ?.replace("\\/", "/")
+                    ?.replace("&amp;", "&")
+                    ?.let(::fixUrlNull)
+                    ?: Regex(
+                        """(?:https?:)?//[^\s"'<>]*video\.php\?[^\s"'<>]+""",
+                        RegexOption.IGNORE_CASE
+                    ).find(ajaxText)?.value
+                        ?.replace("\\/", "/")
+                        ?.let(::fixUrlNull)
+
+                Log.d(WDT_TAG, "video.php=" + videoPhpUrl + " | source=" + sourceName)
+
+                if (videoPhpUrl.isNullOrBlank()) {
+                    val fallbackIframe = Regex(
+                        """(?:src|iframe)[^"']*["'](https?://[^"']+)["']""",
+                        RegexOption.IGNORE_CASE
+                    ).find(ajaxText)?.groupValues?.getOrNull(1)
+
+                    if (!fallbackIframe.isNullOrBlank()) {
+                        found = resolveIframe(
+                            fallbackIframe,
+                            data,
+                            sourceName,
+                            subtitleCallback,
+                            callback,
+                        )
+                        if (found) break
+                    }
+                    continue
+                }
+
+                val videoResponse = runCatching {
+                    app.get(
+                        videoPhpUrl,
+                        headers = mapOf(
+                            "User-Agent" to USER_AGENT,
+                            "Referer" to data,
+                        ),
+                        referer = data,
+                        allowRedirects = true,
+                    )
+                }.getOrNull() ?: continue
+
+                if (!videoResponse.isSuccessful) continue
+
+                val videoHtml = videoResponse.text
+
+                val iframeUrl = Regex(
+                    """<iframe[^>]+(?:id=["']main-iframe["'][^>]+)?src=["']([^"']+)["']""",
+                    RegexOption.IGNORE_CASE
+                ).find(videoHtml)?.groupValues?.getOrNull(1)?.let(::fixUrlNull)
+                    ?: Regex(
+                        """src=["'](https?://[^"']+)["']""",
+                        RegexOption.IGNORE_CASE
+                    ).find(videoHtml)?.groupValues?.getOrNull(1)?.let(::fixUrlNull)
+
+                Log.d(WDT_TAG, "iframe=" + iframeUrl + " | source=" + sourceName)
+
+                if (!iframeUrl.isNullOrBlank()) {
+                    found = resolveIframe(
+                        iframeUrl,
+                        videoPhpUrl,
+                        sourceName,
+                        subtitleCallback,
+                        callback,
+                    )
+                }
+
+                // video.php içinde medya adresi bulunuyorsa doğrudan kullan.
+                if (!found) {
+                    Regex(
+                        """["'](https?://[^"']+\.(?:m3u8|mp4|mpd)[^"']*)["']""",
+                        RegexOption.IGNORE_CASE
+                    ).findAll(videoHtml).forEach { match ->
+                        val stream = match.groupValues[1]
+                        val type = when {
+                            stream.contains(".mpd", true) -> ExtractorLinkType.DASH
+                            stream.contains(".m3u8", true) -> ExtractorLinkType.M3U8
+                            else -> ExtractorLinkType.VIDEO
+                        }
+                        callback(
+                            newExtractorLink(
+                                source = name,
+                                name = "$name - $sourceName",
+                                url = stream,
+                                type = type,
+                            ) {
+                                quality = Qualities.Unknown.value
+                                referer = videoPhpUrl
+                                headers = mapOf(
+                                    "User-Agent" to USER_AGENT,
+                                    "Referer" to videoPhpUrl,
+                                )
+                            }
+                        )
+                        found = true
+                    }
+                }
+
+                // Bu kaynak çalıştıysa diğer kaynaklara dokunma.
+                if (found) break
+
+                Regex(
+                    """["'](?:subtitle|subtitles|captions?)["']\s*[:=]\s*["']([^"']+(?:\.vtt|\.srt)[^"']*)["']""",
+                    RegexOption.IGNORE_CASE
+                ).findAll(videoHtml).forEach { match ->
+                    fixUrlNull(match.groupValues[1])?.let { subtitle ->
+                        runCatching {
+                            subtitleCallback(SubtitleFile("Türkçe", subtitle))
+                        }
+                    }
+                }
+            }
+        }
+
+        // Kaynak düğmesi bulunamazsa iframe fallback.
+        if (!found) {
+            for (iframe in document.select("iframe[src], iframe[data-src]")) {
+                val raw = iframe.attr("data-src").ifBlank { iframe.attr("src") }
+                val iframeUrl = fixUrlNull(raw) ?: continue
+
+                if (resolveIframe(
+                        iframeUrl,
+                        data,
+                        "Alternatif",
+                        subtitleCallback,
+                        callback,
+                    )
+                ) {
+                    found = true
+                    break
+                }
+            }
+        }
+
+        Log.d(WDT_TAG, "loadLinks sonucu found=" + found)
+        return found
+    }
+
+    private suspend fun resolveIframe(
         iframeUrl: String,
         referer: String,
         sourceName: String,
