@@ -664,8 +664,8 @@ class WebDramaTurkey : MainAPI() {
         val normalized = fixUrlNull(
             iframeUrl
                 .trim()
-                .replace("\\/","/")
-                .replace("&amp;","&")
+                .replace("\/", "/")
+                .replace("&amp;", "&")
         ) ?: return false
 
         var emitted = false
@@ -676,7 +676,8 @@ class WebDramaTurkey : MainAPI() {
         }
 
         // Siteye özel oynatıcı
-        if (normalized.contains("dtpasn.asia", true) ||
+        if (
+            normalized.contains("dtpasn.asia", true) ||
             normalized.contains("dtpasn.com", true)
         ) {
             runCatching {
@@ -685,22 +686,27 @@ class WebDramaTurkey : MainAPI() {
                     referer,
                     subtitleCallback
                 ) { link -> emitLink(link) }
+            }.onFailure {
+                Log.d(WDT_TAG, "WDT özel extractor hatası: " + it.message)
             }
         }
 
-        // Özel VK ve Abstream çözücüleri
+        // VK
         if (!emitted &&
             (normalized.contains("vkvideo.ru", true) || normalized.contains("vk.com", true))
         ) {
             runCatching {
-                WebDramaTurkeyVkExtractor().getUrl(
+                loadExtractor(
                     normalized,
                     referer,
                     subtitleCallback
                 ) { link -> emitLink(link) }
+            }.onFailure {
+                Log.d(WDT_TAG, "VK extractor hatası: " + it.message)
             }
         }
 
+        // Abstream
         if (!emitted && normalized.contains("abstream.to", true)) {
             runCatching {
                 WebDramaTurkeyAbstreamExtractor().getUrl(
@@ -708,13 +714,17 @@ class WebDramaTurkey : MainAPI() {
                     referer,
                     subtitleCallback
                 ) { link -> emitLink(link) }
+            }.onFailure {
+                Log.d(WDT_TAG, "Abstream extractor hatası: " + it.message)
             }
         }
 
-        // Önce CloudStream'in yerleşik extractor'larını kullan.
-        // Vidmoly/Filemoon/VK/OK gibi sağlayıcılarda bunlar gerekli özel
-        // başlık, redirect ve manifest işlemlerini zaten yapabiliyor.
-        if (!emitted) {
+        // Önce CloudStream yerleşik extractor'ları.
+        if (!emitted &&
+            !normalized.contains("dtpasn.asia", true) &&
+            !normalized.contains("dtpasn.com", true) &&
+            !normalized.contains("abstream.to", true)
+        ) {
             runCatching {
                 Log.d(WDT_TAG, "Yerleşik extractor deneniyor: " + normalized)
                 loadExtractor(
@@ -730,8 +740,7 @@ class WebDramaTurkey : MainAPI() {
             }
         }
 
-        // Yerleşik extractor link üretmediyse WDT'nin qualities -> redirect
-        // akışını dene.
+        // WDT player: const qualities = [...] -> redirect -> gerçek medya URL.
         if (!emitted) {
             runCatching {
                 emitted = resolveQualityPlayer(
@@ -745,24 +754,9 @@ class WebDramaTurkey : MainAPI() {
                 Log.d(WDT_TAG, "qualities çözümleme hatası: " + it.message)
             }
         }
-            runCatching {
-                Log.d(WDT_TAG, "Yerleşik extractor deneniyor: " + normalized)
-                loadExtractor(
-                    normalized,
-                    referer,
-                    subtitleCallback
-                ) { link ->
-                    Log.d(WDT_TAG, "Yerleşik extractor link üretti: " + link.url)
-                    emitLink(link)
-                }
-            }.onFailure {
-                Log.d(WDT_TAG, "Yerleşik extractor hata: " + it.message)
-            }
-        }
 
         if (emitted) return true
 
-        // Oynatıcı sayfasını doğrudan incele.
         val response = runCatching {
             app.get(
                 normalized,
@@ -779,22 +773,20 @@ class WebDramaTurkey : MainAPI() {
         if (!response.isSuccessful) return false
 
         val html = response.text
-
-        // HTML/JS içindeki doğrudan medya adresleri
         val directCandidates = linkedSetOf<String>()
 
         Regex(
-            """https?://[^"'<>\\s]+(?:\/[^"'<>\\s]*)*\.(?:m3u8|mp4|mpd)(?:\?[^"'<>\\s]*)?""",
+            """https?://[^"'<>\s]+(?:\/[^"'<>\s]*)*\.(?:m3u8|mp4|mpd)(?:\?[^"'<>\s]*)?""",
             RegexOption.IGNORE_CASE
         ).findAll(html)
-            .map { it.value.replace("\\/","/").replace("\u0026","&") }
+            .map { it.value.replace("\/", "/").replace("\u0026", "&") }
             .forEach { directCandidates += it }
 
         Regex(
             """["'](?:file|src|url|source|videoSource|securedLink)["']?\s*[:=]\s*["']([^"']+)["']""",
             RegexOption.IGNORE_CASE
         ).findAll(html)
-            .map { it.groupValues[1].replace("\\/","/").replace("\u0026","&") }
+            .map { it.groupValues[1].replace("\/", "/").replace("\u0026", "&") }
             .filter {
                 it.contains(".m3u8", true) ||
                 it.contains(".mp4", true) ||
@@ -817,7 +809,7 @@ class WebDramaTurkey : MainAPI() {
             }
         }
 
-        directCandidates.forEach { stream ->
+        for (stream in directCandidates) {
             val type = when {
                 stream.contains(".mpd", true) -> ExtractorLinkType.DASH
                 stream.contains(".m3u8", true) -> ExtractorLinkType.M3U8
@@ -834,13 +826,16 @@ class WebDramaTurkey : MainAPI() {
                     ) {
                         quality = Qualities.Unknown.value
                         this.referer = normalized
+                        headers = mapOf(
+                            "User-Agent" to USER_AGENT,
+                            "Referer" to normalized,
+                        )
                     }
                 )
                 emitted = true
             }
         }
 
-        // Alt oynatıcı iframe'leri: ilk iframe çalışmazsa diğerlerini de dene.
         if (!emitted) {
             val nestedFrames = response.document
                 .select("iframe[src], iframe[data-src]")
@@ -869,12 +864,11 @@ class WebDramaTurkey : MainAPI() {
             }
         }
 
-        // Altyazıları doğrudan sayfadan bul.
         Regex(
-            """https?://[^"'<>\\s]+(?:\/[^"'<>\\s]*)*\.(?:vtt|srt)(?:\?[^"'<>\\s]*)?""",
+            """https?://[^"'<>\s]+(?:\/[^"'<>\s]*)*\.(?:vtt|srt)(?:\?[^"'<>\s]*)?""",
             RegexOption.IGNORE_CASE
         ).findAll(html)
-            .map { it.value.replace("\\/","/").replace("\u0026","&") }
+            .map { it.value.replace("\/", "/").replace("\u0026", "&") }
             .distinct()
             .forEach { sub ->
                 runCatching {
