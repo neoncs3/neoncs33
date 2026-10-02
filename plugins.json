@@ -40,6 +40,27 @@
         "name": "DiziBoxizle"
     },
     {
+        "iconUrl": "https://dizipal1586.com/favicon.ico",
+        "fileHash": "sha256-544c8cd0fa962782aa719008b122950ec79025018267537b68dbc224463ecf3e",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
+        "fileSize": 35203,
+        "status": 1,
+        "language": "tr",
+        "authors": [
+            "neoncs3"
+        ],
+        "tvTypes": [
+            "TvSeries",
+            "Movie"
+        ],
+        "version": 1,
+        "internalName": "DiziPal",
+        "description": "Dizipal dizi ve film sa\u011flay\u0131c\u0131s\u0131",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/DiziPal.cs3",
+        "name": "DiziPal"
+    },
+    {
         "iconUrl": "https://www.dramadizilerim.com/favicon.ico",
         "fileHash": "sha256-8fa860f7b5c0857ae91ae9b31d8c69f4b1ad63f7876f3fff03ae471897098a1a",
         "apiVersion": 1,
