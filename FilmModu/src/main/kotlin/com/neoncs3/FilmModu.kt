@@ -72,7 +72,8 @@ class FilmModu : MainAPI() {
             app.get(url, headers = headers()).document
         }.getOrNull() ?: return newHomePageResponse(request.name, emptyList(), false)
 
-        val results = document.select("div.movie-item, div.movie, .movie-item, .film, article")
+        val results = document.select("a[href]")
+            .filter { it.attr("href").contains("/film/", true) || it.attr("href").contains("-film-", true) }
             .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
 
@@ -84,43 +85,60 @@ class FilmModu : MainAPI() {
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val anchor = if (tagName().equals("a", true)) this else selectFirst("a[href]")
-            ?: return null
+        val anchor = if (tagName().equals("a", true)) this else selectFirst("a[href]") ?: return null
 
         val href = normalizeUrl(anchor.attr("href"), mainUrl)
-        if (!href.contains("/film/") && !href.contains("/film-")) return null
+        if (!href.startsWith("http", true)) return null
 
-        val title = listOf(
-            selectFirst("h3, .turkish-name, .original-name, .title, h2, .movie-title")?.text(),
+        val path = runCatching { URI(href).path.orEmpty().lowercase() }.getOrDefault("")
+        if (!path.contains("/film/") && !path.contains("-film-")) return null
+
+        val image = sequence {
+            yield(anchor.selectFirst("img"))
+            var parent = anchor.parent()
+            repeat(6) {
+                if (parent == null) return@repeat
+                yield(parent.selectFirst("img"))
+                parent = parent.parent()
+            }
+        }.filterNotNull().firstOrNull()
+
+        val title = sequenceOf(
             anchor.attr("title"),
+            anchor.attr("aria-label"),
+            anchor.selectFirst("h3, h2, .turkish-name, .original-name, .title, .movie-title")?.text(),
+            image?.attr("alt"),
             anchor.text(),
-            selectFirst("img")?.attr("alt"),
         ).firstOrNull { !it.isNullOrBlank() }?.trim().orEmpty()
 
         if (title.isBlank()) return null
 
-        val poster = normalizeUrl(
-            this.selectFirst("picture img")?.attr("data-src")?.takeIf { it.isNotBlank() }
-                ?: this.selectFirst("picture img")?.attr("src")?.takeIf { it.isNotBlank() }
-                ?: this.selectFirst("img")?.attr("data-src")?.takeIf { it.isNotBlank() }
-                ?: this.selectFirst("img")?.attr("data-lazy-src")?.takeIf { it.isNotBlank() }
-                ?: this.selectFirst("img")?.attr("src")?.takeIf { it.isNotBlank() }
-                ?: posterFrom(this)
-                ?: posterFrom(anchor)
-                ?: "",
-            mainUrl
-        ).takeIf { it.startsWith("http", true) }
+        val rawPoster = sequenceOf(
+            image?.attr("data-src"),
+            image?.attr("data-lazy-src"),
+            image?.attr("data-original"),
+            image?.attr("data-poster"),
+            image?.attr("data-image"),
+            image?.attr("src"),
+        ).firstOrNull { !it.isNullOrBlank() && !it.startsWith("data:", true) }.orEmpty()
 
-        val rating = extractRating(
-            anchor.text() + " " + selectFirst(".imdb-rating, .rating")?.text().orEmpty()
-        )
+        val poster = normalizeUrl(rawPoster, href)
+            .takeIf { it.startsWith("http", true) }
+
+        val ratingText = generateSequence(anchor as Element?) { it.parent() }
+            .take(7)
+            .map { it.text() }
+            .firstOrNull { Regex("""(?i)IMDb|rating|puan""").containsMatchIn(it) }
+            .orEmpty()
+
+        val rating = extractRating(ratingText.ifBlank { anchor.text() })
 
         return newMovieSearchResponse(title, href, TvType.Movie) {
             posterUrl = poster
             posterHeaders = mapOf(
                 "User-Agent" to USER_AGENT,
                 "Referer" to mainUrl + "/",
-                "Accept" to "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+                "Accept" to "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
             )
             rating?.let { score = Score.from10(it) }
         }
@@ -135,7 +153,8 @@ class FilmModu : MainAPI() {
             ).document
         }.getOrNull() ?: return emptyList()
 
-        return document.select("div.movie-item, div.movie, .movie-item, .film, article")
+        return document.select("a[href]")
+            .filter { it.attr("href").contains("/film/", true) || it.attr("href").contains("-film-", true) }
             .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
     }
