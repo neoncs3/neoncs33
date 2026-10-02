@@ -38,10 +38,10 @@ class WebDramaTurkey : MainAPI() {
         "$mainUrl/tur/fantastik?page=" to "Fantastik",
         "$mainUrl/tur/komedi?page=" to "Komedi",
         "$mainUrl/tur/gerilim?page=" to "Gerilim",
-        "$mainUrl/tur/korku?page=" to "korku",
+        "$mainUrl/tur/korku?page=" to "Korku",
         "$mainUrl/tur/aksiyon?page=" to "Aksiyon",
         "$mainUrl/tur/gizem?page=" to "Gizem",
-        "$mainUrl/tur/tarihi?page=" to "Tarihi",
+        "$mainUrl/tur/bilim-kurgu?page=" to "BilimKurgu",
     )
 
     private val pageHeaders = mapOf(
