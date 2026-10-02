@@ -784,14 +784,14 @@ class WebDramaTurkey : MainAPI() {
         val directCandidates = linkedSetOf<String>()
 
         Regex(
-            """https?://[^"'<>\\s]+(?:\\/[^"'<>\\s]*)*\\.(?:m3u8|mp4|mpd)(?:\\?[^"'<>\\s]*)?""",
+            """https?://[^"'<>\\s]+(?:\/[^"'<>\\s]*)*\.(?:m3u8|mp4|mpd)(?:\?[^"'<>\\s]*)?""",
             RegexOption.IGNORE_CASE
         ).findAll(html)
             .map { it.value.replace("\\/","/").replace("\u0026","&") }
             .forEach { directCandidates += it }
 
         Regex(
-            """["'](?:file|src|url|source|videoSource|securedLink)["']?\\s*[:=]\\s*["']([^"']+)["']""",
+            """["'](?:file|src|url|source|videoSource|securedLink)["']?\s*[:=]\s*["']([^"']+)["']""",
             RegexOption.IGNORE_CASE
         ).findAll(html)
             .map { it.groupValues[1].replace("\\/","/").replace("\u0026","&") }
@@ -871,7 +871,7 @@ class WebDramaTurkey : MainAPI() {
 
         // Altyazıları doğrudan sayfadan bul.
         Regex(
-            """https?://[^"'<>\\s]+(?:\\/[^"'<>\\s]*)*\\.(?:vtt|srt)(?:\\?[^"'<>\\s]*)?""",
+            """https?://[^"'<>\\s]+(?:\/[^"'<>\\s]*)*\.(?:vtt|srt)(?:\?[^"'<>\\s]*)?""",
             RegexOption.IGNORE_CASE
         ).findAll(html)
             .map { it.value.replace("\\/","/").replace("\u0026","&") }
@@ -914,14 +914,14 @@ class WebDramaTurkey : MainAPI() {
         val qualityUrls = linkedSetOf<String>()
 
         val qualitiesBlock = Regex(
-            """(?:const|let|var)\\s+qualities\\s*=\\s*(\\[.*?\\])\\s*;""",
+            """(?:const|let|var)\s+qualities\s*=\s*(\[.*?\])\s*;""",
             setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
         ).find(html)?.groupValues?.getOrNull(1)
 
         val qualitySource = qualitiesBlock ?: html
 
         Regex(
-            """["'](?:url|file|src)["']\\s*:\\s*["']([^"']+)["']""",
+            """["'](?:url|file|src)["']\s*:\s*["']([^"']+)["']""",
             RegexOption.IGNORE_CASE
         ).findAll(qualitySource).forEach { match ->
             val raw = match.groupValues[1]
@@ -992,7 +992,7 @@ class WebDramaTurkey : MainAPI() {
         // Player sayfasında doğrudan m3u8/mp4/mpd bulunuyorsa ayrıca dene.
         if (!emitted) {
             Regex(
-                """https?://[^"'<>\\s]+\\.(?:m3u8|mp4|mpd)(?:\\?[^"'<()>\\s]*)?""",
+                """https?://[^"'<>\\s]+\.(?:m3u8|mp4|mpd)(?:\?[^"'<()>\s]*)?""",
                 RegexOption.IGNORE_CASE
             ).findAll(html)
                 .map { it.value.replace("\\/","/").replace("\u0026","&") }
