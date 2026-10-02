@@ -101,7 +101,7 @@ class WebDramaTurkeyExtractor : ExtractorApi() {
         }
     }
 
-    private fun emit(
+    private suspend fun emit(
         rawUrl: String,
         callback: (ExtractorLink) -> Unit,
     ) {
