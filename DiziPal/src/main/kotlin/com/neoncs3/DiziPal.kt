@@ -991,7 +991,29 @@ class DiziPal : MainAPI() {
         }
     }
 
-    private fun extractSubtitles(
+    private suspend fun emitSubtitle(
+        url: String,
+        lang: String,
+        referer: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+    ): Boolean {
+        return try {
+            subtitleCallback(
+                newSubtitleFile(
+                    lang = lang,
+                    url = url,
+                ) {
+                    headers = mediaHeaders(referer)
+                }
+            )
+            true
+        } catch (e: Exception) {
+            Log.d("DiziPal", "Subtitle skipped: " + e.message)
+            false
+        }
+    }
+
+    private suspend fun extractSubtitles(
         text: String,
         referer: String,
         subtitleCallback: (SubtitleFile) -> Unit,
@@ -1019,15 +1041,7 @@ class DiziPal : MainAPI() {
             if (!subtitleLike) return@forEach
             if (!seen.add(url)) return@forEach
 
-            runCatching {
-                subtitleCallback(
-                    newSubtitleFile(
-                        lang = label.ifBlank { "Türkçe" },
-                        url = url,
-                    ) {
-                        headers = mediaHeaders(referer)
-                    }
-                )
+            if (emitSubtitle(url, label.ifBlank { "Türkçe" }, referer, subtitleCallback)) {
                 found = true
             }
         }
@@ -1041,15 +1055,7 @@ class DiziPal : MainAPI() {
             if (!url.startsWith("http", true)) return@forEach
             if (!seen.add(url)) return@forEach
 
-            runCatching {
-                subtitleCallback(
-                    newSubtitleFile(
-                        lang = "Türkçe",
-                        url = url,
-                    ) {
-                        headers = mediaHeaders(referer)
-                    }
-                )
+            if (emitSubtitle(url, "Türkçe", referer, subtitleCallback)) {
                 found = true
             }
         }
