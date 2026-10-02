@@ -67,7 +67,6 @@ class WebDramaTurkey : MainAPI() {
                 headers = pageHeaders,
                 referer = "$mainUrl/",
                 allowRedirects = true,
-                cacheTime = 0,
             ).document
         }.getOrNull() ?: return newHomePageResponse(
             request.name,
@@ -200,7 +199,6 @@ class WebDramaTurkey : MainAPI() {
                 headers = pageHeaders,
                 referer = "$mainUrl/",
                 allowRedirects = true,
-                cacheTime = 0,
             ).document
         }.getOrNull() ?: return emptyList()
 
@@ -235,7 +233,6 @@ class WebDramaTurkey : MainAPI() {
                 headers = pageHeaders,
                 referer = "$mainUrl/",
                 allowRedirects = true,
-                cacheTime = 0,
             ).document
         }.getOrNull() ?: return null
 
@@ -422,10 +419,9 @@ class WebDramaTurkey : MainAPI() {
         val document = runCatching {
             app.get(
                 data,
-                headers = pageHeaders + mapOf("Referer" to data),
-                referer = data,
+                headers = pageHeaders,
+                referer = "$mainUrl/",
                 allowRedirects = true,
-                cacheTime = 0,
             ).document
         }.getOrNull() ?: return false
 
@@ -947,7 +943,6 @@ class WebDramaTurkey : MainAPI() {
                     ),
                     referer = playerUrl,
                     allowRedirects = false,
-                    cacheTime = 0,
                 )
             }.getOrNull()
 
