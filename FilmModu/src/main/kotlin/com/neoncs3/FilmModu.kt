@@ -100,7 +100,7 @@ class FilmModu : MainAPI() {
 
         if (title.isBlank()) return null
 
-        val poster = posterFrom(anchor)
+        val poster = posterFrom(this) ?: posterFrom(anchor)
         val rating = extractRating(
             anchor.text() + " " + selectFirst(".imdb-rating, .rating")?.text().orEmpty()
         )
@@ -539,17 +539,88 @@ class FilmModu : MainAPI() {
     }
 
     private fun posterFrom(element: Element): String? {
-        val image = element.selectFirst("img") ?: return null
-        val raw = listOf(
-            image.attr("data-src"),
-            image.attr("data-lazy-src"),
-            image.attr("data-original"),
-            image.attr("data-srcset").split(" ").firstOrNull { it.startsWith("http") },
-            image.attr("srcset").split(" ").firstOrNull { it.startsWith("http") },
-            image.attr("src")
-        ).firstOrNull { !it.isNullOrBlank() && !it.startsWith("data:") }.orEmpty()
+        fun firstUsable(values: List<String>): String {
+            return values
+                .asSequence()
+                .map { it.trim() }
+                .map { it.substringBefore(" ").trim() }
+                .firstOrNull {
+                    it.isNotBlank() &&
+                        !it.equals("about:blank", true) &&
+                        !it.startsWith("data:", true) &&
+                        !it.startsWith("javascript:", true)
+                }
+                .orEmpty()
+        }
 
-        return normalizeUrl(raw, mainUrl)
+        val image = element.selectFirst(
+            "img[data-src], img[data-lazy-src], img[data-original], img[srcset], img[src]"
+        )
+
+        if (image != null) {
+            val raw = firstUsable(
+                listOf(
+                    image.attr("data-src"),
+                    image.attr("data-lazy-src"),
+                    image.attr("data-original"),
+                    image.attr("data-image"),
+                    image.attr("data-poster"),
+                    image.attr("data-original-src"),
+                    image.attr("data-srcset"),
+                    image.attr("srcset"),
+                    image.attr("src"),
+                )
+            )
+
+            if (raw.isNotBlank()) {
+                return normalizeUrl(raw, mainUrl)
+            }
+        }
+
+        val source = element.selectFirst("picture source[srcset], source[srcset]")
+        if (source != null) {
+            val raw = firstUsable(listOf(source.attr("srcset")))
+            if (raw.isNotBlank()) {
+                return normalizeUrl(raw, mainUrl)
+            }
+        }
+
+        val dataImage = firstUsable(
+            listOf(
+                element.attr("data-poster"),
+                element.attr("data-image"),
+                element.attr("data-bg"),
+                element.attr("data-background"),
+                element.attr("data-thumb"),
+                element.attr("data-src"),
+            )
+        )
+        if (dataImage.isNotBlank()) {
+            return normalizeUrl(dataImage, mainUrl)
+        }
+
+        val style = element.attr("style")
+        val background = Regex(
+            """(?i)background-image\s*:\s*url\((['"]?)(.*?)\1\)"""
+        ).find(style)?.groupValues?.getOrNull(2).orEmpty()
+
+        if (background.isNotBlank()) {
+            return normalizeUrl(background, mainUrl)
+        }
+
+        val nestedStyle = element.selectFirst("[style*='background-image']")
+            ?.attr("style")
+            .orEmpty()
+
+        val nestedBackground = Regex(
+            """(?i)background-image\s*:\s*url\((['"]?)(.*?)\1\)"""
+        ).find(nestedStyle)?.groupValues?.getOrNull(2).orEmpty()
+
+        if (nestedBackground.isNotBlank()) {
+            return normalizeUrl(nestedBackground, mainUrl)
+        }
+
+        return null
     }
 
     private fun extractRating(text: String): Double? {
