@@ -123,10 +123,10 @@
     },
     {
         "iconUrl": "https://www.google.com/s2/favicons?domain=https://webdramaturkey2.com&sz=%size%",
-        "fileHash": "sha256-0d46be950327eaee60ee88a14fd97e434d02f0375dc7abc99b83e7f426b3179d",
+        "fileHash": "sha256-994fa810cf2fc589de9ea2b5052c997f61108cd92b07af1eb412b3eb4fe402eb",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 43364,
+        "fileSize": 43501,
         "status": 1,
         "language": "tr",
         "authors": [
