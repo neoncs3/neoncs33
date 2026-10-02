@@ -427,6 +427,60 @@ class WebDramaTurkey : MainAPI() {
 
         var found = false
 
+        // Bazı içeriklerde site, kaynak URL'sini data-embed/AJAX yerine
+        // doğrudan sayfadaki link olarak bırakıyor (ör. //vidmoly.to/embed-...).
+        // Önce bu harici oynatıcı adreslerini toplayıp doğrudan resolver'a ver.
+        val directPlayerCandidates = linkedSetOf<String>()
+
+        document.select("a[href], iframe[src], iframe[data-src], video[src], source[src], source[data-src]").forEach { element ->
+            val raw = sequenceOf(
+                element.attr("href"),
+                element.attr("data-src"),
+                element.attr("src"),
+                element.attr("data-url")
+            ).firstOrNull { it.isNotBlank() }.orEmpty()
+
+            if (
+                raw.contains("vidmoly", true) ||
+                raw.contains("filemoon", true) ||
+                raw.contains("ok.ru", true) ||
+                raw.contains("odnoklassniki", true) ||
+                raw.contains("vk.com", true) ||
+                raw.contains("vkvideo.ru", true) ||
+                raw.contains("abstream", true) ||
+                raw.contains("upn", true) ||
+                raw.contains("abyss", true) ||
+                raw.contains("moly", true) ||
+                raw.contains("moon", true) ||
+                raw.contains("p2p", true)
+            ) {
+                fixUrlNull(raw)?.let { directPlayerCandidates += it }
+            }
+        }
+
+        // HTML içinde tırnaksız veya scheme-relative bırakılmış player adresleri.
+        Regex(
+            """(?:(?:https?:)?//)[^\s"'<>]+(?:vidmoly|filemoon|ok\.ru|odnoklassniki|vkvideo|vk\.com|abstream|upn|abyss|moly|moon|p2p)[^\s"'<>]*""",
+            RegexOption.IGNORE_CASE
+        ).findAll(document.html()).forEach { match ->
+            fixUrlNull(match.value)?.let { directPlayerCandidates += it }
+        }
+
+        for (playerUrl in directPlayerCandidates) {
+            Log.d(WDT_TAG, "Doğrudan player adayı: $playerUrl")
+            if (
+                resolveIframe(
+                    playerUrl,
+                    data,
+                    "Doğrudan Kaynak",
+                    subtitleCallback,
+                    callback
+                )
+            ) {
+                found = true
+            }
+        }
+
         val buttons = document
             .select("button[data-embed], a[data-embed], .dropdown-source[data-embed], [data-embed]")
             .distinctBy { it.attr("data-embed") }
