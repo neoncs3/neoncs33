@@ -664,7 +664,7 @@ class WebDramaTurkey : MainAPI() {
         val normalized = fixUrlNull(
             iframeUrl
                 .trim()
-                .replace("\/", "/")
+                .replace("\\/", "/")
                 .replace("&amp;", "&")
         ) ?: return false
 
@@ -779,14 +779,14 @@ class WebDramaTurkey : MainAPI() {
             """https?://[^"'<>\s]+(?:\/[^"'<>\s]*)*\.(?:m3u8|mp4|mpd)(?:\?[^"'<>\s]*)?""",
             RegexOption.IGNORE_CASE
         ).findAll(html)
-            .map { it.value.replace("\/", "/").replace("\u0026", "&") }
+            .map { it.value.replace("\\/", "/").replace("\u0026", "&") }
             .forEach { directCandidates += it }
 
         Regex(
             """["'](?:file|src|url|source|videoSource|securedLink)["']?\s*[:=]\s*["']([^"']+)["']""",
             RegexOption.IGNORE_CASE
         ).findAll(html)
-            .map { it.groupValues[1].replace("\/", "/").replace("\u0026", "&") }
+            .map { it.groupValues[1].replace("\\/", "/").replace("\u0026", "&") }
             .filter {
                 it.contains(".m3u8", true) ||
                 it.contains(".mp4", true) ||
@@ -868,7 +868,7 @@ class WebDramaTurkey : MainAPI() {
             """https?://[^"'<>\s]+(?:\/[^"'<>\s]*)*\.(?:vtt|srt)(?:\?[^"'<>\s]*)?""",
             RegexOption.IGNORE_CASE
         ).findAll(html)
-            .map { it.value.replace("\/", "/").replace("\u0026", "&") }
+            .map { it.value.replace("\\/", "/").replace("\u0026", "&") }
             .distinct()
             .forEach { sub ->
                 runCatching {
