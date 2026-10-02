@@ -620,7 +620,9 @@ class WebDramaTurkey : MainAPI() {
         }
 
         // Özel VK ve Abstream çözücüleri
-        if (!emitted && normalized.contains("vkvideo.ru", true) || normalized.contains("vk.com", true)) {
+        if (!emitted &&
+            (normalized.contains("vkvideo.ru", true) || normalized.contains("vk.com", true))
+        ) {
             runCatching {
                 WebDramaTurkeyVkExtractor().getUrl(
                     normalized,
