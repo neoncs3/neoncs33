@@ -20,7 +20,7 @@ import java.net.URLEncoder
 
 class FilmModu : MainAPI() {
 
-    override var mainUrl = "https://www.filmmodu.one"
+    override var mainUrl = "https://www.filmmodu.vip"
     override var name = "FilmModu"
     override var lang = "tr"
     override val hasMainPage = true
@@ -72,9 +72,8 @@ class FilmModu : MainAPI() {
             app.get(url, headers = headers()).document
         }.getOrNull() ?: return newHomePageResponse(request.name, emptyList(), false)
 
-        val results = document.select(
-            "div.movie, div.movie-large, div.poster, div.col-md-2, div.hover-box, article.movie"
-        ).mapNotNull { it.toSearchResult() }
+        val results = document.select("div.movie")
+            .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
 
         return newHomePageResponse(
@@ -120,9 +119,8 @@ class FilmModu : MainAPI() {
             ).document
         }.getOrNull() ?: return emptyList()
 
-        return document.select(
-            "div.movie, div.movie-large, div.poster, div.col-md-2, div.hover-box, article.movie"
-        ).mapNotNull { it.toSearchResult() }
+        return document.select("div.movie")
+            .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
     }
 
