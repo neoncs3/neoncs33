@@ -67,6 +67,7 @@ class WebDramaTurkey : MainAPI() {
                 headers = pageHeaders,
                 referer = "$mainUrl/",
                 allowRedirects = true,
+                cacheTime = 0,
             ).document
         }.getOrNull() ?: return newHomePageResponse(
             request.name,
@@ -199,6 +200,7 @@ class WebDramaTurkey : MainAPI() {
                 headers = pageHeaders,
                 referer = "$mainUrl/",
                 allowRedirects = true,
+                cacheTime = 0,
             ).document
         }.getOrNull() ?: return emptyList()
 
@@ -233,6 +235,7 @@ class WebDramaTurkey : MainAPI() {
                 headers = pageHeaders,
                 referer = "$mainUrl/",
                 allowRedirects = true,
+                cacheTime = 0,
             ).document
         }.getOrNull() ?: return null
 
@@ -422,6 +425,7 @@ class WebDramaTurkey : MainAPI() {
                 headers = pageHeaders,
                 referer = "$mainUrl/",
                 allowRedirects = true,
+                cacheTime = 0,
             ).document
         }.getOrNull() ?: return false
 
@@ -502,6 +506,7 @@ class WebDramaTurkey : MainAPI() {
                         ),
                         referer = data,
                         data = mapOf("id" to embedId),
+                        cacheTime = 0,
                     )
                 }.getOrNull() ?: continue
 
@@ -553,6 +558,7 @@ class WebDramaTurkey : MainAPI() {
                         ),
                         referer = data,
                         allowRedirects = true,
+                        cacheTime = 0,
                     )
                 }.getOrNull() ?: continue
 
@@ -884,6 +890,7 @@ class WebDramaTurkey : MainAPI() {
             ),
             referer = referer,
             allowRedirects = true,
+            cacheTime = 0,
         )
 
         if (!response.isSuccessful) return false
@@ -925,6 +932,7 @@ class WebDramaTurkey : MainAPI() {
                     ),
                     referer = playerUrl,
                     allowRedirects = false,
+                    cacheTime = 0,
                 )
             }.getOrNull()
 
