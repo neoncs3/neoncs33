@@ -73,7 +73,7 @@ class FilmModu : MainAPI() {
         }.getOrNull() ?: return newHomePageResponse(request.name, emptyList(), false)
 
         val results = document.select("a[href]")
-            .filter { it.attr("href").contains("/film/", true) || it.attr("href").contains("-film-", true) }
+            .filter { isFilmDetailLink(it.attr("href")) }
             .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
 
@@ -84,14 +84,39 @@ class FilmModu : MainAPI() {
         )
     }
 
+    private fun isFilmDetailLink(raw: String): Boolean {
+        val href = normalizeUrl(raw, mainUrl)
+        if (!href.startsWith("http", true)) return false
+
+        val path = runCatching { URI(href).path.orEmpty().lowercase() }.getOrDefault("")
+        if (path.isBlank()) return false
+
+        // Real FilmModu film pages end with "-film-izle".
+        if (!path.endsWith("-film-izle")) return false
+
+        // Exclude navigation/category/archive pages that also contain "-film-izle".
+        val blocked = listOf(
+            "/hd-film-kategori/",
+            "/arsiv-filmler",
+            "/hd-populer-filmler",
+            "/boxset-seri-filmler",
+            "/turkce-dublaj-hd-film-izle",
+            "/turkce-altyazili-hd-filmler-izle",
+            "/film-tur/",
+            "/aktor/",
+            "/yil/"
+        )
+
+        return blocked.none { path.contains(it) }
+    }
+
     private fun Element.toSearchResult(): SearchResponse? {
         val anchor = if (tagName().equals("a", true)) this else selectFirst("a[href]") ?: return null
 
         val href = normalizeUrl(anchor.attr("href"), mainUrl)
         if (!href.startsWith("http", true)) return null
 
-        val path = runCatching { URI(href).path.orEmpty().lowercase() }.getOrDefault("")
-        if (!path.contains("/film/") && !path.contains("-film-")) return null
+        if (!isFilmDetailLink(href)) return null
 
         val image = sequence {
             yield(anchor.selectFirst("img"))
@@ -154,7 +179,7 @@ class FilmModu : MainAPI() {
         }.getOrNull() ?: return emptyList()
 
         return document.select("a[href]")
-            .filter { it.attr("href").contains("/film/", true) || it.attr("href").contains("-film-", true) }
+            .filter { isFilmDetailLink(it.attr("href")) }
             .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
     }
@@ -343,7 +368,9 @@ class FilmModu : MainAPI() {
                 val src = listOf(
                     source.optString("src"),
                     source.optString("url"),
-                    source.optString("file")
+                    source.optString("file"),
+                    source.optString("srcUrl"),
+                    source.optString("source")
                 ).firstOrNull { it.isNotBlank() } ?: continue
 
                 val label = listOf(
@@ -356,7 +383,7 @@ class FilmModu : MainAPI() {
                 if (mediaUrl.startsWith("http", true)) {
                     if (emitMedia(
                             mediaUrl,
-                            altLink,
+                            mainUrl + "/",
                             "FilmModu - " + altName,
                             label,
                             subtitleCallback,
@@ -552,6 +579,7 @@ class FilmModu : MainAPI() {
                 headers = mapOf(
                     "User-Agent" to USER_AGENT,
                     "Referer" to referer,
+                    "Origin" to mainUrl,
                     "Accept" to "*/*"
                 )
             }
