@@ -1,7 +1,5 @@
 package com.neoncs3
 
-package com.neoncs3
-
 import android.util.Log
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.app
@@ -34,7 +32,7 @@ class WebDramaTurkeyExtractor : ExtractorApi() {
             val response = app.get(
                 url,
                 headers = mapOf(
-                    "User-Agent" to USER_AGENT,
+                    "User-Agent" to WDT_USER_AGENT,
                     "Referer" to pageReferer,
                 ),
                 referer = pageReferer,
@@ -52,7 +50,7 @@ class WebDramaTurkeyExtractor : ExtractorApi() {
             val apiResponse = app.post(
                 "$mainUrl/api/source",
                 headers = buildMap {
-                    put("User-Agent", USER_AGENT)
+                    put("User-Agent", WDT_USER_AGENT)
                     put("Referer", url)
                     put("Content-Type", "application/x-www-form-urlencoded")
                     if (!cookie.isNullOrBlank()) put("Cookie", cookie)
@@ -103,7 +101,7 @@ class WebDramaTurkeyExtractor : ExtractorApi() {
         }
     }
 
-    private suspend fun emit(
+    private fun emit(
         rawUrl: String,
         callback: (ExtractorLink) -> Unit,
     ) {
@@ -125,7 +123,7 @@ class WebDramaTurkeyExtractor : ExtractorApi() {
             ) {
                 quality = Qualities.Unknown.value
                 headers = mapOf(
-                    "User-Agent" to USER_AGENT,
+                    "User-Agent" to WDT_USER_AGENT,
                     "Referer" to mainUrl,
                 )
                 referer = mainUrl
@@ -142,7 +140,7 @@ class WebDramaTurkeyExtractor : ExtractorApi() {
             return value
         }
 
-        if (value.startsWith("//")) return "https:" + value
+        if (value.startsWith("//")) return "https:$value"
 
         if (value.startsWith("/")) {
             val origin = if (base.startsWith("http", true)) {
