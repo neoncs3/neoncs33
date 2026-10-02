@@ -37,7 +37,6 @@ class WebDramaTurkeyExtractor : ExtractorApi() {
                 ),
                 referer = pageReferer,
                 allowRedirects = true,
-                cacheTime = 0,
             )
 
             if (!response.isSuccessful) return@runCatching
@@ -58,7 +57,6 @@ class WebDramaTurkeyExtractor : ExtractorApi() {
                     put("X-Requested-With", "XMLHttpRequest")
                 },
                 referer = url,
-                cacheTime = 0,
                 data = mapOf(
                     "r" to pageReferer,
                     "d" to mainUrl,
