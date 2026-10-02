@@ -72,7 +72,7 @@ class FilmModu : MainAPI() {
             app.get(url, headers = headers()).document
         }.getOrNull() ?: return newHomePageResponse(request.name, emptyList(), false)
 
-        val results = document.select("div.movie")
+        val results = document.select("div.movie-item, div.movie, .movie-item, .film, article")
             .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
 
@@ -91,8 +91,8 @@ class FilmModu : MainAPI() {
         if (!href.contains("/film/") && !href.contains("/film-")) return null
 
         val title = listOf(
+            selectFirst("h3, .turkish-name, .original-name, .title, h2, .movie-title")?.text(),
             anchor.attr("title"),
-            selectFirst(".movie-title, .title, h2, h3")?.text(),
             anchor.text(),
             selectFirst("img")?.attr("alt"),
         ).firstOrNull { !it.isNullOrBlank() }?.trim().orEmpty()
@@ -124,7 +124,7 @@ class FilmModu : MainAPI() {
             ).document
         }.getOrNull() ?: return emptyList()
 
-        return document.select("div.movie")
+        return document.select("div.movie-item, div.movie, .movie-item, .film, article")
             .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
     }
