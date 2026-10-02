@@ -253,9 +253,13 @@ class WebDramaTurkey : MainAPI() {
             ).firstOrNull { !it.isNullOrBlank() }
         )
 
-        val plot = document.selectFirst(
-            "div.app-detail-overview, div.desc, div.description, div.plot, p.desc"
-        )?.text()?.trim()
+        val plot = document.select("div.detail-attr").firstOrNull { block ->
+            block.selectFirst(".attr")?.text()?.trim()?.equals("Genel Bakış", true) == true
+        }?.selectFirst(".text-content, .text")?.text()?.trim()
+            ?: document.selectFirst(
+                "div.app-detail-overview, div.desc, div.description, div.plot, p.desc"
+            )?.text()?.trim()
+            ?: document.selectFirst("meta[property='og:description']")?.attr("content")?.trim()
 
         val tags = document.select("a[href*='/tur/']")
             .map { it.text().trim() }
@@ -282,24 +286,35 @@ class WebDramaTurkey : MainAPI() {
         val actors = document.select(
             "a[href*='/oyuncu/'], div.actor, div.oyuncu, .actors a[href]"
         ).mapNotNull { element ->
-            val img = element.selectFirst("img")
+            val img = element.selectFirst("img, .media")
             val actorName = sequenceOf(
-                element.selectFirst("div.name, span.name")?.text()?.trim(),
+                element.selectFirst("div.list-title, div.name, span.name")?.text()?.trim(),
                 img?.attr("alt")?.trim(),
                 element.text().trim(),
             ).firstOrNull { !it.isNullOrBlank() } ?: return@mapNotNull null
 
-            Actor(
-                actorName,
-                fixUrlNull(img?.attr("data-src")?.ifBlank { img.attr("src") })
-            )
+            val imageUrl = img?.attr("data-src")
+                ?.ifBlank { img.attr("src") }
+                ?.ifBlank { null }
+                ?: Regex("""url\((?:&quot;|["']?)([^)"']+)(?:&quot;|["']?)\)""")
+                    .find(element.attr("style"))
+                    ?.groupValues?.getOrNull(1)
+
+            Actor(actorName, fixUrlNull(imageUrl))
         }.distinctBy { it.name }
 
-        val trailer = document.select("iframe[src], iframe[data-src], a[href]")
+        val trailer = document.select("iframe[src], iframe[data-src], a[href], button[data-remote]")
             .mapNotNull { element ->
                 val raw = element.attr("data-src")
                     .ifBlank { element.attr("src") }
                     .ifBlank { element.attr("href") }
+                    .ifBlank { element.attr("data-remote") }
+                    .let { value ->
+                        Regex("""(?:trailer=)(https?%3A%2F%2F[^&]+)""", RegexOption.IGNORE_CASE)
+                            .find(value)?.groupValues?.getOrNull(1)
+                            ?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+                            ?: value
+                    }
 
                 fixUrlNull(raw)?.takeIf {
                     it.contains("youtube.com", true) || it.contains("youtu.be", true)
@@ -413,7 +428,7 @@ class WebDramaTurkey : MainAPI() {
         var found = false
 
         val buttons = document
-            .select("button[data-embed], a[data-embed], [data-embed]")
+            .select("button[data-embed], a[data-embed], .dropdown-source[data-embed], [data-embed]")
             .distinctBy { it.attr("data-embed") }
 
         for (button in buttons) {
@@ -442,13 +457,18 @@ class WebDramaTurkey : MainAPI() {
             val ajaxText = ajaxResponse.text
 
             val videoPhpUrl = Regex(
-                """(?:src|url)\s*=\s*["'](https?://[^"']*video\.php\?[^"']+)["']""",
+                """src\s*=\s*["']([^"']+)["']""",
                 RegexOption.IGNORE_CASE
             ).find(ajaxText)?.groupValues?.getOrNull(1)
+                ?.replace("\\/", "/")
+                ?.replace("&amp;", "&")
+                ?.let { fixUrlNull(it) }
                 ?: Regex(
-                    """(?:src|url)\s*=\s*["']([^"']*video\.php\?[^"']+)["']""",
+                    """(?:https?:)?//[^\s"'<>]*video\.php\?[^\s"'<>]+""",
                     RegexOption.IGNORE_CASE
-                ).find(ajaxText)?.groupValues?.getOrNull(1)?.let(::fixUrlNull)
+                ).find(ajaxText)?.value
+                    ?.replace("\\/", "/")
+                    ?.let(::fixUrlNull)
 
             if (videoPhpUrl.isNullOrBlank()) {
                 val fallbackIframe = Regex(
@@ -485,9 +505,13 @@ class WebDramaTurkey : MainAPI() {
             val videoHtml = videoResponse.text
 
             val iframeUrl = Regex(
-                """<iframe[^>]+src=["']([^"']+)["']""",
+                """<iframe[^>]+(?:id=["']main-iframe["'][^>]+)?src=["']([^"']+)["']""",
                 RegexOption.IGNORE_CASE
             ).find(videoHtml)?.groupValues?.getOrNull(1)?.let(::fixUrlNull)
+                ?: Regex(
+                    """src=["'](https?://[^"']+)["']""",
+                    RegexOption.IGNORE_CASE
+                ).find(videoHtml)?.groupValues?.getOrNull(1)?.let(::fixUrlNull)
 
             if (!iframeUrl.isNullOrBlank()) {
                 found = resolveIframe(
@@ -568,13 +592,34 @@ class WebDramaTurkey : MainAPI() {
         if (iframeUrl.contains("dtpasn.asia", true) ||
             iframeUrl.contains("dtpasn.com", true)
         ) {
+            var emitted = false
             WebDramaTurkeyExtractor().getUrl(
                 iframeUrl,
                 referer,
                 subtitleCallback,
-                callback,
-            )
-            return true
+            ) {
+                emitted = true
+                callback(it)
+            }
+            if (emitted) return true
+        }
+
+        if (iframeUrl.contains("vkvideo.ru", true) || iframeUrl.contains("vk.com", true)) {
+            var emitted = false
+            WebDramaTurkeyVkExtractor().getUrl(iframeUrl, referer, subtitleCallback) {
+                emitted = true
+                callback(it)
+            }
+            if (emitted) return true
+        }
+
+        if (iframeUrl.contains("abstream.to", true)) {
+            var emitted = false
+            WebDramaTurkeyAbstreamExtractor().getUrl(iframeUrl, referer, subtitleCallback) {
+                emitted = true
+                callback(it)
+            }
+            if (emitted) return true
         }
 
         val loaded = runCatching {
