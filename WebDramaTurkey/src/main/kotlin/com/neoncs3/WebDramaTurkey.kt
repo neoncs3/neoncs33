@@ -28,8 +28,7 @@ class WebDramaTurkey : MainAPI() {
     override val mainPage = mainPageOf(
         "$mainUrl/" to "Son Bölümler",
         "$mainUrl/diziler?page=" to "Diziler",
-        "$mainUrl/filmler?page=" to "Filmler",
-        "$mainUrl/programlar?page=" to "Programlar",
+        "$mainUrl/filmler?page=" to "Filmler",        
         "$mainUrl/animeler?page=" to "Animeler",
         "$mainUrl/diziler?filter=%7B%22country%22%3A%221%22%2C%22sorting%22%3A%22newest%22%7D&page=" to "Kore Dizileri",
         "$mainUrl/diziler?filter=%7B%22country%22%3A%222%22%2C%22sorting%22%3A%22newest%22%7D&page=" to "Çin Dizileri",
@@ -39,6 +38,7 @@ class WebDramaTurkey : MainAPI() {
         "$mainUrl/tur/fantastik?page=" to "Fantastik",
         "$mainUrl/tur/komedi?page=" to "Komedi",
         "$mainUrl/tur/gerilim?page=" to "Gerilim",
+        "$mainUrl/tur/korku?page=" to "korku",
         "$mainUrl/tur/aksiyon?page=" to "Aksiyon",
         "$mainUrl/tur/gizem?page=" to "Gizem",
         "$mainUrl/tur/tarihi?page=" to "Tarihi",
