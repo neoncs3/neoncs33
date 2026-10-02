@@ -422,8 +422,8 @@ class WebDramaTurkey : MainAPI() {
         val document = runCatching {
             app.get(
                 data,
-                headers = pageHeaders,
-                referer = "$mainUrl/",
+                headers = pageHeaders + mapOf("Referer" to data),
+                referer = data,
                 allowRedirects = true,
                 cacheTime = 0,
             ).document
@@ -580,7 +580,7 @@ class WebDramaTurkey : MainAPI() {
                 if (!iframeUrl.isNullOrBlank()) {
                     found = resolveIframe(
                         iframeUrl,
-                        videoPhpUrl,
+                        data,
                         sourceName,
                         subtitleCallback,
                         callback,
