@@ -206,10 +206,6 @@ class WebDramaTurkeyVkExtractor : ExtractorApi() {
                             type = type,
                         ) {
                             quality = Qualities.Unknown.value
-                            headers = mapOf(
-                                "User-Agent" to WDT_VK_UA,
-                                "Referer" to "https://vkvideo.ru/",
-                            )
                             this.referer = "https://vkvideo.ru/"
                         }
                     )
@@ -239,10 +235,6 @@ class WebDramaTurkeyVkExtractor : ExtractorApi() {
                             type = type,
                         ) {
                             quality = Qualities.Unknown.value
-                            headers = mapOf(
-                                "User-Agent" to WDT_VK_UA,
-                                "Referer" to "https://vkvideo.ru/",
-                            )
                             this.referer = "https://vkvideo.ru/"
                         }
                     )
@@ -290,10 +282,6 @@ class WebDramaTurkeyAbstreamExtractor : ExtractorApi() {
                             type = INFER_TYPE,
                         ) {
                             quality = Qualities.Unknown.value
-                            headers = mapOf(
-                                "User-Agent" to WDT_VK_UA,
-                                "Referer" to mainUrl,
-                            )
                             this.referer = mainUrl
                         }
                     )
