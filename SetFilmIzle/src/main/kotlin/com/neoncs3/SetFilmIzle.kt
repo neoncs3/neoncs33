@@ -488,7 +488,7 @@ class SetFilmIzle : MainAPI() {
         return postId + "|" + pageUrl + "|" + nonce + "|" + player + "|" + part
     }
 
-    private fun loadEpisodePage(
+    private suspend fun loadEpisodePage(
         url: String,
         document: Document,
         poster: String?,
