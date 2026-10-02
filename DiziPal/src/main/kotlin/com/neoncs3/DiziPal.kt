@@ -1045,7 +1045,7 @@ class DiziPal : MainAPI() {
         var found = false
         val seen = HashSet<String>()
 
-        fun register(rawUrl: String?, rawLang: String? = null) {
+        suspend fun register(rawUrl: String?, rawLang: String? = null) {
             var url = normalizeUrl(rawUrl, referer)
             if (url.isBlank() || !url.startsWith("http", true)) return
 
@@ -1085,10 +1085,11 @@ class DiziPal : MainAPI() {
 
         // Common DPlayer/JSON layouts:
         // {"file":"...vtt","label":"Türkçe"}
-        Regex(
+        val fileLabelRegex = Regex(
             """"file"\s*:\s*"([^"]+)"\s*,\s*"label"\s*:\s*"([^"]+)"""",
             RegexOption.IGNORE_CASE,
-        ).findAll(text).forEach { match ->
+        )
+        for (match in fileLabelRegex.findAll(text)) {
             register(
                 match.groupValues[1],
                 match.groupValues[2],
@@ -1096,10 +1097,11 @@ class DiziPal : MainAPI() {
         }
 
         // Some versions use label before file.
-        Regex(
+        val labelFileRegex = Regex(
             """"label"\s*:\s*"([^"]+)"\s*,\s*"file"\s*:\s*"([^"]+)"""",
             RegexOption.IGNORE_CASE,
-        ).findAll(text).forEach { match ->
+        )
+        for (match in labelFileRegex.findAll(text)) {
             register(
                 match.groupValues[2],
                 match.groupValues[1],
@@ -1107,58 +1109,64 @@ class DiziPal : MainAPI() {
         }
 
         // tracks/captions/subtitle objects can use url/src instead of file.
-        Regex(
+        val trackObjectRegex = Regex(
             """(?is)"(?:track|tracks|caption|captions|subtitle|subtitles?)"\s*:\s*(?:\[[^\]]*\]|\{[^}]*\})"""
-        ).findAll(text).forEach { block ->
+        )
+        val trackUrlRegex = Regex(
+            """(?i)"(?:file|src|url|source)"\s*:\s*"([^"]+)""""
+        )
+        val trackLabelRegex = Regex(
+            """(?i)"(?:label|lang|language|name)"\s*:\s*"([^"]+)""""
+        )
+        for (block in trackObjectRegex.findAll(text)) {
             val value = block.value
+            val label = trackLabelRegex.find(value)
+                ?.groupValues
+                ?.getOrNull(1)
 
-            Regex(
-                """(?i)"(?:file|src|url|source)"\s*:\s*"([^"]+)""""
-            ).findAll(value).forEach { urlMatch ->
-                val label = Regex(
-                    """(?i)"(?:label|lang|language|name)"\s*:\s*"([^"]+)""""
-                ).find(value)?.groupValues?.getOrNull(1)
-
+            for (urlMatch in trackUrlRegex.findAll(value)) {
                 register(urlMatch.groupValues[1], label)
             }
         }
 
         // Scalar subtitle fields.
-        Regex(
+        val scalarSubtitleRegex = Regex(
             """(?i)"(?:subtitle|subtitles?|caption|captions?|subtitle_url|subtitleUrl|caption_url|captionUrl|sub_url|subUrl)"\s*:\s*"([^"]+)""""
-        ).findAll(text).forEach { match ->
+        )
+        for (match in scalarSubtitleRegex.findAll(text)) {
             register(match.groupValues[1])
         }
 
         // Bare subtitle URLs, including protocol-relative and extensionless
         // subtitle endpoints used by some player revisions.
-        Regex(
+        val subtitleUrlRegex = Regex(
             """(?i)(?:(?:https?:)?//|/)[^"'<>\\s]+(?:\.srt|\.vtt|\.ass|\.ssa)(?:\?[^"'<>\\s]*)?"""
-        ).findAll(text).forEach { match ->
+        )
+        for (match in subtitleUrlRegex.findAll(text)) {
             register(match.value)
         }
 
-        Regex(
+        val subtitleEndpointRegex = Regex(
             """(?i)(?:(?:https?:)?//)[^"'<>\\s]*(?:subtitle|subtitles|caption|captions|sub\.php|subtitle\.php)[^"'<>\\s]*"""
-        ).findAll(text).forEach { match ->
+        )
+        for (match in subtitleEndpointRegex.findAll(text)) {
             register(match.value)
         }
 
         // HTML <track> elements that survived Jsoup parsing.
-        runCatching {
-            org.jsoup.Jsoup.parse(text)
-                .select("track[src], track[data-src], track[kind='subtitles'], track[kind='captions']")
-                .forEach { track ->
-                    val rawUrl = track.attr("src")
-                        .ifBlank { track.attr("data-src") }
+        val trackDocument = org.jsoup.Jsoup.parse(text)
+        for (track in trackDocument.select(
+            "track[src], track[data-src], track[kind='subtitles'], track[kind='captions']"
+        )) {
+            val rawUrl = track.attr("src")
+                .ifBlank { track.attr("data-src") }
 
-                    register(
-                        rawUrl,
-                        track.attr("label")
-                            .ifBlank { track.attr("srclang") }
-                            .ifBlank { track.attr("lang") },
-                    )
-                }
+            register(
+                rawUrl,
+                track.attr("label")
+                    .ifBlank { track.attr("srclang") }
+                    .ifBlank { track.attr("lang") },
+            )
         }
 
         return found
