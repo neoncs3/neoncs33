@@ -99,7 +99,18 @@ class FilmModu : MainAPI() {
 
         if (title.isBlank()) return null
 
-        val poster = posterFrom(this) ?: posterFrom(anchor)
+        val poster = normalizeUrl(
+            this.selectFirst("picture img")?.attr("data-src")?.takeIf { it.isNotBlank() }
+                ?: this.selectFirst("picture img")?.attr("src")?.takeIf { it.isNotBlank() }
+                ?: this.selectFirst("img")?.attr("data-src")?.takeIf { it.isNotBlank() }
+                ?: this.selectFirst("img")?.attr("data-lazy-src")?.takeIf { it.isNotBlank() }
+                ?: this.selectFirst("img")?.attr("src")?.takeIf { it.isNotBlank() }
+                ?: posterFrom(this)
+                ?: posterFrom(anchor)
+                ?: "",
+            mainUrl
+        ).takeIf { it.startsWith("http", true) }
+
         val rating = extractRating(
             anchor.text() + " " + selectFirst(".imdb-rating, .rating")?.text().orEmpty()
         )
