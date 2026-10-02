@@ -225,17 +225,32 @@ class FilmModu : MainAPI() {
             .map { it.text().trim() }
             .filter { it.isNotBlank() }
 
-        val actors = document.select("div.description a[href*='-oyuncu-']")
-            .mapNotNull {
+        val actors = document.select(
+            "div.description a[href*='-oyuncu-'], " +
+                "div.description a[href*='/oyuncu/'], " +
+                ".actors a[href], .cast a[href]"
+        ).mapNotNull {
                 val actor = it.selectFirst("span")?.text()?.trim() ?: it.text().trim()
                 actor.takeIf { value -> value.isNotBlank() }?.let(::Actor)
             }
 
-        val rating = extractRating(document.text())
-        val trailer = document.selectFirst("div.container iframe, iframe[src*='youtube'], iframe[src*='youtu.be']")
-            ?.attr("src")
-            ?.takeIf { it.isNotBlank() }
-            ?.let { normalizeUrl(it, url) }
+        val rating = listOf(
+            document.selectFirst("div.description p")?.ownText(),
+            document.selectFirst(".imdb-score, .imdb-rating, .rating, .score")?.text(),
+            document.text()
+        ).asSequence()
+            .filterNotNull()
+            .mapNotNull(::extractRating)
+            .firstOrNull()
+        val trailer = document.select("iframe[src], iframe[data-src]")
+            .mapNotNull {
+                val raw = it.attr("data-src").ifBlank { it.attr("src") }
+                normalizeUrl(raw, url).takeIf { value ->
+                    value.contains("youtube.com", true) ||
+                        value.contains("youtu.be", true)
+                }
+            }
+            .firstOrNull()
 
         return newMovieLoadResponse(title, url, TvType.Movie, url) {
             posterUrl = poster
@@ -259,88 +274,76 @@ class FilmModu : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
-        val pageResponse = runCatching {
-            app.get(data, headers = headers()).also {
-                Log.d(tag, "Film sayfası HTTP=" + it.code)
-            }
+        Log.d(tag, "FilmModu loadLinks başladı: $data")
+
+        val baseDocument = runCatching {
+            app.get(
+                data,
+                headers = headers(mainUrl + "/"),
+                referer = mainUrl + "/",
+                allowRedirects = true
+            ).document
         }.getOrNull() ?: return false
 
-        val pageHtml = pageResponse.text
-        var processed = false
-
-        // Yeni tema: video oynatıcı HTML'si Base64 ile gömülü olabilir.
-        val base64Patterns = listOf(
-            Regex("""(?:ilkpartkod|partkod|part[\w]*)\s*=\s*['"]([A-Za-z0-9+/=_-]{80,})['"]""", RegexOption.IGNORE_CASE),
-            Regex("""(?:atob\(|base64_decode\()['"]?([A-Za-z0-9+/=_-]{80,})""", RegexOption.IGNORE_CASE)
+        data class ProbePage(
+            val url: String,
+            val name: String,
+            val document: org.jsoup.nodes.Document?
         )
 
-        val decodedBlocks = LinkedHashSet<String>()
-        for (regex in base64Patterns) {
-            regex.findAll(pageHtml).forEach { match ->
-                val value = match.groupValues.getOrNull(1).orEmpty()
-                decodeBase64Html(value)?.let(decodedBlocks::add)
-            }
-        }
+        val pages = ArrayList<ProbePage>()
+        pages += ProbePage(data, "Ana", baseDocument)
 
-        for (block in decodedBlocks) {
-            val doc = Jsoup.parse(block)
-            val iframes = doc.select("iframe[src], video[src], video source[src], source[src]")
-            for (element in iframes) {
-                val raw = element.attr("src").ifBlank { element.attr("data-src") }
-                val mediaUrl = normalizeUrl(raw, data)
-                if (mediaUrl.startsWith("http", true)) {
-                    if (emitMedia(
-                            mediaUrl,
-                            data,
-                            "FilmModu - Gömülü Oynatıcı",
-                            element.attr("label").ifBlank { element.attr("title") },
-                            subtitleCallback,
-                            callback
-                        )
-                    ) {
-                        processed = true
-                    }
-                }
-            }
-        }
-
-        // Klasik FilmModu akışı: alternatif bağlantı -> videoId/videoType -> get-source.
-        val alternates = pageResponse.document.select(
-            "div.alternates a[href], .alternates a[href], a[href*='alternatif'], a[href*='player']"
-        )
-
-        for (alternate in alternates) {
-            val altLink = normalizeUrl(alternate.attr("href"), data)
-            val altName = alternate.text().trim()
-
-            if (!altLink.startsWith("http", true) ||
-                altName.contains("fragman", true)
+        baseDocument.select("div.alternates a[href], .alternates a[href]").forEach { a ->
+            val href = normalizeUrl(a.attr("href"), data)
+            val pageName = a.text().trim()
+            if (
+                href.startsWith("http", true) &&
+                href != data &&
+                !pageName.contains("fragman", true)
             ) {
-                continue
+                pages += ProbePage(
+                    href,
+                    pageName.ifBlank { "Alternatif" },
+                    null
+                )
             }
+        }
 
-            val altResponse = runCatching {
+        val seenStreams = HashSet<String>()
+        val seenSubtitles = HashSet<String>()
+        var linksFound = false
+
+        for (page in pages.distinctBy { it.url }.take(12)) {
+            val doc = page.document ?: runCatching {
                 app.get(
-                    altLink,
+                    page.url,
                     headers = headers(data),
                     referer = data,
                     allowRedirects = true
-                )
+                ).document
             }.getOrNull() ?: continue
 
-            val altText = altResponse.text
+            val html = doc.html()
 
-            val videoId = Regex(
-                """(?:var\s+)?videoId\s*=\s*['"]([^'"]+)['"]""",
-                RegexOption.IGNORE_CASE
-            ).find(altText)?.groupValues?.getOrNull(1)
+            val videoId = sequenceOf(
+                Regex("""var\s+videoId\s*=\s*['"]([0-9]+)['"]""", RegexOption.IGNORE_CASE)
+                    .find(html)?.groupValues?.getOrNull(1),
+                Regex("""videoId\s*[:=]\s*['"]([0-9]+)['"]""", RegexOption.IGNORE_CASE)
+                    .find(html)?.groupValues?.getOrNull(1)
+            ).firstOrNull { !it.isNullOrBlank() }
 
-            val videoType = Regex(
-                """(?:var\s+)?videoType\s*=\s*['"]([^'"]+)['"]""",
-                RegexOption.IGNORE_CASE
-            ).find(altText)?.groupValues?.getOrNull(1)
+            val videoType = sequenceOf(
+                Regex("""var\s+videoType\s*=\s*['"]([a-zA-Z0-9_-]+)['"]""", RegexOption.IGNORE_CASE)
+                    .find(html)?.groupValues?.getOrNull(1),
+                Regex("""videoType\s*[:=]\s*['"]([a-zA-Z0-9_-]+)['"]""", RegexOption.IGNORE_CASE)
+                    .find(html)?.groupValues?.getOrNull(1)
+            ).firstOrNull { !it.isNullOrBlank() }
 
-            if (videoId.isNullOrBlank() || videoType.isNullOrBlank()) continue
+            if (videoId.isNullOrBlank() || videoType.isNullOrBlank()) {
+                Log.d(tag, "videoId/videoType bulunamadı: \${page.url}")
+                continue
+            }
 
             val sourceUrl = mainUrl +
                 "/get-source?movie_id=" +
@@ -348,89 +351,118 @@ class FilmModu : MainAPI() {
                 "&type=" +
                 URLEncoder.encode(videoType, "UTF-8")
 
-            val sourceResponse = runCatching {
+            val response = runCatching {
                 app.get(
                     sourceUrl,
-                    headers = headers(altLink),
-                    referer = altLink,
+                    headers = mapOf(
+                        "User-Agent" to USER_AGENT,
+                        "Accept" to "application/json, text/javascript, */*;q=0.01",
+                        "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+                        "Referer" to page.url,
+                        "X-Requested-With" to "XMLHttpRequest"
+                    ),
+                    referer = page.url,
                     allowRedirects = true
                 )
             }.getOrNull() ?: continue
 
-            if (!sourceResponse.isSuccessful || sourceResponse.text.isBlank()) continue
+            Log.d(tag, "get-source \${page.name}: HTTP=\${response.code}")
+            if (!response.isSuccessful || response.text.isBlank()) continue
 
-            val json = runCatching {
-                JSONObject(sourceResponse.text)
-            }.getOrNull() ?: continue
+            val json = runCatching { JSONObject(response.text) }.getOrNull() ?: continue
+            val sources = findSources(json)
 
-            val sourceArray = findSources(json)
-            for (source in sourceArray) {
-                val src = listOf(
+            if (sources.isEmpty()) {
+                Log.d(tag, "sources boş: \${page.name}")
+                continue
+            }
+
+            val subtitleRaw = sequenceOf(
+                json.optString("subtitle").takeIf { it.isNotBlank() },
+                json.optJSONObject("data")?.optString("subtitle")
+                    ?.takeIf { it.isNotBlank() }
+            ).firstOrNull { !it.isNullOrBlank() }
+
+            subtitleRaw?.let { raw ->
+                val subUrl = normalizeUrl(raw, page.url)
+                if (
+                    subUrl.startsWith("http", true) &&
+                    seenSubtitles.add(subUrl)
+                ) {
+                    runCatching {
+                        subtitleCallback(
+                            SubtitleFile(
+                                lang = "Türkçe",
+                                url = subUrl
+                            )
+                        )
+                    }
+                }
+            }
+
+            for (source in sources) {
+                val raw = sequenceOf(
                     source.optString("src"),
                     source.optString("url"),
-                    source.optString("file"),
-                    source.optString("srcUrl"),
-                    source.optString("source")
+                    source.optString("file")
                 ).firstOrNull { it.isNotBlank() } ?: continue
 
-                val label = listOf(
+                var streamUrl = normalizeUrl(raw, mainUrl + "/")
+                if (!streamUrl.startsWith("http", true)) continue
+
+                if (!streamUrl.contains(".m3u8", true)) {
+                    val question = streamUrl.indexOf("?")
+                    streamUrl = if (question >= 0) {
+                        streamUrl.substring(0, question) +
+                            ".m3u8" +
+                            streamUrl.substring(question)
+                    } else {
+                        streamUrl + ".m3u8"
+                    }
+                }
+
+                if (!seenStreams.add(streamUrl)) continue
+
+                val label = sequenceOf(
                     source.optString("label"),
                     source.optString("quality"),
                     source.optString("name")
                 ).firstOrNull { it.isNotBlank() }.orEmpty()
 
-                val mediaUrl = normalizeUrl(src, altLink)
-                if (mediaUrl.startsWith("http", true)) {
-                    if (emitMedia(
-                            mediaUrl,
-                            mainUrl + "/",
-                            "FilmModu - " + altName,
-                            label,
-                            subtitleCallback,
-                            callback
-                        )
+                val resolution = source.optString("res").toIntOrNull()
+                val quality = resolution?.takeIf { it > 0 }
+                    ?: getQualityFromName(label).takeIf { it > 0 }
+                    ?: Qualities.Unknown.value
+
+                callback(
+                    newExtractorLink(
+                        source = "$name - \${page.name}",
+                        name = "$name - \${page.name}" +
+                            label.takeIf { it.isNotBlank() }
+                                ?.let { " $it" }
+                                .orEmpty(),
+                        url = streamUrl,
+                        type = ExtractorLinkType.M3U8
                     ) {
-                        processed = true
+                        this.referer = "$mainUrl/"
+                        this.quality = quality
+                        headers = mapOf(
+                            "Referer" to "$mainUrl/",
+                            "User-Agent" to USER_AGENT
+                        )
                     }
-                }
+                )
+
+                linksFound = true
+                Log.d(
+                    tag,
+                    "HLS bulundu: $streamUrl | \${page.name} | $label"
+                )
             }
-
-            emitSubtitlesFromJson(
-                json = json,
-                referer = altLink,
-                defaultLabel = "Türkçe",
-                subtitleCallback = subtitleCallback
-            )
         }
 
-        // Son yedek: sayfada düz m3u8/mp4/source URL'si varsa doğrudan kullan.
-        if (!processed) {
-            val directRegex = Regex(
-                """https?://[^"'<>\s]+(?:\.m3u8|\.mp4)(?:\?[^"'<>\s]*)?""",
-                RegexOption.IGNORE_CASE
-            )
-
-            directRegex.findAll(pageHtml)
-                .map { it.value }
-                .distinct()
-                .take(8)
-                .forEach { url ->
-                    if (emitMedia(
-                            url,
-                            data,
-                            "FilmModu - Doğrudan Kaynak",
-                            "",
-                            subtitleCallback,
-                            callback
-                        )
-                    ) {
-                        processed = true
-                    }
-                }
-        }
-
-        Log.d(tag, "loadLinks tamamlandı processed=" + processed)
-        return processed
+        Log.d(tag, "FilmModu loadLinks tamamlandı: linksFound=$linksFound")
+        return linksFound
     }
 
     private fun findSources(json: JSONObject): List<JSONObject> {
