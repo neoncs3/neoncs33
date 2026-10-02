@@ -621,7 +621,7 @@ class WebDramaTurkey : MainAPI() {
                         type = type,
                     ) {
                         quality = Qualities.Unknown.value
-                        referer = iframeUrl
+                        this.referer = iframeUrl
                         headers = mapOf(
                             "User-Agent" to USER_AGENT,
                             "Referer" to iframeUrl,
