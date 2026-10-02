@@ -81,6 +81,26 @@
         "name": "Dramadizilerim"
     },
     {
+        "iconUrl": "https://www.filmmodu.one/favicon.ico",
+        "fileHash": "sha256-6f7fa77496d4529eba2d99a942b89dae4d775035392243a70dc55aaba0d14d98",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
+        "fileSize": 27278,
+        "status": 1,
+        "language": "tr",
+        "authors": [
+            "neoncs3"
+        ],
+        "tvTypes": [
+            "Movie"
+        ],
+        "version": 1,
+        "internalName": "FilmModu",
+        "description": "FilmModu film sa\u011flay\u0131c\u0131s\u0131",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/FilmModu.cs3",
+        "name": "FilmModu"
+    },
+    {
         "iconUrl": "https://www.setfilmizle.ltd/favicon.ico",
         "fileHash": "sha256-25414662eda50d5d116b10bb4576468fd1a1353e0de26ad8a46868163d2051a7",
         "apiVersion": 1,
