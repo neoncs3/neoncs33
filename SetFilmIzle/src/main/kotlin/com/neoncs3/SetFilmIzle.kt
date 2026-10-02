@@ -237,218 +237,443 @@ class SetFilmIzle : MainAPI() {
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
         val tokens = data.split("|")
-        var postId = tokens.getOrNull(0)?.takeIf { it.all(Char::isDigit) && it.isNotBlank() }
-        val pageUrl = tokens.getOrNull(1)?.takeIf { it.startsWith("http", true) } ?: data
-        var nonce = tokens.getOrNull(2).orEmpty()
-        var playerName = tokens.getOrNull(3).orEmpty().ifBlank { "SetPlay" }
-        var partKey = tokens.getOrNull(4).orEmpty()
+        val pageUrl = tokens.getOrNull(1)
+            ?.takeIf { it.startsWith("http", true) }
+            ?: data.takeIf { it.startsWith("http", true) }
+            ?: return false
 
-        if (!pageUrl.startsWith("http", true)) return false
+        var fixedPostId = tokens.getOrNull(0)
+            ?.takeIf { it.isNotBlank() && it.all(Char::isDigit) }
 
-        if (postId.isNullOrBlank() || nonce.isBlank()) {
-            val document = runCatching {
+        val fixedPlayer = tokens.getOrNull(3).orEmpty()
+        val fixedPartKey = tokens.getOrNull(4).orEmpty()
+        var fixedNonce = tokens.getOrNull(2).orEmpty()
+
+        Log.d(tag, "loadLinks page=" + pageUrl)
+
+        val document = if (
+            fixedPostId.isNullOrBlank() ||
+            fixedNonce.isBlank() ||
+            fixedPlayer.isBlank()
+        ) {
+            runCatching {
                 app.get(
                     pageUrl,
                     headers = pageHeaders(mainUrl + "/"),
                     referer = mainUrl + "/",
                     allowRedirects = true,
                 ).document
-            }.getOrNull() ?: return false
-
-            postId = document.selectFirst("#stfPlayer[data-post-id], [data-post-id]")
-                ?.attr("data-post-id")
-
-            val html = document.html()
-
-            nonce = Regex("""STF_AJAX\s*=\s*\{[\s\S]*?video\s*:\s*["']([^"']+)["']""")
-                .find(html)
-                ?.groupValues
-                ?.getOrNull(1)
-                .orEmpty()
-
-            if (nonce.isBlank()) {
-                nonce = Regex("""video\s*:\s*["']([^"']+)["']""")
-                    .find(html)
-                    ?.groupValues
-                    ?.getOrNull(1)
-                    .orEmpty()
-            }
-
-            val tab = document.selectFirst(".src-tab.selected, .src-tab")
-            playerName = tab?.attr("data-player-name").orEmpty().ifBlank { playerName }
-            partKey = tab?.attr("data-part-key").orEmpty().ifBlank { partKey }
-        }
-
-        if (postId.isNullOrBlank() || nonce.isBlank()) return false
-
-        val ajaxResponse = runCatching {
-            app.post(
-                mainUrl + "/wp-admin/admin-ajax.php",
-                headers = ajaxHeaders(pageUrl),
-                data = mapOf(
-                    "action" to "get_video_url",
-                    "nonce" to nonce,
-                    "post_id" to postId,
-                    "player_name" to playerName,
-                    "part_key" to partKey,
-                ),
-                allowRedirects = true,
-            )
-        }.getOrNull() ?: return false
-
-        if (!ajaxResponse.isSuccessful || ajaxResponse.text.isBlank()) return false
-
-        val json = runCatching { JSONObject(ajaxResponse.text) }.getOrNull()
-
-        var bridgeUrl = json
-            ?.optJSONObject("data")
-            ?.optJSONObject("stream")
-            ?.optString("url")
-            .orEmpty()
-
-        if (bridgeUrl.isBlank()) {
-            bridgeUrl = json?.optJSONObject("data")?.optString("url").orEmpty()
-        }
-
-        if (bridgeUrl.isBlank()) {
-            bridgeUrl = Regex("""https?://[^"'\\s<>]+""")
-                .find(ajaxResponse.text)
-                ?.value
-                .orEmpty()
-        }
-
-        bridgeUrl = normalizeUrl(bridgeUrl, pageUrl)
-        if (!bridgeUrl.startsWith("http", true)) return false
-
-        val bridgeResponse = runCatching {
-            app.get(
-                bridgeUrl,
-                headers = pageHeaders(pageUrl),
-                referer = pageUrl,
-                allowRedirects = true,
-            )
-        }.getOrNull() ?: return false
-
-        if (!bridgeResponse.isSuccessful) return false
-
-        val bridgeHtml = bridgeResponse.text.decodeJsEscapes()
-
-        val cerceve = Regex(
-            """SPG\.cerceve\s*\(\s*["'][^"']+["']\s*,\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']\s*\)""",
-            RegexOption.IGNORE_CASE,
-        ).find(bridgeHtml)
-
-        var fastplayUrl = if (cerceve != null) {
-            xorBase64(cerceve.groupValues[1], cerceve.groupValues[2])
+            }.getOrNull()
         } else {
             null
         }
 
-        if (fastplayUrl.isNullOrBlank()) {
-            fastplayUrl = Regex(
-                """https?://[^"'<>\\s]+/(?:video|stfplay)(?:\.php)?\?[^"'<>\\s]+""",
-                RegexOption.IGNORE_CASE,
-            ).find(bridgeHtml)
-                ?.value
+        val html = document?.html().orEmpty()
+
+        if (fixedPostId.isNullOrBlank() && document != null) {
+            fixedPostId = document.select("[data-post-id]")
+                .asSequence()
+                .map { it.attr("data-post-id") }
+                .firstOrNull { it.isNotBlank() && it.all(Char::isDigit) }
         }
 
-        if (fastplayUrl.isNullOrBlank()) {
-            Log.d(tag, "FastPlay bağlantısı çözülemedi: " + bridgeUrl)
-            return false
+        if (fixedNonce.isBlank() && html.isNotBlank()) {
+            fixedNonce = Regex(
+                """(?is)window\s*\.\s*STF_AJAX\s*=\s*\{.*?nonces\s*:\s*\{.*?video\s*:\s*["']([^"']+)["']"""
+            ).find(html)?.groupValues?.getOrNull(1).orEmpty()
         }
 
-        fastplayUrl = normalizeUrl(
-            fastplayUrl,
-            bridgeResponse.url.ifBlank { bridgeUrl },
+        if (fixedNonce.isBlank() && html.isNotBlank()) {
+            fixedNonce = Regex(
+                """(?is)STF_AJAX\s*=\s*\{.*?video\s*:\s*["']([^"']+)["']"""
+            ).find(html)?.groupValues?.getOrNull(1).orEmpty()
+        }
+
+        if (fixedNonce.isBlank() && html.isNotBlank()) {
+            fixedNonce = Regex(
+                """(?is)\bvideo\s*:\s*["']([^"']+)["']"""
+            ).find(html)?.groupValues?.getOrNull(1).orEmpty()
+        }
+
+        if (fixedNonce.isBlank() && document != null) {
+            fixedNonce = document.select("[data-nonce]")
+                .asSequence()
+                .map { it.attr("data-nonce") }
+                .firstOrNull { it.isNotBlank() }
+                .orEmpty()
+        }
+
+        data class Player(
+            val postId: String,
+            val name: String,
+            val partKey: String,
         )
 
-        val fastplayResponse = runCatching {
-            app.get(
-                fastplayUrl,
-                headers = pageHeaders(bridgeResponse.url.ifBlank { bridgeUrl }),
-                referer = bridgeResponse.url.ifBlank { bridgeUrl },
-                allowRedirects = true,
+        val players = LinkedHashMap<String, Player>()
+
+        fun addPlayer(postId: String?, name: String?, partKey: String?) {
+            val pid = postId.orEmpty().trim()
+            val pname = name.orEmpty().trim()
+            val pkey = partKey.orEmpty().trim()
+
+            if (pid.isBlank() || !pid.all(Char::isDigit) || pname.isBlank()) return
+            if (pid.contains("event", true)) return
+
+            val key = pid + "|" + pname + "|" + pkey
+            players[key] = Player(pid, pname, pkey)
+        }
+
+        if (fixedPostId != null && fixedPlayer.isNotBlank()) {
+            addPlayer(fixedPostId, fixedPlayer, fixedPartKey)
+        }
+
+        if (html.isNotBlank()) {
+            val combinedForward = Regex(
+                """data-post-id\s*=\s*["']([^"']+)["'][^>]{0,500}?data-player-name\s*=\s*["']([^"']+)["'][^>]{0,300}?data-part-key\s*=\s*["']([^"']*)["']"""
             )
-        }.getOrNull() ?: return false
-
-        if (!fastplayResponse.isSuccessful) return false
-
-        val fastplayHtml = fastplayResponse.text.decodeJsEscapes()
-
-        val streamPath = Regex(
-            """(?:stream|src)\s*:\s*["']([^"']+)["']""",
-            RegexOption.IGNORE_CASE,
-        ).find(fastplayHtml)
-            ?.groupValues
-            ?.getOrNull(1)
-            .orEmpty()
-
-        if (streamPath.isBlank()) return false
-
-        val fastplayFinalUrl = fastplayResponse.url.ifBlank { fastplayUrl }
-        val manifestUrl = normalizeUrl(
-            streamPath,
-            originOf(fastplayFinalUrl) ?: fastplayFinalUrl,
-        )
-
-        if (!manifestUrl.startsWith("http", true)) return false
-
-        val sp = Regex(
-            """"sp"\s*:\s*"([^"]*)"""",
-            RegexOption.IGNORE_CASE,
-        ).find(fastplayHtml)
-            ?.groupValues
-            ?.getOrNull(1)
-            .orEmpty()
-
-        val spT = Regex(
-            """"spT"\s*:\s*(\d+)""",
-            RegexOption.IGNORE_CASE,
-        ).find(fastplayHtml)
-            ?.groupValues
-            ?.getOrNull(1)
-            ?.toLongOrNull()
-            ?: (System.currentTimeMillis() / 1000L)
-
-        val xSp = makeXSp(sp, spT)
-
-        callback(
-            newExtractorLink(
-                source = name,
-                name = name + " FastPlay HD",
-                url = manifestUrl,
-                type = ExtractorLinkType.M3U8,
-            ) {
-                quality = Qualities.P1080.value
-                referer = fastplayFinalUrl
-                headers = mapOf(
-                    "User-Agent" to USER_AGENT,
-                    "Referer" to fastplayFinalUrl,
-                    "Accept" to "*/*",
-                    "X-Sp" to xSp,
+            for (m in combinedForward.findAll(html)) {
+                addPlayer(
+                    m.groupValues.getOrNull(1),
+                    m.groupValues.getOrNull(2),
+                    m.groupValues.getOrNull(3)
                 )
-            },
-        )
-
-        var subtitleCount = 0
-
-        for ((url, label) in extractSubtitleCandidates(fastplayHtml, fastplayFinalUrl)) {
-            if (emitSubtitle(url, label, fastplayFinalUrl, subtitleCallback)) {
-                subtitleCount++
             }
-        }
 
-        if (subtitleCount == 0) {
-            val bridgeRef = bridgeResponse.url.ifBlank { bridgeUrl }
-            for ((url, label) in extractSubtitleCandidates(bridgeHtml, bridgeRef)) {
-                if (emitSubtitle(url, label, bridgeRef, subtitleCallback)) {
-                    subtitleCount++
+            val combinedReverse = Regex(
+                """data-player-name\s*=\s*["']([^"']+)["'][^>]{0,300}?data-part-key\s*=\s*["']([^"']*)["'][^>]{0,500}?data-post-id\s*=\s*["']([^"']+)["']"""
+            )
+            for (m in combinedReverse.findAll(html)) {
+                addPlayer(
+                    m.groupValues.getOrNull(3),
+                    m.groupValues.getOrNull(1),
+                    m.groupValues.getOrNull(2)
+                )
+            }
+
+            val postIds = Regex(
+                """data-post-id\s*=\s*["']([^"']+)["']"""
+            ).findAll(html)
+                .mapNotNull { it.groupValues.getOrNull(1) }
+                .filter {
+                    it.isNotBlank() &&
+                        it.all(Char::isDigit) &&
+                        !it.contains("event", true)
+                }
+                .distinct()
+                .toList()
+
+            val buttons = LinkedHashMap<String, String>()
+
+            val buttonForward = Regex(
+                """data-player-name\s*=\s*["']([^"']+)["'][^>]{0,250}?data-part-key\s*=\s*["']([^"']*)["']"""
+            )
+            for (m in buttonForward.findAll(html)) {
+                buttons[m.groupValues[1].trim()] = m.groupValues[2].trim()
+            }
+
+            val buttonReverse = Regex(
+                """data-part-key\s*=\s*["']([^"']*)["'][^>]{0,250}?data-player-name\s*=\s*["']([^"']+)["']"""
+            )
+            for (m in buttonReverse.findAll(html)) {
+                buttons[m.groupValues[2].trim()] = m.groupValues[1].trim()
+            }
+
+            if (buttons.isEmpty()) {
+                Regex(
+                    """data-player-name\s*=\s*["']([^"']+)["']"""
+                ).findAll(html)
+                    .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
+                    .filter { it.isNotBlank() }
+                    .forEach { buttons.putIfAbsent(it, "") }
+            }
+
+            for (pid in postIds) {
+                for ((pname, pkey) in buttons) {
+                    addPlayer(pid, pname, pkey)
+                }
+            }
+
+            if (fixedPostId != null && buttons.isNotEmpty()) {
+                for ((pname, pkey) in buttons) {
+                    addPlayer(fixedPostId, pname, pkey)
                 }
             }
         }
 
-        Log.d(tag, "Stream hazır; altyazı=" + subtitleCount)
-        return true
+        if (players.isEmpty() && fixedPostId != null) {
+            addPlayer(
+                fixedPostId,
+                fixedPlayer.ifBlank { "SetPlay" },
+                fixedPartKey
+            )
+        }
+
+        if (players.isEmpty() || fixedNonce.isBlank()) {
+            Log.d(
+                tag,
+                "Oynatıcı verisi eksik: postId=" +
+                    fixedPostId +
+                    " nonceLen=" +
+                    fixedNonce.length +
+                    " players=" +
+                    players.size
+            )
+            return false
+        }
+
+        val ajaxUrl = Regex(
+            """(?is)window\s*\.\s*STF_AJAX\s*=\s*\{.*?url\s*:\s*["']([^"']+)["']"""
+        ).find(html)?.groupValues?.getOrNull(1)?.let {
+            normalizeUrl(it, pageUrl)
+        } ?: (mainUrl + "/wp-admin/admin-ajax.php")
+
+        val seenManifest = HashSet<String>()
+        var processed = false
+
+        for (player in players.values.take(8)) {
+            val response = runCatching {
+                app.post(
+                    ajaxUrl,
+                    headers = ajaxHeaders(pageUrl),
+                    data = mapOf(
+                        "action" to "get_video_url",
+                        "nonce" to fixedNonce,
+                        "post_id" to player.postId,
+                        "player_name" to player.name,
+                        "part_key" to player.partKey,
+                    ),
+                    allowRedirects = true,
+                )
+            }.getOrNull() ?: continue
+
+            if (!response.isSuccessful || response.text.isBlank()) {
+                Log.d(
+                    tag,
+                    "get_video_url başarısız: " +
+                        player.name +
+                        " code=" +
+                        response.code
+                )
+                continue
+            }
+
+            val json = runCatching {
+                JSONObject(response.text)
+            }.getOrNull()
+
+            if (json?.has("success") == true && !json.optBoolean("success", true)) {
+                Log.d(tag, "get_video_url success=false: " + player.name)
+                continue
+            }
+
+            var bridgeUrl = json
+                ?.optJSONObject("data")
+                ?.optJSONObject("stream")
+                ?.optString("url")
+                .orEmpty()
+
+            if (bridgeUrl.isBlank()) {
+                bridgeUrl = json
+                    ?.optJSONObject("data")
+                    ?.optString("url")
+                    .orEmpty()
+            }
+
+            if (bridgeUrl.isBlank()) {
+                bridgeUrl = Regex("""https?://[^"'<>\\s]+""")
+                    .find(response.text)
+                    ?.value
+                    .orEmpty()
+            }
+
+            bridgeUrl = normalizeUrl(bridgeUrl, pageUrl)
+            if (!bridgeUrl.startsWith("http", true)) continue
+
+            val bridgeResponse = runCatching {
+                app.get(
+                    bridgeUrl,
+                    headers = pageHeaders(pageUrl),
+                    referer = pageUrl,
+                    allowRedirects = true,
+                )
+            }.getOrNull() ?: continue
+
+            if (!bridgeResponse.isSuccessful) continue
+
+            val bridgeHtml = bridgeResponse.text.decodeJsEscapes()
+
+            val cerceve = Regex(
+                """SPG\.cerceve\s*\(\s*["'][^"']+["']\s*,\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']\s*\)""",
+                RegexOption.IGNORE_CASE,
+            ).find(bridgeHtml)
+
+            var fastplayUrl = if (cerceve != null) {
+                xorBase64(
+                    cerceve.groupValues[1],
+                    cerceve.groupValues[2]
+                )
+            } else {
+                val twoArg = Regex(
+                    """SPG\.cerceve\s*\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']\s*\)""",
+                    RegexOption.IGNORE_CASE,
+                ).find(bridgeHtml)
+
+                if (twoArg != null) {
+                    xorBase64(
+                        twoArg.groupValues[1],
+                        twoArg.groupValues[2]
+                    )
+                } else {
+                    null
+                }
+            }
+
+            if (fastplayUrl.isNullOrBlank()) {
+                fastplayUrl = Regex(
+                    """https?://[^"'<>\\s]+/(?:stfplay|video)(?:\.php)?(?:\?[^"'<>\\s]+)?""",
+                    RegexOption.IGNORE_CASE,
+                ).find(bridgeHtml)?.value
+            }
+
+            if (fastplayUrl.isNullOrBlank()) continue
+
+            fastplayUrl = normalizeUrl(
+                fastplayUrl,
+                bridgeResponse.url.ifBlank { bridgeUrl },
+            )
+
+            val fastplayResponse = runCatching {
+                app.get(
+                    fastplayUrl,
+                    headers = pageHeaders(
+                        bridgeResponse.url.ifBlank { bridgeUrl }
+                    ),
+                    referer = bridgeResponse.url.ifBlank { bridgeUrl },
+                    allowRedirects = true,
+                )
+            }.getOrNull() ?: continue
+
+            if (!fastplayResponse.isSuccessful) continue
+
+            val fastplayHtml = fastplayResponse.text.decodeJsEscapes()
+
+            val streamPath = Regex(
+                """["']?(?:stream|src)["']?\s*[:=]\s*["']([^"']+)["']""",
+                RegexOption.IGNORE_CASE,
+            ).find(fastplayHtml)
+                ?.groupValues
+                ?.getOrNull(1)
+                .orEmpty()
+
+            if (streamPath.isBlank()) continue
+
+            val fastplayFinalUrl = fastplayResponse.url.ifBlank { fastplayUrl }
+            var manifestUrl = normalizeUrl(
+                streamPath.replace("&amp;", "&"),
+                originOf(fastplayFinalUrl) ?: fastplayFinalUrl,
+            )
+
+            if (!manifestUrl.startsWith("http", true)) continue
+
+            if (!manifestUrl.contains(".m3u8", true) &&
+                !manifestUrl.contains("/manifests/", true)
+            ) {
+                val maybeM3u8 = normalizeUrl(
+                    streamPath.substringBefore("#").substringBefore("?") + ".m3u8",
+                    originOf(fastplayFinalUrl) ?: fastplayFinalUrl,
+                )
+                if (maybeM3u8.contains(".m3u8", true)) {
+                    manifestUrl = maybeM3u8
+                } else {
+                    continue
+                }
+            }
+
+            if (!seenManifest.add(manifestUrl)) continue
+
+            val sp = Regex(
+                """"sp"\s*:\s*"([^"]*)"""",
+                RegexOption.IGNORE_CASE,
+            ).find(fastplayHtml)
+                ?.groupValues
+                ?.getOrNull(1)
+                .orEmpty()
+
+            val spT = Regex(
+                """"spT"\s*:\s*(\d+)""",
+                RegexOption.IGNORE_CASE,
+            ).find(fastplayHtml)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.toLongOrNull()
+                ?: (System.currentTimeMillis() / 1000L)
+
+            val xSp = makeXSp(sp, spT)
+
+            callback(
+                newExtractorLink(
+                    source = name,
+                    name = name + " " + player.name + " HD",
+                    url = manifestUrl,
+                    type = ExtractorLinkType.M3U8,
+                ) {
+                    quality = Qualities.P1080.value
+                    referer = fastplayFinalUrl
+                    headers = buildMap {
+                        put("User-Agent", "ExoPlayerLib/2.19.1")
+                        put("Referer", fastplayFinalUrl)
+                        put("Accept", "*/*")
+                        if (xSp.isNotBlank()) put("X-Sp", xSp)
+                    }
+                },
+            )
+
+            var subtitleCount = 0
+            for ((url, label) in extractSubtitleCandidates(
+                fastplayHtml,
+                fastplayFinalUrl
+            )) {
+                if (emitSubtitle(
+                    url,
+                    label,
+                    fastplayFinalUrl,
+                    subtitleCallback
+                )) {
+                    subtitleCount++
+                }
+            }
+
+            if (subtitleCount == 0) {
+                val bridgeRef = bridgeResponse.url.ifBlank { bridgeUrl }
+                for ((url, label) in extractSubtitleCandidates(
+                    bridgeHtml,
+                    bridgeRef
+                )) {
+                    if (emitSubtitle(
+                        url,
+                        label,
+                        bridgeRef,
+                        subtitleCallback
+                    )) {
+                        subtitleCount++
+                    }
+                }
+            }
+
+            Log.d(
+                tag,
+                "Stream hazır: player=" +
+                    player.name +
+                    ", manifest=" +
+                    manifestUrl +
+                    ", altyazı=" +
+                    subtitleCount
+            )
+
+            processed = true
+        }
+
+        return processed
     }
 
     private fun buildLinkData(document: Document, pageUrl: String): String {
