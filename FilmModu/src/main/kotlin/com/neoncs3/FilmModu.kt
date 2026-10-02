@@ -509,7 +509,7 @@ class FilmModu : MainAPI() {
                 url = mediaUrl,
                 type = type
             ) {
-                referer = referer
+                this.referer = referer
                 this.quality = quality
                 headers = mapOf(
                     "User-Agent" to USER_AGENT,
