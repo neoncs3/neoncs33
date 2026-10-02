@@ -1,5 +1,7 @@
 package com.neoncs3
 
+package com.neoncs3
+
 import android.util.Log
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.app
@@ -11,6 +13,7 @@ import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.newExtractorLink
 
 private const val WDT_EXT_TAG = "WDT2_EXT"
+private const val WDT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
 
 class WebDramaTurkeyExtractor : ExtractorApi() {
     override val name = "WebDramaTurkey"
