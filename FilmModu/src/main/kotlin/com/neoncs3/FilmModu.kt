@@ -550,7 +550,11 @@ class FilmModu : MainAPI() {
         if (!mediaUrl.startsWith("http", true)) return false
 
         val lower = mediaUrl.lowercase()
-        val type = if (lower.contains(".m3u8") || lower.contains("/hls/")) {
+        val type = if (
+            lower.contains(".m3u8") ||
+            lower.contains("/hls/") ||
+            sourceName.contains("FilmModu -", true)
+        ) {
             ExtractorLinkType.M3U8
         } else {
             INFER_TYPE
@@ -577,10 +581,7 @@ class FilmModu : MainAPI() {
                 this.referer = referer
                 this.quality = quality
                 headers = mapOf(
-                    "User-Agent" to USER_AGENT,
-                    "Referer" to referer,
-                    "Origin" to mainUrl,
-                    "Accept" to "*/*"
+                    "Referer" to "$mainUrl/"
                 )
             }
         )
