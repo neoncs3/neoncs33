@@ -82,10 +82,10 @@
     },
     {
         "iconUrl": "https://www.filmmodu.one/favicon.ico",
-        "fileHash": "sha256-6f7fa77496d4529eba2d99a942b89dae4d775035392243a70dc55aaba0d14d98",
+        "fileHash": "sha256-82a2bb1f20f921535224f90309a525ec06881a8dabca3ea296ab229b523913e9",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 27278,
+        "fileSize": 28024,
         "status": 1,
         "language": "tr",
         "authors": [
