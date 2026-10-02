@@ -160,3 +160,146 @@ class WebDramaTurkeyExtractor : ExtractorApi() {
             (url.contains(".vtt", true) || url.contains(".srt", true))
     }
 }
+
+
+private const val WDT_VK_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
+
+class WebDramaTurkeyVkExtractor : ExtractorApi() {
+    override val name = "WebDramaTurkey VK"
+    override val mainUrl = "https://vkvideo.ru"
+    override val requiresReferer = true
+
+    override suspend fun getUrl(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit,
+    ) {
+        runCatching {
+            val headers = mapOf(
+                "User-Agent" to WDT_VK_UA,
+                "Referer" to (referer ?: mainUrl),
+            )
+
+            val html = app.get(url, headers = headers, referer = referer ?: mainUrl).text
+
+            val directRegex = Regex(
+                """https?://[^"\\s<>]+\\.(?:m3u8|mp4|mpd)(?:\\?[^"\\s<>]*)?""",
+                RegexOption.IGNORE_CASE
+            )
+
+            directRegex.findAll(html)
+                .map { it.value.replace("\\\\/", "/") }
+                .distinct()
+                .forEach { stream ->
+                    val type = when {
+                        stream.contains(".mpd", true) -> ExtractorLinkType.DASH
+                        stream.contains(".m3u8", true) -> INFER_TYPE
+                        else -> ExtractorLinkType.VIDEO
+                    }
+
+                    callback(
+                        newExtractorLink(
+                            source = name,
+                            name = name,
+                            url = stream,
+                            type = type,
+                        ) {
+                            quality = Qualities.Unknown.value
+                            headers = mapOf(
+                                "User-Agent" to WDT_VK_UA,
+                                "Referer" to "https://vkvideo.ru/",
+                            )
+                            this.referer = "https://vkvideo.ru/"
+                        }
+                    )
+                }
+
+            val jsonRegex = Regex(
+                """["'](?:url|src)["']\\s*:\\s*["'](https?://[^"']+)["']""",
+                RegexOption.IGNORE_CASE
+            )
+
+            jsonRegex.findAll(html)
+                .map { it.groupValues[1].replace("\\\\/", "/") }
+                .filter { it.contains(".m3u8", true) || it.contains(".mp4", true) || it.contains(".mpd", true) }
+                .distinct()
+                .forEach { stream ->
+                    val type = when {
+                        stream.contains(".mpd", true) -> ExtractorLinkType.DASH
+                        stream.contains(".m3u8", true) -> INFER_TYPE
+                        else -> ExtractorLinkType.VIDEO
+                    }
+
+                    callback(
+                        newExtractorLink(
+                            source = name,
+                            name = name,
+                            url = stream,
+                            type = type,
+                        ) {
+                            quality = Qualities.Unknown.value
+                            headers = mapOf(
+                                "User-Agent" to WDT_VK_UA,
+                                "Referer" to "https://vkvideo.ru/",
+                            )
+                            this.referer = "https://vkvideo.ru/"
+                        }
+                    )
+                }
+        }.onFailure {
+            Log.e("WDT2_VK", "VK extractor: " + it.message)
+        }
+    }
+}
+
+class WebDramaTurkeyAbstreamExtractor : ExtractorApi() {
+    override val name = "WebDramaTurkey Abstream"
+    override val mainUrl = "https://abstream.to"
+    override val requiresReferer = true
+
+    override suspend fun getUrl(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit,
+    ) {
+        runCatching {
+            val response = app.get(
+                url,
+                headers = mapOf(
+                    "User-Agent" to WDT_VK_UA,
+                    "Referer" to (referer ?: mainUrl),
+                ),
+                referer = referer ?: mainUrl,
+            )
+
+            val html = response.text
+            Regex(
+                """["'](https?://[^"']+\\.m3u8(?:\\?[^"']*)?)["']""",
+                RegexOption.IGNORE_CASE
+            ).findAll(html)
+                .map { it.groupValues[1].replace("\\\\/", "/") }
+                .distinct()
+                .forEach { stream ->
+                    callback(
+                        newExtractorLink(
+                            source = name,
+                            name = name,
+                            url = stream,
+                            type = INFER_TYPE,
+                        ) {
+                            quality = Qualities.Unknown.value
+                            headers = mapOf(
+                                "User-Agent" to WDT_VK_UA,
+                                "Referer" to mainUrl,
+                            )
+                            this.referer = mainUrl
+                        }
+                    )
+                }
+        }.onFailure {
+            Log.e("WDT2_AB", "Abstream extractor: " + it.message)
+        }
+    }
+}
