@@ -197,9 +197,6 @@ class JetFilmizle : MainAPI() {
                 v.contains("/wp-content/uploads/") &&
                     Regex("""\.(jpe?g|png|webp)(?:[?#].*)?$""").containsMatchIn(v)
             }
-            ?: imageCandidates
-                .mapNotNull { fixUrlNull(it.trim().removeSurrounding("'").removeSurrounding("\"")) }
-                .firstOrNull()
             ?: try {
                 val detail = app.get(
                     href,
@@ -208,20 +205,28 @@ class JetFilmizle : MainAPI() {
                     allowRedirects = true,
                 ).document
 
-                detail.select(
-                    "section.movie-exp img, .movie-exp img, " +
-                        ".film-resim img, .film-poster img, " +
-                        "a[href*='/wp-content/uploads/'] img"
-                ).mapNotNull { img ->
-                    sequenceOf(
-                        img.attr("data-src"),
-                        img.attr("data-lazy-src"),
-                        img.attr("data-original"),
-                        img.attr("src"),
-                    ).firstOrNull { it.isNotBlank() }?.let(::fixUrlNull)
-                }.firstOrNull()
-                    ?: detail.select("a[href*='/wp-content/uploads/']").mapNotNull {
-                        fixUrlNull(it.attr("href"))
+                detail.select("a[href*='/wp-content/uploads/']").mapNotNull {
+                    fixUrlNull(it.attr("href"))
+                }.firstOrNull { url ->
+                    val v = url.lowercase()
+                    !v.contains("logo") &&
+                        !v.contains("dublaj") &&
+                        !v.contains("altyazi") &&
+                        Regex("""\.(jpe?g|png|webp)(?:[?#].*)?$""").containsMatchIn(v)
+                }
+                    ?: detail.selectFirst("meta[property='og:image']")
+                        ?.attr("content")
+                        ?.let(::fixUrlNull)
+                    ?: detail.select(
+                        "section.movie-exp img, .movie-exp img, " +
+                            ".film-resim img, .film-poster img"
+                    ).mapNotNull { img ->
+                        sequenceOf(
+                            img.attr("data-src"),
+                            img.attr("data-lazy-src"),
+                            img.attr("data-original"),
+                            img.attr("src"),
+                        ).firstOrNull { it.isNotBlank() }?.let(::fixUrlNull)
                     }.firstOrNull()
             } catch (_: Exception) {
                 null
