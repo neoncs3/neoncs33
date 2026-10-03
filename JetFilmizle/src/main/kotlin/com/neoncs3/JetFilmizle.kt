@@ -201,102 +201,90 @@ class JetFilmizle : MainAPI() {
         val pageUrl = fixUrlNull(url) ?: return null
 
         val document = runCatching {
-            app.get(
-                pageUrl,
-                headers = pageHeaders,
-                referer = "$mainUrl/",
-                allowRedirects = true,
-            ).document
+            app.get(pageUrl, headers = pageHeaders, referer = mainUrl + "/", allowRedirects = true).document
         }.getOrNull() ?: return null
 
         val title = sequenceOf(
-            document.selectFirst("section.movie-exp div.movie-exp-title")?.text(),
+            document.selectFirst(".col-12 .film-title")?.text(),
+            document.selectFirst(".film-title")?.text(),
             document.selectFirst("h1")?.text(),
-            document.selectFirst("h2")?.text(),
-        ).firstOrNull { !it.isNullOrBlank() }
-            ?.substringBefore(" izle")
-            ?.trim()
-            ?: return null
+        ).firstOrNull { !it.isNullOrBlank() }?.substringBefore(" izle")?.trim() ?: return null
 
         val poster = sequenceOf(
-            document.selectFirst("section.movie-exp img")?.attr("data-src"),
-            document.selectFirst("section.movie-exp img")?.attr("src"),
-            document.selectFirst("meta[property='og:image']")?.attr("content"),
-            document.selectFirst("article img")?.attr("data-src"),
-            document.selectFirst("article img")?.attr("src"),
+            document.selectFirst(".film-bilgileri-section img")?.attr("data-src"),
+            document.selectFirst(".film-bilgileri-section img")?.attr("src"),
+            document.selectFirst(".film-poster img")?.attr("data-src"),
+            document.selectFirst(".film-poster img")?.attr("src"),
         ).firstOrNull { !it.isNullOrBlank() }?.let(::fixUrlNull)
 
-        val text = document.text()
-
-        val year = Regex("""(?<!\d)(?:19|20)\d{2}(?!\d)""")
-            .find(
-                document.selectFirst(
-                    ".yap, .movie-info, .film-info, .movie-exp"
-                )?.text().orEmpty().ifBlank { text }
-            )?.value?.toIntOrNull()
-
+        val infoText = document.selectFirst(".film-bilgileri-section, .film-info, .detail-item")?.text().orEmpty()
+        val year = Regex("""(?<!\d)(?:19|20)\d{2}(?!\d)""").find(infoText)?.value?.toIntOrNull()
+        val rating = document.selectFirst(".film-ratings-container b, .rating-year-imdb .text-warning, .rating, .imdb")?.text()?.let { value ->
+            Regex("""\d+(?:[\.,]\d+)?""").find(value)?.value?.replace(",", ".")
+        }
         val description = sequenceOf(
-            document.selectFirst("section.movie-exp p.aciklama")?.text(),
-            document.selectFirst(".aciklama")?.text(),
-            document.selectFirst("meta[property='og:description']")?.attr("content"),
+            document.selectFirst(".description-text p:nth-child(2)")?.text(),
+            document.selectFirst(".description-text p:nth-child(1)")?.text(),
+            document.selectFirst(".description, .plot")?.text(),
         ).firstOrNull { !it.isNullOrBlank() }?.trim()
 
-        val rating = sequenceOf(
-            document.selectFirst("section.movie-exp div.imdb_puan span")?.text(),
-            document.selectFirst(".imdb_puan")?.text(),
-            document.selectFirst(".puan_1")?.text(),
-        ).firstOrNull { !it.isNullOrBlank() }?.let {
-            Regex("""\d+(?:[\.,]\d+)?""").find(it)?.value?.replace(',', '.')
-        }
+        val tags = document.select(".categories-container-details a, .categories-container a, .catss a")
+            .map { it.text().trim() }.filter { it.isNotBlank() }.distinct()
 
-        val tags = document.select(
-            "section.movie-exp div.catss a, .catss a, a[href*='/dizi/']"
-        ).map { it.text().trim() }
-            .filter { it.isNotBlank() && it.length < 40 }
-            .distinct()
-
-        val actors = document.select(
-            "section.movie-exp div.oyuncu, .oyuncu, .actor, .actors .name"
-        ).mapNotNull { actor ->
+        val actors = document.select(".oyuncular-section .actors-grid .col, .oyuncu").mapNotNull { actorElement ->
             val actorName = sequenceOf(
-                actor.selectFirst("div.name")?.text(),
-                actor.selectFirst("a")?.text(),
-                actor.text(),
+                actorElement.selectFirst(".text-decoration-none")?.text(),
+                actorElement.selectFirst(".name")?.text(),
             ).firstOrNull { !it.isNullOrBlank() }?.trim() ?: return@mapNotNull null
-
             val actorImage = sequenceOf(
-                actor.selectFirst("img")?.attr("data-src"),
-                actor.selectFirst("img")?.attr("src"),
+                actorElement.selectFirst("img")?.attr("data-src"),
+                actorElement.selectFirst("img")?.attr("src"),
             ).firstOrNull { !it.isNullOrBlank() }?.let(::fixUrlNull)
-
             Actor(actorName, actorImage)
         }.distinctBy { it.name }
 
-        val trailer = document.select(
-            "iframe[src], iframe[data-src], a[href], a[data-src], img[data-src]"
-        ).mapNotNull { element ->
-            val raw = sequenceOf(
-                element.attr("data-src"),
-                element.attr("src"),
-                element.attr("href"),
-            ).firstOrNull { it.isNotBlank() } ?: return@mapNotNull null
+        if (pageUrl.contains("/dizi/", true)) {
+            val episodes = document.select("button.episode-btn[data-player-type], button.episode-btn")
+                .mapNotNull { button ->
+                    val season = button.attr("data-season").toIntOrNull() ?: return@mapNotNull null
+                    val episode = button.attr("data-episode").toIntOrNull() ?: return@mapNotNull null
+                    val sourceIndex = button.attr("data-source-index")
+                    val playerType = button.attr("data-player-type")
+                    if (sourceIndex.isBlank() || playerType.isBlank()) return@mapNotNull null
 
-            fixUrlNull(raw)?.takeIf {
-                it.contains("youtube.com", true) || it.contains("youtu.be", true)
+                    val episodeUrl = pageUrl + "?sezon=" + season + "&bolum=" + episode + "&index=" + sourceIndex + "&type=" + playerType
+
+                    newEpisode(episodeUrl) {
+                        name = season.toString() + ".Sezon " + episode + ".Bölüm"
+                        this.season = season
+                        this.episode = episode
+                        posterUrl = poster
+                    }
+                }
+                .distinctBy { it.season.toString() + "-" + it.episode.toString() + "-" + it.data }
+                .sortedWith(compareBy({ it.season ?: 0 }, { it.episode ?: 0 }))
+
+            Log.d(JET_TAG, "Dizi bölümleri: " + episodes.size)
+
+            return newTvSeriesLoadResponse(title, pageUrl, TvType.TvSeries, episodes) {
+                posterUrl = poster
+                this.year = year
+                this.plot = description
+                this.tags = tags
+                this.score = Score.from10(rating)
+                addActors(actors)
             }
-        }.firstOrNull()
+        }
 
         return newMovieLoadResponse(title, pageUrl, TvType.Movie, pageUrl) {
             posterUrl = poster
             this.year = year
             this.plot = description
-            this.score = Score.from10(rating)
             this.tags = tags
+            this.score = Score.from10(rating)
             addActors(actors)
-            addTrailer(trailer)
         }
     }
-
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -401,13 +389,16 @@ class JetFilmizle : MainAPI() {
 
         val sourceButtons = document.select("button.player-source-btn")
         if (sourceButtons.isNotEmpty()) {
-            sourceButtons.forEach { button ->
+            val button = sourceButtons.firstOrNull { it.attr("data-source-index").isNotBlank() }
+
+            if (button != null) {
                 requestPlayer(
                     sourceIndex = button.attr("data-source-index"),
                     playerType = button.attr("data-player-type").ifBlank { "dublaj" },
                     label = button.text().trim().ifBlank { "Kaynak" },
                 )
             }
+
             return true
         }
 
