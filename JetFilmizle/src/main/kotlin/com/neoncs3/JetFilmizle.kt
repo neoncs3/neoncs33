@@ -303,9 +303,27 @@ class JetFilmizle : MainAPI() {
             ).document
         }.getOrNull() ?: return false
 
-        val filmId = document.selectFirst(
+        val episodeMode = data.contains("sezon=") &&
+            data.contains("bolum=") &&
+            data.contains("index=") &&
+            data.contains("type=")
+
+        var filmId = document.selectFirst(
             "input[name=film_id], input[name='film_id'], input[name=filmId]"
         )?.attr("value")
+
+        if (filmId.isNullOrBlank() && episodeMode) {
+            val baseUrl = data.substringBefore("?")
+            filmId = runCatching {
+                app.get(
+                    baseUrl,
+                    headers = pageHeaders + mapOf("Referer" to "$mainUrl/"),
+                    allowRedirects = true,
+                ).document.selectFirst(
+                    "input[name=film_id], input[name='film_id'], input[name=filmId]"
+                )?.attr("value")
+            }.getOrNull()
+        }
 
         Log.d(JET_TAG, "film_id: " + filmId)
 
@@ -424,33 +442,83 @@ class JetFilmizle : MainAPI() {
             }
         }
 
-        val isEpisode = data.contains("sezon=") &&
-            data.contains("bolum=") &&
-            data.contains("index=") &&
-            data.contains("type=")
-
-        if (isEpisode) {
+        if (episodeMode) {
             val sourceIndex = data.substringAfter("index=")
                 .substringBefore("&")
                 .toIntOrNull()
 
-            val rawType = data.substringAfter("type=")
+            val playerType = data.substringAfter("type=")
                 .substringBefore("&")
-                .lowercase()
+                .trim()
+                .ifBlank { "dublaj" }
 
-            val playerType = rawType.ifBlank { "dublaj" }
+            val season = data.substringAfter("sezon=")
+                .substringBefore("&")
+                .toIntOrNull()
+
+            val episode = data.substringAfter("bolum=")
+                .substringBefore("&")
+                .toIntOrNull()
+
+            Log.d(
+                JET_TAG,
+                "Dizi bölüm: S" + season +
+                    "E" + episode +
+                    " index=" + sourceIndex +
+                    " type=" + playerType
+            )
 
             if (sourceIndex != null) {
                 requestPlayer(
                     sourceIndex = sourceIndex,
                     playerType = playerType,
-                    label = "Bölüm",
+                    label = "S" + season + "E" + episode,
                 )
+            }
+
+            if (linksFound) return true
+
+            val fallbackButtons = document.select(
+                "button.episode-btn[data-season][data-episode][data-source-index][data-player-type]"
+            ).filter { button ->
+                button.attr("data-season").toIntOrNull() == season &&
+                    button.attr("data-episode").toIntOrNull() == episode
+            }
+
+            val tried = mutableSetOf<String>()
+
+            fallbackButtons.forEach { button ->
+                if (linksFound) return@forEach
+
+                val idx = button.attr("data-source-index").toIntOrNull() ?: return@forEach
+                val type = button.attr("data-player-type").trim().ifBlank { "dublaj" }
+                val key = "$idx|$type"
+
+                if (!tried.add(key)) return@forEach
+
+                requestPlayer(
+                    sourceIndex = idx,
+                    playerType = type,
+                    label = "S" + season + "E" + episode + " fallback",
+                )
+            }
+
+            if (!linksFound && sourceIndex != null) {
+                listOf(playerType, "dublaj", "altyazili")
+                    .distinct()
+                    .forEach { type ->
+                        if (linksFound) return@forEach
+
+                        requestPlayer(
+                            sourceIndex = sourceIndex,
+                            playerType = type,
+                            label = "S" + season + "E" + episode + " type fallback",
+                        )
+                    }
             }
 
             return linksFound
         }
-
         val sourceIndexes = document.select(".player-source-btn, button.player-source-btn")
             .mapNotNull { it.attr("data-source-index").toIntOrNull() }
             .distinct()
