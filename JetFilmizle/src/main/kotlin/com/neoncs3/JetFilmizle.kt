@@ -392,11 +392,11 @@ class JetFilmizle : MainAPI() {
                     ).document
 
                     val script = playerDoc.select("script").firstOrNull {
-                        it.data().contains(""sources"", true)
+                        it.data().contains("\"sources\"", true)
                     }?.data().orEmpty()
 
                     val sourceBlock = script
-                        .substringAfter(""sources"", "")
+                        .substringAfter("\"sources\"", "")
                         .substringAfter("[", "")
                         .substringBefore("]", "")
 
@@ -406,7 +406,7 @@ class JetFilmizle : MainAPI() {
                     ).findAll(sourceBlock).forEach { match ->
                         val url = match.groupValues[1]
                             .replace("\\/", "/")
-                            .replace("\\"", """)
+                            .replace("\\\"", """)
 
                         val label = match.groupValues[2]
                         callback(
