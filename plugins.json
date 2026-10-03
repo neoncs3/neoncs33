@@ -101,6 +101,26 @@
         "name": "FilmModu"
     },
     {
+        "iconUrl": "https://www.google.com/s2/favicons?domain=jetizle.com&sz=%size%",
+        "fileHash": "sha256-5558ab7040d64c2426610bce884f2166395262c0ecda868ba94e6aeab40809ce",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
+        "fileSize": 28746,
+        "status": 1,
+        "language": "tr",
+        "authors": [
+            "neoncs3"
+        ],
+        "tvTypes": [
+            "Movie"
+        ],
+        "version": 1,
+        "internalName": "JetFilmizle",
+        "description": "Jet Film - T\u00fcrk\u00e7e dublajl\u0131 ve altyaz\u0131l\u0131 film sa\u011flay\u0131c\u0131s\u0131",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/JetFilmizle.cs3",
+        "name": "JetFilmizle"
+    },
+    {
         "iconUrl": "https://www.setfilmizle.ltd/favicon.ico",
         "fileHash": "sha256-25414662eda50d5d116b10bb4576468fd1a1353e0de26ad8a46868163d2051a7",
         "apiVersion": 1,
