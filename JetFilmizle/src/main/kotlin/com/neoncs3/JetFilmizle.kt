@@ -138,34 +138,52 @@ class JetFilmizle : MainAPI() {
             ?: return null
 
         val imageCandidates = select(
-            "img[data-src], img[data-lazy-src], img[data-original], img[src], " +
-                "[style*='background-image']"
+            "img[data-src], img[data-lazy-src], img[data-original], img[data-background], " +
+                "img[data-bg], img[data-image], img[src], " +
+                "[data-background], [data-bg], [data-image], [data-lazy-background], " +
+                "[data-lazy-background-image], [style*='background-image']"
         ).flatMap { image ->
             val urls = sequenceOf(
                 image.attr("data-src"),
                 image.attr("data-lazy-src"),
                 image.attr("data-original"),
+                image.attr("data-background"),
+                image.attr("data-bg"),
+                image.attr("data-image"),
+                image.attr("data-lazy-background"),
+                image.attr("data-lazy-background-image"),
                 image.attr("src"),
             ).filter { it.isNotBlank() }
 
-            val style = image.attr("style")
-            val styleUrl = Regex("""url\\((?:["'])?([^)"']+)(?:["'])?\\)""", RegexOption.IGNORE_CASE)
-                .find(style)?.groupValues?.getOrNull(1)
+            val styleUrl = Regex(
+                """url\((?:["'])?([^)"']+)(?:["'])?\)""",
+                RegexOption.IGNORE_CASE
+            ).find(image.attr("style"))?.groupValues?.getOrNull(1)
 
             urls + listOfNotNull(styleUrl)
         }
 
         val poster = imageCandidates
-            .mapNotNull { fixUrlNull(it) }
-            .firstOrNull { imageUrl ->
-                val v = imageUrl.lowercase()
-                v.contains("/wp-content/uploads/") &&
-                    !v.contains("logo") &&
-                    !v.contains("turkce-dublaj") &&
-                    !v.contains("turkce-altyazi") &&
-                    !v.contains("yerli-film")
+            .mapNotNull { raw ->
+                fixUrlNull(
+                    raw.trim()
+                        .removeSurrounding("'")
+                        .removeSurrounding(""")
+                )
             }
-            ?: imageCandidates.mapNotNull { fixUrlNull(it) }.firstOrNull()
+            .filterNot { imageUrl ->
+                val v = imageUrl.lowercase()
+                v.contains("logo") ||
+                    v.contains("turkce-dublaj") ||
+                    v.contains("turkce-altyazi") ||
+                    v.contains("yerli-film") ||
+                    v.contains("avatar") ||
+                    v.contains("placeholder")
+            }
+            .firstOrNull { it.lowercase().contains("/wp-content/uploads/") }
+            ?: imageCandidates
+                .mapNotNull { fixUrlNull(it.trim().removeSurrounding("'").removeSurrounding(""")) }
+                .firstOrNull()
 
         val score = selectFirst(
             "span.puan_1, .imdb, .rating, .score"
