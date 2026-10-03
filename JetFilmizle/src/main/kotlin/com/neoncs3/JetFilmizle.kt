@@ -93,8 +93,12 @@ class JetFilmizle : MainAPI() {
             false,
         )
 
-        val items = document.select("article.movie, article[class*=movie], .movie-item, .film-item, .movie, .film").mapNotNull {
-            it.toSearchResult()
+        val items = buildList {
+            for (element in document.select(
+                "article.movie, article[class*=movie], .movie-item, .film-item, .movie, .film"
+            )) {
+                element.toSearchResult()?.let { add(it) }
+            }
         }.distinctBy { it.url }
 
         val hasNext = detectNextPage(document, page)
@@ -117,7 +121,7 @@ class JetFilmizle : MainAPI() {
         return page < 50 && document.select("article.movie").isNotEmpty()
     }
 
-    private fun Element.toSearchResult(): SearchResponse? {
+    private suspend fun Element.toSearchResult(): SearchResponse? {
         val link = selectFirst("a[href*='-izle/'], a[href*='-202'], a[href]") ?: return null
         val href = fixUrlNull(link.attr("href")) ?: return null
         if (!href.startsWith(mainUrl, true) || href == mainUrl || href == "$mainUrl/") {
@@ -173,7 +177,7 @@ class JetFilmizle : MainAPI() {
                 fixUrlNull(
                     raw.trim()
                         .removeSurrounding("'")
-                        .removeSurrounding(""")
+                        .removeSurrounding("\"")
                 )
             }
             .filterNot { imageUrl ->
@@ -236,25 +240,33 @@ class JetFilmizle : MainAPI() {
         if (q.isBlank()) return emptyList()
 
         val results = runCatching {
-            app.post(
+            val doc = app.post(
                 "$mainUrl/filmara.php",
                 headers = pageHeaders,
                 referer = "$mainUrl/",
                 data = mapOf("s" to q),
-            ).document.select("article.movie, article[class*=movie]")
-                .mapNotNull { it.toSearchResult() }
+            ).document
+            buildList {
+                for (element in doc.select("article.movie, article[class*=movie], .movie-item, .film-item, .movie, .film")) {
+                    element.toSearchResult()?.let { add(it) }
+                }
+            }
         }.getOrDefault(emptyList())
 
         if (results.isNotEmpty()) return results
 
         val encoded = URLEncoder.encode(q, "UTF-8")
         return runCatching {
-            app.get(
+            val doc = app.get(
                 "$mainUrl/?s=$encoded",
                 headers = pageHeaders,
                 referer = "$mainUrl/",
-            ).document.select("article.movie, article[class*=movie]")
-                .mapNotNull { it.toSearchResult() }
+            ).document
+            buildList {
+                for (element in doc.select("article.movie, article[class*=movie], .movie-item, .film-item, .movie, .film")) {
+                    element.toSearchResult()?.let { add(it) }
+                }
+            }
         }.getOrDefault(emptyList()).distinctBy { it.url }
     }
 
