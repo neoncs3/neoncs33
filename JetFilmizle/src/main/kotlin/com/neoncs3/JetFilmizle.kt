@@ -198,32 +198,34 @@ class JetFilmizle : MainAPI() {
                     Regex("""\.(jpe?g|png|webp)(?:[?#].*)?$""").containsMatchIn(v)
             }
             ?: imageCandidates
-                .mapNotNull { fixUrlNull(it.trim().removeSurrounding("'").removeSurrounding(""")) }
+                .mapNotNull { fixUrlNull(it.trim().removeSurrounding("'").removeSurrounding("\"")) }
                 .firstOrNull()
-            ?: runCatching {
-                app.get(
+            ?: try {
+                val detail = app.get(
                     href,
                     headers = pageHeaders,
                     referer = "$mainUrl/",
                     allowRedirects = true,
-                ).document.let { detail ->
-                    detail.select(
-                        "section.movie-exp img, .movie-exp img, " +
-                            ".film-resim img, .film-poster img, " +
-                            "a[href*='/wp-content/uploads/'] img"
-                    ).mapNotNull { img ->
-                        sequenceOf(
-                            img.attr("data-src"),
-                            img.attr("data-lazy-src"),
-                            img.attr("data-original"),
-                            img.attr("src"),
-                        ).firstOrNull { it.isNotBlank() }?.let(::fixUrlNull)
+                ).document
+
+                detail.select(
+                    "section.movie-exp img, .movie-exp img, " +
+                        ".film-resim img, .film-poster img, " +
+                        "a[href*='/wp-content/uploads/'] img"
+                ).mapNotNull { img ->
+                    sequenceOf(
+                        img.attr("data-src"),
+                        img.attr("data-lazy-src"),
+                        img.attr("data-original"),
+                        img.attr("src"),
+                    ).firstOrNull { it.isNotBlank() }?.let(::fixUrlNull)
+                }.firstOrNull()
+                    ?: detail.select("a[href*='/wp-content/uploads/']").mapNotNull {
+                        fixUrlNull(it.attr("href"))
                     }.firstOrNull()
-                        ?: detail.select("a[href*='/wp-content/uploads/']").mapNotNull {
-                            fixUrlNull(it.attr("href"))
-                        }.firstOrNull()
-                }
-            }.getOrNull()
+            } catch (_: Exception) {
+                null
+            }
 
         val score = selectFirst(
             "span.puan_1, .imdb, .rating, .score"
@@ -239,35 +241,45 @@ class JetFilmizle : MainAPI() {
         val q = query.trim()
         if (q.isBlank()) return emptyList()
 
-        val results = runCatching {
+        val results = try {
             val doc = app.post(
                 "$mainUrl/filmara.php",
                 headers = pageHeaders,
                 referer = "$mainUrl/",
                 data = mapOf("s" to q),
             ).document
+
             buildList {
-                for (element in doc.select("article.movie, article[class*=movie], .movie-item, .film-item, .movie, .film")) {
+                for (element in doc.select(
+                    "article.movie, article[class*=movie], .movie-item, .film-item, .movie, .film"
+                )) {
                     element.toSearchResult()?.let { add(it) }
                 }
             }
-        }.getOrDefault(emptyList())
+        } catch (_: Exception) {
+            emptyList()
+        }
 
         if (results.isNotEmpty()) return results
 
         val encoded = URLEncoder.encode(q, "UTF-8")
-        return runCatching {
+        return try {
             val doc = app.get(
                 "$mainUrl/?s=$encoded",
                 headers = pageHeaders,
                 referer = "$mainUrl/",
             ).document
+
             buildList {
-                for (element in doc.select("article.movie, article[class*=movie], .movie-item, .film-item, .movie, .film")) {
+                for (element in doc.select(
+                    "article.movie, article[class*=movie], .movie-item, .film-item, .movie, .film"
+                )) {
                     element.toSearchResult()?.let { add(it) }
                 }
-            }
-        }.getOrDefault(emptyList()).distinctBy { it.url }
+            }.distinctBy { it.url }
+        } catch (_: Exception) {
+            emptyList()
+        }
     }
 
     override suspend fun load(url: String): com.lagradost.cloudstream3.LoadResponse? {
