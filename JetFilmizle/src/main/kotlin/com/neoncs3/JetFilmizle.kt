@@ -137,11 +137,35 @@ class JetFilmizle : MainAPI() {
             ?.trim()
             ?: return null
 
-        val poster = sequenceOf(
-            selectFirst("img")?.attr("data-src"),
-            selectFirst("img")?.attr("data-lazy-src"),
-            selectFirst("img")?.attr("src"),
-        ).firstOrNull { !it.isNullOrBlank() }?.let(::fixUrlNull)
+        val imageCandidates = select(
+            "img[data-src], img[data-lazy-src], img[data-original], img[src], " +
+                "[style*='background-image']"
+        ).flatMap { image ->
+            val urls = sequenceOf(
+                image.attr("data-src"),
+                image.attr("data-lazy-src"),
+                image.attr("data-original"),
+                image.attr("src"),
+            ).filter { it.isNotBlank() }
+
+            val style = image.attr("style")
+            val styleUrl = Regex("""url\\((?:["'])?([^)"']+)(?:["'])?\\)""", RegexOption.IGNORE_CASE)
+                .find(style)?.groupValues?.getOrNull(1)
+
+            urls + listOfNotNull(styleUrl)
+        }
+
+        val poster = imageCandidates
+            .mapNotNull { fixUrlNull(it) }
+            .firstOrNull { imageUrl ->
+                val v = imageUrl.lowercase()
+                v.contains("/wp-content/uploads/") &&
+                    !v.contains("logo") &&
+                    !v.contains("turkce-dublaj") &&
+                    !v.contains("turkce-altyazi") &&
+                    !v.contains("yerli-film")
+            }
+            ?: imageCandidates.mapNotNull { fixUrlNull(it) }.firstOrNull()
 
         val score = selectFirst(
             "span.puan_1, .imdb, .rating, .score"
@@ -149,6 +173,10 @@ class JetFilmizle : MainAPI() {
 
         return newMovieSearchResponse(title, href, TvType.Movie) {
             posterUrl = poster
+            posterHeaders = mapOf(
+                "User-Agent" to JET_UA,
+                "Referer" to "$mainUrl/",
+            )
             this.score = Score.from10(score)
         }
     }
