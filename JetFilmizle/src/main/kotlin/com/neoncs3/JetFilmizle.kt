@@ -183,12 +183,43 @@ class JetFilmizle : MainAPI() {
                     v.contains("turkce-altyazi") ||
                     v.contains("yerli-film") ||
                     v.contains("avatar") ||
-                    v.contains("placeholder")
+                    v.contains("placeholder") ||
+                    v.contains("loading") ||
+                    v.contains("spinner") ||
+                    v.contains("blank")
             }
-            .firstOrNull { it.lowercase().contains("/wp-content/uploads/") }
+            .firstOrNull { imageUrl ->
+                val v = imageUrl.lowercase()
+                v.contains("/wp-content/uploads/") &&
+                    Regex("""\.(jpe?g|png|webp)(?:[?#].*)?$""").containsMatchIn(v)
+            }
             ?: imageCandidates
                 .mapNotNull { fixUrlNull(it.trim().removeSurrounding("'").removeSurrounding(""")) }
                 .firstOrNull()
+            ?: runCatching {
+                app.get(
+                    href,
+                    headers = pageHeaders,
+                    referer = "$mainUrl/",
+                    allowRedirects = true,
+                ).document.let { detail ->
+                    detail.select(
+                        "section.movie-exp img, .movie-exp img, " +
+                            ".film-resim img, .film-poster img, " +
+                            "a[href*='/wp-content/uploads/'] img"
+                    ).mapNotNull { img ->
+                        sequenceOf(
+                            img.attr("data-src"),
+                            img.attr("data-lazy-src"),
+                            img.attr("data-original"),
+                            img.attr("src"),
+                        ).firstOrNull { it.isNotBlank() }?.let(::fixUrlNull)
+                    }.firstOrNull()
+                        ?: detail.select("a[href*='/wp-content/uploads/']").mapNotNull {
+                            fixUrlNull(it.attr("href"))
+                        }.firstOrNull()
+                }
+            }.getOrNull()
 
         val score = selectFirst(
             "span.puan_1, .imdb, .rating, .score"
