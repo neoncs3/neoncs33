@@ -316,6 +316,60 @@ class JetFilmizle : MainAPI() {
 
         var linksFound = false
 
+        // Bazı JetFilmizle içeriklerinde kaynak, /jetplayer çağrısına gerek
+        // kalmadan doğrudan Pixeldrain bağlantısı olarak sayfada bulunuyor.
+        val directPlayerUrls = buildList {
+            document.select(
+                "a[href*='pixeldrain.com'], " +
+                    "a[href*='pixeldrain.net'], " +
+                    "[data-url*='pixeldrain.com'], " +
+                    "[data-src*='pixeldrain.com'], " +
+                    "[data-href*='pixeldrain.com'], " +
+                    "[data-url*='pixeldrain.net'], " +
+                    "[data-src*='pixeldrain.net'], " +
+                    "[data-href*='pixeldrain.net']"
+            ).forEach { element ->
+                val raw = sequenceOf(
+                    element.attr("href"),
+                    element.attr("data-url"),
+                    element.attr("data-src"),
+                    element.attr("data-href"),
+                ).firstOrNull { it.isNotBlank() } ?: return@forEach
+
+                val url = if (raw.startsWith("//")) {
+                    "https:$raw"
+                } else {
+                    fixUrlNull(raw) ?: return@forEach
+                }
+
+                add(url)
+            }
+        }.distinct()
+
+        if (directPlayerUrls.isNotEmpty()) {
+            Log.d(JET_TAG, "Doğrudan kaynak bulundu: " + directPlayerUrls.size)
+
+            directPlayerUrls.forEach { playerUrl ->
+                runCatching {
+                    loadExtractor(
+                        playerUrl,
+                        data,
+                        subtitleCallback,
+                        callback,
+                    )
+                    linksFound = true
+                    Log.d(JET_TAG, "Doğrudan extractor: " + playerUrl)
+                }.onFailure {
+                    Log.e(
+                        JET_TAG,
+                        "Doğrudan kaynak hatası: " + playerUrl + " -> " + it.message
+                    )
+                }
+            }
+
+            if (linksFound) return true
+        }
+
         suspend fun requestPlayer(
             sourceIndex: Int,
             playerType: String,
