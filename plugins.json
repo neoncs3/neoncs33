@@ -101,20 +101,21 @@
         "name": "FilmModu"
     },
     {
-        "iconUrl": "https://www.google.com/s2/favicons?domain=jetizle.com&sz=%size%",
-        "fileHash": "sha256-26b28ed4d7230a5730249b8031f4299ca77024ddb28ca6b9e846e44af29a339b",
+        "iconUrl": "https://www.google.com/s2/favicons?domain=jetfilmizle.now&sz=%size%",
+        "fileHash": "sha256-cac8dbb09b4d5e8dcf64e5e52d4af2557b99b328c49d3bb7653350091a4b15d1",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 22144,
+        "fileSize": 27272,
         "status": 1,
         "language": "tr",
         "authors": [
             "neoncs3"
         ],
         "tvTypes": [
-            "Movie"
+            "Movie",
+            "TvSeries"
         ],
-        "version": 17,
+        "version": 20,
         "internalName": "JetFilmizle",
         "description": "Jet Film - T\u00fcrk\u00e7e dublajl\u0131 ve altyaz\u0131l\u0131 film sa\u011flay\u0131c\u0131s\u0131",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/JetFilmizle.cs3",
