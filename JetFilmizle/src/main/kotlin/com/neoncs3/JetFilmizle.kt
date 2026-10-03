@@ -293,65 +293,120 @@ class JetFilmizle : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
-        Log.d(JET_TAG, "loadLinks: $data")
+        Log.d(JET_TAG, "loadLinks: " + data)
 
         val document = runCatching {
             app.get(
                 data,
-                headers = pageHeaders,
-                referer = "$mainUrl/",
+                headers = pageHeaders + mapOf("Referer" to "$mainUrl/"),
                 allowRedirects = true,
             ).document
         }.getOrNull() ?: return false
 
         val filmId = document.selectFirst(
-            "input[name='film_id'], input[name='filmId']"
+            "input[name=film_id], input[name='film_id'], input[name=filmId]"
         )?.attr("value")
 
+        Log.d(JET_TAG, "film_id: " + filmId)
+
         if (filmId.isNullOrBlank()) {
-            Log.e(JET_TAG, "film_id bulunamadı: $data")
+            Log.e(JET_TAG, "film_id bulunamadı: " + data)
             return false
         }
 
-        val episodeMode = data.contains("?sezon=") && data.contains("&bolum=")
+        var linksFound = false
 
         suspend fun requestPlayer(
-            sourceIndex: String,
+            sourceIndex: Int,
             playerType: String,
             label: String,
         ) {
-            if (sourceIndex.isBlank() || playerType.isBlank()) return
-
             try {
-                val response = app.post(
+                Log.d(
+                    JET_TAG,
+                    "jetplayer POST: film_id=" + filmId +
+                        " source=" + sourceIndex +
+                        " type=" + playerType,
+                )
+
+                val responseText = app.post(
                     "$mainUrl/jetplayer",
-                    data = mapOf(
-                        "film_id" to filmId,
-                        "source_index" to sourceIndex,
-                        "player_type" to playerType,
-                    ),
                     headers = mapOf(
                         "User-Agent" to JET_UA,
+                        "Referer" to data,
                         "Origin" to mainUrl,
-                        "Content-Type" to "application/x-www-form-urlencoded",
+                        "X-Requested-With" to "XMLHttpRequest",
                         "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                        "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
                     ),
-                    referer = data,
+                    data = mapOf(
+                        "film_id" to filmId,
+                        "source_index" to sourceIndex.toString(),
+                        "player_type" to playerType,
+                    ),
                     allowRedirects = true,
-                ).document
+                ).text
 
-                val iframeSrc = response.selectFirst("iframe")
-                    ?.attr("src")
+                Log.d(
+                    JET_TAG,
+                    "jetplayer response [" + label + "]: " +
+                        responseText.take(220).replace("\n", " "),
+                )
+
+                if (responseText.isBlank()) return
+
+                val responseDoc = org.jsoup.Jsoup.parse(responseText)
+
+                val iframeSrc = sequenceOf(
+                    responseDoc.selectFirst("iframe")?.attr("src"),
+                    responseDoc.selectFirst("iframe")?.attr("data-src"),
+                    responseDoc.selectFirst("video")?.attr("src"),
+                    responseDoc.selectFirst("video source")?.attr("src"),
+                    responseDoc.selectFirst("source")?.attr("src"),
+                ).firstOrNull { !it.isNullOrBlank() }
                     ?.trim()
-                    ?.takeIf { it.isNotBlank() && it != "about:blank" }
+                    ?.takeIf { it.isNotBlank() }
 
                 if (iframeSrc.isNullOrBlank()) {
-                    Log.d(JET_TAG, "iframe bulunamadı: $label")
+                    Log.d(JET_TAG, "medya/iframe yok [" + label + "]")
                     return
                 }
 
-                val playerUrl = if (iframeSrc.startsWith("//")) "https:$iframeSrc" else iframeSrc
-                Log.d(JET_TAG, "player: $label -> $playerUrl")
+                val playerUrl = when {
+                    iframeSrc.startsWith("//") -> "https:" + iframeSrc
+                    iframeSrc.startsWith("/") -> "$mainUrl$iframeSrc"
+                    else -> fixUrlNull(iframeSrc) ?: iframeSrc
+                }
+
+                Log.d(JET_TAG, "player bulundu [" + label + "]: " + playerUrl)
+
+                if (
+                    playerUrl.contains("pixeldrain.com", true) ||
+                    playerUrl.contains("pixeldrain.net", true)
+                ) {
+                    val pixelId = playerUrl.substringAfterLast("/")
+                        .substringBefore("?")
+                        .trim()
+
+                    if (pixelId.isNotBlank()) {
+                        val directUrl = "https://pixeldrain.com/api/file/" + pixelId + "?download"
+
+                        callback(
+                            newExtractorLink(
+                                source = "PixelDrain",
+                                name = "PixelDrain",
+                                url = directUrl,
+                                type = ExtractorLinkType.VIDEO,
+                            ) {
+                                referer = playerUrl
+                                quality = Qualities.Unknown.value
+                            }
+                        )
+
+                        linksFound = true
+                        return
+                    }
+                }
 
                 loadExtractor(
                     playerUrl,
@@ -359,69 +414,100 @@ class JetFilmizle : MainAPI() {
                     subtitleCallback,
                     callback,
                 )
+
+                linksFound = true
             } catch (e: Exception) {
-                Log.e(JET_TAG, "player hatası: $label -> ${e.message}")
-            }
-        }
-
-        if (episodeMode) {
-            val sourceIndex = data.substringAfter("index=").substringBefore("&")
-            val playerType = data.substringAfter("type=").substringBefore("&").ifBlank { "dublaj" }
-            val season = data.substringAfter("sezon=").substringBefore("&")
-            val episode = data.substringAfter("bolum=").substringBefore("&")
-
-            requestPlayer(
-                sourceIndex = sourceIndex,
-                playerType = playerType,
-                label = "S\${season}B\${episode}",
-            )
-            return true
-        }
-
-        if (data.contains("/dizi/")) {
-            document.select("button.episode-btn[data-player-type]").firstOrNull()?.let { first ->
-                requestPlayer(
-                    sourceIndex = first.attr("data-source-index"),
-                    playerType = first.attr("data-player-type"),
-                    label = first.text().trim().ifBlank { "Dizi" },
+                Log.e(
+                    JET_TAG,
+                    "jetplayer hata [" + label + "]: " + e.message,
                 )
             }
-            return true
         }
 
-        val sourceButtons = document.select("button.player-source-btn")
-        if (sourceButtons.isNotEmpty()) {
-            val button = sourceButtons.firstOrNull { it.attr("data-source-index").isNotBlank() }
+        val isEpisode = data.contains("?sezon=") &&
+            data.contains("&bolum=")
 
-            if (button != null) {
+        if (isEpisode) {
+            val sourceIndex = data.substringAfter("index=")
+                .substringBefore("&")
+                .toIntOrNull()
+
+            val rawType = data.substringAfter("type=")
+                .substringBefore("&")
+                .lowercase()
+
+            val playerType = when {
+                rawType.contains("altyaz") -> "altyazili"
+                else -> "dublaj"
+            }
+
+            if (sourceIndex != null) {
                 requestPlayer(
-                    sourceIndex = button.attr("data-source-index"),
-                    playerType = button.attr("data-player-type").ifBlank { "dublaj" },
-                    label = button.text().trim().ifBlank { "Kaynak" },
+                    sourceIndex = sourceIndex,
+                    playerType = playerType,
+                    label = "Bölüm",
                 )
             }
 
-            return true
+            return linksFound
         }
 
-        document.select("#movie iframe[src], #movie iframe[data-src], iframe[src], iframe[data-src]").forEach { iframe ->
-            val raw = iframe.attr("data-src").ifBlank { iframe.attr("src") }
-            if (raw.isBlank()) return@forEach
+        val sourceIndexes = document.select(".player-source-btn, button.player-source-btn")
+            .mapNotNull { it.attr("data-source-index").toIntOrNull() }
+            .distinct()
+            .sorted()
 
-            val playerUrl = if (raw.startsWith("//")) "https:$raw" else fixUrlNull(raw) ?: return@forEach
-            runCatching {
-                loadExtractor(playerUrl, data, subtitleCallback, callback)
+        val maxIndex = sourceIndexes.maxOrNull() ?: 8
+
+        // JetFilmizle'nin /jetplayer endpoint'i player_type olarak
+        // "dublaj" ve "altyazili" bekliyor. Kaynak indeksleri ayrı ayrı denenir.
+        for (playerType in listOf("dublaj", "altyazili")) {
+            for (sourceIndex in 0..maxIndex) {
+                requestPlayer(
+                    sourceIndex = sourceIndex,
+                    playerType = playerType,
+                    label = playerType + "-" + sourceIndex,
+                )
+            }
+        }
+
+        if (!linksFound) {
+            document.select(
+                "#movie iframe[src], #movie iframe[data-src], iframe[src], iframe[data-src]"
+            ).forEach { iframe ->
+                val raw = iframe.attr("data-src")
+                    .ifBlank { iframe.attr("src") }
+
+                val playerUrl = fixUrlNull(raw) ?: return@forEach
+
+                runCatching {
+                    loadExtractor(
+                        playerUrl,
+                        data,
+                        subtitleCallback,
+                        callback,
+                    )
+                    linksFound = true
+                }.onFailure {
+                    Log.e(JET_TAG, "fallback extractor hata: " + it.message)
+                }
             }
         }
 
         document.select("track[src], track[data-src]").forEach { track ->
-            val raw = track.attr("src").ifBlank { track.attr("data-src") }
+            val raw = track.attr("src")
+                .ifBlank { track.attr("data-src") }
+
             val subUrl = fixUrlNull(raw) ?: return@forEach
+
             runCatching {
-                subtitleCallback(SubtitleFile("Türkçe", subUrl))
+                subtitleCallback(
+                    SubtitleFile("Türkçe", subUrl)
+                )
             }
         }
 
-        return true
+        return linksFound
     }
+
 }
