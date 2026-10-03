@@ -1,11 +1,11 @@
 package com.neoncs3
 
-import com.lagradost.cloudstream3.ExtractorApi
-import com.lagradost.cloudstream3.ExtractorLink
 import com.lagradost.cloudstream3.SubtitleFile
+import com.lagradost.cloudstream3.utils.ExtractorApi
+import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.INFER_TYPE
 import com.lagradost.cloudstream3.utils.Qualities
-import com.lagradost.cloudstream3.newExtractorLink
+import com.lagradost.cloudstream3.utils.newExtractorLink
 
 class PixelDrain : ExtractorApi() {
     override val name = "PixelDrain"
@@ -33,7 +33,9 @@ class PixelDrain : ExtractorApi() {
                 url = downloadLink,
                 type = INFER_TYPE,
             ) {
-                referer = url
+                headers = mapOf(
+                    "Referer" to (referer ?: url)
+                )
                 quality = Qualities.Unknown.value
             }
         )
