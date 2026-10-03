@@ -133,7 +133,7 @@ class JetFilmizle : MainAPI() {
             selectFirst("a[title]")?.attr("title"),
         ).firstOrNull { !it.isNullOrBlank() }
             ?.trim()
-            ?.substringBefore(" izle", true)
+            ?.substringBefore(" izle")
             ?.trim()
             ?: return null
 
@@ -197,7 +197,7 @@ class JetFilmizle : MainAPI() {
             document.selectFirst("h1")?.text(),
             document.selectFirst("h2")?.text(),
         ).firstOrNull { !it.isNullOrBlank() }
-            ?.substringBefore(" izle", true)
+            ?.substringBefore(" izle")
             ?.trim()
             ?: return null
 
