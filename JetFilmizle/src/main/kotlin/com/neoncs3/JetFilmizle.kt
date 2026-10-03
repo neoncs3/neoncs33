@@ -314,317 +314,121 @@ class JetFilmizle : MainAPI() {
             ).document
         }.getOrNull() ?: return false
 
-        val iframeUrls = linkedSetOf<String>()
+        val filmId = document.selectFirst(
+            "input[name='film_id'], input[name='filmId']"
+        )?.attr("value")
 
-        fun addUrl(raw: String?) {
-            if (raw.isNullOrBlank()) return
-            fixUrlNull(
-                raw.trim()
-                    .replace("\\/", "/")
-                    .replace("&amp;", "&")
-                    .replace("&#038;", "&")
-            )?.let { iframeUrls += it }
-        }
-
-        // Ana oynatıcı
-        document.selectFirst("div#movie iframe")?.let {
-            addUrl(
-                it.attr("data-src").ifBlank {
-                    it.attr("data-litespeed-src").ifBlank {
-                        it.attr("data").ifBlank { it.attr("src") }
-                    }
-                }
-            )
-        }
-
-        // Kaynak/part düğmeleri
-        document.select(
-            "div.film_part a, .film_part a, .sources a, .source a"
-        ).forEach { sourceLink ->
-            val sourceName = sourceLink.text().trim()
-            if (sourceName.contains("fragman", true)) return@forEach
-
-            val href = fixUrlNull(sourceLink.attr("href")) ?: return@forEach
-            val sourceDoc = runCatching {
-                app.get(
-                    href,
-                    headers = pageHeaders,
-                    referer = data,
-                    allowRedirects = true,
-                ).document
-            }.getOrNull() ?: return@forEach
-
-            val sourceIframe = sourceDoc.selectFirst("div#movie iframe")?.let {
-                sequenceOf(
-                    it.attr("data-src"),
-                    it.attr("data-litespeed-src"),
-                    it.attr("data"),
-                    it.attr("src"),
-                ).firstOrNull { value -> value.isNotBlank() }
-            }
-
-            if (!sourceIframe.isNullOrBlank()) {
-                addUrl(sourceIframe)
-            } else {
-                sourceDoc.select("div#movie p a, #movie p a").forEach {
-                    addUrl(it.attr("href"))
-                }
-            }
-        }
-
-        // Doğrudan sayfada bırakılmış embed/player bağlantıları
-        document.select(
-            "iframe[src], iframe[data-src], video[src], source[src]"
-        ).forEach {
-            val raw = sequenceOf(
-                it.attr("data-src"),
-                it.attr("src"),
-            ).firstOrNull { value -> value.isNotBlank() }
-            if (
-                raw?.contains("youtube", true) != true &&
-                raw?.contains("youtu.be", true) != true
-            ) {
-                addUrl(raw)
-            }
-        }
-
-        if (iframeUrls.isEmpty()) {
-            Log.d(JET_TAG, "Player bulunamadı")
+        if (filmId.isNullOrBlank()) {
+            Log.e(JET_TAG, "film_id bulunamadı: $data")
             return false
         }
 
-        var found = false
+        val episodeMode = data.contains("?sezon=") && data.contains("&bolum=")
 
-        for (iframe in iframeUrls) {
-            Log.d(JET_TAG, "Player deneniyor: $iframe")
+        suspend fun requestPlayer(
+            sourceIndex: String,
+            playerType: String,
+            label: String,
+        ) {
+            if (sourceIndex.isBlank() || playerType.isBlank()) return
 
             try {
-                // JetTV benzeri oynatıcı
-                if (iframe.contains("jetv.xyz", true)) {
-                    val playerDoc = app.get(
-                        iframe,
-                        headers = pageHeaders,
-                        referer = data,
-                        allowRedirects = true,
-                    ).document
+                val response = app.post(
+                    "$mainUrl/jetplayer",
+                    data = mapOf(
+                        "film_id" to filmId,
+                        "source_index" to sourceIndex,
+                        "player_type" to playerType,
+                    ),
+                    headers = mapOf(
+                        "User-Agent" to JET_UA,
+                        "Origin" to mainUrl,
+                        "Content-Type" to "application/x-www-form-urlencoded",
+                        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    ),
+                    referer = data,
+                    allowRedirects = true,
+                ).document
 
-                    val script = playerDoc.select("script").firstOrNull {
-                        it.data().contains("\"sources\"", true)
-                    }?.data().orEmpty()
+                val iframeSrc = response.selectFirst("iframe")
+                    ?.attr("src")
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() && it != "about:blank" }
 
-                    val sourceBlock = script
-                        .substringAfter("\"sources\"", "")
-                        .substringAfter("[", "")
-                        .substringBefore("]", "")
-
-                    Regex(
-                        """\{[^{}]*["']file["']\s*:\s*["']([^"']+)["'][^{}]*["']label["']\s*:\s*["']([^"']+)["'][^{}]*}""",
-                        RegexOption.IGNORE_CASE
-                    ).findAll(sourceBlock).forEach { match ->
-                        val url = match.groupValues[1]
-                            .replace("\\/", "/")
-                            .replace("\\\"", "\"")
-
-                        val label = match.groupValues[2]
-                        callback(
-                            newExtractorLink(
-                                source = "JetTV",
-                                name = "JetTV - $label",
-                                url = url,
-                                type = if (url.contains(".mp4", true))
-                                    ExtractorLinkType.VIDEO
-                                else
-                                    ExtractorLinkType.M3U8,
-                            ) {
-                                quality = getQualityFromName(label)
-                                referer = iframe
-                                headers = mapOf(
-                                    "User-Agent" to JET_UA,
-                                    "Referer" to iframe,
-                                )
-                            }
-                        )
-                        found = true
-                    }
-
-                    if (!found) {
-                        runCatching {
-                            loadExtractor(
-                                iframe,
-                                data,
-                                subtitleCallback,
-                                callback,
-                            )
-                        }
-                    }
-                    continue
+                if (iframeSrc.isNullOrBlank()) {
+                    Log.d(JET_TAG, "iframe bulunamadı: $label")
+                    return
                 }
 
-                // D2RS API tabanlı oynatıcı
-                if (iframe.contains("d2rs.com", true)) {
-                    val playerHtml = app.get(
-                        iframe,
-                        headers = pageHeaders,
-                        referer = data,
-                        allowRedirects = true,
-                    ).text
+                val playerUrl = if (iframeSrc.startsWith("//")) "https:$iframeSrc" else iframeSrc
+                Log.d(JET_TAG, "player: $label -> $playerUrl")
 
-                    val q = Regex(
-                        """form\.append\(["']q["'],\s*["']([^"']+)["']""",
-                        RegexOption.IGNORE_CASE
-                    ).find(playerHtml)?.groupValues?.getOrNull(1)
-
-                    if (!q.isNullOrBlank()) {
-                        val api = runCatching {
-                            app.post(
-                                "https://d2rs.com/zeus/api.php",
-                                headers = pageHeaders,
-                                referer = iframe,
-                                data = mapOf("q" to q),
-                            ).text
-                        }.getOrNull().orEmpty()
-
-                        Regex(
-                            """["']file["']\s*:\s*["']([^"']+)["'].*?["']label["']\s*:\s*["']([^"']+)["'].*?["']type["']\s*:\s*["']([^"']+)["']""",
-                            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
-                        ).findAll(api).forEach { match ->
-                            val file = match.groupValues[1]
-                            val label = match.groupValues[2]
-                            val sourceType = match.groupValues[3]
-
-                            callback(
-                                newExtractorLink(
-                                    source = "D2RS",
-                                    name = "D2RS - $label",
-                                    url = if (file.startsWith("http", true)) {
-                                        file
-                                    } else {
-                                        "https://d2rs.com/zeus/$file"
-                                    },
-                                    type = if (sourceType.contains("mp4", true))
-                                        ExtractorLinkType.VIDEO
-                                    else
-                                        ExtractorLinkType.M3U8,
-                                ) {
-                                    quality = getQualityFromName(label)
-                                    referer = iframe
-                                    headers = mapOf(
-                                        "User-Agent" to JET_UA,
-                                        "Referer" to iframe,
-                                    )
-                                }
-                            )
-                            found = true
-                        }
-                    }
-                    continue
-                }
-
-                // JS ile paketlenmiş videoları açmayı dene
-                val playerHtml = runCatching {
-                    app.get(
-                        iframe,
-                        headers = pageHeaders,
-                        referer = data,
-                        allowRedirects = true,
-                    ).text
-                }.getOrNull().orEmpty()
-
-                Regex(
-                    """https?://[^"'<>\s]+\.(?:m3u8|mp4|mpd)(?:\?[^"'<>\s]*)?""",
-                    RegexOption.IGNORE_CASE
-                ).findAll(playerHtml)
-                    .map { it.value.replace("\\/", "/") }
-                    .distinct()
-                    .forEach { media ->
-                        val type = when {
-                            media.contains(".mpd", true) -> ExtractorLinkType.DASH
-                            media.contains(".m3u8", true) -> ExtractorLinkType.M3U8
-                            else -> ExtractorLinkType.VIDEO
-                        }
-
-                        callback(
-                            newExtractorLink(
-                                source = "JetFilmizle",
-                                name = "JetFilmizle",
-                                url = media,
-                                type = type,
-                            ) {
-                                quality = Qualities.Unknown.value
-                                referer = iframe
-                                headers = mapOf(
-                                    "User-Agent" to JET_UA,
-                                    "Referer" to iframe,
-                                )
-                            }
-                        )
-                        found = true
-                    }
-
-                val unpackScript = playerHtml.lines().firstOrNull {
-                    it.contains("eval(function(p,a,c,k,e,d)", true) ||
-                        it.contains("eval(function(p,a,c,k,e,r)", true)
-                }
-
-                if (!found && !unpackScript.isNullOrBlank()) {
-                    val unpacked = runCatching {
-                        JsUnpacker(unpackScript).unpack()
-                    }.getOrNull().orEmpty()
-
-                    Regex(
-                        """https?://[^"'<>\s]+\.(?:m3u8|mp4|mpd)(?:\?[^"'<>\s]*)?""",
-                        RegexOption.IGNORE_CASE
-                    ).findAll(unpacked)
-                        .map { it.value.replace("\\/", "/") }
-                        .distinct()
-                        .forEach { media ->
-                            val type = when {
-                                media.contains(".mpd", true) -> ExtractorLinkType.DASH
-                                media.contains(".m3u8", true) -> ExtractorLinkType.M3U8
-                                else -> ExtractorLinkType.VIDEO
-                            }
-
-                            callback(
-                                newExtractorLink(
-                                    source = "JetFilmizle",
-                                    name = "JetFilmizle",
-                                    url = media,
-                                    type = type,
-                                ) {
-                                    quality = Qualities.Unknown.value
-                                    referer = iframe
-                                    headers = mapOf(
-                                        "User-Agent" to JET_UA,
-                                        "Referer" to iframe,
-                                    )
-                                }
-                            )
-                            found = true
-                        }
-                }
-
-                // Son aşamada CloudStream'in yerleşik extractor'ı
-                if (!found) {
-                    runCatching {
-                        loadExtractor(
-                            iframe,
-                            data,
-                            subtitleCallback,
-                            callback,
-                        )
-                    }
-                }
+                loadExtractor(
+                    playerUrl,
+                    data,
+                    subtitleCallback,
+                    callback,
+                )
             } catch (e: Exception) {
-                Log.e(JET_TAG, "Kaynak hatası: $iframe", e)
+                Log.e(JET_TAG, "player hatası: $label -> ${e.message}")
             }
         }
 
-        // Subtitle
-        document.select("track[src], track[kind='subtitles']").forEach { track ->
-            val sub = fixUrlNull(track.attr("src")) ?: return@forEach
-            subtitleCallback(SubtitleFile("Türkçe", sub))
+        if (episodeMode) {
+            val sourceIndex = data.substringAfter("index=").substringBefore("&")
+            val playerType = data.substringAfter("type=").substringBefore("&").ifBlank { "dublaj" }
+            val season = data.substringAfter("sezon=").substringBefore("&")
+            val episode = data.substringAfter("bolum=").substringBefore("&")
+
+            requestPlayer(
+                sourceIndex = sourceIndex,
+                playerType = playerType,
+                label = "S\${season}B\${episode}",
+            )
+            return true
         }
 
-        return found
+        if (data.contains("/dizi/")) {
+            document.select("button.episode-btn[data-player-type]").firstOrNull()?.let { first ->
+                requestPlayer(
+                    sourceIndex = first.attr("data-source-index"),
+                    playerType = first.attr("data-player-type"),
+                    label = first.text().trim().ifBlank { "Dizi" },
+                )
+            }
+            return true
+        }
+
+        val sourceButtons = document.select("button.player-source-btn")
+        if (sourceButtons.isNotEmpty()) {
+            sourceButtons.forEach { button ->
+                requestPlayer(
+                    sourceIndex = button.attr("data-source-index"),
+                    playerType = button.attr("data-player-type").ifBlank { "dublaj" },
+                    label = button.text().trim().ifBlank { "Kaynak" },
+                )
+            }
+            return true
+        }
+
+        document.select("#movie iframe[src], #movie iframe[data-src], iframe[src], iframe[data-src]").forEach { iframe ->
+            val raw = iframe.attr("data-src").ifBlank { iframe.attr("src") }
+            if (raw.isBlank()) return@forEach
+
+            val playerUrl = if (raw.startsWith("//")) "https:$raw" else fixUrlNull(raw) ?: return@forEach
+            runCatching {
+                loadExtractor(playerUrl, data, subtitleCallback, callback)
+            }
+        }
+
+        document.select("track[src], track[data-src]").forEach { track ->
+            val raw = track.attr("src").ifBlank { track.attr("data-src") }
+            val subUrl = fixUrlNull(raw) ?: return@forEach
+            runCatching {
+                subtitleCallback(SubtitleFile("Türkçe", subUrl))
+            }
+        }
+
+        return true
     }
 }
