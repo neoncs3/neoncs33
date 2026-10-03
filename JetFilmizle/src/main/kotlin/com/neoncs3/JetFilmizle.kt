@@ -25,6 +25,7 @@ import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Element
+import org.json.JSONObject
 import java.net.URLDecoder
 import java.net.URLEncoder
 
@@ -144,67 +145,33 @@ class JetFilmizle : MainAPI() {
             ?.trim()
             ?: return null
 
-        fun validPoster(url: String?): String? {
+        fun cleanImage(url: String?): String? {
             val fixed = url?.trim()
                 ?.removeSurrounding("'")
-                ?.removeSurrounding("\"")
+                ?.removeSurrounding(""")
                 ?.let(::fixUrlNull)
                 ?: return null
 
             val v = fixed.lowercase()
-            return if (
-                v.contains("/wp-content/uploads/") &&
+            return fixed.takeIf {
                 !v.contains("logo") &&
-                !v.contains("turkce-dublaj") &&
-                !v.contains("turkce-altyazi") &&
-                !v.contains("yerli-film") &&
-                !v.contains("avatar") &&
-                !v.contains("placeholder") &&
-                Regex("""\.(jpe?g|png|webp)(?:[?#].*)?$""").containsMatchIn(v)
-            ) {
-                fixed
-            } else null
+                    !v.contains("turkce-dublaj") &&
+                    !v.contains("turkce-altyazi") &&
+                    !v.contains("yerli-film") &&
+                    !v.contains("avatar") &&
+                    !v.contains("placeholder") &&
+                    !v.contains("loading") &&
+                    !v.contains("spinner") &&
+                    !v.contains("blank")
+            }
         }
 
-        val poster = try {
-            val detail = app.get(
-                href,
-                headers = pageHeaders,
-                referer = "$mainUrl/",
-                allowRedirects = true,
-            ).document
-
-            validPoster(
-                detail.select("a[href*='/wp-content/uploads/']").mapNotNull {
-                    it.attr("href")
-                }.firstOrNull { validPoster(it) != null }
-            )
-                ?: validPoster(
-                    detail.selectFirst("meta[property='og:image']")
-                        ?.attr("content")
-                )
-                ?: detail.select(
-                    "section.movie-exp img, .movie-exp img, .film-resim img, .film-poster img"
-                ).mapNotNull { img ->
-                    sequenceOf(
-                        img.attr("data-src"),
-                        img.attr("data-lazy-src"),
-                        img.attr("data-original"),
-                        img.attr("data-background"),
-                        img.attr("data-bg"),
-                        img.attr("data-image"),
-                        img.attr("src"),
-                    ).mapNotNull(::validPoster).firstOrNull()
-                }.firstOrNull()
-        } catch (e: Exception) {
-            Log.d(JET_TAG, "poster resolve failed: $href -> ${e.message}")
-            null
-        }
-
-        val cardPoster = select(
+        val sitePoster = select(
             "img[data-src], img[data-lazy-src], img[data-original], img[data-background], " +
                 "img[data-bg], img[data-image], img[src], picture source, " +
-                "[data-background], [data-bg], [data-image], [style*='background-image']"
+                "[data-background], [data-bg], [data-image], " +
+                "[data-lazy-background], [data-lazy-background-image], " +
+                "[style*='background-image']"
         ).flatMap { image ->
             val attrs = sequenceOf(
                 image.attr("data-src"),
@@ -213,6 +180,8 @@ class JetFilmizle : MainAPI() {
                 image.attr("data-background"),
                 image.attr("data-bg"),
                 image.attr("data-image"),
+                image.attr("data-lazy-background"),
+                image.attr("data-lazy-background-image"),
                 image.attr("src"),
             ).filter { it.isNotBlank() }
 
@@ -222,23 +191,101 @@ class JetFilmizle : MainAPI() {
             ).find(image.attr("style"))?.groupValues?.getOrNull(1)
 
             attrs + listOfNotNull(styleUrl)
-        }.mapNotNull(::validPoster).firstOrNull()
+        }.mapNotNull(::cleanImage).firstOrNull { imageUrl ->
+            val v = imageUrl.lowercase()
+            v.contains("/wp-content/uploads/") &&
+                Regex("""\.(jpe?g|png|webp)(?:[?#].*)?$""").containsMatchIn(v)
+        }
+
+        val year = Regex("""(?<!\d)(?:19|20)\d{2}(?!\d)""")
+            .find(title)?.value?.toIntOrNull()
+
+        val imdbPoster = if (sitePoster == null) {
+            try {
+                val query = title
+                    .substringBefore("(")
+                    .replace(Regex("""(?i)\b(?:dublaj|altyazılı|altyazili|full\s*hd|izle)\b"""), " ")
+                    .trim()
+                    .lowercase()
+
+                if (query.isBlank()) {
+                    null
+                } else {
+                    val encoded = URLEncoder.encode(query, "UTF-8").replace("+", "%20")
+                    val apiUrl =
+                        "https://v3.sg.media-imdb.com/suggestion/titles/x/$encoded.json?includeVideos=0"
+
+                    val json = JSONObject(
+                        app.get(
+                            apiUrl,
+                            headers = mapOf(
+                                "User-Agent" to JET_UA,
+                                "Accept" to "application/json",
+                            ),
+                            referer = "https://www.imdb.com/",
+                            allowRedirects = true,
+                        ).text
+                    )
+
+                    val items = json.optJSONArray("d")
+                    var bestPoster: String? = null
+                    var bestScore = Int.MIN_VALUE
+
+                    if (items != null) {
+                        val wanted = query
+                            .replace(Regex("[^\p{L}\p{N}]+"), " ")
+                            .trim()
+
+                        for (i in 0 until items.length()) {
+                            val item = items.optJSONObject(i) ?: continue
+                            val qid = item.optString("qid")
+                            if (qid != "movie" && qid != "tvMovie" && qid != "short" && qid != "video") {
+                                continue
+                            }
+
+                            val image = item.optJSONObject("i")?.optString("imageUrl").orEmpty()
+                            if (image.isBlank()) continue
+
+                            val candidateTitle = item.optString("l")
+                                .lowercase()
+                                .replace(Regex("[^\p{L}\p{N}]+"), " ")
+                                .trim()
+
+                            var score = 0
+                            if (candidateTitle == wanted) score += 100
+                            if (candidateTitle.contains(wanted) || wanted.contains(candidateTitle)) score += 50
+
+                            val candidateYear = item.optInt("y", -1)
+                            if (year != null && candidateYear == year) score += 40
+                            if (year != null && candidateYear in (year - 1)..(year + 1)) score += 10
+
+                            if (score > bestScore) {
+                                bestScore = score
+                                bestPoster = image
+                            }
+                        }
+                    }
+
+                    cleanImage(bestPoster)
+                }
+            } catch (e: Exception) {
+                Log.d(JET_TAG, "IMDb poster resolve failed: $title -> ${e.message}")
+                null
+            }
+        } else {
+            null
+        }
+
+        val finalPoster = imdbPoster ?: sitePoster
+
+        Log.d(JET_TAG, "home item: $title | poster=$finalPoster")
 
         val score = selectFirst(
             "span.puan_1, .imdb, .rating, .score"
         )?.text()?.trim()
 
-        val finalPoster = poster ?: cardPoster
-
-        Log.d(JET_TAG, "home item: $title | poster=$finalPoster")
-
         return newMovieSearchResponse(title, href, TvType.Movie) {
             posterUrl = finalPoster
-            posterHeaders = mapOf(
-                "User-Agent" to JET_UA,
-                "Referer" to "$mainUrl/",
-                "Accept" to "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-            )
             this.score = Score.from10(score)
         }
     }
