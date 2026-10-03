@@ -93,7 +93,7 @@ class JetFilmizle : MainAPI() {
             false,
         )
 
-        val items = document.select("article.movie, article[class*=movie]").mapNotNull {
+        val items = document.select("article.movie, article[class*=movie], .movie-item, .film-item, .movie, .film").mapNotNull {
             it.toSearchResult()
         }.distinctBy { it.url }
 
@@ -138,8 +138,7 @@ class JetFilmizle : MainAPI() {
             ?: return null
 
         val imageCandidates = select(
-            "img[data-src], img[data-lazy-src], img[data-original], img[data-background], " +
-                "img[data-bg], img[data-image], img[src], " +
+            "img, picture source, [data-src], [data-lazy-src], [data-original], " +
                 "[data-background], [data-bg], [data-image], [data-lazy-background], " +
                 "[data-lazy-background-image], [style*='background-image']"
         ).flatMap { image ->
@@ -153,7 +152,13 @@ class JetFilmizle : MainAPI() {
                 image.attr("data-lazy-background"),
                 image.attr("data-lazy-background-image"),
                 image.attr("src"),
-            ).filter { it.isNotBlank() }
+                image.attr("data-srcset"),
+                image.attr("srcset"),
+            ).filter { it.isNotBlank() }.flatMap { raw ->
+                if (raw.contains(",")) {
+                    raw.split(",").map { it.trim().substringBefore(" ").trim() }
+                } else listOf(raw.trim().substringBefore(" ").trim())
+            }
 
             val styleUrl = Regex(
                 """url\((?:["'])?([^)"']+)(?:["'])?\)""",
@@ -191,10 +196,6 @@ class JetFilmizle : MainAPI() {
 
         return newMovieSearchResponse(title, href, TvType.Movie) {
             posterUrl = poster
-            posterHeaders = mapOf(
-                "User-Agent" to JET_UA,
-                "Referer" to "$mainUrl/",
-            )
             this.score = Score.from10(score)
         }
     }
