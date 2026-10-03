@@ -172,8 +172,21 @@ class JetFilmizle : MainAPI() {
             urls + listOfNotNull(styleUrl)
         }
 
-        val poster = imageCandidates
-            .mapNotNull { raw ->
+        val linkedPosterCandidates = select("a[href*='/wp-content/uploads/']").mapNotNull {
+            fixUrlNull(it.attr("href"))
+        }
+
+        val poster = linkedPosterCandidates
+            .firstOrNull { imageUrl ->
+                val v = imageUrl.lowercase()
+                !v.contains("logo") &&
+                    !v.contains("dublaj") &&
+                    !v.contains("altyazi") &&
+                    !v.contains("yerli-film") &&
+                    Regex("""\.(jpe?g|png|webp)(?:[?#].*)?$""").containsMatchIn(v)
+            }
+            ?: imageCandidates
+                .mapNotNull { raw ->
                 fixUrlNull(
                     raw.trim()
                         .removeSurrounding("'")
@@ -238,6 +251,10 @@ class JetFilmizle : MainAPI() {
 
         return newMovieSearchResponse(title, href, TvType.Movie) {
             posterUrl = poster
+            posterHeaders = mapOf(
+                "User-Agent" to JET_UA,
+                "Referer" to "$mainUrl/",
+            )
             this.score = Score.from10(score)
         }
     }
