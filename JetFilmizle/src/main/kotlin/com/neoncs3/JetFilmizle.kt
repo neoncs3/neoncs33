@@ -25,9 +25,7 @@ import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Element
-import org.json.JSONObject
 import java.net.URLDecoder
-import java.net.URLEncoder
 
 private const val JET_TAG = "JetFilmizle"
 private const val JET_UA =
@@ -35,12 +33,12 @@ private const val JET_UA =
         "(KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
 
 class JetFilmizle : MainAPI() {
-    override var mainUrl = "https://jetizle.com"
+    override var mainUrl = "https://jetfilmizle.now"
     override var name = "JetFilmizle"
     override var lang = "tr"
     override val hasMainPage = true
     override val hasQuickSearch = true
-    override val supportedTypes = setOf(TvType.Movie)
+    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
     private val pageHeaders = mapOf(
         "User-Agent" to JET_UA,
@@ -49,23 +47,25 @@ class JetFilmizle : MainAPI() {
     )
 
     override val mainPage = mainPageOf(
-        "$mainUrl/" to "Son Filmler",
-        "$mainUrl/turkce-dublaj-filmler/" to "Türkçe Dublaj",
-        "$mainUrl/turkce-altyazili-filmler/" to "Türkçe Altyazılı",
-        "$mainUrl/dizi/aksiyon/" to "Aksiyon",
-        "$mainUrl/dizi/animasyon/" to "Animasyon",
-        "$mainUrl/dizi/bilim-kurgu/" to "Bilim Kurgu",
-        "$mainUrl/dizi/dram/" to "Dram",
-        "$mainUrl/dizi/fantastik/" to "Fantastik",
-        "$mainUrl/dizi/gerilim/" to "Gerilim",
-        "$mainUrl/dizi/gizem/" to "Gizem",
-        "$mainUrl/dizi/komedi/" to "Komedi",
-        "$mainUrl/dizi/korku/" to "Korku",
-        "$mainUrl/dizi/macera/" to "Macera",
-        "$mainUrl/dizi/romantik/" to "Romantik",
-        "$mainUrl/dizi/suc/" to "Suç",
-        "$mainUrl/dizi/tarih/" to "Tarih",
-        "$mainUrl/dizi/yerli-filmleri/" to "Yerli Filmler",
+        "$mainUrl/filmler/sayfa-" to "En Yeni Filmler",
+        "$mainUrl/diziler/sayfa-" to "En Yeni Diziler",
+        "$mainUrl/filmler/en-cok-izlenenler/sayfa-" to "En Çok İzlenen Filmler",
+        "$mainUrl/diziler/siralama-en-cok-izlenen/sayfa-" to "En Çok İzlenen Diziler",
+        "$mainUrl/saglayici/netflix?sayfa=" to "Netflix",
+        "$mainUrl/yerli-filmler/sayfa-" to "Yerli Filmler",
+        "$mainUrl/tur/aile/film/sayfa-" to "Aile",
+        "$mainUrl/tur/aksiyon/film/sayfa-" to "Aksiyon",
+        "$mainUrl/tur/animasyon/film/sayfa-" to "Animasyon",
+        "$mainUrl/tur/bilim-kurgu/film/sayfa-" to "Bilim Kurgu",
+        "$mainUrl/tur/dram/film/sayfa-" to "Dram",
+        "$mainUrl/tur/fantastik/film/sayfa-" to "Fantastik",
+        "$mainUrl/tur/gerilim/film/sayfa-" to "Gerilim",
+        "$mainUrl/tur/gizem/film/sayfa-" to "Gizem",
+        "$mainUrl/tur/komedi/film/sayfa-" to "Komedi",
+        "$mainUrl/tur/korku/film/sayfa-" to "Korku",
+        "$mainUrl/tur/macera/film/sayfa-" to "Macera",
+        "$mainUrl/tur/romantik/film/sayfa-" to "Romantik",
+        "$mainUrl/tur/suc/film/sayfa-" to "Suç",
     )
 
     override suspend fun getMainPage(
@@ -94,13 +94,10 @@ class JetFilmizle : MainAPI() {
             false,
         )
 
-        val items = buildList {
-            for (element in document.select(
-                "article.movie, article[class*=movie], .movie-item, .film-item, .movie, .film"
-            )) {
-                element.toSearchResult()?.let { add(it) }
-            }
-        }.distinctBy { it.url }
+        val items = document.select(
+            ".row-cols-2 .col .film-card, .film-card"
+        ).mapNotNull { it.toSearchResult() }
+            .distinctBy { it.url }
 
         val hasNext = detectNextPage(document, page)
         return newHomePageResponse(request.name, items, hasNext)
@@ -122,171 +119,40 @@ class JetFilmizle : MainAPI() {
         return page < 50 && document.select("article.movie").isNotEmpty()
     }
 
-    private suspend fun Element.toSearchResult(): SearchResponse? {
-        val link = selectFirst("a[href*='-izle/'], a[href*='-202'], a[href]")
-            ?: return null
-
-        val href = fixUrlNull(link.attr("href")) ?: return null
-        if (!href.startsWith(mainUrl, true) || href == mainUrl || href == "$mainUrl/") {
-            return null
-        }
-
-        val title = sequenceOf(
-            selectFirst("h2 a")?.text(),
-            selectFirst("h3 a")?.text(),
-            selectFirst("h4 a")?.text(),
-            selectFirst("h5 a")?.text(),
-            selectFirst("h6 a")?.text(),
-            link.attr("title"),
-            link.text(),
-        ).firstOrNull { !it.isNullOrBlank() }
-            ?.trim()
+    private fun Element.toSearchResult(): SearchResponse? {
+        val title = selectFirst(
+            ".film-title, .card-title, h3 a, h3, h2 a, h2"
+        )?.text()?.trim()
             ?.substringBefore(" izle")
             ?.trim()
             ?: return null
 
-        fun cleanImage(url: String?): String? {
-            val fixed = url?.trim()
-                ?.removeSurrounding("'")
-                ?.removeSurrounding(""")
-                ?.let(::fixUrlNull)
-                ?: return null
+        val href = fixUrlNull(
+            selectFirst(".card-body a[href], a[href]")?.attr("href")
+        ) ?: return null
 
-            val v = fixed.lowercase()
-            return fixed.takeIf {
-                !v.contains("logo") &&
-                    !v.contains("turkce-dublaj") &&
-                    !v.contains("turkce-altyazi") &&
-                    !v.contains("yerli-film") &&
-                    !v.contains("avatar") &&
-                    !v.contains("placeholder") &&
-                    !v.contains("loading") &&
-                    !v.contains("spinner") &&
-                    !v.contains("blank")
-            }
-        }
-
-        val sitePoster = select(
-            "img[data-src], img[data-lazy-src], img[data-original], img[data-background], " +
-                "img[data-bg], img[data-image], img[src], picture source, " +
-                "[data-background], [data-bg], [data-image], " +
-                "[data-lazy-background], [data-lazy-background-image], " +
-                "[style*='background-image']"
-        ).flatMap { image ->
-            val attrs = sequenceOf(
-                image.attr("data-src"),
-                image.attr("data-lazy-src"),
-                image.attr("data-original"),
-                image.attr("data-background"),
-                image.attr("data-bg"),
-                image.attr("data-image"),
-                image.attr("data-lazy-background"),
-                image.attr("data-lazy-background-image"),
-                image.attr("src"),
-            ).filter { it.isNotBlank() }
-
-            val styleUrl = Regex(
-                """url\((?:["'])?([^)"']+)(?:["'])?\)""",
-                RegexOption.IGNORE_CASE
-            ).find(image.attr("style"))?.groupValues?.getOrNull(1)
-
-            attrs + listOfNotNull(styleUrl)
-        }.mapNotNull(::cleanImage).firstOrNull { imageUrl ->
-            val v = imageUrl.lowercase()
-            v.contains("/wp-content/uploads/") &&
-                Regex("""\.(jpe?g|png|webp)(?:[?#].*)?$""").containsMatchIn(v)
-        }
-
-        val year = Regex("""(?<!\d)(?:19|20)\d{2}(?!\d)""")
-            .find(title)?.value?.toIntOrNull()
-
-        val imdbPoster = if (sitePoster == null) {
-            try {
-                val query = title
-                    .substringBefore("(")
-                    .replace(Regex("""(?i)\b(?:dublaj|altyazılı|altyazili|full\s*hd|izle)\b"""), " ")
-                    .trim()
-                    .lowercase()
-
-                if (query.isBlank()) {
-                    null
-                } else {
-                    val encoded = URLEncoder.encode(query, "UTF-8").replace("+", "%20")
-                    val apiUrl =
-                        "https://v3.sg.media-imdb.com/suggestion/titles/x/$encoded.json?includeVideos=0"
-
-                    val json = JSONObject(
-                        app.get(
-                            apiUrl,
-                            headers = mapOf(
-                                "User-Agent" to JET_UA,
-                                "Accept" to "application/json",
-                            ),
-                            referer = "https://www.imdb.com/",
-                            allowRedirects = true,
-                        ).text
-                    )
-
-                    val items = json.optJSONArray("d")
-                    var bestPoster: String? = null
-                    var bestScore = Int.MIN_VALUE
-
-                    if (items != null) {
-                        val wanted = query
-                            .replace(Regex("[^\p{L}\p{N}]+"), " ")
-                            .trim()
-
-                        for (i in 0 until items.length()) {
-                            val item = items.optJSONObject(i) ?: continue
-                            val qid = item.optString("qid")
-                            if (qid != "movie" && qid != "tvMovie" && qid != "short" && qid != "video") {
-                                continue
-                            }
-
-                            val image = item.optJSONObject("i")?.optString("imageUrl").orEmpty()
-                            if (image.isBlank()) continue
-
-                            val candidateTitle = item.optString("l")
-                                .lowercase()
-                                .replace(Regex("[^\p{L}\p{N}]+"), " ")
-                                .trim()
-
-                            var score = 0
-                            if (candidateTitle == wanted) score += 100
-                            if (candidateTitle.contains(wanted) || wanted.contains(candidateTitle)) score += 50
-
-                            val candidateYear = item.optInt("y", -1)
-                            if (year != null && candidateYear == year) score += 40
-                            if (year != null && candidateYear in (year - 1)..(year + 1)) score += 10
-
-                            if (score > bestScore) {
-                                bestScore = score
-                                bestPoster = image
-                            }
-                        }
-                    }
-
-                    cleanImage(bestPoster)
-                }
-            } catch (e: Exception) {
-                Log.d(JET_TAG, "IMDb poster resolve failed: $title -> ${e.message}")
-                null
-            }
-        } else {
-            null
-        }
-
-        val finalPoster = imdbPoster ?: sitePoster
-
-        Log.d(JET_TAG, "home item: $title | poster=$finalPoster")
+        val poster = sequenceOf(
+            selectFirst(".film-poster img")?.attr("data-src"),
+            selectFirst(".film-poster img")?.attr("data-lazy-src"),
+            selectFirst(".film-poster img")?.attr("src"),
+            selectFirst("img")?.attr("data-src"),
+            selectFirst("img")?.attr("src"),
+        ).firstOrNull { it.isNotBlank() }?.let(::fixUrlNull)
 
         val score = selectFirst(
-            "span.puan_1, .imdb, .rating, .score"
+            ".rating-year-imdb .text-warning, .rating, .imdb"
         )?.text()?.trim()
 
-        return newMovieSearchResponse(title, href, TvType.Movie) {
-            posterUrl = finalPoster
-            this.score = Score.from10(score)
+        return if (href.contains("/dizi/")) {
+            newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
+                posterUrl = poster
+                score?.let { this.score = Score.from10(it) }
+            }
+        } else {
+            newMovieSearchResponse(title, href, TvType.Movie) {
+                posterUrl = poster
+                score?.let { this.score = Score.from10(it) }
+            }
         }
     }
 
