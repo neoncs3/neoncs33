@@ -1,10 +1,10 @@
-version = 17
+version = 18
 
 cloudstream {
     description = "Jet Film - Türkçe dublajlı ve altyazılı film sağlayıcısı"
     authors = listOf("neoncs3")
     status = 1
-    tvTypes = listOf("Movie")
+    tvTypes = listOf("Movie", "TvSeries")
     language = "tr"
-    iconUrl = "https://www.google.com/s2/favicons?domain=jetizle.com&sz=%size%"
+    iconUrl = "https://www.google.com/s2/favicons?domain=jetfilmizle.now&sz=%size%"
 }
