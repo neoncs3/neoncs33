@@ -9,5 +9,6 @@ class JetFilmizlePlugin : Plugin() {
     override fun load(context: Context) {
         super.load(context)
         registerMainAPI(JetFilmizle())
+        registerExtractorAPI(PixelDrain())
     }
 }
