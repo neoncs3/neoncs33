@@ -102,10 +102,10 @@
     },
     {
         "iconUrl": "https://www.google.com/s2/favicons?domain=jetizle.com&sz=%size%",
-        "fileHash": "sha256-0cfa716b02ff47f3290396974c77a9b95ac8894b347c8211778279d4cda2ba25",
+        "fileHash": "sha256-43ce6eb3422527c9e8ce9e7fb7dad7caab886a7c5a49e49f3611a0e2af315bda",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 33097,
+        "fileSize": 33714,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -114,7 +114,7 @@
         "tvTypes": [
             "Movie"
         ],
-        "version": 6,
+        "version": 7,
         "internalName": "JetFilmizle",
         "description": "Jet Film - T\u00fcrk\u00e7e dublajl\u0131 ve altyaz\u0131l\u0131 film sa\u011flay\u0131c\u0131s\u0131",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/JetFilmizle.cs3",
