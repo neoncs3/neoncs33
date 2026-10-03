@@ -122,7 +122,9 @@ class JetFilmizle : MainAPI() {
     }
 
     private suspend fun Element.toSearchResult(): SearchResponse? {
-        val link = selectFirst("a[href*='-izle/'], a[href*='-202'], a[href]") ?: return null
+        val link = selectFirst("a[href*='-izle/'], a[href*='-202'], a[href]")
+            ?: return null
+
         val href = fixUrlNull(link.attr("href")) ?: return null
         if (!href.startsWith(mainUrl, true) || href == mainUrl || href == "$mainUrl/") {
             return null
@@ -134,126 +136,108 @@ class JetFilmizle : MainAPI() {
             selectFirst("h4 a")?.text(),
             selectFirst("h5 a")?.text(),
             selectFirst("h6 a")?.text(),
-            selectFirst("a[title]")?.attr("title"),
+            link.attr("title"),
+            link.text(),
         ).firstOrNull { !it.isNullOrBlank() }
             ?.trim()
             ?.substringBefore(" izle")
             ?.trim()
             ?: return null
 
-        val imageCandidates = select(
-            "img, picture source, [data-src], [data-lazy-src], [data-original], " +
-                "[data-background], [data-bg], [data-image], [data-lazy-background], " +
-                "[data-lazy-background-image], [style*='background-image']"
+        fun validPoster(url: String?): String? {
+            val fixed = url?.trim()
+                ?.removeSurrounding("'")
+                ?.removeSurrounding(""")
+                ?.let(::fixUrlNull)
+                ?: return null
+
+            val v = fixed.lowercase()
+            return if (
+                v.contains("/wp-content/uploads/") &&
+                !v.contains("logo") &&
+                !v.contains("turkce-dublaj") &&
+                !v.contains("turkce-altyazi") &&
+                !v.contains("yerli-film") &&
+                !v.contains("avatar") &&
+                !v.contains("placeholder") &&
+                Regex("""\.(jpe?g|png|webp)(?:[?#].*)?$""").containsMatchIn(v)
+            ) {
+                fixed
+            } else null
+        }
+
+        val poster = try {
+            val detail = app.get(
+                href,
+                headers = pageHeaders,
+                referer = "$mainUrl/",
+                allowRedirects = true,
+            ).document
+
+            validPoster(
+                detail.select("a[href*='/wp-content/uploads/']").mapNotNull {
+                    it.attr("href")
+                }.firstOrNull { validPoster(it) != null }
+            )
+                ?: validPoster(
+                    detail.selectFirst("meta[property='og:image']")
+                        ?.attr("content")
+                )
+                ?: detail.select(
+                    "section.movie-exp img, .movie-exp img, .film-resim img, .film-poster img"
+                ).mapNotNull { img ->
+                    sequenceOf(
+                        img.attr("data-src"),
+                        img.attr("data-lazy-src"),
+                        img.attr("data-original"),
+                        img.attr("data-background"),
+                        img.attr("data-bg"),
+                        img.attr("data-image"),
+                        img.attr("src"),
+                    ).mapNotNull(::validPoster).firstOrNull()
+                }.firstOrNull()
+        } catch (e: Exception) {
+            Log.d(JET_TAG, "poster resolve failed: $href -> ${e.message}")
+            null
+        }
+
+        val cardPoster = select(
+            "img[data-src], img[data-lazy-src], img[data-original], img[data-background], " +
+                "img[data-bg], img[data-image], img[src], picture source, " +
+                "[data-background], [data-bg], [data-image], [style*='background-image']"
         ).flatMap { image ->
-            val urls = sequenceOf(
+            val attrs = sequenceOf(
                 image.attr("data-src"),
                 image.attr("data-lazy-src"),
                 image.attr("data-original"),
                 image.attr("data-background"),
                 image.attr("data-bg"),
                 image.attr("data-image"),
-                image.attr("data-lazy-background"),
-                image.attr("data-lazy-background-image"),
                 image.attr("src"),
-                image.attr("data-srcset"),
-                image.attr("srcset"),
-            ).filter { it.isNotBlank() }.flatMap { raw ->
-                if (raw.contains(",")) {
-                    raw.split(",").map { it.trim().substringBefore(" ").trim() }
-                } else listOf(raw.trim().substringBefore(" ").trim())
-            }
+            ).filter { it.isNotBlank() }
 
             val styleUrl = Regex(
                 """url\((?:["'])?([^)"']+)(?:["'])?\)""",
                 RegexOption.IGNORE_CASE
             ).find(image.attr("style"))?.groupValues?.getOrNull(1)
 
-            urls + listOfNotNull(styleUrl)
-        }
-
-        val linkedPosterCandidates = select("a[href*='/wp-content/uploads/']").mapNotNull {
-            fixUrlNull(it.attr("href"))
-        }
-
-        val poster = linkedPosterCandidates
-            .firstOrNull { imageUrl ->
-                val v = imageUrl.lowercase()
-                !v.contains("logo") &&
-                    !v.contains("dublaj") &&
-                    !v.contains("altyazi") &&
-                    !v.contains("yerli-film") &&
-                    Regex("""\.(jpe?g|png|webp)(?:[?#].*)?$""").containsMatchIn(v)
-            }
-            ?: imageCandidates
-                .mapNotNull { raw ->
-                fixUrlNull(
-                    raw.trim()
-                        .removeSurrounding("'")
-                        .removeSurrounding("\"")
-                )
-            }
-            .filterNot { imageUrl ->
-                val v = imageUrl.lowercase()
-                v.contains("logo") ||
-                    v.contains("turkce-dublaj") ||
-                    v.contains("turkce-altyazi") ||
-                    v.contains("yerli-film") ||
-                    v.contains("avatar") ||
-                    v.contains("placeholder") ||
-                    v.contains("loading") ||
-                    v.contains("spinner") ||
-                    v.contains("blank")
-            }
-            .firstOrNull { imageUrl ->
-                val v = imageUrl.lowercase()
-                v.contains("/wp-content/uploads/") &&
-                    Regex("""\.(jpe?g|png|webp)(?:[?#].*)?$""").containsMatchIn(v)
-            }
-            ?: try {
-                val detail = app.get(
-                    href,
-                    headers = pageHeaders,
-                    referer = "$mainUrl/",
-                    allowRedirects = true,
-                ).document
-
-                detail.select("a[href*='/wp-content/uploads/']").mapNotNull {
-                    fixUrlNull(it.attr("href"))
-                }.firstOrNull { url ->
-                    val v = url.lowercase()
-                    !v.contains("logo") &&
-                        !v.contains("dublaj") &&
-                        !v.contains("altyazi") &&
-                        Regex("""\.(jpe?g|png|webp)(?:[?#].*)?$""").containsMatchIn(v)
-                }
-                    ?: detail.selectFirst("meta[property='og:image']")
-                        ?.attr("content")
-                        ?.let(::fixUrlNull)
-                    ?: detail.select(
-                        "section.movie-exp img, .movie-exp img, " +
-                            ".film-resim img, .film-poster img"
-                    ).mapNotNull { img ->
-                        sequenceOf(
-                            img.attr("data-src"),
-                            img.attr("data-lazy-src"),
-                            img.attr("data-original"),
-                            img.attr("src"),
-                        ).firstOrNull { it.isNotBlank() }?.let(::fixUrlNull)
-                    }.firstOrNull()
-            } catch (_: Exception) {
-                null
-            }
+            attrs + listOfNotNull(styleUrl)
+        }.mapNotNull(::validPoster).firstOrNull()
 
         val score = selectFirst(
             "span.puan_1, .imdb, .rating, .score"
         )?.text()?.trim()
 
+        val finalPoster = poster ?: cardPoster
+
+        Log.d(JET_TAG, "home item: $title | poster=$finalPoster")
+
         return newMovieSearchResponse(title, href, TvType.Movie) {
-            posterUrl = poster
+            posterUrl = finalPoster
             posterHeaders = mapOf(
                 "User-Agent" to JET_UA,
                 "Referer" to "$mainUrl/",
+                "Accept" to "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
             )
             this.score = Score.from10(score)
         }
