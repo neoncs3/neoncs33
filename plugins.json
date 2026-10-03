@@ -102,10 +102,10 @@
     },
     {
         "iconUrl": "https://www.google.com/s2/favicons?domain=jetizle.com&sz=%size%",
-        "fileHash": "sha256-5558ab7040d64c2426610bce884f2166395262c0ecda868ba94e6aeab40809ce",
+        "fileHash": "sha256-a41593ae37a39d62796fa5e1a68944fb4bc84f2c06293e2093dc6b76a8fc6fcf",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 28746,
+        "fileSize": 30234,
         "status": 1,
         "language": "tr",
         "authors": [
