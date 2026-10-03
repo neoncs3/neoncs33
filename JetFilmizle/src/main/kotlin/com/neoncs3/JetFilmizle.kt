@@ -406,7 +406,7 @@ class JetFilmizle : MainAPI() {
                     ).findAll(sourceBlock).forEach { match ->
                         val url = match.groupValues[1]
                             .replace("\\/", "/")
-                            .replace("\\\"", """)
+                            .replace("\\\"", "\"")
 
                         val label = match.groupValues[2]
                         callback(
