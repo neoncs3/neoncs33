@@ -147,7 +147,7 @@ class JetFilmizle : MainAPI() {
         fun validPoster(url: String?): String? {
             val fixed = url?.trim()
                 ?.removeSurrounding("'")
-                ?.removeSurrounding(""")
+                ?.removeSurrounding("\"")
                 ?.let(::fixUrlNull)
                 ?: return null
 
