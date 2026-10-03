@@ -25,7 +25,7 @@ import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Element
-import java.net.URLDecoder
+import java.net.URLEncoder
 
 private const val JET_TAG = "JetFilmizle"
 private const val JET_UA =
@@ -72,12 +72,7 @@ class JetFilmizle : MainAPI() {
         page: Int,
         request: MainPageRequest,
     ): HomePageResponse {
-        val base = request.data
-        val url = if (page <= 1) {
-            base
-        } else {
-            buildPagedUrl(base, page)
-        }
+        val url = "${request.data}$page"
 
         Log.d(JET_TAG, "getMainPage: $url")
 
@@ -99,7 +94,7 @@ class JetFilmizle : MainAPI() {
         ).mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
 
-        val hasNext = detectNextPage(document, page)
+        val hasNext = items.isNotEmpty()
         return newHomePageResponse(request.name, items, hasNext)
     }
 
@@ -137,22 +132,19 @@ class JetFilmizle : MainAPI() {
             selectFirst(".film-poster img")?.attr("src"),
             selectFirst("img")?.attr("data-src"),
             selectFirst("img")?.attr("src"),
-        ).firstOrNull { it.isNotBlank() }?.let(::fixUrlNull)
+        ).firstOrNull { !it.isNullOrBlank() }?.let(::fixUrlNull)
 
         val score = selectFirst(
             ".rating-year-imdb .text-warning, .rating, .imdb"
         )?.text()?.trim()
 
-        return if (href.contains("/dizi/")) {
-            newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
-                posterUrl = poster
-                score?.let { this.score = Score.from10(it) }
-            }
-        } else {
-            newMovieSearchResponse(title, href, TvType.Movie) {
-                posterUrl = poster
-                score?.let { this.score = Score.from10(it) }
-            }
+        return newMovieSearchResponse(
+            title,
+            href,
+            if (href.contains("/dizi/")) TvType.TvSeries else TvType.Movie,
+        ) {
+            posterUrl = poster
+            score?.let { this.score = Score.from10(it) }
         }
     }
 
@@ -160,46 +152,50 @@ class JetFilmizle : MainAPI() {
         val q = query.trim()
         if (q.isBlank()) return emptyList()
 
-        val results = try {
-            val doc = app.post(
-                "$mainUrl/filmara.php",
-                headers = pageHeaders,
-                referer = "$mainUrl/",
-                data = mapOf("s" to q),
-            ).document
-
-            buildList {
-                for (element in doc.select(
-                    "article.movie, article[class*=movie], .movie-item, .film-item, .movie, .film"
-                )) {
-                    element.toSearchResult()?.let { add(it) }
-                }
-            }
-        } catch (_: Exception) {
-            emptyList()
-        }
-
-        if (results.isNotEmpty()) return results
-
         val encoded = URLEncoder.encode(q, "UTF-8")
-        return try {
-            val doc = app.get(
-                "$mainUrl/?s=$encoded",
+        val response = runCatching {
+            app.get(
+                "$mainUrl/arama-json?q=$encoded",
                 headers = pageHeaders,
                 referer = "$mainUrl/",
-            ).document
+            ).text
+        }.getOrNull() ?: return emptyList()
+
+        return try {
+            val body = response.substringAfter("<body>", response).substringBefore("</body>", response)
+            val json = org.json.JSONObject(body)
+            val results = json.optJSONArray("results") ?: return emptyList()
 
             buildList {
-                for (element in doc.select(
-                    "article.movie, article[class*=movie], .movie-item, .film-item, .movie, .film"
-                )) {
-                    element.toSearchResult()?.let { add(it) }
+                for (i in 0 until results.length()) {
+                    val item = results.optJSONObject(i) ?: continue
+                    val title = item.optString("title").trim()
+                    val rawUrl = item.optString("url").trim()
+                    if (title.isBlank() || rawUrl.isBlank()) continue
+
+                    val fullUrl = fixUrlNull(
+                        if (rawUrl.startsWith("http")) rawUrl else "$mainUrl/$rawUrl"
+                    ) ?: continue
+
+                    val poster = fixUrlNull(item.optString("poster").trim())
+                    val year = item.optString("year").toIntOrNull()
+                    val rating = item.optString("rating")
+                    val type = if (item.optString("type").equals("dizi", true)) TvType.TvSeries else TvType.Movie
+
+                    add(newMovieSearchResponse(title, fullUrl, type) {
+                        posterUrl = poster
+                        this.year = year
+                        this.score = Score.from10(rating)
+                    })
                 }
             }.distinctBy { it.url }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e(JET_TAG, "search hata: ${e.message}")
             emptyList()
         }
     }
+
+    override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun load(url: String): com.lagradost.cloudstream3.LoadResponse? {
         val pageUrl = fixUrlNull(url) ?: return null
