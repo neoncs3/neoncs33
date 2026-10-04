@@ -20,6 +20,7 @@ class SinemaCX : MainAPI() {
     override val hasMainPage          = true
     override var lang                 = "tr"
     override val hasQuickSearch = true
+    private val SCX_TAG = "SinemaCX"
     override val supportedTypes       = setOf(TvType.Movie)
 
     // ! CloudFlare bypass
@@ -30,41 +31,124 @@ class SinemaCX : MainAPI() {
 	*/
 
     override val mainPage = mainPageOf(
-        "${mainUrl}/page/"			                     to		"Son Eklenen Filmler",
-        "${mainUrl}/izle/aile-filmleri/page/"			 to		"Aile Filmleri",
-        "${mainUrl}/izle/aksiyon-filmleri/page/"		 to		"Aksiyon Filmleri",
-        "${mainUrl}/izle/animasyon-filmleri/page/"		 to		"Animasyon Filmleri",
-        "${mainUrl}/izle/belgesel/page/"				 to		"Belgesel Filmleri",
-        "${mainUrl}/izle/bilim-kurgu-filmleri/page/"	 to		"Bilim Kurgu Filmler",
-        "${mainUrl}/izle/biyografi/page/"				 to		"Biyografi Filmleri",
-        "${mainUrl}/izle/fantastik-filmler/page/"		 to		"Fantastik Filmler",
-        "${mainUrl}/izle/gizem-filmleri/page/"			 to		"Gizem Filmleri",
-        "${mainUrl}/izle/komedi-filmleri/page/"			 to		"Komedi Filmleri",
-        "${mainUrl}/izle/korku-filmleri/page/"			 to		"Korku Filmleri",
-        "${mainUrl}/izle/macera-filmleri/page/"			 to		"Macera Filmleri",
-        "${mainUrl}/izle/romantik-filmler/page/"		 to		"Romantik Filmler",
-        "${mainUrl}/izle/erotik-filmler/page/"			 to		"Erotik Film izle",
+        "$mainUrl/page/" to "Son Eklenen Filmler",
+        "$mainUrl/tur/aile-filmleri/" to "Aile Filmleri",
+        "$mainUrl/tur/aksiyon-filmleri/" to "Aksiyon Filmleri",
+        "$mainUrl/tur/animasyon-filmleri/" to "Animasyon Filmleri",
+        "$mainUrl/tur/belgesel/" to "Belgesel Filmleri",
+        "$mainUrl/tur/bilim-kurgu-filmleri/" to "Bilim Kurgu Filmleri",
+        "$mainUrl/tur/biyografi/" to "Biyografi Filmleri",
+        "$mainUrl/tur/dram-filmleri/" to "Dram Filmleri",
+        "$mainUrl/tur/fantastik-filmler/" to "Fantastik Filmler",
+        "$mainUrl/tur/gerilim-filmleri/" to "Gerilim Filmleri",
+        "$mainUrl/tur/gizem-filmleri/" to "Gizem Filmleri",
+        "$mainUrl/tur/komedi-filmleri/" to "Komedi Filmleri",
+        "$mainUrl/tur/korku-filmleri/" to "Korku Filmleri",
+        "$mainUrl/tur/macera-filmleri/" to "Macera Filmleri",
+        "$mainUrl/tur/muzikal-filmleri/" to "Müzikal Filmleri",
+        "$mainUrl/tur/romantik-filmleri/" to "Romantik Filmleri",
+        "$mainUrl/tur/savas-filmleri/" to "Savaş Filmleri",
+        "$mainUrl/tur/spor-filmleri/" to "Spor Filmleri",
+        "$mainUrl/tur/suc-filmleri/" to "Suç Filmleri",
+        "$mainUrl/tur/tarihi-filmler/" to "Tarih Filmleri",
+        "$mainUrl/tur/western-filmleri/" to "Western Filmleri",
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val document = app.get("${request.data}${page}").document
-        val home     = document.select("div.son div.frag-k, div.icerik div.frag-k").mapNotNull { it.toSearchResult() }
+        val url = when {
+            request.data == "$mainUrl/page/" && page == 1 -> "$mainUrl/"
+            page == 1 -> request.data
+            else -> request.data.trimEnd('/') + "/page/" + page + "/"
+        }
 
-        return newHomePageResponse(request.name, home)
+        Log.d(SCX_TAG, "Ana sayfa: " + url)
+
+        val document = runCatching {
+            app.get(
+                url,
+                headers = mapOf("User-Agent" to SCX_UA),
+                referer = "$mainUrl/",
+                allowRedirects = true
+            ).document
+        }.getOrNull() ?: return newHomePageResponse(request.name, emptyList(), false)
+
+        val home = document.select(
+            "div.son div.frag-k, div.icerik div.frag-k, article"
+        ).mapNotNull { it.toSearchResult() }.distinctBy { it.url }
+
+        return newHomePageResponse(request.name, home, home.isNotEmpty())
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val title     = this.selectFirst("div.yanac span")?.text() ?: return null
-        val href      = fixUrlNull(this.selectFirst("div.yanac a")?.attr("href")) ?: return null
-        val posterUrl = fixUrlNull(this.selectFirst("a.resim img")?.attr("data-src")) ?: fixUrlNull(this.selectFirst("a.resim img")?.attr("src"))
+        val title = sequenceOf(
+            selectFirst("div.yanac span")?.text(),
+            selectFirst(".film-title")?.text(),
+            selectFirst(".card-title")?.text(),
+            selectFirst("h2 a")?.text(),
+            selectFirst("h2")?.text(),
+            selectFirst("h3 a")?.text(),
+            selectFirst("h3")?.text(),
+        ).firstOrNull { !it.isNullOrBlank() }
+            ?.trim()
+            ?.substringBefore(" izle")
+            ?.trim()
+            ?: return null
 
-        return newMovieSearchResponse(title, href, TvType.Movie) { this.posterUrl = posterUrl }
+        val href = fixUrlNull(
+            sequenceOf(
+                selectFirst("div.yanac a")?.attr("href"),
+                selectFirst(".film-title a")?.attr("href"),
+                selectFirst(".card-title a")?.attr("href"),
+                selectFirst("a[href*='/film/']")?.attr("href"),
+                selectFirst("a[href]")?.attr("href"),
+            ).firstOrNull { !it.isNullOrBlank() }
+        ) ?: return null
+
+        if (!href.contains("/film/")) return null
+
+        val posterUrl = sequenceOf(
+            selectFirst("a.resim img")?.attr("data-src"),
+            selectFirst("a.resim img")?.attr("data-lazy-src"),
+            selectFirst("a.resim img")?.attr("src"),
+            selectFirst(".film-poster img")?.attr("data-src"),
+            selectFirst(".film-poster img")?.attr("src"),
+            selectFirst("img")?.attr("data-src"),
+            selectFirst("img")?.attr("src"),
+        ).firstOrNull { !it.isNullOrBlank() }?.let(::fixUrlNull)
+
+        val scoreText = sequenceOf(
+            selectFirst(".imdb")?.text(),
+            selectFirst(".rating")?.text(),
+        ).firstOrNull { !it.isNullOrBlank() }
+
+        return newMovieSearchResponse(title, href, TvType.Movie) {
+            this.posterUrl = posterUrl
+            scoreText?.let {
+                val value = Regex("""\d+(?:[\\.,]\d+)?""")
+                    .find(it)?.value?.replace(",", ".")
+                this.score = Score.from10(value)
+            }
+        }
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val document = app.get("${mainUrl}/?s=${query}").document
+        val q = query.trim()
+        if (q.isBlank()) return emptyList()
 
-        return document.select("div.icerik div.frag-k").mapNotNull { it.toSearchResult() }
+        val encoded = java.net.URLEncoder.encode(q, "UTF-8")
+        val document = runCatching {
+            app.get(
+                "$mainUrl/?s=$encoded",
+                headers = mapOf("User-Agent" to SCX_UA),
+                referer = "$mainUrl/",
+                allowRedirects = true
+            ).document
+        }.getOrNull() ?: return emptyList()
+
+        return document.select(
+            "div.icerik div.frag-k, div.son div.frag-k, article"
+        ).mapNotNull { it.toSearchResult() }
+            .distinctBy { it.url }
     }
 
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
