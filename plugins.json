@@ -143,6 +143,26 @@
         "name": "SetFilmIzle"
     },
     {
+        "iconUrl": "https://www.google.com/s2/favicons?domain=sinemacc.com&sz=%size%",
+        "fileHash": "sha256-566e113e6b7305c3739f9706312e281dc165d7cd2730cbbc41a64d5a050da2a1",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
+        "fileSize": 21869,
+        "status": 1,
+        "language": "tr",
+        "authors": [
+            "neoncs3"
+        ],
+        "tvTypes": [
+            "Movie"
+        ],
+        "version": 1,
+        "internalName": "SinemaCX",
+        "description": "Sinema CC - T\u00fcrk\u00e7e dublaj ve altyaz\u0131l\u0131 film sa\u011flay\u0131c\u0131s\u0131",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/SinemaCX.cs3",
+        "name": "SinemaCX"
+    },
+    {
         "iconUrl": "https://www.google.com/s2/favicons?domain=https://webdramaturkey2.com&sz=%size%",
         "fileHash": "sha256-8281b4136e9d7be6287e58038e9288febe59fc574c5bfbe8a0cf4ff1e2e6333f",
         "apiVersion": 1,
