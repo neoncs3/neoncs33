@@ -52,13 +52,36 @@ class AsyaFilmIzle : MainAPI() {
     }
 
     private fun posterFrom(element: Element): String? {
-        val img = element.selectFirst("img") ?: return null
-        return absolute(
-            img.attr("data-src")
-                .ifBlank { img.attr("data-lazy-src") }
-                .ifBlank { img.attr("data-original") }
-                .ifBlank { img.attr("src") }
-        )
+        val images = element.select("img")
+
+        fun firstSrcSet(value: String): String? {
+            return value
+                .split(",")
+                .asSequence()
+                .map { it.trim().substringBefore(" ").trim() }
+                .firstOrNull { it.isNotBlank() && !it.startsWith("data:image", true) }
+        }
+
+        fun imageUrl(img: Element): String? {
+            val raw = sequenceOf(
+                img.attr("data-src"),
+                img.attr("data-lazy-src"),
+                img.attr("data-original"),
+                img.attr("data-wpfc-original-src"),
+                firstSrcSet(img.attr("data-srcset")),
+                firstSrcSet(img.attr("data-lazy-srcset")),
+                firstSrcSet(img.attr("srcset")),
+                img.attr("src")
+            ).firstOrNull { it.isNotBlank() && !it.startsWith("data:image", true) }
+
+            return absolute(raw)
+        }
+
+        return images
+            .asSequence()
+            .mapNotNull(::imageUrl)
+            .firstOrNull { it.contains("image.tmdb.org", true) }
+            ?: images.asSequence().mapNotNull(::imageUrl).firstOrNull()
     }
 
     private fun scoreFrom(text: String?): Score? {
@@ -134,7 +157,7 @@ class AsyaFilmIzle : MainAPI() {
 
         if (title.isBlank()) return null
 
-        val poster = posterFrom(card)
+        val poster = posterFrom(link) ?: posterFrom(card)
         val score = scoreFrom(card.text())
         return if (url.contains("/film/", true)) {
             newMovieSearchResponse(title, url) {
@@ -169,7 +192,7 @@ class AsyaFilmIzle : MainAPI() {
             if (title.isBlank()) return@forEach
 
             val card = link.closest("article, .item, .post, .card, .film, .dizi, li, div") ?: link
-            val poster = posterFrom(card)
+            val poster = posterFrom(link) ?: posterFrom(card)
             val score = scoreFrom(card.text())
 
             results += if (href.contains("/film/", true)) {
