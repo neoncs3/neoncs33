@@ -84,6 +84,25 @@ class SinemaCX : MainAPI() {
             this.tags      = tags
             this.duration  = duration
             addActors(actors)
+
+            val imdb = document.selectFirst("a[href*='imdb.com']")?.text()
+                ?.trim()
+                ?.let { Regex("""\d+(?:[\.,]\d+)?""").find(it)?.value?.replace(",", ".") }
+            this.score = Score.from10(imdb)
+
+            val trailer = document.select(
+                "iframe[src*='youtube'], iframe[data-vsrc*='youtube'], a[href*='youtube.com/watch'], a[href*='youtu.be/']"
+            ).mapNotNull { element ->
+                sequenceOf(
+                    element.attr("src"),
+                    element.attr("data-vsrc"),
+                    element.attr("href")
+                ).firstOrNull { it.isNotBlank() }
+            }.firstOrNull { it.isNotBlank() }
+
+            if (!trailer.isNullOrBlank()) {
+                addTrailer(fixUrl(trailer))
+            }
         }
     }
 
