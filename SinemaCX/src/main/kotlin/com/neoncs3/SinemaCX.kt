@@ -195,6 +195,7 @@ class SinemaCX : MainAPI() {
             selectFirst("img")?.attr("data-src"),
             selectFirst("img")?.attr("src")
         )
+            .filterNotNull()
             .firstOrNull { it.isNotBlank() && !it.startsWith("data:image", true) }
             ?.let(::fixUrlNull)
 
