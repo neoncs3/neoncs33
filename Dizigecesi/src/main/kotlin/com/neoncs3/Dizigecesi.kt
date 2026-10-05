@@ -138,6 +138,11 @@ class Dizigecesi : MainAPI() {
         var found = false
         val document = app.get(data).document
 
+        val embedIds = document.select("[data-embed]")
+            .mapNotNull { it.attr("data-embed").trim().takeIf { id -> id.isNotBlank() } }
+            .filter { it.all(Char::isDigit) }
+            .distinct()
+
         for (embedId in embedIds) {
             try {
                 val postResponse = app.post(
