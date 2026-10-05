@@ -233,16 +233,12 @@ class SinemaCX : MainAPI() {
         val q = query.trim()
         if (q.isBlank()) return emptyList()
 
+        val encoded = java.net.URLEncoder.encode(q, "UTF-8")
         val document = runCatching {
-            app.get(
-                "$mainUrl/?s=$q",
-                headers = mapOf("User-Agent" to SCX_UA),
-                referer = "$mainUrl/",
-                allowRedirects = true
-            ).document
+            app.get("$mainUrl/?s=$encoded").document
         }.getOrNull() ?: return emptyList()
 
-        val searchResults = document.select("div.icerik div.frag-k")
+        val searchResults = document.select("div.icerik div.frag-k, .film_kutusu, div.frag-k, div.film-k, article.film")
             .mapNotNull { it.toSearchCardResult() }
             .distinctBy { it.url }
 
