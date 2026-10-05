@@ -283,22 +283,7 @@ class SinemaCX : MainAPI() {
         val imdb = imdbText
             ?.let { Regex("""\d+(?:[.,]\d+)?""").find(it)?.value?.replace(",", ".") }
 
-        val playerData = document.select(
-            "a[href], button[data-href], [data-url], [data-src]"
-        ).mapNotNull { element ->
-            sequenceOf(
-                element.attr("href"),
-                element.attr("data-href"),
-                element.attr("data-url"),
-                element.attr("data-src")
-            ).firstOrNull { it.isNotBlank() }?.let(::fixUrlNull)
-        }.firstOrNull { candidate ->
-            candidate.contains("vidon=", true) ||
-                candidate.contains("vr_set=", true) ||
-                candidate.contains("player.filmizle.in", true)
-        } ?: url
-
-        val trailer = document.select(
+        val trailerCandidates = document.select(
             "iframe, a, [data-src], [data-vsrc], [data-url]"
         ).mapNotNull { element ->
             sequenceOf(
@@ -308,15 +293,21 @@ class SinemaCX : MainAPI() {
                 element.attr("data-url"),
                 element.attr("href")
             ).firstOrNull { it.isNotBlank() }
-        }.mapNotNull { raw ->
-            fixUrlNull(raw.replace("\\/", "/"))
-        }.firstOrNull { candidate ->
-            candidate.contains("youtube.com/watch", true) ||
-                candidate.contains("youtu.be/", true) ||
-                candidate.contains("youtube-nocookie.com/embed/", true)
-        }
+        }.toMutableList()
 
-        return newMovieLoadResponse(title, url, TvType.Movie, playerData) {
+        Regex("""(?i)(?:https?:)?//(?:www\.)?(?:youtube\.com/(?:watch\?v=|embed/)|youtu\.be/)[^"'\s<>]+""")
+            .findAll(document.html().replace("\\/", "/"))
+            .forEach { trailerCandidates.add(it.value) }
+
+        val trailer = trailerCandidates
+            .mapNotNull { fixUrlNull(it.replace("\\/", "/")) }
+            .firstOrNull { candidate ->
+                candidate.contains("youtube.com/watch", true) ||
+                    candidate.contains("youtu.be/", true) ||
+                    candidate.contains("youtube-nocookie.com/embed/", true)
+            }
+
+        return newMovieLoadResponse(title, url, TvType.Movie, url) {
             this.posterUrl = poster
             this.year = year
             this.plot = description
@@ -356,7 +347,7 @@ override suspend fun loadLinks(
     val pages = LinkedHashSet<String>()
     pages.add(data)
 
-    // Film detayından Player/iframe adreslerini topla.
+    // Film detayından gerçek Player bağlantısını ve iframe'leri topla.
     runCatching {
         val detail = app.get(
             data,
@@ -368,6 +359,8 @@ override suspend fun loadLinks(
         detail.document.select(
             "a[href], button[data-href], [data-url], [data-src], iframe"
         ).forEach { element ->
+            val label = element.text().trim()
+
             sequenceOf(
                 element.attr("href"),
                 element.attr("data-href"),
@@ -377,8 +370,8 @@ override suspend fun loadLinks(
                 element.attr("src")
             ).mapNotNull(::resolve).forEach { candidate ->
                 if (
+                    label.contains("Player", true) ||
                     candidate.contains("vidon=", true) ||
-                    candidate.contains("vr_set=", true) ||
                     candidate.contains("player.filmizle.in", true) ||
                     candidate.contains("filmizle.in", true)
                 ) {
@@ -449,9 +442,7 @@ override suspend fun loadLinks(
                         "?data=" + java.net.URLEncoder.encode(videoId, "UTF-8") +
                         "&do=getVideo"
 
-                val filmReferer = data
-                    .substringBefore("?vidon=")
-                    .ifBlank { mainUrl + "/" }
+                val filmReferer = data.ifBlank { mainUrl + "/" }
 
                 val panel = runCatching {
                     app.post(
