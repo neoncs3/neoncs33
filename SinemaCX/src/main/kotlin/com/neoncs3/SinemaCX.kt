@@ -178,32 +178,117 @@ class SinemaCX : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
-        val document = app.get(url).document
+        val document = runCatching {
+            app.get(
+                url,
+                headers = mapOf(
+                    "User-Agent" to SCX_UA,
+                    "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
+                ),
+                referer = "$mainUrl/",
+                allowRedirects = true
+            ).document
+        }.getOrNull() ?: return null
 
-        val title       = document.selectFirst("div.f-bilgi h1")?.text()?.trim() ?: return null
-        val poster      = fixUrlNull(document.selectFirst("link[rel='image_src']")?.attr("href"))
-        val year        = document.selectFirst("div.f-bilgi ul.detay a[href*='yapim']")?.text()?.toIntOrNull()
-        val description = document.selectFirst("div.f-bilgi div.ackl")?.text()?.trim()
-        val tags        = document.select("div.f-bilgi div.tur a").map { it.text() }
-        val duration    = Regex("""Süre: </span>(\d+) Dakika</li>""").find(document.html())?.groupValues?.get(1)?.toIntOrNull()
-        val actors      = document.select("li.oync li.oyuncu-k").map {
-            Actor(it.selectFirst("span.isim")!!.text(), it.selectFirst("img")!!.attr("data-src"))
-        }
+        val rawTitle = sequenceOf(
+            document.selectFirst("h1")?.text(),
+            document.selectFirst("meta[property='og:title']")?.attr("content"),
+            document.selectFirst("title")?.text()
+        ).firstOrNull { !it.isNullOrBlank() }?.trim() ?: return null
+
+        val title = rawTitle
+            .replace(Regex("""(?i)\s*[-|]\s*(Sinema\s*CC|Sinema\.gg)\s*$"""), "")
+            .replace(Regex("""(?i)\s+(Full HD|HD)\s+İzle$"""), "")
+            .replace(Regex("""(?i)\s+İzle$"""), "")
+            .trim()
+
+        if (title.isBlank()) return null
+
+        val poster = sequenceOf(
+            document.selectFirst("meta[property='og:image']")?.attr("content"),
+            document.selectFirst("link[rel='image_src']")?.attr("href"),
+            document.selectFirst("div.f-bilgi img")?.attr("data-src"),
+            document.selectFirst("div.f-bilgi img")?.attr("data-lazy-src"),
+            document.selectFirst("div.f-bilgi img")?.attr("data-original"),
+            document.selectFirst("div.f-bilgi img")?.attr("src"),
+            document.selectFirst("img[src*='/uploads/']")?.attr("src"),
+            document.selectFirst("img[data-src*='/uploads/']")?.attr("data-src")
+        ).firstOrNull { !it.isNullOrBlank() }?.let(::fixUrlNull)
+
+        val pageText = document.text()
+
+        val year = sequenceOf(
+            Regex("""\b(19\d{2}|20\d{2})\b""").find(
+                document.selectFirst("div.f-bilgi")?.text().orEmpty()
+            )?.groupValues?.getOrNull(1),
+            Regex("""\b(19\d{2}|20\d{2})\b""").find(pageText)?.groupValues?.getOrNull(1)
+        ).firstOrNull { !it.isNullOrBlank() }?.toIntOrNull()
+
+        val description = sequenceOf(
+            document.selectFirst("meta[property='og:description']")?.attr("content"),
+            document.selectFirst("div.f-bilgi div.ackl")?.text(),
+            document.selectFirst(".film_ozeti, .f-ozet, .konu, .description, .plot")?.text()
+        ).firstOrNull { !it.isNullOrBlank() }?.trim()
+
+        val tags = document.select(
+            "div.f-bilgi div.tur a, a[href*='/tur/'], a[href*='/kategori/']"
+        ).map { it.text().trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+
+        val duration = Regex("""(?i)(\d{2,3})\s*Dakika""")
+            .find(pageText)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.toIntOrNull()
+
+        val actors = document.select(
+            "li.oync li.oyuncu-k, .oyuncu-k, .oyuncular .oyuncu-k"
+        ).mapNotNull { actor ->
+            val name = sequenceOf(
+                actor.selectFirst("span.isim")?.text(),
+                actor.selectFirst(".isim")?.text(),
+                actor.selectFirst("a")?.text()
+            ).firstOrNull { !it.isNullOrBlank() }?.trim()
+
+            if (name.isNullOrBlank()) {
+                null
+            } else {
+                val image = sequenceOf(
+                    actor.selectFirst("img")?.attr("data-src"),
+                    actor.selectFirst("img")?.attr("data-lazy-src"),
+                    actor.selectFirst("img")?.attr("data-original"),
+                    actor.selectFirst("img")?.attr("src")
+                ).firstOrNull { !it.isNullOrBlank() }?.let(::fixUrlNull)
+
+                Actor(name, image)
+            }
+        }.distinctBy { it.name }
 
         return newMovieLoadResponse(title, url, TvType.Movie, url) {
             this.posterUrl = poster
-            this.year      = year
-            this.plot      = description
-            this.tags      = tags
-            this.duration  = duration
-            addActors(actors)
+            this.year = year
+            this.plot = description
+            this.tags = tags
+            this.duration = duration
 
-            val imdb = document.selectFirst("a[href*='imdb.com']")?.text()
-                ?.let { Regex("""\d+(?:[\.,]\d+)?""").find(it)?.value?.replace(",", ".") }
+            if (actors.isNotEmpty()) {
+                addActors(actors)
+            }
+
+            val imdbText = sequenceOf(
+                document.selectFirst("a[href*='imdb.com']")?.text(),
+                document.selectFirst("span.imdb, span.puan, div.f-puan, .film_puani")?.text()
+            ).firstOrNull { !it.isNullOrBlank() }
+
+            val imdb = imdbText
+                ?.let { Regex("""\d+(?:[.,]\d+)?""").find(it)?.value?.replace(",", ".") }
+
             this.score = Score.from10(imdb)
 
             val trailer = document.select(
-                "iframe[src*='youtube'], iframe[data-vsrc*='youtube'], a[href*='youtube.com/watch'], a[href*='youtu.be/']"
+                "iframe[src*='youtube'], iframe[data-vsrc*='youtube'], " +
+                    "a[href*='youtube.com/watch'], a[href*='youtu.be/']"
             ).mapNotNull { element ->
                 sequenceOf(
                     element.attr("src"),
@@ -215,7 +300,6 @@ class SinemaCX : MainAPI() {
             if (!trailer.isNullOrBlank()) {
                 addTrailer(fixUrl(trailer))
             }
-
         }
     }
 
