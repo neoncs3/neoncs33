@@ -175,7 +175,7 @@ class Dizigecesi : MainAPI() {
             document.selectFirst("h1")?.text(),
             document.selectFirst("meta[property='og:title']")?.attr("content"),
             document.title().substringBefore(" - "),
-            url.substringAfterLast('/')
+            url.substringAfterLast("/")
         )
 
         val sitePoster = posterOf(document)
@@ -201,17 +201,21 @@ class Dizigecesi : MainAPI() {
         val poster = sitePoster ?: tmdb?.posterPath?.let {
             "https://image.tmdb.org/t/p/w500" + it
         }
+
         val backdrop = tmdb?.backdropPath?.let {
             "https://image.tmdb.org/t/p/w1280" + it
         }
+
         val plot = firstNonBlank(sitePlot, tmdb?.overview)
+
         val year = siteYear ?: (
             if (isMovie) tmdb?.releaseDate else tmdb?.firstAirDate
         )?.take(4)?.toIntOrNull()
 
         val tags = (
             siteTags + tmdb?.genres.orEmpty().mapNotNull { it.name }
-        ).map { it.trim() }
+        )
+            .map { it.trim() }
             .filter { it.isNotBlank() }
             .distinct()
 
@@ -219,7 +223,156 @@ class Dizigecesi : MainAPI() {
 
         val actors = tmdb?.credits?.cast.orEmpty()
             .sortedBy { it.order ?: Int.MAX_VALUE }
-               override suspend fun loadLinks(
+            .take(15)
+            .mapNotNull { cast ->
+                val actorName = cast.name?.trim()?.takeIf { it.isNotBlank() }
+                    ?: return@mapNotNull null
+
+                Actor(
+                    actorName,
+                    cast.profilePath?.let {
+                        "https://image.tmdb.org/t/p/w500" + it
+                    }
+                )
+            }
+
+        val trailer = tmdb?.videos?.results.orEmpty()
+            .filter {
+                it.site.equals("YouTube", true) &&
+                    !it.key.isNullOrBlank() &&
+                    (
+                        it.type.equals("Trailer", true) ||
+                            it.type.equals("Teaser", true)
+                    )
+            }
+            .sortedWith(
+                compareBy<TmdbVideo>(
+                    { if (it.language.equals("tr", true)) 0 else 1 },
+                    { if (it.type.equals("Trailer", true)) 0 else 1 },
+                    { if (it.official == true) 0 else 1 }
+                )
+            )
+            .mapNotNull {
+                it.key?.let { key ->
+                    "https://www.youtube.com/watch?v=" + key
+                }
+            }
+            .distinct()
+            .firstOrNull()
+
+        if (isMovie) {
+            return newMovieLoadResponse(
+                title,
+                url,
+                TvType.Movie,
+                url
+            ) {
+                posterUrl = poster
+                backgroundPosterUrl = backdrop
+                this.plot = plot
+                this.year = year
+                this.tags = tags
+                score?.let { this.score = Score.from10(it.toString()) }
+                addActors(actors)
+                trailer?.let { addTrailer(it) }
+            }
+        }
+
+        val episodes = parseEpisodes(document, poster)
+
+        return newTvSeriesLoadResponse(
+            title,
+            url,
+            TvType.TvSeries,
+            episodes
+        ) {
+            posterUrl = poster
+            backgroundPosterUrl = backdrop
+            this.plot = plot
+            this.year = year
+            this.tags = tags
+            score?.let { this.score = Score.from10(it.toString()) }
+            addActors(actors)
+            trailer?.let { addTrailer(it) }
+        }
+    }
+
+    private suspend fun fetchTmdbDetail(
+        title: String,
+        year: Int?,
+        isMovie: Boolean
+    ): TmdbDetail? {
+        if (title.isBlank()) return null
+
+        val type = if (isMovie) "movie" else "tv"
+        val encoded = URLEncoder.encode(title, "UTF-8")
+
+        val search = runCatching {
+            app.get(
+                "https://api.themoviedb.org/3/search/" + type +
+                    "?api_key=" + TMDB_API_KEY +
+                    "&language=tr-TR&include_adult=false&page=1&query=" + encoded,
+                headers = mapOf(
+                    "User-Agent" to USER_AGENT,
+                    "Accept" to "application/json"
+                ),
+                cacheTime = 3600
+            ).parsedSafe<TmdbSearchPage>()
+        }.getOrNull() ?: return null
+
+        val wanted = normalizeForMatch(title)
+
+        val candidate = search.results
+            .filter { it.id != null }
+            .minByOrNull { item ->
+                val candidateTitle = normalizeForMatch(
+                    if (isMovie) {
+                        item.title ?: item.originalTitle
+                    } else {
+                        item.name ?: item.originalName
+                    }
+                )
+
+                val candidateYear = (
+                    if (isMovie) item.releaseDate else item.firstAirDate
+                )?.take(4)?.toIntOrNull()
+
+                val titlePenalty = when {
+                    candidateTitle == wanted -> 0
+                    candidateTitle.contains(wanted) -> 10
+                    wanted.contains(candidateTitle) -> 20
+                    else -> 100
+                }
+
+                val yearPenalty = when {
+                    year == null || candidateYear == null -> 5
+                    year == candidateYear -> 0
+                    kotlin.math.abs(year - candidateYear) <= 1 -> 2
+                    else -> 10
+                }
+
+                titlePenalty + yearPenalty
+            } ?: return null
+
+        val id = candidate.id ?: return null
+
+        return runCatching {
+            app.get(
+                "https://api.themoviedb.org/3/" + type + "/" + id +
+                    "?api_key=" + TMDB_API_KEY +
+                    "&language=tr-TR" +
+                    "&append_to_response=credits,videos" +
+                    "&include_video_language=tr,en,null",
+                headers = mapOf(
+                    "User-Agent" to USER_AGENT,
+                    "Accept" to "application/json"
+                ),
+                cacheTime = 3600
+            ).parsedSafe<TmdbDetail>()
+        }.getOrNull()
+    }
+
+    override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
