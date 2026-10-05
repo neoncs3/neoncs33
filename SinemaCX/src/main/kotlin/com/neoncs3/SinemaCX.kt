@@ -289,26 +289,26 @@ class SinemaCX : MainAPI() {
             ).parsedSafe<TmdbSearchResponse>()
         }.getOrNull() ?: return emptyList()
 
-        val searchResults = tmdb.results
-            .asSequence()
+        val searchResults = mutableListOf<SearchResponse>()
+
+        for (movie in tmdb.results
             .filter { it.mediaType.isNullOrBlank() || it.mediaType.equals("movie", true) }
             .take(10)
-            .mapNotNull { movie ->
-                val url = findSinemaMovieUrl(movie) ?: return@mapNotNull null
-                val title = movie.title?.trim()?.ifBlank { null } ?: return@mapNotNull null
-                val year = movie.releaseDate?.take(4)?.toIntOrNull()
-                val poster = movie.posterPath?.let { "https://image.tmdb.org/t/p/w500" + it }
+        ) {
+            val url = findSinemaMovieUrl(movie) ?: continue
+            val title = movie.title?.trim()?.ifBlank { null } ?: continue
+            val year = movie.releaseDate?.take(4)?.toIntOrNull()
+            val poster = movie.posterPath?.let { "https://image.tmdb.org/t/p/w500" + it }
 
-                newMovieSearchResponse(title, url, TvType.Movie) {
-                    posterUrl = poster
-                    this.year = year
-                }
+            searchResults += newMovieSearchResponse(title, url, TvType.Movie) {
+                posterUrl = poster
+                this.year = year
             }
-            .distinctBy { it.url }
-            .toList()
+        }
 
-        Log.d(SCX_TAG, "TMDB arama: " + q + " -> " + searchResults.size + " SinemaCX sonucu")
-        return searchResults
+        val results = searchResults.distinctBy { it.url }
+        Log.d(SCX_TAG, "TMDB arama: " + q + " -> " + results.size + " SinemaCX sonucu")
+        return results
     }
 
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
