@@ -61,26 +61,14 @@ class SinemaCX : MainAPI() {
 
     override val mainPage = mainPageOf(
         "$mainUrl/page/" to "Son Eklenen Filmler",
-        "$mainUrl/tur/aile-filmleri/" to "Aile Filmleri",
         "$mainUrl/tur/aksiyon-filmleri/" to "Aksiyon Filmleri",
-        "$mainUrl/tur/animasyon-filmleri/" to "Animasyon Filmleri",
-        "$mainUrl/tur/belgesel/" to "Belgesel Filmleri",
         "$mainUrl/tur/bilim-kurgu-filmleri/" to "Bilim Kurgu Filmleri",
-        "$mainUrl/tur/biyografi/" to "Biyografi Filmleri",
         "$mainUrl/tur/dram-filmleri/" to "Dram Filmleri",
-        "$mainUrl/tur/fantastik-filmler/" to "Fantastik Filmler",
+        "$mainUrl/tur/fantastik-filmler/" to "Fantastik Filmleri",
         "$mainUrl/tur/gerilim-filmleri/" to "Gerilim Filmleri",
-        "$mainUrl/tur/gizem-filmleri/" to "Gizem Filmleri",
         "$mainUrl/tur/komedi-filmleri/" to "Komedi Filmleri",
         "$mainUrl/tur/korku-filmleri/" to "Korku Filmleri",
-        "$mainUrl/tur/macera-filmleri/" to "Macera Filmleri",
-        "$mainUrl/tur/muzikal-filmleri/" to "Müzikal Filmleri",
         "$mainUrl/tur/romantik-filmleri/" to "Romantik Filmleri",
-        "$mainUrl/tur/savas-filmleri/" to "Savaş Filmleri",
-        "$mainUrl/tur/spor-filmleri/" to "Spor Filmleri",
-        "$mainUrl/tur/suc-filmleri/" to "Suç Filmleri",
-        "$mainUrl/tur/tarihi-filmler/" to "Tarih Filmleri",
-        "$mainUrl/tur/western-filmleri/" to "Western Filmleri",
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -279,114 +267,122 @@ class SinemaCX : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val playerResponse = runCatching {
-            app.get(
-                iframeUrl,
-                headers = mapOf(
-                    "User-Agent" to SCX_UA,
-                    "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                    "Referer" to filmReferer
-                ),
-                referer = filmReferer,
-                allowRedirects = true
-            )
-        }.getOrNull() ?: return false
-
-        if (!playerResponse.isSuccessful) return false
-
-        val playerHtml = playerResponse.text
-
+        val cleanIframe = iframeUrl.substringBefore("?img=")
         val videoId = Regex("""/video/([A-Za-z0-9_-]+)""")
-            .find(iframeUrl)
+            .find(cleanIframe)
             ?.groupValues
             ?.getOrNull(1)
-            ?: iframeUrl.substringAfterLast("/")
+            ?: cleanIframe.substringAfterLast("/")
                 .substringBefore("?")
                 .takeIf { it.isNotBlank() }
             ?: return false
-
-        val hash = Regex("""(?i)hash\s*[:=]\s*["']([^"']+)["']""")
-            .find(playerHtml)
-            ?.groupValues
-            ?.getOrNull(1)
-            ?: videoId
-
-        Regex("""(?i)playerjsSubtitle\s*=\s*["']\[(.*?)](https?://[^"']+)["']""")
-            .findAll(playerHtml)
-            .forEach { match ->
-                val language = match.groupValues.getOrNull(1).orEmpty().ifBlank { "Türkçe" }
-                val subtitleUrl = match.groupValues.getOrNull(2).orEmpty()
-                if (subtitleUrl.isNotBlank()) {
-                    subtitleCallback(
-                        SubtitleFile(
-                            lang = language,
-                            url = subtitleUrl.replace("\\/", "/")
-                        )
-                    )
-                }
-            }
 
         val apiUrl =
             "https://player.filmizle.in/player/index.php" +
                 "?data=" + java.net.URLEncoder.encode(videoId, "UTF-8") +
                 "&do=getVideo"
 
-        val legacyResponse = runCatching {
-            app.post(
-                apiUrl,
-                headers = mapOf(
-                    "X-Requested-With" to "XMLHttpRequest",
-                    "Referer" to "$mainUrl/",
-                    "User-Agent" to SCX_UA,
-                    "Accept" to "*/*"
-                ),
-                referer = "$mainUrl/"
-            ).text
-        }.getOrDefault("")
-
-        val apiResponse = if (
-            legacyResponse.contains("securedLink", true) ||
-            legacyResponse.contains("videoSource", true) ||
-            legacyResponse.contains(".m3u8", true)
-        ) {
-            legacyResponse
-        } else {
-            runCatching {
-                app.post(
-                    apiUrl,
-                    data = mapOf(
-                        "hash" to hash,
-                        "r" to filmReferer,
-                        "s" to ""
-                    ),
-                    headers = mapOf(
-                        "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
-                        "X-Requested-With" to "XMLHttpRequest",
-                        "Referer" to iframeUrl,
-                        "User-Agent" to SCX_UA,
-                        "Accept" to "application/json, text/javascript, */*; q=0.01"
-                    ),
-                    referer = iframeUrl
-                ).text
-            }.getOrDefault("")
-        }
-
-        val streamUrl = Regex("""(?i)"securedLink"\s*:\s*"([^"]+)"""")
-            .find(apiResponse)
-            ?.groupValues
-            ?.getOrNull(1)
-            ?.replace("\\/", "/")
-            ?: Regex("""(?i)"videoSource"\s*:\s*"([^"]+)"""")
-                .find(apiResponse)
+        fun streamFromResponse(body: String): String? {
+            return Regex("""(?i)"securedLink"\s*:\s*"([^"]+)"""")
+                .find(body)
                 ?.groupValues
                 ?.getOrNull(1)
                 ?.replace("\\/", "/")
-            ?: Regex("""https?://[^"'\\s<>]+\.m3u8[^"'\\s<>]*""")
-                .find(apiResponse)
-                ?.value
+                ?: Regex("""(?i)"videoSource"\s*:\s*"([^"]+)"""")
+                    .find(body)
+                    ?.groupValues
+                    ?.getOrNull(1)
+                    ?.replace("\\/", "/")
+                ?: Regex("""https?://[^"'\s<>]+\.m3u8[^"'\s<>]*""")
+                    .find(body)
+                    ?.value
+            }
+
+        // SinemaCX'nin güncel çalışma şekli: doğrudan tek POST.
+        val directResponse = runCatching {
+            app.post(
+                apiUrl,
+                data = mapOf(
+                    "hash" to videoId,
+                    "r" to filmReferer,
+                    "s" to ""
+                ),
+                headers = mapOf(
+                    "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
+                    "X-Requested-With" to "XMLHttpRequest",
+                    "Referer" to cleanIframe,
+                    "User-Agent" to SCX_UA,
+                    "Accept" to "application/json, text/javascript, */*; q=0.01"
+                ),
+                referer = cleanIframe
+            ).text
+        }.getOrDefault("")
+
+        var streamUrl = streamFromResponse(directResponse)
+
+        // İlk istek başarısızsa yalnızca bir kez player sayfasından hash/subtitle al.
+        if (streamUrl.isNullOrBlank()) {
+            val playerResponse = runCatching {
+                app.get(
+                    cleanIframe,
+                    headers = mapOf(
+                        "User-Agent" to SCX_UA,
+                        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                        "Referer" to filmReferer
+                    ),
+                    referer = filmReferer,
+                    allowRedirects = true
+                )
+            }.getOrNull()
+
+            if (playerResponse?.isSuccessful == true) {
+                val playerHtml = playerResponse.text
+
+                Regex("""(?i)playerjsSubtitle\s*=\s*["']\[(.*?)](https?://[^"']+)["']""")
+                    .findAll(playerHtml)
+                    .forEach { match ->
+                        val language = match.groupValues.getOrNull(1).orEmpty().ifBlank { "Türkçe" }
+                        val subtitleUrl = match.groupValues.getOrNull(2).orEmpty()
+                        if (subtitleUrl.isNotBlank()) {
+                            subtitleCallback(
+                                SubtitleFile(
+                                    lang = language,
+                                    url = subtitleUrl.replace("\\/", "/")
+                                )
+                            )
+                        }
+                    }
+
+                val hash = Regex("""(?i)hash\s*[:=]\s*["']([^"']+)["']""")
+                    .find(playerHtml)
+                    ?.groupValues
+                    ?.getOrNull(1)
+                    ?: videoId
+
+                streamUrl = runCatching {
+                    app.post(
+                        apiUrl,
+                        data = mapOf(
+                            "hash" to hash,
+                            "r" to filmReferer,
+                            "s" to ""
+                        ),
+                        headers = mapOf(
+                            "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
+                            "X-Requested-With" to "XMLHttpRequest",
+                            "Referer" to cleanIframe,
+                            "User-Agent" to SCX_UA,
+                            "Accept" to "application/json, text/javascript, */*; q=0.01"
+                        ),
+                        referer = cleanIframe
+                    ).text
+                }.getOrDefault("")
+                    .let(::streamFromResponse)
+            }
+        }
 
         if (streamUrl.isNullOrBlank()) {
-            Log.e(SCX_TAG, "FilmizleIn stream bulunamadı: " + iframeUrl)
+            Log.e(SCX_TAG, "FilmizleIn stream bulunamadı: " + cleanIframe)
             return false
         }
 
@@ -402,9 +398,9 @@ class SinemaCX : MainAPI() {
                 }
             ) {
                 quality = Qualities.P1080.value
-                referer = iframeUrl
+                referer = "https://player.filmizle.in/"
                 headers = mapOf(
-                    "Referer" to iframeUrl,
+                    "Referer" to "https://player.filmizle.in/",
                     "User-Agent" to SCX_UA
                 )
             }
@@ -573,128 +569,85 @@ override suspend fun loadLinks(
 ): Boolean {
     Log.d(SCX_TAG, "loadLinks data=" + data)
 
-    val headers = mapOf(
-        "User-Agent" to SCX_UA,
-        "Accept" to "text/html,application/xhtml+xml,application/json,*/*;q=0.8",
-        "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
-    )
-
-    fun resolve(raw: String?): String? {
-        if (raw.isNullOrBlank()) return null
-        return fixUrlNull(raw.trim().replace("\\/", "/"))
-    }
-
-    val filmPages = LinkedHashSet<String>()
-    filmPages.add(data)
-
-    fun collectCandidates(document: org.jsoup.nodes.Document) {
-        document.select("iframe, a[href], [data-vsrc], [data-src], [data-url]").forEach { element ->
-            val label = element.text().trim()
-            val raw = sequenceOf(
-                element.attr("data-vsrc"),
-                element.attr("data-src"),
-                element.attr("data-url"),
-                element.attr("src"),
-                element.attr("href")
-            ).firstOrNull { it.isNotBlank() }
-
-            val candidate = resolve(raw) ?: return@forEach
-
-            if (
-                candidate.contains("/video/", true) ||
-                candidate.contains("player.filmizle.in", true) ||
-                candidate.contains("filmizle.in", true) ||
-                candidate.contains("vidon=", true) ||
-                candidate.contains("vr_set=", true) ||
-                label.contains("Player", true)
-            ) {
-                filmPages.add(candidate.substringBefore("?img="))
-            }
-        }
-    }
-
-    runCatching {
-        val response = app.get(
+    val response = runCatching {
+        app.get(
             data,
-            headers = headers,
+            headers = mapOf(
+                "User-Agent" to SCX_UA,
+                "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
+            ),
             referer = "$mainUrl/",
             allowRedirects = true
         )
-        collectCandidates(response.document)
-    }
+    }.getOrNull() ?: return false
 
-    // İkinci sayfada gerçek player bulunan filmleri de destekle.
-    if (filmPages.none { it.contains("/video/", true) || it.contains("player.filmizle.in", true) }) {
-        runCatching {
-            val response = app.get(
-                data.removeSuffix("/") + "/2/",
-                headers = headers,
-                referer = data,
-                allowRedirects = true
-            )
-            collectCandidates(response.document)
-        }
-    }
+    if (!response.isSuccessful) return false
 
-    val iframeUrls = LinkedHashSet<String>()
+    val document = response.document
 
-    for (page in filmPages) {
-        val response = runCatching {
-            app.get(
-                page,
-                headers = headers,
-                referer = data,
-                allowRedirects = true
-            )
-        }.getOrNull() ?: continue
-
-        response.document.select("iframe, [data-vsrc], [data-src], [data-url]").forEach { element ->
-            val raw = sequenceOf(
+    val iframe = document.select(
+        "iframe[data-vsrc*='filmizle.in'], iframe[src*='filmizle.in'], iframe[data-vsrc], iframe[src]"
+    )
+        .mapNotNull { element ->
+            sequenceOf(
                 element.attr("data-vsrc"),
-                element.attr("data-src"),
-                element.attr("data-url"),
                 element.attr("src")
-            ).firstOrNull { it.isNotBlank() }
-
-            val iframe = resolve(raw) ?: return@forEach
-
-            if (!iframe.contains("youtube", true) && !iframe.contains("youtu.be", true)) {
-                iframeUrls.add(iframe.substringBefore("?img="))
-            }
+            )
+                .firstOrNull { it.isNotBlank() }
+                ?.trim()
+                ?.replace("\\/", "/")
+                ?.let(::fixUrlNull)
+        }
+        .firstOrNull { candidate ->
+            candidate.contains("filmizle.in", true) && !candidate.contains("youtube", true)
         }
 
-        Regex("""(?i)(?:https?:)?//[^"'<>\s]+/video/[A-Za-z0-9_-]+""")
-            .findAll(response.text)
-            .mapNotNull { resolve(it.value) }
-            .forEach { iframeUrls.add(it.substringBefore("?img=")) }
+    if (!iframe.isNullOrBlank()) {
+        if (extractFilmizleLink(
+                iframeUrl = iframe,
+                filmReferer = data,
+                subtitleCallback = subtitleCallback,
+                callback = callback
+            )
+        ) {
+            return true
+        }
     }
 
-    var emitted = false
-
-    for (iframe in iframeUrls.distinct()) {
-        if (iframe.contains("/video/", true) || iframe.contains("player.filmizle.in", true)) {
-            if (extractFilmizleLink(
-                    iframeUrl = iframe,
-                    filmReferer = data,
-                    subtitleCallback = subtitleCallback,
-                    callback = callback
-                )) {
-                emitted = true
-                continue
-            }
+    // Site yapısı değişmişse sayfadaki diğer embedleri tek tek dene.
+    val fallbackIframes = document.select("iframe, [data-vsrc], [data-src], [data-url]")
+        .mapNotNull { element ->
+            sequenceOf(
+                element.attr("data-vsrc"),
+                element.attr("src"),
+                element.attr("data-src"),
+                element.attr("data-url")
+            )
+                .firstOrNull { it.isNotBlank() }
+                ?.trim()
+                ?.replace("\\/", "/")
+                ?.let(::fixUrlNull)
         }
+        .filter { candidate ->
+            !candidate.contains("youtube", true) &&
+                !candidate.contains("youtu.be", true) &&
+                !candidate.contains("filmizle.in", true)
+        }
+        .distinct()
 
+    for (candidate in fallbackIframes) {
         runCatching {
-            if (loadExtractor(iframe, data, subtitleCallback) { link ->
-                emitted = true
+            loadExtractor(candidate, data, subtitleCallback) { link ->
                 callback(link)
-            }) {
-                emitted = true
             }
+        }.getOrElse { false }.let { found ->
+            if (found) return true
         }
     }
 
-    return emitted
+    Log.e(SCX_TAG, "Video iframe bulunamadı: " + data)
+    return false
 }
 
 
