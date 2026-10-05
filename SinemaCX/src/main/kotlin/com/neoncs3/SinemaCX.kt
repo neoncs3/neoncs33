@@ -173,65 +173,95 @@ class SinemaCX : MainAPI() {
         }
     }
 
+        private fun Element.toSearchCardResult(): SearchResponse? {
+        val title = selectFirst("div.yanac span")?.text()?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: selectFirst("a[title]")?.attr("title")?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: selectFirst("img")?.attr("alt")?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: return null
+
+        val href = fixUrlNull(
+            selectFirst("div.yanac a")?.attr("href")
+                ?: selectFirst("a[href*='/film/']")?.attr("href")
+        ) ?: return null
+
+        val poster = sequenceOf(
+            selectFirst("a.resim img")?.attr("data-src"),
+            selectFirst("a.resim img")?.attr("data-lazy-src"),
+            selectFirst("a.resim img")?.attr("data-original"),
+            selectFirst("a.resim img")?.attr("src"),
+            selectFirst("img")?.attr("data-src"),
+            selectFirst("img")?.attr("src")
+        )
+            .firstOrNull { it.isNotBlank() && !it.startsWith("data:image", true) }
+            ?.let(::fixUrlNull)
+
+        val scoreText = selectFirst("i.fa-imdb")?.siblingElements()?.firstOrNull()?.text()
+            ?: selectFirst(".imdb, .rating")?.text()
+
+        val year = Regex("""\b(19\d{2}|20\d{2})\b""")
+            .find(text())
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.toIntOrNull()
+
+        return newMovieSearchResponse(
+            title
+                .replace(Regex("""\s*\((19\d{2}|20\d{2})\)\s*$"""), "")
+                .replace(Regex("""(?i)\s*(Türkçe Dublaj|Türkçe Altyazı|Film Posteri|İzle)\s*$"""), "")
+                .trim(),
+            href,
+            TvType.Movie
+        ) {
+            posterUrl = poster
+            this.year = year
+            scoreText?.let {
+                score = Score.from10(
+                    Regex("""\d+(?:[.,]\d+)?""")
+                        .find(it)
+                        ?.value
+                        ?.replace(",", ".")
+                )
+            }
+        }
+    }
+
     override suspend fun search(query: String): List<SearchResponse> {
         val q = query.trim()
         if (q.isBlank()) return emptyList()
 
-        fun parseResults(document: org.jsoup.nodes.Document): List<SearchResponse> {
-            val results = document
-                .select("a[href*='/film/'], a.baslik, a.resim")
-                .mapNotNull { it.toSearchResultFromAnchor() }
-                .distinctBy { it.url }
-
-            val words = q.lowercase()
-                .split(Regex("""\s+"""))
-                .filter { it.length >= 2 }
-
-            if (words.isEmpty()) return results
-
-            // Site arama sorgusunu yok sayıp ana sayfayı döndürürse,
-            // ana sayfadaki rastgele filmleri yanlış sonuç olarak göstermeyelim.
-            val matching = results.filter { result ->
-                val haystack = (result.name + " " + result.url).lowercase()
-                words.count { word -> haystack.contains(word) } > 0
-            }
-
-            return if (matching.isNotEmpty()) matching else emptyList()
-        }
-
-        val timestamp = System.currentTimeMillis()
         val encoded = java.net.URLEncoder.encode(q, "UTF-8")
+        val document = runCatching {
+            app.get(
+                "$mainUrl/?s=$encoded",
+                headers = mapOf(
+                    "User-Agent" to SCX_UA,
+                    "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
+                ),
+                referer = "$mainUrl/",
+                allowRedirects = true
+            ).document
+        }.getOrNull() ?: return emptyList()
 
-        // Önce sitenin klasik WordPress aramasını, cache'i kırarak dene.
-        val urls = listOf(
-            "$mainUrl/?s=$q&scx_search=$timestamp",
-            "$mainUrl/?s=$encoded&scx_search=$timestamp"
-        ).distinct()
+        val cards = document.select(
+            "div.icerik div.frag-k, div.son div.frag-k, .frag-k"
+        )
+            .mapNotNull { it.toSearchCardResult() }
+            .distinctBy { it.url }
 
-        for (url in urls) {
-            val document = runCatching {
-                app.get(
-                    url,
-                    headers = mapOf(
-                        "User-Agent" to SCX_UA,
-                        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                        "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
-                        "Cache-Control" to "no-cache"
-                    ),
-                    referer = "$mainUrl/",
-                    allowRedirects = true
-                ).document
-            }.getOrNull() ?: continue
-
-            val results = parseResults(document)
-            if (results.isNotEmpty()) {
-                Log.d(SCX_TAG, "Arama sonucu: " + q + " -> " + results.size)
-                return results
-            }
+        if (cards.isNotEmpty()) {
+            Log.d(SCX_TAG, "Arama: " + q + " -> " + cards.size + " sonuç")
+            return cards
         }
 
-        return emptyList()
+        return document.select("a[href*='/film/']")
+            .mapNotNull { it.toSearchResultFromAnchor() }
+            .distinctBy { it.url }
     }
+
 
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
