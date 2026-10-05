@@ -273,6 +273,125 @@ class SinemaCX : MainAPI() {
         return actors to trailers
     }
 
+    private suspend fun extractFilmizleLink(
+        iframeUrl: String,
+        filmReferer: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val playerResponse = runCatching {
+            app.get(
+                iframeUrl,
+                headers = mapOf(
+                    "User-Agent" to SCX_UA,
+                    "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Referer" to filmReferer
+                ),
+                referer = filmReferer,
+                allowRedirects = true
+            )
+        }.getOrNull() ?: return false
+
+        if (!playerResponse.isSuccessful) return false
+
+        val playerHtml = playerResponse.text
+
+        val videoId = Regex("""/video/([A-Za-z0-9_-]+)""")
+            .find(iframeUrl)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?: iframeUrl.substringAfterLast("/")
+                .substringBefore("?")
+                .takeIf { it.isNotBlank() }
+            ?: return false
+
+        val hash = Regex("""(?i)hash\s*[:=]\s*["']([^"']+)["']""")
+            .find(playerHtml)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?: videoId
+
+        Regex("""(?i)playerjsSubtitle\s*=\s*["']\[(.*?)](https?://[^"']+)["']""")
+            .findAll(playerHtml)
+            .forEach { match ->
+                val language = match.groupValues.getOrNull(1).orEmpty().ifBlank { "Türkçe" }
+                val subtitleUrl = match.groupValues.getOrNull(2).orEmpty()
+                if (subtitleUrl.isNotBlank()) {
+                    subtitleCallback(
+                        SubtitleFile(
+                            lang = language,
+                            url = subtitleUrl.replace("\\/", "/")
+                        )
+                    )
+                }
+            }
+
+        val apiUrl =
+            "https://player.filmizle.in/player/index.php" +
+                "?data=" + java.net.URLEncoder.encode(videoId, "UTF-8") +
+                "&do=getVideo"
+
+        val apiResponse = runCatching {
+            app.post(
+                apiUrl,
+                data = mapOf(
+                    "hash" to hash,
+                    "r" to filmReferer,
+                    "s" to ""
+                ),
+                headers = mapOf(
+                    "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
+                    "X-Requested-With" to "XMLHttpRequest",
+                    "Referer" to iframeUrl,
+                    "User-Agent" to SCX_UA,
+                    "Accept" to "application/json, text/javascript, */*; q=0.01"
+                ),
+                referer = iframeUrl
+            ).text
+        }.getOrNull() ?: return false
+
+        val streamUrl = Regex("""(?i)"securedLink"\s*:\s*"([^"]+)"""")
+            .find(apiResponse)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.replace("\\/", "/")
+            ?: Regex("""(?i)"videoSource"\s*:\s*"([^"]+)"""")
+                .find(apiResponse)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.replace("\\/", "/")
+            ?: Regex("""https?://[^"'\\s<>]+\.m3u8[^"'\\s<>]*""")
+                .find(apiResponse)
+                ?.value
+
+        if (streamUrl.isNullOrBlank()) {
+            Log.e(SCX_TAG, "FilmizleIn stream bulunamadı: " + iframeUrl)
+            return false
+        }
+
+        callback(
+            newExtractorLink(
+                name = "SinemaCX",
+                source = "FilmizleIn",
+                url = streamUrl,
+                type = if (streamUrl.contains(".m3u8", true)) {
+                    ExtractorLinkType.M3U8
+                } else {
+                    ExtractorLinkType.VIDEO
+                }
+            ) {
+                quality = Qualities.P1080.value
+                referer = "https://player.filmizle.in/"
+                headers = mapOf(
+                    "Referer" to "https://player.filmizle.in/",
+                    "User-Agent" to SCX_UA
+                )
+            }
+        )
+
+        return true
+    }
+
     override suspend fun load(url: String): LoadResponse? {
         val document = runCatching {
             app.get(
