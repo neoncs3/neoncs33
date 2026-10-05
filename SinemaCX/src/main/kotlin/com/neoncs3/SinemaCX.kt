@@ -56,7 +56,7 @@ class SinemaCX : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url = when {
-            request.data == "$mainUrl/page/" && page <= 1 -> "$mainUrl/"
+            request.data == "$mainUrl/page/" && page == 1 -> "$mainUrl/"
             page == 1 -> request.data
             else -> request.data.trimEnd('/') + "/page/" + page + "/"
         }
@@ -73,138 +73,69 @@ class SinemaCX : MainAPI() {
         }.getOrNull() ?: return newHomePageResponse(request.name, emptyList(), false)
 
         val home = document.select(
-            ".film_kutusu, div.frag-k, div.film-k, article.film"
+            ".film_kutusu, div.frag-k, div.film-k, article.film, article"
         ).mapNotNull { it.toSearchResult() }.distinctBy { it.url }
 
         return newHomePageResponse(request.name, home, home.isNotEmpty())
     }
 
-    private fun resolveImageUrl(raw: String?): String? {
-        if (raw.isNullOrBlank()) return null
-
-        val value = raw.trim()
-            .trim('"', '\'', ' ', '\\')
-            .replace("\\/","/")
-            .replace("&amp;", "&")
-
-        if (value.isBlank() || value.startsWith("data:image", true)) return null
-
-        return when {
-            value.startsWith("http://", true) || value.startsWith("https://", true) -> value
-            value.startsWith("//") -> "https:$value"
-            value.startsWith("/") -> mainUrl + value
-            else -> "$mainUrl/$value"
-        }
-    }
-
-    private fun extractPoster(element: Element): String? {
-        val images = element.select("img")
-
-        // SinemaCX lazy-loads posters with different attributes depending on
-        // the page/template version. Try real image attributes first.
-        val attributes = listOf(
-            "data-src",
-            "data-lazy-src",
-            "data-original",
-            "data-wpfc-original-src",
-            "data-vsrc",
-            "data-fsrc",
-            "data-poster",
-            "data-cover",
-            "data-image",
-            "data-img",
-            "src"
-        )
-
-        for (image in images) {
-            for (attribute in attributes) {
-                val url = resolveImageUrl(image.attr(attribute))
-                if (!url.isNullOrBlank()) return url
-            }
-
-            val srcSet = listOf(
-                image.attr("data-srcset"),
-                image.attr("data-lazy-srcset"),
-                image.attr("srcset")
-            )
-
-            for (set in srcSet) {
-                val first = set.split(",")
-                    .asSequence()
-                    .map { it.trim().substringBefore(" ").trim() }
-                    .mapNotNull(::resolveImageUrl)
-                    .firstOrNull()
-
-                if (!first.isNullOrBlank()) return first
-            }
-        }
-
-        // Some templates put the poster in a CSS background.
-        for (node in element.select("[style]")) {
-            val style = node.attr("style")
-            val match = Regex("(?i)url\\(\\s*['\"]?([^'\")]+)").find(style)
-            val url = resolveImageUrl(match?.groupValues?.getOrNull(1))
-            if (!url.isNullOrBlank()) return url
-        }
-
-        return null
-    }
-
     private fun Element.toSearchResult(): SearchResponse? {
-        val linkEl = selectFirst("a[href*='/film/']")
-            ?: selectFirst("a.resim[href]")
-            ?: selectFirst("a[href]")
+        val title = sequenceOf(
+            selectFirst("div.yanac span")?.text(),
+            selectFirst(".film-title")?.text(),
+            selectFirst(".card-title")?.text(),
+            selectFirst("h2 a")?.text(),
+            selectFirst("h2")?.text(),
+            selectFirst("h3 a")?.text(),
+            selectFirst("h3")?.text(),
+        ).firstOrNull { !it.isNullOrBlank() }
+            ?.trim()
+            ?.substringBefore(" izle")
+            ?.trim()
             ?: return null
 
-        val href = fixUrlNull(linkEl.attr("href")) ?: return null
-        if (!href.contains("/film/", true)) return null
+        val href = fixUrlNull(
+            sequenceOf(
+                selectFirst("div.yanac a")?.attr("href"),
+                selectFirst(".film-title a")?.attr("href"),
+                selectFirst(".card-title a")?.attr("href"),
+                selectFirst("a[href*='/film/']")?.attr("href"),
+                selectFirst("a[href]")?.attr("href"),
+            ).firstOrNull { !it.isNullOrBlank() }
+        ) ?: return null
 
-        val imgEl = selectFirst("img")
+        if (!href.contains("/film/")) return null
 
-        val rawTitle = linkEl.attr("title").ifBlank { null }
-            ?: selectFirst(
-                ".film_adi, .film-title, .card-title, div.yanac span, " +
-                    "div.f-baslik, h2, h3, .baslik"
-            )?.text()?.ifBlank { null }
-            ?: imgEl?.attr("alt")?.ifBlank { null }
-            ?: return null
-
-        val posterUrl = extractPoster(this)
-
-        val year = selectFirst("span.yil, span.f-yil, div.yil")?.text()
-            ?.filter { it.isDigit() }
-            ?.take(4)
-            ?.toIntOrNull()
-            ?: Regex("""\((\d{4})\)""")
-                .find(rawTitle)
-                ?.groupValues
-                ?.getOrNull(1)
-                ?.toIntOrNull()
-
-        val cleanTitle = rawTitle
-            .replace(Regex("""\s*\(\d{4}\)$"""), "")
-            .replace(" Türkçe Dublaj İzle", "")
-            .replace(" Türkçe Altyazı İzle", "")
-            .replace(" Film Posteri", "")
-            .replace(" İzle", "")
-            .replace(" izle", "")
-            .trim()
+        val posterUrl = sequenceOf(
+            selectFirst("a.resim img")?.attr("data-src"),
+            selectFirst("a.resim img")?.attr("data-lazy-src"),
+            selectFirst("a.resim img")?.attr("data-original"),
+            selectFirst("a.resim img")?.attr("data-wpfc-original-src"),
+            selectFirst("a.resim img")?.attr("data-vsrc"),
+            selectFirst("a.resim img")?.attr("data-poster"),
+            selectFirst("a.resim img")?.attr("src"),
+            selectFirst(".film-poster img")?.attr("data-src"),
+            selectFirst(".film-poster img")?.attr("data-lazy-src"),
+            selectFirst(".film-poster img")?.attr("data-original"),
+            selectFirst(".film-poster img")?.attr("src"),
+            selectFirst("img")?.attr("data-src"),
+            selectFirst("img")?.attr("data-lazy-src"),
+            selectFirst("img")?.attr("data-original"),
+            selectFirst("img")?.attr("src"),
+        ).firstOrNull { value ->
+            value.isNotBlank() && !value.startsWith("data:image", true)
+        }?.let(::fixUrlNull)
 
         val scoreText = sequenceOf(
             selectFirst(".imdb")?.text(),
             selectFirst(".rating")?.text(),
-            selectFirst(".f-puan")?.text()
         ).firstOrNull { !it.isNullOrBlank() }
 
-        return newMovieSearchResponse(cleanTitle, href, TvType.Movie) {
+        return newMovieSearchResponse(title, href, TvType.Movie) {
             this.posterUrl = posterUrl
-            this.year = year
-
             scoreText?.let {
-                val value = Regex("""\d+(?:[.,]\d+)?""")
-                    .find(it)
-                    ?.value
-                    ?.replace(",", ".")
+                val value = Regex("""\d+(?:[\\.,]\d+)?""")
+                    .find(it)?.value?.replace(",", ".")
                 this.score = Score.from10(value)
             }
         }
@@ -225,7 +156,7 @@ class SinemaCX : MainAPI() {
         }.getOrNull() ?: return emptyList()
 
         return document.select(
-            ".film_kutusu, div.frag-k, div.film-k, article.film"
+            ".film_kutusu, div.frag-k, div.film-k, article.film, article"
         ).mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
     }
