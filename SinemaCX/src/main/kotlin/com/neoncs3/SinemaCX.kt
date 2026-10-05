@@ -538,8 +538,8 @@ class SinemaCX : MainAPI() {
                 addActors(finalActors)
             }
 
-            if (finalTrailers.isNotEmpty()) {
-                addTrailer(finalTrailers)
+            finalTrailers.forEach { trailerUrl ->
+                addTrailer(trailerUrl)
             }
         }
     }
