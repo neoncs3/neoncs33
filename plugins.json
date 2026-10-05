@@ -144,10 +144,10 @@
     },
     {
         "iconUrl": "https://www.google.com/s2/favicons?domain=sinemacc.com&sz=%size%",
-        "fileHash": "sha256-bb7f848fe239c8722852630e27d561ef7069b61361ce3a91181a9ba01a06fd57",
+        "fileHash": "sha256-f6e772a8535311b01c4230e9c892df365646b0975a8e957dfde74cad6bbf56eb",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 31945,
+        "fileSize": 32321,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -156,7 +156,7 @@
         "tvTypes": [
             "Movie"
         ],
-        "version": 6,
+        "version": 7,
         "internalName": "SinemaCX",
         "description": "Sinema CC - T\u00fcrk\u00e7e dublaj ve altyaz\u0131l\u0131 film sa\u011flay\u0131c\u0131s\u0131",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/SinemaCX.cs3",
