@@ -747,10 +747,10 @@ class Dizigecesi : MainAPI() {
     private fun cleanTitle(vararg values: String?): String {
         return values.firstNotNullOfOrNull { value ->
             value
-                ?.replace(Regex("(?i)\s*[-|/]\s*Dizigecesi.*$"), "")
-                ?.replace(Regex("(?i)\s+İzle.*$"), "")
-                ?.replace(Regex("\s+\(\d{4}\)$"), "")
-                ?.replace(Regex("\s+"), " ")
+                ?.replace(Regex("""(?i)\s*[-|/]\s*Dizigecesi.*$"""), "")
+                ?.replace(Regex("""(?i)\s+İzle.*$"""), "")
+                ?.replace(Regex("""\s+\(\d{4}\)$"""), "")
+                ?.replace(Regex("""\s+"""), " ")
                 ?.trim()
                 ?.takeIf { it.isNotBlank() }
         } ?: ""
