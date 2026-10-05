@@ -72,7 +72,9 @@ class AsyaFilmIzle : MainAPI() {
                 firstSrcSet(img.attr("data-lazy-srcset")),
                 firstSrcSet(img.attr("srcset")),
                 img.attr("src")
-            ).firstOrNull { it.isNotBlank() && !it.startsWith("data:image", true) }
+            ).firstOrNull { value ->
+                !value.isNullOrBlank() && !value.startsWith("data:image", true)
+            }
 
             return absolute(raw)
         }
