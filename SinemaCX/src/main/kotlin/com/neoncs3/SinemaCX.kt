@@ -630,13 +630,42 @@ override suspend fun loadLinks(
         ) {
             if (extractFilmizleLink(
                     iframeUrl = iframe,
-                    filmReferer = "$mainUrl/",
+                    filmReferer = data,
                     subtitleCallback = subtitleCallback,
                     callback = callback
                 )
             ) {
                 return true
             }
+        }
+    }
+
+    // Doğrudan HLS/MP4 kaynakları varsa CloudStream extractor'una ihtiyaç yok.
+    for (iframe in iframes) {
+        if (
+            iframe.contains(".m3u8", true) ||
+            iframe.contains(".mp4", true)
+        ) {
+            callback(
+                newExtractorLink(
+                    source = this.name,
+                    name = "SinemaCX | Doğrudan Kaynak",
+                    url = iframe,
+                    type = if (iframe.contains(".m3u8", true)) {
+                        ExtractorLinkType.M3U8
+                    } else {
+                        ExtractorLinkType.VIDEO
+                    }
+                ) {
+                    quality = Qualities.P1080.value
+                    referer = data
+                    headers = mapOf(
+                        "Referer" to data,
+                        "User-Agent" to SCX_UA
+                    )
+                }
+            )
+            return true
         }
     }
 
