@@ -261,33 +261,33 @@ class SinemaCX : MainAPI() {
         return actors to trailers
     }
 
+
     private suspend fun extractFilmizleLink(
         iframeUrl: String,
         filmReferer: String,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val cleanIframe = iframeUrl.substringBefore("?img=")
+        val cleanIframe = iframeUrl.trim().substringBefore("?img=")
 
-        // Çalışan SinemaCX akışı: önce player iframe'ini GET et.
-        val iframeResponse = runCatching {
+        val playerResponse = runCatching {
             app.get(
                 cleanIframe,
                 headers = mapOf(
                     "User-Agent" to SCX_UA,
                     "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
                 ),
-                referer = "$mainUrl/",
+                referer = filmReferer,
                 allowRedirects = true
             )
         }.getOrNull() ?: return false
 
-        if (!iframeResponse.isSuccessful) return false
+        if (!playerResponse.isSuccessful) return false
 
-        val iframeText = iframeResponse.text
+        val playerHtml = playerResponse.text
 
         Regex("""playerjsSubtitle\s*=\s*"(.+?)"""")
-            .find(iframeText)
+            .find(playerHtml)
             ?.groupValues
             ?.getOrNull(1)
             ?.let { section ->
@@ -307,43 +307,68 @@ class SinemaCX : MainAPI() {
                     }
             }
 
-        val videoId = cleanIframe.substringAfterLast("/")
-            .substringBefore("?")
-            .takeIf { it.isNotBlank() }
+        val videoId = Regex("""/video/([A-Za-z0-9_-]+)""")
+            .find(cleanIframe)
+            ?.groupValues
+            ?.getOrNull(1)
             ?: return false
+
+        val hash = Regex("""(?i)hash\s*[:=]\s*["']([^"']+)["']""")
+            .find(playerHtml)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?: videoId
 
         val apiBase = when {
             cleanIframe.contains("player.filmizle.in", true) ->
                 "https://player.filmizle.in"
             cleanIframe.contains("panel.sinema.cx", true) ->
                 "https://panel.sinema.cx"
-            else -> null
-        } ?: return false
+            else -> return false
+        }
 
         val apiUrl =
             "$apiBase/player/index.php?data=" +
                 java.net.URLEncoder.encode(videoId, "UTF-8") +
                 "&do=getVideo"
 
-        // SinemaCX'nin çalışan Kotlin sağlayıcılarındaki POST şekli:
-        // body yok, sadece X-Requested-With + ana site referer'i.
-        val panel = runCatching {
+        // Güncel çalışan SinemaCX akışındaki POST: hash + r + s.
+        val apiResponse = runCatching {
             app.post(
                 apiUrl,
+                data = mapOf(
+                    "hash" to hash,
+                    "r" to filmReferer,
+                    "s" to ""
+                ),
                 headers = mapOf(
                     "X-Requested-With" to "XMLHttpRequest",
+                    "Referer" to cleanIframe,
                     "User-Agent" to SCX_UA,
                     "Accept" to "application/json, text/javascript, */*; q=0.01"
                 ),
-                referer = "$mainUrl/"
-            ).parsedSafe<Panel>()
-        }.getOrNull()
+                referer = cleanIframe
+            ).text
+        }.getOrDefault("")
 
-        val streamUrl = panel?.securedLink
-            ?: panel?.videoSource
-            ?: return false
+        val streamUrl = Regex(""""securedLink"\s*:\s*"([^"]+)"""")
+            .find(apiResponse)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.replace("\\/", "/")
+            ?: Regex(""""videoSource"\s*:\s*"([^"]+)"""")
+                .find(apiResponse)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.replace("\\/", "/")
+            ?: Regex("""https?://[^"'\s<>]+\.m3u8[^"'\s<>]*""")
+                .find(apiResponse)
+                ?.value
 
-        if (streamUrl.isBlank()) return false
+        if (streamUrl.isNullOrBlank()) {
+            Log.e(SCX_TAG, "Filmizle stream yok. iframe=" + cleanIframe)
+            return false
+        }
 
         callback(
             newExtractorLink(
@@ -353,167 +378,19 @@ class SinemaCX : MainAPI() {
                 type = ExtractorLinkType.M3U8
             ) {
                 quality = Qualities.P1080.value
-                referer = cleanIframe
+                referer = if (apiBase.contains("filmizle.in", true)) {
+                    "https://player.filmizle.in/"
+                } else {
+                    "$apiBase/"
+                }
                 headers = mapOf(
-                    "Referer" to cleanIframe,
+                    "Referer" to referer,
                     "User-Agent" to SCX_UA
                 )
             }
         )
 
         return true
-    }
-
-    override suspend fun load(url: String): LoadResponse? {
-        val document = runCatching {
-            app.get(
-                url,
-                headers = mapOf(
-                    "User-Agent" to SCX_UA,
-                    "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
-                ),
-                referer = "$mainUrl/",
-                allowRedirects = true
-            ).document
-        }.getOrNull() ?: return null
-
-        val rawTitle = sequenceOf(
-            document.selectFirst("h1")?.text(),
-            document.selectFirst("meta[property='og:title']")?.attr("content"),
-            document.selectFirst("title")?.text()
-        ).firstOrNull { !it.isNullOrBlank() }?.trim() ?: return null
-
-        val title = rawTitle
-            .replace(Regex("""(?i)\s*[-|]\s*(Sinema\s*CC|Sinema\.gg)\s*$"""), "")
-            .replace(Regex("""(?i)\s+(Full HD|HD)\s+İzle$"""), "")
-            .replace(Regex("""(?i)\s+İzle$"""), "")
-            .trim()
-
-        if (title.isBlank()) return null
-
-        val poster = sequenceOf(
-            document.selectFirst("meta[property='og:image']")?.attr("content"),
-            document.selectFirst("link[rel='image_src']")?.attr("href"),
-            document.selectFirst("img[src*='/uploads/']")?.attr("src"),
-            document.selectFirst("img[data-src*='/uploads/']")?.attr("data-src"),
-            document.selectFirst("img[data-original*='/uploads/']")?.attr("data-original"),
-            document.selectFirst("div.f-bilgi img")?.attr("data-src"),
-            document.selectFirst("div.f-bilgi img")?.attr("data-lazy-src"),
-            document.selectFirst("div.f-bilgi img")?.attr("data-original"),
-            document.selectFirst("div.f-bilgi img")?.attr("src")
-        ).firstOrNull { !it.isNullOrBlank() }?.let(::fixUrlNull)
-
-        val pageText = document.text()
-
-        val year = Regex("""\b(19\d{2}|20\d{2})\b""")
-            .find(document.selectFirst("div.f-bilgi")?.text().orEmpty().ifBlank { pageText })
-            ?.groupValues?.getOrNull(1)?.toIntOrNull()
-
-        val description = sequenceOf(
-            document.selectFirst("meta[property='og:description']")?.attr("content"),
-            document.selectFirst("div.f-bilgi div.ackl")?.text(),
-            document.selectFirst(".film_ozeti, .f-ozet, .konu, .description, .plot")?.text()
-        ).firstOrNull { !it.isNullOrBlank() }?.trim()
-
-        val tags = document.select(
-            "div.f-bilgi div.tur a, a[href*='/tur/'], a[href*='/kategori/']"
-        ).map { it.text().trim() }
-            .filter { it.isNotBlank() }
-            .distinct()
-
-        val duration = Regex("""(?i)(\d{2,3})\s*Dakika""")
-            .find(pageText)?.groupValues?.getOrNull(1)?.toIntOrNull()
-
-        val actorNodes = document.select(
-            "[class*='oyuncu'], .oyuncular li, .oyuncular div, .cast li, .cast div"
-        )
-
-        val actors = actorNodes.mapNotNull { node ->
-            val name = sequenceOf(
-                node.selectFirst("span.isim")?.text(),
-                node.selectFirst(".isim")?.text(),
-                node.selectFirst(".oyuncu-isim")?.text(),
-                node.selectFirst(".actor-name")?.text(),
-                node.selectFirst("a[href*='/oyuncu/']")?.text(),
-                node.selectFirst("a")?.text(),
-                node.ownText()
-            ).firstOrNull { !it.isNullOrBlank() }
-                ?.replace(Regex("""\s+"""), " ")
-                ?.trim()
-
-            if (name.isNullOrBlank()) {
-                null
-            } else {
-                val image = sequenceOf(
-                    node.selectFirst("img")?.attr("data-src"),
-                    node.selectFirst("img")?.attr("data-lazy-src"),
-                    node.selectFirst("img")?.attr("data-original"),
-                    node.selectFirst("img")?.attr("src")
-                ).firstOrNull { !it.isNullOrBlank() }?.let(::fixUrlNull)
-
-                Actor(name, image)
-            }
-        }
-            .filter {
-                it.name.length in 2..80 &&
-                    !it.name.equals("Oyuncuları", true) &&
-                    !it.name.equals("Oyuncular", true) &&
-                    !it.name.contains("Daha Fazla", true)
-            }
-            .distinctBy { it.name }
-
-        val imdbText = sequenceOf(
-            document.selectFirst("a[href*='imdb.com']")?.text(),
-            document.selectFirst("span.imdb, span.puan, div.f-puan, .film_puani")?.text()
-        ).firstOrNull { !it.isNullOrBlank() }
-
-        val imdb = imdbText
-            ?.let { Regex("""\d+(?:[.,]\d+)?""").find(it)?.value?.replace(",", ".") }
-
-        val trailerCandidates = document.select(
-            "iframe, a, [data-src], [data-vsrc], [data-url]"
-        ).mapNotNull { element ->
-            sequenceOf(
-                element.attr("src"),
-                element.attr("data-vsrc"),
-                element.attr("data-src"),
-                element.attr("data-url"),
-                element.attr("href")
-            ).firstOrNull { it.isNotBlank() }
-        }.toMutableList()
-
-        Regex("""(?i)(?:https?:)?//(?:www\.)?(?:youtube\.com/(?:watch\?v=|embed/)|youtu\.be/)[^"'\s<>]+""")
-            .findAll(document.html().replace("\\/", "/"))
-            .forEach { trailerCandidates.add(it.value) }
-
-        val trailer = trailerCandidates
-            .mapNotNull { fixUrlNull(it.replace("\\/", "/")) }
-            .firstOrNull { candidate ->
-                candidate.contains("youtube.com/watch", true) ||
-                    candidate.contains("youtu.be/", true) ||
-                    candidate.contains("youtube-nocookie.com/embed/", true)
-            }
-
-        val tmdbExtras = getTmdbExtras(document)
-        val finalActors = if (actors.isNotEmpty()) actors else tmdbExtras.first
-        val finalTrailers = if (!trailer.isNullOrBlank()) listOf(trailer) else tmdbExtras.second
-
-        return newMovieLoadResponse(title, url, TvType.Movie, url) {
-            this.posterUrl = poster
-            this.year = year
-            this.plot = description
-            this.tags = tags
-            this.duration = duration
-            this.score = Score.from10(imdb)
-
-            if (finalActors.isNotEmpty()) {
-                addActors(finalActors)
-            }
-
-            finalTrailers.forEach { trailerUrl ->
-                addTrailer(trailerUrl)
-            }
-        }
     }
 
 override suspend fun loadLinks(
@@ -524,7 +401,35 @@ override suspend fun loadLinks(
 ): Boolean {
     Log.d(SCX_TAG, "loadLinks data=" + data)
 
-    val document = runCatching {
+    fun decodeIframeUrl(raw: String): String? {
+        val value = raw.trim()
+            .replace("\\/", "/")
+
+        if (value.startsWith("http://", true) ||
+            value.startsWith("https://", true) ||
+            value.startsWith("//")
+        ) {
+            return fixUrlNull(value)
+        }
+
+        return runCatching {
+            val decoded = String(
+                android.util.Base64.decode(value, android.util.Base64.DEFAULT),
+                Charsets.UTF_8
+            ).trim()
+
+            if (decoded.startsWith("http://", true) ||
+                decoded.startsWith("https://", true) ||
+                decoded.startsWith("//")
+            ) {
+                fixUrlNull(decoded)
+            } else {
+                fixUrlNull(value)
+            }
+        }.getOrNull()
+    }
+
+    val firstDocument = runCatching {
         app.get(
             data,
             headers = mapOf(
@@ -536,79 +441,100 @@ override suspend fun loadLinks(
         ).document
     }.getOrNull() ?: return false
 
-    // Öncelik gerçek Filmizle/Panel player iframe'inde.
-    val iframe = document
-        .select("iframe, [data-vsrc], [data-src], [data-url]")
-        .mapNotNull { element ->
-            sequenceOf(
-                element.attr("data-vsrc"),
-                element.attr("src"),
-                element.attr("data-src"),
-                element.attr("data-url")
-            )
-                .firstOrNull { it.isNotBlank() }
-                ?.trim()
-                ?.replace("\\/", "/")
-                ?.let(::fixUrlNull)
-        }
-        .firstOrNull { candidate ->
-            !candidate.contains("youtube", true) &&
-                !candidate.contains("youtu.be", true) &&
-                (
-                    candidate.contains("player.filmizle.in", true) ||
-                        candidate.contains("panel.sinema.cx", true)
-                    )
+    val documents = mutableListOf(firstDocument)
+
+    // Bazı eski/yeni film sayfalarında gerçek player /2/ altında bulunuyor.
+    val part2Url = firstDocument.selectFirst("a[href*='/2/'], .part-sayfala a")
+        ?.attr("href")
+        ?.let(::fixUrlNull)
+        ?: if (!data.endsWith("/2/")) {
+            data.removeSuffix("/") + "/2/"
+        } else {
+            null
         }
 
-    if (!iframe.isNullOrBlank()) {
-        Log.d(SCX_TAG, "player iframe=" + iframe)
-        if (extractFilmizleLink(
-                iframeUrl = iframe,
-                filmReferer = data,
-                subtitleCallback = subtitleCallback,
-                callback = callback
-            )
-        ) {
-            return true
+    if (!part2Url.isNullOrBlank()) {
+        runCatching {
+            val second = app.get(
+                part2Url,
+                headers = mapOf(
+                    "User-Agent" to SCX_UA,
+                    "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                ),
+                referer = data,
+                allowRedirects = true
+            ).document
+            documents.add(second)
         }
     }
 
-    // Site player alanı değişirse diğer embedleri dene; fragmanı video kaynağı olarak kullanma.
-    val fallback = document
-        .select("iframe, [data-vsrc], [data-src], [data-url]")
-        .mapNotNull { element ->
-            sequenceOf(
-                element.attr("data-vsrc"),
-                element.attr("src"),
-                element.attr("data-src"),
-                element.attr("data-url")
-            )
-                .firstOrNull { it.isNotBlank() }
-                ?.trim()
-                ?.replace("\\/", "/")
-                ?.let(::fixUrlNull)
-        }
-        .filter {
-            !it.contains("youtube", true) &&
-                !it.contains("youtu.be", true) &&
-                !it.contains("player.filmizle.in", true) &&
-                !it.contains("panel.sinema.cx", true)
-        }
-        .distinct()
+    val iframes = LinkedHashSet<String>()
 
-    for (candidate in fallback) {
-        val ok = runCatching {
-            loadExtractor(candidate, "$mainUrl/", subtitleCallback) { link ->
+    documents.forEach { document ->
+        document.select("iframe, [data-vsrc], [data-src], [data-url]").forEach { element ->
+            val raw = sequenceOf(
+                element.attr("data-vsrc"),
+                element.attr("data-src"),
+                element.attr("src"),
+                element.attr("data-url")
+            ).firstOrNull { it.isNotBlank() } ?: return@forEach
+
+            val iframe = decodeIframeUrl(raw) ?: return@forEach
+
+            if (
+                !iframe.contains("youtube", true) &&
+                !iframe.contains("youtu.be", true) &&
+                !iframe.contains("vr_set=", true) &&
+                !iframe.contains("/fragman", true)
+            ) {
+                iframes.add(iframe.substringBefore("?img="))
+            }
+        }
+    }
+
+    Log.d(SCX_TAG, "Bulunan player sayısı=" + iframes.size)
+
+    // Önce gerçek Filmizle player'ı dene.
+    for (iframe in iframes) {
+        if (
+            iframe.contains("player.filmizle.in", true) ||
+            iframe.contains("panel.sinema.cx", true)
+        ) {
+            if (extractFilmizleLink(
+                    iframeUrl = iframe,
+                    filmReferer = "$mainUrl/",
+                    subtitleCallback = subtitleCallback,
+                    callback = callback
+                )
+            ) {
+                return true
+            }
+        }
+    }
+
+    // Başka extractor'a ait player varsa CloudStream extractor'larına bırak.
+    for (iframe in iframes) {
+        if (
+            iframe.contains("player.filmizle.in", true) ||
+            iframe.contains("panel.sinema.cx", true)
+        ) {
+            continue
+        }
+
+        val found = runCatching {
+            loadExtractor(iframe, data, subtitleCallback) { link ->
                 callback(link)
             }
-        }.getOrElse { false }
+        }.getOrDefault(false)
 
-        if (ok) return true
+        if (found) return true
     }
 
     Log.e(SCX_TAG, "Video kaynağı bulunamadı: " + data)
     return false
 }
+
+
 
 
     data class Panel(
