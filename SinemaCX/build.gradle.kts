@@ -1,4 +1,4 @@
-version = "12"
+version = "13"
 cloudstream {
     description = "Sinema CC - Türkçe dublaj ve altyazılı film sağlayıcısı"
     authors = listOf("neoncs3")
