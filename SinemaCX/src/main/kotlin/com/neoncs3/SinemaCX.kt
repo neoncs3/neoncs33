@@ -177,19 +177,60 @@ class SinemaCX : MainAPI() {
         val q = query.trim()
         if (q.isBlank()) return emptyList()
 
-        val encoded = java.net.URLEncoder.encode(q, "UTF-8")
-        val document = runCatching {
-            app.get(
-                "$mainUrl/?s=$encoded",
-                headers = mapOf("User-Agent" to SCX_UA),
-                referer = "$mainUrl/",
-                allowRedirects = true
-            ).document
-        }.getOrNull() ?: return emptyList()
+        fun parseResults(document: org.jsoup.nodes.Document): List<SearchResponse> {
+            val results = document
+                .select("a[href*='/film/'], a.baslik, a.resim")
+                .mapNotNull { it.toSearchResultFromAnchor() }
+                .distinctBy { it.url }
 
-        return document.select("a[href*='/film/']")
-            .mapNotNull { it.toSearchResultFromAnchor() }
-            .distinctBy { it.url }
+            val words = q.lowercase()
+                .split(Regex("""\s+"""))
+                .filter { it.length >= 2 }
+
+            if (words.isEmpty()) return results
+
+            // Site arama sorgusunu yok sayıp ana sayfayı döndürürse,
+            // ana sayfadaki rastgele filmleri yanlış sonuç olarak göstermeyelim.
+            val matching = results.filter { result ->
+                val haystack = (result.name + " " + result.url).lowercase()
+                words.count { word -> haystack.contains(word) } > 0
+            }
+
+            return if (matching.isNotEmpty()) matching else emptyList()
+        }
+
+        val timestamp = System.currentTimeMillis()
+        val encoded = java.net.URLEncoder.encode(q, "UTF-8")
+
+        // Önce sitenin klasik WordPress aramasını, cache'i kırarak dene.
+        val urls = listOf(
+            "$mainUrl/?s=$q&scx_search=$timestamp",
+            "$mainUrl/?s=$encoded&scx_search=$timestamp"
+        ).distinct()
+
+        for (url in urls) {
+            val document = runCatching {
+                app.get(
+                    url,
+                    headers = mapOf(
+                        "User-Agent" to SCX_UA,
+                        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                        "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+                        "Cache-Control" to "no-cache"
+                    ),
+                    referer = "$mainUrl/",
+                    allowRedirects = true
+                ).document
+            }.getOrNull() ?: continue
+
+            val results = parseResults(document)
+            if (results.isNotEmpty()) {
+                Log.d(SCX_TAG, "Arama sonucu: " + q + " -> " + results.size)
+                return results
+            }
+        }
+
+        return emptyList()
     }
 
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
