@@ -10,9 +10,38 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.fasterxml.jackson.annotation.JsonProperty
 
+private const val TMDB_API_KEY = "500330721680edb6d5f7f12ba7cd9023"
+
 private const val SCX_UA =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
         "(KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
+
+data class TmdbVideo(
+    @JsonProperty("key") val key: String? = null,
+    @JsonProperty("site") val site: String? = null,
+    @JsonProperty("type") val type: String? = null,
+    @JsonProperty("iso_639_1") val language: String? = null,
+    @JsonProperty("official") val official: Boolean? = null
+)
+
+data class TmdbVideos(
+    @JsonProperty("results") val results: List<TmdbVideo> = emptyList()
+)
+
+data class TmdbCast(
+    @JsonProperty("name") val name: String? = null,
+    @JsonProperty("profile_path") val profilePath: String? = null,
+    @JsonProperty("order") val order: Int? = null
+)
+
+data class TmdbCredits(
+    @JsonProperty("cast") val cast: List<TmdbCast> = emptyList()
+)
+
+data class TmdbDetails(
+    @JsonProperty("videos") val videos: TmdbVideos? = null,
+    @JsonProperty("credits") val credits: TmdbCredits? = null
+)
 
 class SinemaCX : MainAPI() {
     override var mainUrl              = "https://sinemacc.com"
@@ -177,6 +206,73 @@ class SinemaCX : MainAPI() {
 
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
+    private suspend fun getTmdbExtras(
+        document: org.jsoup.nodes.Document
+    ): Pair<List<Actor>, List<String>> {
+        val tmdbHref = document.selectFirst("a[href*='themoviedb.org/movie/']")
+            ?.attr("href")
+            ?: return emptyList<Actor>() to emptyList()
+
+        val match = Regex("""themoviedb\.org/movie/(\d+)""").find(tmdbHref)
+            ?: return emptyList<Actor>() to emptyList()
+
+        val id = match.groupValues.getOrNull(1)
+            ?: return emptyList<Actor>() to emptyList()
+
+        val details = runCatching {
+            app.get(
+                "https://api.themoviedb.org/3/movie/" + id +
+                    "?api_key=" + TMDB_API_KEY +
+                    "&language=tr-TR" +
+                    "&append_to_response=videos,credits" +
+                    "&include_video_language=tr,en,null",
+                headers = mapOf("User-Agent" to SCX_UA),
+                referer = "$mainUrl/"
+            ).parsedSafe<TmdbDetails>()
+        }.getOrNull() ?: return emptyList<Actor>() to emptyList()
+
+        val trailers = details.videos?.results.orEmpty()
+            .filter {
+                it.site.equals("YouTube", true) &&
+                    !it.key.isNullOrBlank() &&
+                    (
+                        it.type.equals("Trailer", true) ||
+                            it.type.equals("Teaser", true)
+                    )
+            }
+            .sortedWith(
+                compareBy<TmdbVideo>(
+                    { if (it.language == "tr") 0 else 1 },
+                    { if (it.type.equals("Trailer", true)) 0 else 1 },
+                    { if (it.official == true) 0 else 1 }
+                )
+            )
+            .mapNotNull { video ->
+                video.key?.let { key ->
+                    "https://www.youtube.com/watch?v=" + key
+                }
+            }
+            .distinct()
+            .take(3)
+
+        val actors = details.credits?.cast.orEmpty()
+            .sortedBy { it.order ?: Int.MAX_VALUE }
+            .take(15)
+            .mapNotNull { cast ->
+                val actorName = cast.name?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                    ?: return@mapNotNull null
+
+                val image = cast.profilePath?.let {
+                    "https://image.tmdb.org/t/p/w500" + it
+                }
+
+                Actor(actorName, image)
+            }
+
+        return actors to trailers
+    }
+
     override suspend fun load(url: String): LoadResponse? {
         val document = runCatching {
             app.get(
@@ -307,6 +403,10 @@ class SinemaCX : MainAPI() {
                     candidate.contains("youtube-nocookie.com/embed/", true)
             }
 
+        val tmdbExtras = getTmdbExtras(document)
+        val finalActors = if (actors.isNotEmpty()) actors else tmdbExtras.first
+        val finalTrailers = if (!trailer.isNullOrBlank()) listOf(trailer) else tmdbExtras.second
+
         return newMovieLoadResponse(title, url, TvType.Movie, url) {
             this.posterUrl = poster
             this.year = year
@@ -315,12 +415,12 @@ class SinemaCX : MainAPI() {
             this.duration = duration
             this.score = Score.from10(imdb)
 
-            if (actors.isNotEmpty()) {
-                addActors(actors)
+            if (finalActors.isNotEmpty()) {
+                addActors(finalActors)
             }
 
-            if (!trailer.isNullOrBlank()) {
-                addTrailer(trailer)
+            if (finalTrailers.isNotEmpty()) {
+                addTrailer(finalTrailers)
             }
         }
     }
@@ -333,7 +433,7 @@ override suspend fun loadLinks(
 ): Boolean {
     Log.d(SCX_TAG, "loadLinks data=" + data)
 
-    val pageHeaders = mapOf(
+    val headers = mapOf(
         "User-Agent" to SCX_UA,
         "Accept" to "text/html,application/xhtml+xml,application/json,*/*;q=0.8",
         "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
@@ -344,173 +444,119 @@ override suspend fun loadLinks(
         return fixUrlNull(raw.trim().replace("\\/", "/"))
     }
 
-    val pages = LinkedHashSet<String>()
-    pages.add(data)
+    val filmPages = LinkedHashSet<String>()
+    filmPages.add(data)
 
-    // Film detayından gerçek Player bağlantısını ve iframe'leri topla.
+    fun collectCandidates(document: org.jsoup.nodes.Document) {
+        document.select("iframe, a[href], [data-vsrc], [data-src], [data-url]").forEach { element ->
+            val label = element.text().trim()
+            val raw = sequenceOf(
+                element.attr("data-vsrc"),
+                element.attr("data-src"),
+                element.attr("data-url"),
+                element.attr("src"),
+                element.attr("href")
+            ).firstOrNull { it.isNotBlank() }
+
+            val candidate = resolve(raw) ?: return@forEach
+
+            if (
+                candidate.contains("/video/", true) ||
+                candidate.contains("player.filmizle.in", true) ||
+                candidate.contains("filmizle.in", true) ||
+                candidate.contains("vidon=", true) ||
+                candidate.contains("vr_set=", true) ||
+                label.contains("Player", true)
+            ) {
+                filmPages.add(candidate.substringBefore("?img="))
+            }
+        }
+    }
+
     runCatching {
-        val detail = app.get(
+        val response = app.get(
             data,
-            headers = pageHeaders,
+            headers = headers,
             referer = "$mainUrl/",
             allowRedirects = true
         )
+        collectCandidates(response.document)
+    }
 
-        detail.document.select(
-            "a[href], button[data-href], [data-url], [data-src], iframe"
-        ).forEach { element ->
-            val label = element.text().trim()
-
-            sequenceOf(
-                element.attr("href"),
-                element.attr("data-href"),
-                element.attr("data-url"),
-                element.attr("data-vsrc"),
-                element.attr("data-src"),
-                element.attr("src")
-            ).mapNotNull(::resolve).forEach { candidate ->
-                if (
-                    label.contains("Player", true) ||
-                    candidate.contains("vidon=", true) ||
-                    candidate.contains("player.filmizle.in", true) ||
-                    candidate.contains("filmizle.in", true)
-                ) {
-                    pages.add(candidate)
-                }
-            }
+    // İkinci sayfada gerçek player bulunan filmleri de destekle.
+    if (filmPages.none { it.contains("/video/", true) || it.contains("player.filmizle.in", true) }) {
+        runCatching {
+            val response = app.get(
+                data.removeSuffix("/") + "/2/",
+                headers = headers,
+                referer = data,
+                allowRedirects = true
+            )
+            collectCandidates(response.document)
         }
     }
 
     val iframeUrls = LinkedHashSet<String>()
 
-    for (pageUrl in pages) {
+    for (page in filmPages) {
         val response = runCatching {
             app.get(
-                pageUrl,
-                headers = pageHeaders,
+                page,
+                headers = headers,
                 referer = data,
                 allowRedirects = true
             )
         }.getOrNull() ?: continue
 
-        response.document.select("iframe, [data-vsrc], [data-src], [data-url]").forEach { iframe ->
-            sequenceOf(
-                iframe.attr("data-vsrc"),
-                iframe.attr("data-src"),
-                iframe.attr("data-url"),
-                iframe.attr("src")
-            ).mapNotNull(::resolve).forEach { candidate ->
-                if (
-                    !candidate.contains("youtube", true) &&
-                    !candidate.contains("youtu.be", true) &&
-                    !candidate.contains("fragman", true) &&
-                    !candidate.contains("trailer", true)
-                ) {
-                    iframeUrls.add(candidate.substringBefore("?img="))
-                }
+        response.document.select("iframe, [data-vsrc], [data-src], [data-url]").forEach { element ->
+            val raw = sequenceOf(
+                element.attr("data-vsrc"),
+                element.attr("data-src"),
+                element.attr("data-url"),
+                element.attr("src")
+            ).firstOrNull { it.isNotBlank() }
+
+            val iframe = resolve(raw) ?: return@forEach
+
+            if (!iframe.contains("youtube", true) && !iframe.contains("youtu.be", true)) {
+                iframeUrls.add(iframe.substringBefore("?img="))
             }
         }
 
-        Regex("""(?i)(?:https?:)?//[^"'<>\\s]+(?:player\.filmizle\.in|filmizle\.in)[^"'<>\\s]*""")
+        Regex("""(?i)(?:https?:)?//[^"'<>\s]+/video/[A-Za-z0-9_-]+""")
             .findAll(response.text)
             .mapNotNull { resolve(it.value) }
-            .forEach { candidate ->
-                if (!candidate.contains("youtube", true)) {
-                    iframeUrls.add(candidate.substringBefore("?img="))
-                }
-            }
+            .forEach { iframeUrls.add(it.substringBefore("?img=")) }
     }
-
-    if (iframeUrls.isEmpty()) return false
 
     var emitted = false
 
     for (iframe in iframeUrls.distinct()) {
-        Log.d(SCX_TAG, "player iframe=" + iframe)
-
-        if (iframe.contains("player.filmizle.in", true) ||
-            iframe.contains("filmizle.in", true)
-        ) {
-            val videoId = iframe
-                .substringAfterLast("/")
-                .substringBefore("?")
-                .takeIf { it.isNotBlank() }
-
-            if (!videoId.isNullOrBlank()) {
-                val apiUrl =
-                    "https://player.filmizle.in/player/index.php" +
-                        "?data=" + java.net.URLEncoder.encode(videoId, "UTF-8") +
-                        "&do=getVideo"
-
-                val filmReferer = data.ifBlank { mainUrl + "/" }
-
-                val panel = runCatching {
-                    app.post(
-                        apiUrl,
-                        headers = mapOf(
-                            "User-Agent" to SCX_UA,
-                            "Accept" to "application/json, text/javascript, */*; q=0.01",
-                            "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
-                            "X-Requested-With" to "XMLHttpRequest",
-                            "Origin" to "https://player.filmizle.in",
-                            "Referer" to iframe
-                        ),
-                        referer = iframe,
-                        data = mapOf(
-                            "hash" to videoId,
-                            "r" to filmReferer
-                        )
-                    ).parsedSafe<Panel>()
-                }.getOrNull()
-
-                val stream = panel?.securedLink ?: panel?.videoSource
-
-                if (!stream.isNullOrBlank()) {
-                    callback(
-                        newExtractorLink(
-                            name,
-                            "SinemaCX",
-                            stream,
-                            if (
-                                stream.contains(".m3u8", true) ||
-                                panel?.hls == true
-                            ) {
-                                ExtractorLinkType.M3U8
-                            } else {
-                                ExtractorLinkType.VIDEO
-                            }
-                        ) {
-                            quality = Qualities.P1080.value
-                            referer = "https://player.filmizle.in/"
-                            headers = mapOf(
-                                "User-Agent" to SCX_UA,
-                                "Referer" to "https://player.filmizle.in/"
-                            )
-                        }
-                    )
-                    emitted = true
-                }
+        if (iframe.contains("/video/", true) || iframe.contains("player.filmizle.in", true)) {
+            if (extractFilmizleLink(
+                    iframeUrl = iframe,
+                    filmReferer = data,
+                    subtitleCallback = subtitleCallback,
+                    callback = callback
+                )) {
+                emitted = true
+                continue
             }
         }
 
         runCatching {
-            if (loadExtractor(
-                    iframe,
-                    data,
-                    subtitleCallback
-                ) { link ->
-                    emitted = true
-                    callback(link)
-                }) {
+            if (loadExtractor(iframe, data, subtitleCallback) { link ->
+                emitted = true
+                callback(link)
+            }) {
                 emitted = true
             }
-        }.onFailure { error ->
-            Log.e(SCX_TAG, "Extractor hata: " + error.message)
         }
     }
 
     return emitted
 }
+
 
     data class Panel(
         @JsonProperty("hls")         val hls: Boolean?        = null,
