@@ -28,6 +28,19 @@ data class TmdbVideos(
     @JsonProperty("results") val results: List<TmdbVideo> = emptyList()
 )
 
+data class TmdbSearchMovie(
+    @JsonProperty("title") val title: String? = null,
+    @JsonProperty("original_title") val originalTitle: String? = null,
+    @JsonProperty("release_date") val releaseDate: String? = null,
+    @JsonProperty("poster_path") val posterPath: String? = null,
+    @JsonProperty("media_type") val mediaType: String? = null
+)
+
+data class TmdbSearchResponse(
+    @JsonProperty("results") val results: List<TmdbSearchMovie> = emptyList()
+)
+
+
 data class TmdbCast(
     @JsonProperty("name") val name: String? = null,
     @JsonProperty("profile_path") val profilePath: String? = null,
@@ -215,20 +228,86 @@ class SinemaCX : MainAPI() {
         }
     }
 
+    private fun slugifySinema(value: String): String {
+        return java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "")
+            .lowercase(java.util.Locale.ROOT)
+            .replace("ı", "i")
+            .replace("ğ", "g")
+            .replace("ü", "u")
+            .replace("ş", "s")
+            .replace("ö", "o")
+            .replace("ç", "c")
+            .replace(Regex("[^a-z0-9]+"), "-")
+            .trim('-')
+    }
+
+    private suspend fun findSinemaMovieUrl(movie: TmdbSearchMovie): String? {
+        val title = movie.title?.trim().orEmpty()
+        val original = movie.originalTitle?.trim().orEmpty()
+        val year = movie.releaseDate?.take(4)?.toIntOrNull()
+        if (title.isBlank() || year == null) return null
+
+        val titleSlug = slugifySinema(title)
+        val originalSlug = slugifySinema(original)
+        val candidates = linkedSetOf<String>()
+
+        if (originalSlug.isNotBlank() && originalSlug != titleSlug) {
+            candidates += "$mainUrl/film/$titleSlug-$originalSlug-$year/"
+        }
+        candidates += "$mainUrl/film/$titleSlug-$year/"
+        if (originalSlug.isNotBlank()) {
+            candidates += "$mainUrl/film/$originalSlug-$year/"
+        }
+
+        for (candidate in candidates) {
+            val document = runCatching {
+                app.get(candidate, headers = mapOf("User-Agent" to SCX_UA)).document
+            }.getOrNull() ?: continue
+
+            val heading = document.selectFirst("div.f-bilgi h1, h1")?.text()?.trim().orEmpty()
+            val ogTitle = document.selectFirst("meta[property='og:title']")?.attr("content")?.trim().orEmpty()
+            val combined = (heading + " " + ogTitle).lowercase(java.util.Locale.ROOT)
+            val titleMatch = combined.contains(title.lowercase(java.util.Locale.ROOT))
+            val originalMatch = original.isNotBlank() && combined.contains(original.lowercase(java.util.Locale.ROOT))
+            if (combined.isNotBlank() && (titleMatch || originalMatch)) return candidate
+        }
+
+        return null
+    }
+
     override suspend fun search(query: String): List<SearchResponse> {
         val q = query.trim()
         if (q.isBlank()) return emptyList()
 
         val encoded = java.net.URLEncoder.encode(q, "UTF-8")
-        val document = runCatching {
-            app.get("$mainUrl/?s=$encoded").document
+        val tmdb = runCatching {
+            app.get(
+                "https://api.themoviedb.org/3/search/movie?api_key=" + TMDB_API_KEY +
+                    "&language=tr-TR&include_adult=false&page=1&query=" + encoded,
+                headers = mapOf("User-Agent" to SCX_UA)
+            ).parsedSafe<TmdbSearchResponse>()
         }.getOrNull() ?: return emptyList()
 
-        val searchResults = document.select("div.icerik div.frag-k, .film_kutusu, div.frag-k, div.film-k, article.film")
-            .mapNotNull { it.toSearchCardResult() }
-            .distinctBy { it.url }
+        val searchResults = tmdb.results
+            .asSequence()
+            .filter { it.mediaType.isNullOrBlank() || it.mediaType.equals("movie", true) }
+            .take(10)
+            .mapNotNull { movie ->
+                val url = findSinemaMovieUrl(movie) ?: return@mapNotNull null
+                val title = movie.title?.trim()?.ifBlank { null } ?: return@mapNotNull null
+                val year = movie.releaseDate?.take(4)?.toIntOrNull()
+                val poster = movie.posterPath?.let { "https://image.tmdb.org/t/p/w500" + it }
 
-        Log.d(SCX_TAG, "Arama: $q -> ${searchResults.size} sonuç")
+                newMovieSearchResponse(title, url, TvType.Movie) {
+                    posterUrl = poster
+                    this.year = year
+                }
+            }
+            .distinctBy { it.url }
+            .toList()
+
+        Log.d(SCX_TAG, "TMDB arama: " + q + " -> " + searchResults.size + " SinemaCX sonucu")
         return searchResults
     }
 
