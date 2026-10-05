@@ -123,7 +123,7 @@ class SinemaCX : MainAPI() {
             selectFirst("img")?.attr("data-original"),
             selectFirst("img")?.attr("src"),
         ).firstOrNull { value ->
-            value.isNotBlank() && !value.startsWith("data:image", true)
+            !value.isNullOrBlank() && !value.startsWith("data:image", true)
         }?.let(::fixUrlNull)
 
         val scoreText = sequenceOf(
