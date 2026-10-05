@@ -331,24 +331,45 @@ class SinemaCX : MainAPI() {
                 "?data=" + java.net.URLEncoder.encode(videoId, "UTF-8") +
                 "&do=getVideo"
 
-        val apiResponse = runCatching {
+        val legacyResponse = runCatching {
             app.post(
                 apiUrl,
-                data = mapOf(
-                    "hash" to hash,
-                    "r" to filmReferer,
-                    "s" to ""
-                ),
                 headers = mapOf(
-                    "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
                     "X-Requested-With" to "XMLHttpRequest",
-                    "Referer" to iframeUrl,
+                    "Referer" to "$mainUrl/",
                     "User-Agent" to SCX_UA,
-                    "Accept" to "application/json, text/javascript, */*; q=0.01"
+                    "Accept" to "*/*"
                 ),
-                referer = iframeUrl
+                referer = "$mainUrl/"
             ).text
-        }.getOrNull() ?: return false
+        }.getOrDefault("")
+
+        val apiResponse = if (
+            legacyResponse.contains("securedLink", true) ||
+            legacyResponse.contains("videoSource", true) ||
+            legacyResponse.contains(".m3u8", true)
+        ) {
+            legacyResponse
+        } else {
+            runCatching {
+                app.post(
+                    apiUrl,
+                    data = mapOf(
+                        "hash" to hash,
+                        "r" to filmReferer,
+                        "s" to ""
+                    ),
+                    headers = mapOf(
+                        "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
+                        "X-Requested-With" to "XMLHttpRequest",
+                        "Referer" to iframeUrl,
+                        "User-Agent" to SCX_UA,
+                        "Accept" to "application/json, text/javascript, */*; q=0.01"
+                    ),
+                    referer = iframeUrl
+                ).text
+            }.getOrDefault("")
+        }
 
         val streamUrl = Regex("""(?i)"securedLink"\s*:\s*"([^"]+)"""")
             .find(apiResponse)
@@ -381,9 +402,9 @@ class SinemaCX : MainAPI() {
                 }
             ) {
                 quality = Qualities.P1080.value
-                referer = "https://player.filmizle.in/"
+                referer = iframeUrl
                 headers = mapOf(
-                    "Referer" to "https://player.filmizle.in/",
+                    "Referer" to iframeUrl,
                     "User-Agent" to SCX_UA
                 )
             }
