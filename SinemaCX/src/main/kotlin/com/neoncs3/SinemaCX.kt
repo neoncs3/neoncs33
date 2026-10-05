@@ -175,14 +175,14 @@ class SinemaCX : MainAPI() {
             ?.filter { it.isDigit() }
             ?.take(4)
             ?.toIntOrNull()
-            ?: Regex("""\\((\\d{4})\\)""")
+            ?: Regex("""\((\d{4})\)""")
                 .find(rawTitle)
                 ?.groupValues
                 ?.getOrNull(1)
                 ?.toIntOrNull()
 
         val cleanTitle = rawTitle
-            .replace(Regex("""\\s*\\(\\d{4}\\)$"""), "")
+            .replace(Regex("""\s*\(\d{4}\)$"""), "")
             .replace(" Türkçe Dublaj İzle", "")
             .replace(" Türkçe Altyazı İzle", "")
             .replace(" Film Posteri", "")
@@ -201,7 +201,7 @@ class SinemaCX : MainAPI() {
             this.year = year
 
             scoreText?.let {
-                val value = Regex("""\\d+(?:[.,]\\d+)?""")
+                val value = Regex("""\d+(?:[.,]\d+)?""")
                     .find(it)
                     ?.value
                     ?.replace(",", ".")
