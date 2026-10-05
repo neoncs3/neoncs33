@@ -40,6 +40,27 @@
         "name": "DiziBoxizle"
     },
     {
+        "iconUrl": "https://dizigecesi.com/favicon.ico",
+        "fileHash": "sha256-ab1eb100a063e4f1fe6340c9f92e86a22323b00056436d2ffabf9e7a5a55019f",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
+        "fileSize": 14622,
+        "status": 1,
+        "language": "tr",
+        "authors": [
+            "neoncs3"
+        ],
+        "tvTypes": [
+            "TvSeries",
+            "Movie"
+        ],
+        "version": 1,
+        "internalName": "Dizigecesi",
+        "description": "Dizigecesi film ve dizi sa\u011flay\u0131c\u0131s\u0131",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/Dizigecesi.cs3",
+        "name": "Dizigecesi"
+    },
+    {
         "iconUrl": "https://dizipal1586.com/favicon.ico",
         "fileHash": "sha256-1af1d4fc667e8179561c3095aa1273e122bc21ae94a0d6d7c0418bd91f27f002",
         "apiVersion": 1,
