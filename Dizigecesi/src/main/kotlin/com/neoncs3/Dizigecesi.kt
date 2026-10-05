@@ -332,21 +332,21 @@ class Dizigecesi : MainAPI() {
                 .forEach { candidates += it }
 
             Regex(
-                """(?:src|url|player|embed)s*[:=]s*["']([^"']+)["']""",
+                """(?:src|url|player|embed)\s*[:=]\s*["']([^"']+)["']""",
                 RegexOption.IGNORE_CASE
             ).findAll(ajaxText)
                 .mapNotNull { fixUrlNull(it.groupValues[1]) }
                 .forEach { candidates += it }
 
             Regex(
-                """(?:https?:)?//[^"'<>s]*video.php?[^"'<>s]+""",
+                """(?:https?:)?//[^"'<>\s]*video\.php\?[^"'<>\s]+""",
                 RegexOption.IGNORE_CASE
             ).findAll(ajaxText)
                 .mapNotNull { fixUrlNull(it.value) }
                 .forEach { candidates += it }
 
             Regex(
-                """(?:https?:)?//[^"'<>s]+.(?:m3u8|mp4|mpd)(?:?[^"'<>s]*)?""",
+                """(?:https?:)?//[^"'<>\s]+\.(?:m3u8|mp4|mpd)(?:\?[^"'<>\s]*)?""",
                 RegexOption.IGNORE_CASE
             ).findAll(ajaxText)
                 .mapNotNull { fixUrlNull(it.value) }
@@ -435,7 +435,7 @@ class Dizigecesi : MainAPI() {
                     .forEach { candidates += it }
 
                 Regex(
-                    """(?:https?:)?//[^"'<>s]+.(?:m3u8|mp4|mpd)(?:?[^"'<>s]*)?""",
+                    """(?:https?:)?//[^"'<>\s]+\.(?:m3u8|mp4|mpd)(?:\?[^"'<>\s]*)?""",
                     RegexOption.IGNORE_CASE
                 ).findAll(html)
                     .mapNotNull { fixUrlNull(it.value) }
@@ -464,7 +464,7 @@ class Dizigecesi : MainAPI() {
             val candidates = linkedSetOf<String>()
 
             Regex(
-                """https?://[^"'<>s]+""",
+                """https?://[^"'<>\s]+""",
                 RegexOption.IGNORE_CASE
             ).findAll(html)
                 .mapNotNull { match ->
@@ -554,14 +554,14 @@ class Dizigecesi : MainAPI() {
         val directMedia = linkedSetOf<String>()
 
         Regex(
-            """https?://[^"'<>s]+.(?:m3u8|mp4|mpd)(?:?[^"'<>s]*)?""",
+            """https?://[^"'<>\s]+\.(?:m3u8|mp4|mpd)(?:\?[^"'<>\s]*)?""",
             RegexOption.IGNORE_CASE
         ).findAll(html)
             .mapNotNull { fixUrlNull(it.value) }
             .forEach { directMedia += it }
 
         Regex(
-            """["'](?:file|src|url|source|videoSource|securedLink)["']?s*[:=]s*["']([^"']+)["']""",
+            """["'](?:file|src|url|source|videoSource|securedLink)["']?\s*[:=]\s*["']([^"']+)["']""",
             RegexOption.IGNORE_CASE
         ).findAll(html)
             .mapNotNull { fixUrlNull(it.groupValues[1]) }
@@ -669,7 +669,7 @@ class Dizigecesi : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit
     ) {
         Regex(
-            """https?://[^"'<>s]+.(?:vtt|srt)(?:?[^"'<>s]*)?""",
+            """https?://[^"'<>\s]+\.(?:vtt|srt)(?:\?[^"'<>\s]*)?""",
             RegexOption.IGNORE_CASE
         ).findAll(html)
             .map { it.value.replace("\\/", "/").replace("&amp;", "&") }
@@ -740,7 +740,7 @@ class Dizigecesi : MainAPI() {
             .replace("ö", "o")
             .replace("ç", "c")
             .replace(Regex("[^a-z0-9]+"), " ")
-            .replace(Regex("s+"), " ")
+            .replace(Regex("\\s+"), " ")
             .trim()
     }
 
@@ -770,12 +770,12 @@ class Dizigecesi : MainAPI() {
     }
 
     private fun isEpisodeUrl(url: String): Boolean {
-        return Regex("""/d+-sezon/d+-bolum(?:/)?$""")
+        return Regex("""/\d+-sezon/\d+-bolum(?:/)?$""")
             .containsMatchIn(url.lowercase(Locale.ROOT))
     }
 
     private fun parseEpisodes(document: Document, poster: String?): List<Episode> {
-        val regex = Regex("""(?:/dizi/[^/]+/)?(d+)-sezon/(d+)-bolum""")
+        val regex = Regex("""(?:/dizi/[^/]+/)?(\d+)-sezon/(\d+)-bolum""")
 
         return document.select(
             "a[href*='-sezon/'][href*='-bolum']"
