@@ -138,22 +138,6 @@ class Dizigecesi : MainAPI() {
         var found = false
         val document = app.get(data).document
 
-        // Collect embed IDs from play button and service buttons
-        val embedIds = mutableSetOf<String>()
-        document.select("[data-embed]").forEach { el ->
-            val id = el.attr("data-embed").trim()
-            if (id.isNotBlank() && id.all { it.isDigit() }) {
-                embedIds.add(id)
-            }
-        }
-
-        val embedCandidates = embedIds.toList()
-
-        val embedIds = document.select("[data-embed]")
-            .mapNotNull { it.attr("data-embed").trim().takeIf { id -> id.isNotBlank() } }
-            .filter { it.all(Char::isDigit) }
-            .distinct()
-
         for (embedId in embedIds) {
             try {
                 val postResponse = app.post(
@@ -198,5 +182,7 @@ class Dizigecesi : MainAPI() {
         }
 
         
+        return found
+
     }
 }
