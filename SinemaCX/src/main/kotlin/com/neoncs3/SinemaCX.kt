@@ -173,57 +173,43 @@ class SinemaCX : MainAPI() {
         }
     }
 
-        private fun Element.toSearchCardResult(): SearchResponse? {
-        val title = selectFirst("div.yanac span")?.text()?.trim()
-            ?.takeIf { it.isNotBlank() }
-            ?: selectFirst("a[title]")?.attr("title")?.trim()
-            ?.takeIf { it.isNotBlank() }
-            ?: selectFirst("img")?.attr("alt")?.trim()
-            ?.takeIf { it.isNotBlank() }
+    private fun Element.toSearchCardResult(): SearchResponse? {
+        val linkEl = selectFirst("a") ?: return null
+        val href = fixUrlNull(linkEl.attr("href")) ?: return null
+
+        val imgEl = selectFirst("img")
+        val rawTitle = linkEl.attr("title").ifBlank { null }
+            ?: selectFirst(".film_adi, div.f-baslik, h2, h3, .baslik")?.text()?.ifBlank { null }
+            ?: imgEl?.attr("alt")?.ifBlank { null }
             ?: return null
 
-        val href = fixUrlNull(
-            selectFirst("div.yanac a")?.attr("href")
-                ?: selectFirst("a[href*='/film/']")?.attr("href")
-        ) ?: return null
-
-        val poster = sequenceOf(
-            selectFirst("a.resim img")?.attr("data-src"),
-            selectFirst("a.resim img")?.attr("data-lazy-src"),
-            selectFirst("a.resim img")?.attr("data-original"),
-            selectFirst("a.resim img")?.attr("src"),
-            selectFirst("img")?.attr("data-src"),
-            selectFirst("img")?.attr("src")
+        val poster = fixUrlNull(
+            imgEl?.attr("data-src")?.ifBlank { null }
+                ?: imgEl?.attr("data-lazy-src")?.ifBlank { null }
+                ?: imgEl?.attr("data-original")?.ifBlank { null }
+                ?: imgEl?.attr("src")?.ifBlank { null }
         )
-            .filterNotNull()
-            .firstOrNull { it.isNotBlank() && !it.startsWith("data:image", true) }
-            ?.let(::fixUrlNull)
 
-        val scoreText = selectFirst("i.fa-imdb")?.siblingElements()?.firstOrNull()?.text()
+        val year = selectFirst("span.yil, span.f-yil, div.yil")?.text()
+            ?.filter { it.isDigit() }
+            ?.take(4)
+            ?.toIntOrNull()
+            ?: Regex("""\\((\\d{4})\\)""").find(rawTitle)?.groupValues?.getOrNull(1)?.toIntOrNull()
+
+        val cleanTitle = rawTitle
+            .replace(Regex("""\\s*\\(\\d{4}\\)$"""), "")
+            .replace(Regex("""(?i)\\s*(Türkçe Dublaj|Türkçe Altyazı|Film Posteri|İzle)\\s*$"""), "")
+            .trim()
+
+        val score = selectFirst("i.fa-imdb")?.siblingElements()?.firstOrNull()?.text()
             ?: selectFirst(".imdb, .rating")?.text()
 
-        val year = Regex("""\b(19\d{2}|20\d{2})\b""")
-            .find(text())
-            ?.groupValues
-            ?.getOrNull(1)
-            ?.toIntOrNull()
-
-        return newMovieSearchResponse(
-            title
-                .replace(Regex("""\s*\((19\d{2}|20\d{2})\)\s*$"""), "")
-                .replace(Regex("""(?i)\s*(Türkçe Dublaj|Türkçe Altyazı|Film Posteri|İzle)\s*$"""), "")
-                .trim(),
-            href,
-            TvType.Movie
-        ) {
-            posterUrl = poster
+        return newMovieSearchResponse(cleanTitle, href, TvType.Movie) {
+            this.posterUrl = poster
             this.year = year
-            scoreText?.let {
-                score = Score.from10(
-                    Regex("""\d+(?:[.,]\d+)?""")
-                        .find(it)
-                        ?.value
-                        ?.replace(",", ".")
+            score?.let {
+                this.score = Score.from10(
+                    Regex("""\\d+(?:[.,]\\d+)?""").find(it)?.value?.replace(",", ".")
                 )
             }
         }
