@@ -87,6 +87,13 @@ class Dizigecesi : MainAPI() {
         TvType.Movie
     )
 
+    private val browserHeaders = mapOf(
+        "User-Agent" to USER_AGENT,
+        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer" to mainUrl + "/"
+    )
+
     override val mainPage = mainPageOf(
         "${mainUrl}/diziler" to "Popüler Diziler",
         "${mainUrl}/filmler" to "Yeni Filmler",
@@ -159,6 +166,16 @@ class Dizigecesi : MainAPI() {
             results,
             hasNext = page < 20 && hasNextPage(document, page)
         )
+    }
+
+
+    fun parseSearchResults(document: Document): List<SearchResponse> {
+        val elements = document.select(
+            "a.card-series[href*='/dizi/'], a.card-series[href*='/film/']"
+        )
+
+        return elements.mapNotNull { toSearchResult(it) }
+            .distinctBy { it.url }
     }
 
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query, 1).items
@@ -788,7 +805,7 @@ class Dizigecesi : MainAPI() {
         return false
     }
 
-    private fun emitDirectMedia(
+    private suspend fun emitDirectMedia(
         url: String,
         referer: String,
         sourceName: String,
