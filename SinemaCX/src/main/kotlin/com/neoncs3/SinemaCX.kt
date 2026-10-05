@@ -229,6 +229,33 @@ class SinemaCX : MainAPI() {
         }
     }
 
+    private fun normalizeSearchText(value: String): String {
+        return java.text.Normalizer.normalize(
+            value,
+            java.text.Normalizer.Form.NFD
+        )
+            .replace(Regex("\\p{M}+"), "")
+            .lowercase(java.util.Locale.ROOT)
+            .replace(Regex("[^a-z0-9]+"), " ")
+            .trim()
+    }
+
+    private fun SearchResponse.matchesSinemaSearch(query: String): Boolean {
+        val ignored = setOf(
+            "the", "a", "an", "of", "and", "or",
+            "bir", "ve", "ile", "film", "filmi", "izle", "movie"
+        )
+
+        val terms = normalizeSearchText(query)
+            .split(Regex("\\s+"))
+            .filter { it.length >= 2 && it !in ignored }
+
+        if (terms.isEmpty()) return true
+
+        val haystack = normalizeSearchText("$name $url")
+        return terms.all { haystack.contains(it) }
+    }
+
     override suspend fun search(query: String): List<SearchResponse> {
         val q = query.trim()
         if (q.isBlank()) return emptyList()
@@ -247,22 +274,14 @@ class SinemaCX : MainAPI() {
             ).document
         }.getOrNull() ?: return emptyList()
 
-        val cards = document.select(
-            "div.icerik div.frag-k, div.son div.frag-k, .frag-k"
-        )
+        val cards = document.select("div.icerik div.frag-k")
             .mapNotNull { it.toSearchCardResult() }
+            .filter { it.matchesSinemaSearch(q) }
             .distinctBy { it.url }
 
-        if (cards.isNotEmpty()) {
-            Log.d(SCX_TAG, "Arama: " + q + " -> " + cards.size + " sonuç")
-            return cards
-        }
-
-        return document.select("a[href*='/film/']")
-            .mapNotNull { it.toSearchResultFromAnchor() }
-            .distinctBy { it.url }
+        Log.d(SCX_TAG, "Arama: $q -> ${cards.size} eşleşen sonuç")
+        return cards
     }
-
 
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
