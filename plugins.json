@@ -41,10 +41,10 @@
     },
     {
         "iconUrl": "https://dizigecesi.com/favicon.ico",
-        "fileHash": "sha256-2a27045611305f388f423e1171034f0de0486aba9d00de0f992c1ee3a90d87d5",
+        "fileHash": "sha256-65941d6f9781e15d1445d1f1f26d42e0e60f4d83a6d2e6490f1a9cc5cc9d4a98",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 14619,
+        "fileSize": 46380,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -54,7 +54,7 @@
             "TvSeries",
             "Movie"
         ],
-        "version": 1,
+        "version": 2,
         "internalName": "Dizigecesi",
         "description": "Dizigecesi film ve dizi sa\u011flay\u0131c\u0131s\u0131",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/Dizigecesi.cs3",
