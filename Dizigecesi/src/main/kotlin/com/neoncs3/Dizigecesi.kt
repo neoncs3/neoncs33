@@ -20,7 +20,7 @@ class Dizigecesi : MainAPI() {
     override val mainPage = mainPageOf(
         "${mainUrl}/diziler" to "Popüler Diziler",
         "${mainUrl}/filmler" to "Yeni Filmler",
-        "${mainUrl}/trend-diziler" to "Trend Diziler"
+        "${mainUrl}/populer" to "En Popüler"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
