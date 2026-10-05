@@ -144,10 +144,10 @@
     },
     {
         "iconUrl": "https://www.google.com/s2/favicons?domain=sinemacc.com&sz=%size%",
-        "fileHash": "sha256-a91feae202f0e15a44961bd0bd42bb270d9f77b794524526535d2d0174ac8365",
+        "fileHash": "sha256-47eabddd7c4b1b5c7755d3ea084701459afca3ac8c7b20e477bb8661fed8af33",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 22112,
+        "fileSize": 22235,
         "status": 1,
         "language": "tr",
         "authors": [
