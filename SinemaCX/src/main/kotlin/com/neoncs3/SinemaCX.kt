@@ -331,15 +331,19 @@ class SinemaCX : MainAPI() {
         val apiUrl = "$apiBase/player/index.php?data=$videoId&do=getVideo"
 
         fun extractStream(body: String): String? {
-            val json = runCatching { mapper.readValue<Panel>(body) }.getOrNull()
-            return json?.securedLink?.takeIf { it.isNotBlank() }
-                ?: json?.videoSource?.takeIf { it.isNotBlank() }
-                ?: Regex(""""securedLink"\s*:\s*"([^"]+)"""")
-                    .find(body)?.groupValues?.getOrNull(1)?.replace("\\/", "/")
+            return Regex(""""securedLink"\s*:\s*"([^"]+)"""")
+                .find(body)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.replace("\\/", "/")
                 ?: Regex(""""videoSource"\s*:\s*"([^"]+)"""")
-                    .find(body)?.groupValues?.getOrNull(1)?.replace("\\/", "/")
+                    .find(body)
+                    ?.groupValues
+                    ?.getOrNull(1)
+                    ?.replace("\\/", "/")
                 ?: Regex("""https?://[^"'\s<>]+\.m3u8[^"'\s<>]*""")
-                    .find(body)?.value
+                    .find(body)
+                    ?.value
         }
 
         // Önce gerçek film URL'si ile isteği yap.
