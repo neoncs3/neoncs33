@@ -56,7 +56,7 @@ class SinemaCX : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url = when {
-            request.data == "$mainUrl/page/" && page == 1 -> "$mainUrl/"
+            request.data == "$mainUrl/page/" && page <= 1 -> "$mainUrl/"
             page == 1 -> request.data
             else -> request.data.trimEnd('/') + "/page/" + page + "/"
         }
@@ -72,70 +72,85 @@ class SinemaCX : MainAPI() {
             ).document
         }.getOrNull() ?: return newHomePageResponse(request.name, emptyList(), false)
 
-        val home = document.select(
-            ".film_kutusu, div.frag-k, div.film-k, article.film, article"
-        ).mapNotNull { it.toSearchResult() }.distinctBy { it.url }
+        val items = document.select("a[href*='/film/']")
+            .mapNotNull { it.toSearchResultFromAnchor() }
+            .distinctBy { it.url }
 
-        return newHomePageResponse(request.name, home, home.isNotEmpty())
+        return newHomePageResponse(request.name, items, items.isNotEmpty())
     }
 
-    private fun Element.toSearchResult(): SearchResponse? {
-        val title = sequenceOf(
-            selectFirst("div.yanac span")?.text(),
-            selectFirst(".film-title")?.text(),
-            selectFirst(".card-title")?.text(),
-            selectFirst("h2 a")?.text(),
-            selectFirst("h2")?.text(),
-            selectFirst("h3 a")?.text(),
-            selectFirst("h3")?.text(),
-        ).firstOrNull { !it.isNullOrBlank() }
-            ?.trim()
-            ?.substringBefore(" izle")
-            ?.trim()
+    private fun Element.posterFromAnchor(): String? {
+        fun imageUrl(img: Element): String? {
+            val values = listOf(
+                img.attr("data-src"),
+                img.attr("data-lazy-src"),
+                img.attr("data-original"),
+                img.attr("data-wpfc-original-src"),
+                img.attr("data-poster"),
+                img.attr("data-cover"),
+                img.attr("src")
+            )
+
+            return values.firstOrNull { value ->
+                !value.isNullOrBlank() && !value.startsWith("data:image", true)
+            }?.let(::fixUrlNull)
+        }
+
+        selectFirst("img")?.let { imageUrl(it) }?.let { return it }
+
+        closest(".film_kutusu, .frag-k, .film-k, article, li, div")?.selectFirst("img")?.let {
+            imageUrl(it)
+        }?.let { return it }
+
+        return null
+    }
+
+    private fun Element.toSearchResultFromAnchor(): SearchResponse? {
+        val href = fixUrlNull(attr("href")) ?: return null
+        if (!href.contains("/film/", true)) return null
+
+        val img = selectFirst("img")
+
+        val title = attr("title").ifBlank { null }
+            ?: img?.attr("alt")?.ifBlank { null }
+            ?: text().trim().ifBlank { null }
+            ?: closest(".film_kutusu, .frag-k, .film-k, article, li, div")
+                ?.selectFirst(".film_adi, .film-title, .card-title, .baslik, h2, h3")
+                ?.text()
+                ?.trim()
+                ?.ifBlank { null }
             ?: return null
 
-        val href = fixUrlNull(
-            sequenceOf(
-                selectFirst("div.yanac a")?.attr("href"),
-                selectFirst(".film-title a")?.attr("href"),
-                selectFirst(".card-title a")?.attr("href"),
-                selectFirst("a[href*='/film/']")?.attr("href"),
-                selectFirst("a[href]")?.attr("href"),
-            ).firstOrNull { !it.isNullOrBlank() }
-        ) ?: return null
+        val poster = posterFromAnchor()
 
-        if (!href.contains("/film/")) return null
+        val year = Regex("""\b(19\d{2}|20\d{2})\b""")
+            .find(title)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.toIntOrNull()
 
-        val posterUrl = sequenceOf(
-            selectFirst("a.resim img")?.attr("data-src"),
-            selectFirst("a.resim img")?.attr("data-lazy-src"),
-            selectFirst("a.resim img")?.attr("data-original"),
-            selectFirst("a.resim img")?.attr("data-wpfc-original-src"),
-            selectFirst("a.resim img")?.attr("data-vsrc"),
-            selectFirst("a.resim img")?.attr("data-poster"),
-            selectFirst("a.resim img")?.attr("src"),
-            selectFirst(".film-poster img")?.attr("data-src"),
-            selectFirst(".film-poster img")?.attr("data-lazy-src"),
-            selectFirst(".film-poster img")?.attr("data-original"),
-            selectFirst(".film-poster img")?.attr("src"),
-            selectFirst("img")?.attr("data-src"),
-            selectFirst("img")?.attr("data-lazy-src"),
-            selectFirst("img")?.attr("data-original"),
-            selectFirst("img")?.attr("src"),
-        ).firstOrNull { value ->
-            !value.isNullOrBlank() && !value.startsWith("data:image", true)
-        }?.let(::fixUrlNull)
+        val cleanTitle = title
+            .replace(Regex("""\s*\((19\d{2}|20\d{2})\)"""), "")
+            .replace(Regex("""(?i)\s*(Türkçe Dublaj|Türkçe Altyazı|Film Posteri|İzle)\s*$"""), "")
+            .trim()
 
+        val card = closest(".film_kutusu, .frag-k, .film-k, article, li, div")
         val scoreText = sequenceOf(
             selectFirst(".imdb")?.text(),
             selectFirst(".rating")?.text(),
+            card?.selectFirst(".imdb")?.text(),
+            card?.selectFirst(".rating")?.text()
         ).firstOrNull { !it.isNullOrBlank() }
 
-        return newMovieSearchResponse(title, href, TvType.Movie) {
-            this.posterUrl = posterUrl
+        return newMovieSearchResponse(cleanTitle, href, TvType.Movie) {
+            posterUrl = poster
+            this.year = year
+
             scoreText?.let {
-                val value = Regex("""\d+(?:[\\.,]\d+)?""")
-                    .find(it)?.value?.replace(",", ".")
+                val value = Regex("""\d+(?:[.,]\d+)?""")
+                    .find(it)
+                    ?.value
+                    ?.replace(",", ".")
                 this.score = Score.from10(value)
             }
         }
@@ -155,9 +170,8 @@ class SinemaCX : MainAPI() {
             ).document
         }.getOrNull() ?: return emptyList()
 
-        return document.select(
-            ".film_kutusu, div.frag-k, div.film-k, article.film, article"
-        ).mapNotNull { it.toSearchResult() }
+        return document.select("a[href*='/film/']")
+            .mapNotNull { it.toSearchResultFromAnchor() }
             .distinctBy { it.url }
     }
 
