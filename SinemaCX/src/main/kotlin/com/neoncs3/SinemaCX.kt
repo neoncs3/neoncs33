@@ -514,6 +514,7 @@ override suspend fun loadLinks(
 
     data class Panel(
         @JsonProperty("hls")         val hls: Boolean?        = null,
-        @JsonProperty("securedLink") val securedLink: String? = null
+        @JsonProperty("securedLink") val securedLink: String? = null,
+        @JsonProperty("videoSource") val videoSource: String? = null
     )
 }
