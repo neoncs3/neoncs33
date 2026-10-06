@@ -327,10 +327,8 @@ class WebDramaTurkey : NeonMainAPI() {
 
         if (isMovie) {
             return neonEnrichResponse(
-            newMovieLoadResponse(title, pageUrl, TvType.Movie, pageUrl),
-            document = document,
-            baseUrl = pageUrl,
-        ) {
+            newMovieLoadResponse(title, pageUrl, TvType.Movie, pageUrl) {
+
                 posterUrl = poster
                 posterHeaders = mapOf("User-Agent" to USER_AGENT, "Referer" to "$mainUrl/")
                 this.plot = plot
@@ -340,7 +338,11 @@ class WebDramaTurkey : NeonMainAPI() {
                 this.contentRating = statusText
                 addActors(actors)
                 addTrailer(trailer)
-            }
+            
+            },
+            document = document,
+            baseUrl = pageUrl,
+        )
         }
 
         val episodeElements = document.select(
@@ -373,10 +375,8 @@ class WebDramaTurkey : NeonMainAPI() {
 
         if (isAnime) {
             return neonEnrichResponse(
-            newAnimeLoadResponse(title, pageUrl, TvType.Anime),
-            document = document,
-            baseUrl = pageUrl,
-        ) {
+            newAnimeLoadResponse(title, pageUrl, TvType.Anime) {
+
                 posterUrl = poster
                 posterHeaders = mapOf("User-Agent" to USER_AGENT, "Referer" to "$mainUrl/")
                 this.plot = plot
@@ -386,15 +386,17 @@ class WebDramaTurkey : NeonMainAPI() {
                 addEpisodes(DubStatus.Subbed, episodes)
                 addActors(actors)
                 addTrailer(trailer)
-            }
+            
+            },
+            document = document,
+            baseUrl = pageUrl,
+        )
         }
 
         if (isProgram) {
             return neonEnrichResponse(
-            newTvSeriesLoadResponse(title, pageUrl, TvType.Others, episodes),
-            document = document,
-            baseUrl = pageUrl,
-        ) {
+            newTvSeriesLoadResponse(title, pageUrl, TvType.Others, episodes) {
+
                 posterUrl = poster
                 posterHeaders = mapOf("User-Agent" to USER_AGENT, "Referer" to "$mainUrl/")
                 this.plot = plot
@@ -404,14 +406,16 @@ class WebDramaTurkey : NeonMainAPI() {
                 this.duration = duration
                 addActors(actors)
                 addTrailer(trailer)
-            }
+            
+            },
+            document = document,
+            baseUrl = pageUrl,
+        )
         }
 
         return neonEnrichResponse(
-            newTvSeriesLoadResponse(title, pageUrl, TvType.AsianDrama, episodes),
-            document = document,
-            baseUrl = pageUrl,
-        ) {
+            newTvSeriesLoadResponse(title, pageUrl, TvType.AsianDrama, episodes) {
+
             posterUrl = poster
             posterHeaders = mapOf("User-Agent" to USER_AGENT, "Referer" to "$mainUrl/")
             this.plot = plot
@@ -421,7 +425,11 @@ class WebDramaTurkey : NeonMainAPI() {
             this.duration = duration
             addActors(actors)
             addTrailer(trailer)
-        }
+        
+            },
+            document = document,
+            baseUrl = pageUrl,
+        )
     }
 
     override suspend fun loadLinks(
