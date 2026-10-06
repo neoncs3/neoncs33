@@ -60,22 +60,36 @@ jobs:
             LOG="$GITHUB_WORKSPACE/playback-status/logcat.txt"
 
             mkdir -p "$GITHUB_WORKSPACE/playback-status"
+            rm -f "$GITHUB_WORKSPACE/playback-status/instrumentation.log" || true
             adb logcat -c || true
             trap 'adb logcat -d -v time > "$LOG" || true' EXIT
 
+            # Her koşuda temiz CloudStream kurulumu kullan.
+            adb uninstall "$APP_ID" || true
             ./gradlew :app:installPrereleaseDebug --no-daemon --stacktrace
+
             adb shell appops set --uid "$APP_ID" MANAGE_EXTERNAL_STORAGE allow || true
+            echo "MANAGE_EXTERNAL_STORAGE:"
+            adb shell appops get --uid "$APP_ID" MANAGE_EXTERNAL_STORAGE || true
+
             adb shell mkdir -p /sdcard/Cloudstream3/plugins
+            adb shell rm -f /sdcard/Cloudstream3/plugins/*.cs3 || true
 
             for plugin in AsyaFilmIzle DiziBoxizle DiziPal Dizigecesi Dramadizilerim FilmModu JetFilmizle SetFilmIzle SinemaCX WebDramaTurkey; do
               curl -fsSL "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/$plugin.cs3" -o "$RUNNER_TEMP/$plugin.cs3"
+              test -s "$RUNNER_TEMP/$plugin.cs3"
               adb push "$RUNNER_TEMP/$plugin.cs3" "/sdcard/Cloudstream3/plugins/$plugin.cs3"
             done
 
+            echo "Yüklenen yerel plugin dosyaları:"
+            adb shell ls -lah /sdcard/Cloudstream3/plugins/
+
             set +e
-            ./gradlew :app:connectedPrereleaseDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.lagradost.cloudstream3.NeonPlaybackSmokeTest --no-daemon --stacktrace
-            TEST_EXIT=$?
+            ./gradlew :app:connectedPrereleaseDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.lagradost.cloudstream3.NeonPlaybackSmokeTest --no-daemon --stacktrace 2>&1 | tee "$RUNNER_TEMP/instrumentation.log"
+            TEST_EXIT=${PIPESTATUS[0]}
             set -e
+
+            cp "$RUNNER_TEMP/instrumentation.log" "$GITHUB_WORKSPACE/playback-status/instrumentation.log" || true
 
             adb exec-out run-as "$APP_ID" cat files/neon-playback-report.json > "$REPORT" || true
             if [ -s "$REPORT" ]; then
