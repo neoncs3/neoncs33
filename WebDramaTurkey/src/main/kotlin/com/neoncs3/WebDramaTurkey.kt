@@ -1028,6 +1028,15 @@ class WebDramaTurkey : NeonMainAPI() {
                 runCatching { subtitleCallback(SubtitleFile("Türkçe", subtitle)) }
             }
 
+        if (!emitted) {
+            emitted = neonResolveLinks(
+                data = data,
+                sourceName = "$name - NeonCore",
+                subtitleCallback = subtitleCallback,
+                callback = callback,
+            )
+        }
+
         return emitted
     }
 
