@@ -577,10 +577,8 @@ class AsyaFilmIzle : NeonMainAPI() {
                 url = url,
                 type = TvType.TvSeries,
                 episodes = episodes
-            ),
-            document = document,
-            baseUrl = url,
-        ) {
+            ) {
+
                 posterUrl = poster
                 this.year = year
                 this.plot = plot
@@ -597,7 +595,11 @@ class AsyaFilmIzle : NeonMainAPI() {
                         append(directors.joinToString(", "))
                     }
                 }
-            }
+            
+            },
+            document = document,
+            baseUrl = url,
+        )
         }
 
         return neonEnrichResponse(
@@ -606,10 +608,8 @@ class AsyaFilmIzle : NeonMainAPI() {
             url = url,
             type = TvType.Movie,
             dataUrl = url
-        ),
-            document = document,
-            baseUrl = url,
         ) {
+
             posterUrl = poster
             this.year = year
             this.plot = plot
@@ -627,7 +627,11 @@ class AsyaFilmIzle : NeonMainAPI() {
                     append(directors.joinToString(", "))
                 }
             }
-        }
+        
+            },
+            document = document,
+            baseUrl = url,
+        )
     }
 
     private fun normalizeUrl(value: String): String {
