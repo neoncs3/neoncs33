@@ -7,7 +7,7 @@ Bu rapor tools/provider_health.py tarafından otomatik güncellenir.
 | **AsyaFilmIzle** | 🟡 | https://asyafilmizle.com | ❌ | ✅ | ✅ | ✅ | ✅ |
 | **DiziBoxizle** | 🟢 | https://diziboxizle.com | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Dizigecesi** | 🟡 | https://dizigecesi.com | ❌ | ✅ | ✅ | ✅ | ✅ |
-| **DiziPal** | 🟡 | https://dizipal1586.com | ❌ | ✅ | ✅ | ✅ | ✅ |
+| **DiziPal** | 🟡 | https://dizipal1587.com | ❌ | ✅ | ✅ | ✅ | ✅ |
 | **Dramadizilerim** | 🟢 | https://dramadizilerim.com | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **FilmModu** | 🟢 | https://www.filmmodu.one | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **JetFilmizle** | 🟢 | https://jetfilmizle.now | ✅ | ✅ | ✅ | ✅ | ✅ |
