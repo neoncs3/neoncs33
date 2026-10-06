@@ -3,6 +3,7 @@ package com.neoncs3
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.Actor
+import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.Score
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
@@ -432,7 +433,7 @@ open class NeonMainAPI : MainAPI() {
                     node.selectFirst("img")?.attr("data-lazy-src"),
                     node.selectFirst("img")?.attr("data-original"),
                     node.selectFirst("img")?.attr("src"),
-                ).firstOrNull { it.isNotBlank() }
+                ).firstOrNull { !it.isNullOrBlank() }
 
                 Actor(
                     name = name,
