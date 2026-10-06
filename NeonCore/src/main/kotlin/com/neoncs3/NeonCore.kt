@@ -3,7 +3,6 @@ package com.neoncs3
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.SubtitleFile
-import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
@@ -292,6 +291,7 @@ open class NeonMainAPI : MainAPI() {
         if (root.isBlank()) return false
 
         val visited = HashSet<String>()
+        val mediaSeen = HashSet<String>()
         var found = false
 
         suspend fun visit(url: String, referer: String, depth: Int) {
@@ -299,6 +299,7 @@ open class NeonMainAPI : MainAPI() {
             if (!visited.add(normalized) || depth > maxDepth) return
 
             if (neonIsMediaUrl(normalized)) {
+                if (!mediaSeen.add(normalized)) return
                 if (neonEmitMedia(normalized, sourceName, referer, callback)) {
                     found = true
                 }
@@ -323,6 +324,7 @@ open class NeonMainAPI : MainAPI() {
             val document = Jsoup.parse(html, normalized)
 
             neonExtractMediaUrls(html).forEach { media ->
+                if (!mediaSeen.add(media)) return@forEach
                 if (neonEmitMedia(media, sourceName, normalized, callback)) {
                     found = true
                 }
