@@ -18,7 +18,7 @@ permissions:
 
 concurrency:
   group: neon-real-playback
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   playback:
