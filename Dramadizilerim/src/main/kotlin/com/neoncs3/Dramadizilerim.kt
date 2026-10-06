@@ -156,15 +156,17 @@ class Dramadizilerim : NeonMainAPI() {
             url,
             TvType.TvSeries,
             episodeList
-        ),
-            document = doc,
-            baseUrl = url,
         ) {
+
             posterUrl = poster
             this.plot = plot
             this.year = year
             score = imdb?.let { Score.from10(it) }
-        }
+        
+            },
+            document = doc,
+            baseUrl = url,
+        )
     }
 
     // ------------------------------------------------------------------------
