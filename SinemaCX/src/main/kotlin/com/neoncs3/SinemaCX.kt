@@ -675,7 +675,11 @@ class SinemaCX : NeonMainAPI() {
         val finalActors = if (actors.isNotEmpty()) actors else tmdbExtras.first
         val finalTrailers = if (!trailer.isNullOrBlank()) listOf(trailer) else tmdbExtras.second
 
-        return newMovieLoadResponse(title, url, TvType.Movie, url) {
+        return neonEnrichResponse(
+            newMovieLoadResponse(title, url, TvType.Movie, url),
+            document = document,
+            baseUrl = url,
+        ) {
             this.posterUrl = poster
             this.year = year
             this.plot = description
