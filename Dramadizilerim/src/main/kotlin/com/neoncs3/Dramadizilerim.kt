@@ -12,7 +12,7 @@ import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-class Dramadizilerim : MainAPI() {
+class Dramadizilerim : NeonMainAPI() {
 
     override var name = "DramaDizilerim"
     override var mainUrl = "https://dramadizilerim.com"
