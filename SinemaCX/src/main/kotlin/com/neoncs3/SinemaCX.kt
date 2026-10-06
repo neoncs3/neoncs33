@@ -94,12 +94,11 @@ class SinemaCX : NeonMainAPI() {
         Log.d(SCX_TAG, "Ana sayfa: " + url)
 
         val document = runCatching {
-            app.get(
-                url,
-                headers = mapOf("User-Agent" to SCX_UA),
+            neonCachedDocument(
+                url = url,
                 referer = "$mainUrl/",
-                allowRedirects = true
-            ).document
+                ttlMs = neonCacheTtlMs
+            )
         }.getOrNull() ?: return newHomePageResponse(request.name, emptyList(), false)
 
         val items = document.select("a[href*='/film/']")
@@ -261,9 +260,11 @@ class SinemaCX : NeonMainAPI() {
         }
 
         for (candidate in candidates) {
-            val document = runCatching {
-                app.get(candidate, headers = mapOf("User-Agent" to SCX_UA)).document
-            }.getOrNull() ?: continue
+            val document = neonCachedDocument(
+                url = candidate,
+                referer = "$mainUrl/",
+                ttlMs = neonCacheTtlMs
+            ) ?: continue
 
             val heading = document.selectFirst("div.f-bilgi h1, h1")?.text()?.trim().orEmpty()
             val ogTitle = document.selectFirst("meta[property='og:title']")?.attr("content")?.trim().orEmpty()
@@ -569,17 +570,11 @@ class SinemaCX : NeonMainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val document = runCatching {
-            app.get(
-                url,
-                headers = mapOf(
-                    "User-Agent" to SCX_UA,
-                    "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
-                ),
-                referer = "$mainUrl/",
-                allowRedirects = true
-            ).document
-        }.getOrNull() ?: return null
+        val document = neonCachedDocument(
+            url = url,
+            referer = "$mainUrl/",
+            ttlMs = neonCacheTtlMs
+        ) ?: return null
 
         val rawTitle = sequenceOf(
             document.selectFirst("h1")?.text(),
@@ -734,28 +729,17 @@ override suspend fun loadLinks(
     fun collectIframes(document: org.jsoup.nodes.Document): LinkedHashSet<String> {
         val result = LinkedHashSet<String>()
 
-        document.select("iframe, [data-vsrc], [data-src], [data-url]").forEach { element ->
-            sequenceOf(
-                element.attr("data-vsrc"),
-                element.attr("data-src"),
-                element.attr("src"),
-                element.attr("data-url")
-            )
-                .filter { it.isNotBlank() }
-                .forEach { raw ->
-                    decodeIframeUrl(raw)?.let { iframe ->
-                        val clean = iframe.substringBefore("?img=")
-                        if (
-                            !clean.contains("youtube", true) &&
-                            !clean.contains("youtu.be", true) &&
-                            !clean.contains("vr_set=", true) &&
-                            !clean.contains("/fragman", true) &&
-                            !clean.contains("trailer", true)
-                        ) {
-                            result.add(clean)
-                        }
-                    }
-                }
+        neonExtractPlayerCandidates(document, data).forEach { candidate ->
+            val clean = candidate.substringBefore("?img=")
+            if (
+                !clean.contains("youtube", true) &&
+                !clean.contains("youtu.be", true) &&
+                !clean.contains("vr_set=", true) &&
+                !clean.contains("/fragman", true) &&
+                !clean.contains("trailer", true)
+            ) {
+                result.add(clean)
+            }
         }
 
         Regex("""(?i)(?:https?:)?//[^"'<>\s]+/video/[A-Za-z0-9_-]+""")
@@ -912,15 +896,17 @@ override suspend fun loadLinks(
     }
 
     Log.e(SCX_TAG, "Hiçbir video kaynağı çözülemedi: " + data)
-    val neonFound = neonResolveLinks(
-        data = data,
+    val neonCandidates = buildList {
+        add(data)
+        part2Url?.let(::add)
+    }
+
+    return neonResolveLinkCandidates(
+        candidates = neonCandidates,
         sourceName = "$name - NeonCore",
         subtitleCallback = subtitleCallback,
         callback = callback,
     )
-    if (neonFound) return true
-
-    return false
 }
 
 
