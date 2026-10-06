@@ -56,7 +56,7 @@ data class TmdbDetails(
     @JsonProperty("credits") val credits: TmdbCredits? = null
 )
 
-class SinemaCX : MainAPI() {
+class SinemaCX : NeonMainAPI() {
     override var mainUrl              = "https://sinemacc.com"
     override var name                 = "SinemaCX"
     override val hasMainPage          = true
