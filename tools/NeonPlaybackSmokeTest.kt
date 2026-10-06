@@ -317,6 +317,30 @@ class NeonPlaybackSmokeTest {
 
         val candidates = providerCandidates(api, target)
 
+        // A provider may be healthy in code but temporarily blocked by its
+        // origin/CDN. Do a lightweight origin probe before calling that a
+        // plugin playback failure, so HTTP 403/429 becomes BLOCKED.
+        if (candidates.isEmpty()) {
+            val originStatus = runCatching {
+                app.get(
+                    api.mainUrl,
+                    headers = mapOf(
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/154.0 Safari/537.36",
+                        "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+                    ),
+                    allowRedirects = true,
+                ).code
+            }.getOrDefault(0)
+
+            if (originStatus == 403 || originStatus == 429) {
+                return Result(
+                    provider = target.name,
+                    status = "BLOCKED",
+                    error = "Provider origin HTTP $originStatus",
+                )
+            }
+        }
+
         Log.d(
             "NEON_PLAYBACK",
             "Provider=" + target.name +
@@ -505,6 +529,6 @@ class NeonPlaybackSmokeTest {
         )
     }
 }
-// smoke trigger v8
+// smoke trigger v9
 
-// real player smoke v8
+// real player smoke v9
