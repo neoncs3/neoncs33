@@ -76,11 +76,20 @@ jobs:
               adb push "$RUNNER_TEMP/$plugin.cs3" "/sdcard/Cloudstream3/plugins/$plugin.cs3"
             done
 
+            set +e
             ./gradlew :app:connectedPrereleaseDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.lagradost.cloudstream3.NeonPlaybackSmokeTest --no-daemon --stacktrace
+            TEST_EXIT=$?
+            set -e
 
-            adb exec-out run-as "$APP_ID" cat files/neon-playback-report.json > "$REPORT"
-            cp "$REPORT" "$GITHUB_WORKSPACE/neon-playback-report.json"
-            cat "$REPORT"
+            adb exec-out run-as "$APP_ID" cat files/neon-playback-report.json > "$REPORT" || true
+            if [ -s "$REPORT" ]; then
+              cp "$REPORT" "$GITHUB_WORKSPACE/neon-playback-report.json"
+              cat "$REPORT"
+            else
+              echo '{"results":[],"pass":0,"blocked":0,"fail":1}' > "$GITHUB_WORKSPACE/neon-playback-report.json"
+            fi
+
+            exit "$TEST_EXIT"
 
       - name: Playback raporunu oluştur
         if: always()
@@ -101,7 +110,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add playback-status/latest.md playback-status/latest.json
+          git add playback-status
           if git diff --cached --quiet; then exit 0; fi
           git commit -m "🎬 Gerçek playback raporunu güncelle"
           git push origin master
