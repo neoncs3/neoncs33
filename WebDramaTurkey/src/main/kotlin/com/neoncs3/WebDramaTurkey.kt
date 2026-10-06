@@ -647,6 +647,15 @@ class WebDramaTurkey : NeonMainAPI() {
             }
         }
 
+        if (!found) {
+            found = neonResolveLinks(
+                data = data,
+                sourceName = "$name - NeonCore",
+                subtitleCallback = subtitleCallback,
+                callback = callback,
+            )
+        }
+
         Log.d(WDT_TAG, "loadLinks sonucu found=" + found)
         return found
     }
@@ -1027,15 +1036,6 @@ class WebDramaTurkey : NeonMainAPI() {
             .forEach { subtitle ->
                 runCatching { subtitleCallback(SubtitleFile("Türkçe", subtitle)) }
             }
-
-        if (!emitted) {
-            emitted = neonResolveLinks(
-                data = data,
-                sourceName = "$name - NeonCore",
-                subtitleCallback = subtitleCallback,
-                callback = callback,
-            )
-        }
 
         return emitted
     }
