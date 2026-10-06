@@ -18,7 +18,7 @@ import org.jsoup.nodes.Element
 import java.net.URI
 import java.net.URLEncoder
 
-class FilmModu : MainAPI() {
+class FilmModu : NeonMainAPI() {
 
     override var mainUrl = "https://www.filmmodu.one"
     override var name = "FilmModu"
