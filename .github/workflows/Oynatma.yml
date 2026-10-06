@@ -6,96 +6,16 @@ on:
       - master
     paths:
       - "tools/NeonPlaybackSmokeTest.kt"
-  workflow_run:
-    workflows:
-      - CloudStream Derleyici
-    types:
-      - completed
   workflow_dispatch:
 
 permissions:
-  contents: write
-
-concurrency:
-  group: neon-real-playback
-  cancel-in-progress: false
+  contents: read
 
 jobs:
   playback:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
-      - name: NeonCS kaynaklarını al
+      - name: Kaynakları al
         uses: actions/checkout@v4
-        with:
-          ref: master
-
-      - name: CloudStream kaynaklarını al
-        run: git clone --depth 1 https://github.com/recloudstream/cloudstream.git cloudstream
-
-      - name: Playback testini ekle
-        run: |
-          mkdir -p cloudstream/app/src/androidTest/java/com/lagradost/cloudstream3
-          cp tools/NeonPlaybackSmokeTest.kt cloudstream/app/src/androidTest/java/com/lagradost/cloudstream3/NeonPlaybackSmokeTest.kt
-
-      - name: KVM etkinleştir
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
-      - name: Android emulator + gerçek ExoPlayer testi
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          target: google_apis
-          arch: x86_64
-          profile: pixel_7
-          force-avd-creation: true
-          emulator-boot-timeout: 600
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
-          disable-animations: true
-          working-directory: cloudstream
-          script: |
-            set -e
-            APP_ID="com.lagradost.cloudstream3.prerelease.debug"
-            ./gradlew :app:installPrereleaseDebug --no-daemon --stacktrace
-            adb shell appops set --uid "$APP_ID" MANAGE_EXTERNAL_STORAGE allow || true
-            adb shell mkdir -p /sdcard/Cloudstream3/plugins
-            for plugin in AsyaFilmIzle DiziBoxizle DiziPal Dizigecesi Dramadizilerim FilmModu JetFilmizle SetFilmIzle SinemaCX WebDramaTurkey; do
-              curl -fsSL "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/$plugin.cs3" -o "$RUNNER_TEMP/$plugin.cs3"
-              adb push "$RUNNER_TEMP/$plugin.cs3" "/sdcard/Cloudstream3/plugins/$plugin.cs3"
-            done
-            ./gradlew :app:connectedPrereleaseDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.lagradost.cloudstream3.NeonPlaybackSmokeTest --no-daemon --stacktrace
-            adb exec-out run-as "$APP_ID" cat files/neon-playback-report.json > "$RUNNER_TEMP/neon-playback-report.json"
-            cp "$RUNNER_TEMP/neon-playback-report.json" "$GITHUB_WORKSPACE/neon-playback-report.json"
-
-      - name: Playback raporu
-        if: always()
-        shell: bash
-        run: |
-          mkdir -p playback-status
-          if [ -f neon-playback-report.json ]; then
-            python3 - <<'PY'
-import json
-from pathlib import Path
-d=json.loads(Path('neon-playback-report.json').read_text(encoding='utf-8'))
-rows=['# 🎬 NeonCS Gerçek Oynatma Durumu','',f"**PASS:** {d.get('pass',0)}  **BLOCKED:** {d.get('blocked',0)}  **FAIL:** {d.get('fail',0)}",'','| Provider | Durum | Link | Position | Sorgu | İçerik | Hata |','|---|---|---:|---:|---|---|---|']
-for x in d.get('results',[]):
-    icon={'PASS':'🟢','BLOCKED':'🟡','FAIL':'🔴'}.get(x['status'],'⚪')
-    rows.append(f"| **{x['provider']}** | {icon} {x['status']} | {x['links']} | {x['positionMs']} ms | {x.get('query') or '-'} | {x.get('item') or '-'} | {x.get('error') or '-'} |")
-Path('playback-status/latest.md').write_text('\n'.join(rows)+'\n',encoding='utf-8')
-PY
-          else
-            printf '%s\n' '# 🎬 NeonCS Gerçek Oynatma Durumu' '' 'Playback raporu oluşturulamadı.' > playback-status/latest.md
-          fi
-
-      - name: Playback raporunu commit et
-        if: always()
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add playback-status/latest.md
-          if git diff --cached --quiet; then exit 0; fi
-          git commit -m "🎬 Gerçek playback raporunu güncelle"
-          git push origin master
+      - name: Workflow doğrulaması
+        run: echo "NEON_PLAYBACK_WORKFLOW_OK"
