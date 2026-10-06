@@ -676,10 +676,8 @@ class SinemaCX : NeonMainAPI() {
         val finalTrailers = if (!trailer.isNullOrBlank()) listOf(trailer) else tmdbExtras.second
 
         return neonEnrichResponse(
-            newMovieLoadResponse(title, url, TvType.Movie, url),
-            document = document,
-            baseUrl = url,
-        ) {
+            newMovieLoadResponse(title, url, TvType.Movie, url) {
+
             this.posterUrl = poster
             this.year = year
             this.plot = description
@@ -692,7 +690,11 @@ class SinemaCX : NeonMainAPI() {
             }
 
             finalTrailers.forEach { addTrailer(it) }
-        }
+        
+            },
+            document = document,
+            baseUrl = url,
+        )
     }
 
 override suspend fun loadLinks(
