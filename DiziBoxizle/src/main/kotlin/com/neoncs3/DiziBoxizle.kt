@@ -1,5 +1,6 @@
 package com.neoncs3
 
+import android.util.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
@@ -269,6 +270,12 @@ class DiziBoxizle : NeonMainAPI() {
         VMEAS_M3U8_PATTERN.findAll(rawHtml)
             .map { it.value.trimEnd(')', ']', '}', ';') }
             .forEach(candidates::add)
+        Log.d(
+            "DZBX",
+            "loadLinks episode=${episodeUrl} candidates=${candidates.size} " +
+                candidates.take(12).joinToString(" | "),
+        )
+
         var found = false
 
         for (candidate in candidates) {
@@ -291,16 +298,9 @@ class DiziBoxizle : NeonMainAPI() {
                 }
 
                 isExternalPlayer(clean) -> {
-                    // First inspect the provider page itself. VidMoly/Moly may hide the
-                    // real VMEAS master.m3u8 URL inside JavaScript instead of exposing it
-                    // as a normal HTML video element.
-                    val providerFound = extractProviderMedia(
-                        clean,
-                        episodeUrl,
-                        subtitleCallback,
-                        callback,
-                    )
-
+                    // Prefer CloudStream's native extractor first. The current Vidmoly
+                    // extractor knows how to normalize /w/... embeds and resolve JWPlayer
+                    // sources directly.
                     val extracted = runCatching {
                         loadExtractor(
                             clean,
@@ -310,9 +310,21 @@ class DiziBoxizle : NeonMainAPI() {
                         )
                     }.getOrDefault(false)
 
+                    // Keep the local provider parser as a fallback for providers/variants
+                    // that are not handled by a native extractor.
+                    val providerFound = if (!extracted) {
+                        extractProviderMedia(
+                            clean,
+                            episodeUrl,
+                            subtitleCallback,
+                            callback,
+                        )
+                    } else {
+                        false
+                    }
+
                     found = providerFound || extracted || found
-                }
-            }
+                }            }
         }
 
         // Public subtitle tracks only.
@@ -337,6 +349,10 @@ class DiziBoxizle : NeonMainAPI() {
             )
         }
 
+        Log.d(
+            "DZBX",
+            "loadLinks result found=${found} episode=${episodeUrl}",
+        )
         return found
     }
 
@@ -497,14 +513,14 @@ class DiziBoxizle : NeonMainAPI() {
 
     private fun vidMolyClassicUrl(url: String): String? {
         val path = runCatching { URI(url).path }.getOrNull() ?: return null
-        val id = Regex("(?i)/v/([a-z0-9]+)$").find(path)?.groupValues?.getOrNull(1)
+        val id = Regex("(?i)/w/([a-z0-9]+)$").find(path)?.groupValues?.getOrNull(1)
+            ?: Regex("(?i)/v/([a-z0-9]+)$").find(path)?.groupValues?.getOrNull(1)
             ?: Regex("(?i)/embed-([a-z0-9]+)\\.html$").find(path)?.groupValues?.getOrNull(1)
             ?: return null
 
         val origin = originOf(url) ?: "https://vidmoly.biz"
         return "$origin/embed-$id.html"
     }
-
     private fun originOf(url: String): String? {
         return runCatching {
             val uri = URI(url)
