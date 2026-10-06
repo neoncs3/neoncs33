@@ -18,6 +18,7 @@ on:
       - "**/*.gif"
       - "domain-status/**"
       - "health-status/**"
+      - "playback-status/**"
 
 permissions:
   contents: write
