@@ -462,6 +462,15 @@ class FilmModu : NeonMainAPI() {
         }
 
         Log.d(tag, "FilmModu loadLinks tamamlandı: linksFound=$linksFound")
+        if (!linksFound) {
+            linksFound = neonResolveLinks(
+                data = data,
+                sourceName = "$name - NeonCore",
+                subtitleCallback = subtitleCallback,
+                callback = callback,
+            )
+        }
+
         return linksFound
     }
 
