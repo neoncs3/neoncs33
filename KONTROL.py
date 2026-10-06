@@ -402,6 +402,14 @@ class MainUrlUpdater:
                 ikon = "🔄 **DEĞİŞTİ**"
                 previous = veri.get("previous_domain") or "-"
                 changed_at = veri.get("changed_at") or "-"
+            elif status == "unreachable":
+                ikon = "⚠️ **ULAŞILAMIYOR**"
+                previous = veri.get("previous_domain") or "-"
+                changed_at = veri.get("changed_at") or "-"
+            elif status == "protected":
+                ikon = "🛡️ **KORUMALI**"
+                previous = veri.get("previous_domain") or "-"
+                changed_at = veri.get("changed_at") or "-"
             else:
                 ikon = "✅ **DEĞİŞMEDİ**"
                 previous = "-"
