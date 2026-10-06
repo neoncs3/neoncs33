@@ -592,6 +592,14 @@ class JetFilmizle : NeonMainAPI() {
             }
         }
 
+        val neonFound = neonResolveLinks(
+            data = data,
+            sourceName = "$name - NeonCore",
+            subtitleCallback = subtitleCallback,
+            callback = callback,
+        )
+        if (neonFound) return true
+
         return false
     }
 
