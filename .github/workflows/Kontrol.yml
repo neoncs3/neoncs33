@@ -1,79 +1,88 @@
-# Bu araç @keyiflerolsun tarafından | @KekikAkademi için yazılmıştır.
+# NeonCS otomatik domain kontrolü
 
 name: Domain Değişiklik Kontrolü
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: neon-domain-control-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: false
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: 11 */9 * * *
+    - cron: "11 */9 * * *"
 
 jobs:
   DomainKontrol:
     runs-on: ubuntu-latest
 
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      REPO_OWNER: ${{ github.repository_owner }}
-      REPO_NAME: ${{ github.event.repository.name }}
-
     permissions:
       contents: write
       pull-requests: write
 
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO_OWNER: ${{ github.repository_owner }}
+      REPO_NAME: ${{ github.event.repository.name }}
+
     steps:
-      - name : Depo Kontrolü
-        uses : actions/checkout@v4
+      - name: Depo Kontrolü
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name : Python 3.11.8 Yükle
-        uses : actions/setup-python@v5
-        with :
-          python-version: 3.11.8
+      - name: Python 3.11.8 Yükle
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.8"
 
-      - name : Python Sürümünü Göster
-        run  : python -c "import sys; print(sys.version)"
+      - name: Python Sürümünü Göster
+        run: python -c "import sys; print(sys.version)"
 
-      - name : Gereksinimleri Yükle
-        run  : |
+      - name: Gereksinimleri Yükle
+        run: |
           python -m pip install --upgrade pip
           pip install -U setuptools wheel Kekik cloudscraper pycryptodome
 
-      - name : Betiği Çalıştır
-        run  : |
-          python KONTROL.py
+      - name: Açık domain PR kontrolü
+        id: acik_pr
+        run: |
+          COUNT=$(gh pr list --repo "$REPO_OWNER/$REPO_NAME"             --head "domain-degisikligi"             --base "master"             --state open             --json number             --jq 'length')
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
 
-      - name : Değişiklik Kontrolü
-        id   : degisiklik_kontrol
-        run  : |
-          git diff --quiet . || echo "degisiklik=true" >> $GITHUB_OUTPUT || true
+      - name: Domainleri Kontrol Et
+        if: steps.acik_pr.outputs.count == '0'
+        run: python KONTROL.py
 
-      - name : Pull Request Oluştur
-        if   : steps.degisiklik_kontrol.outputs.degisiklik == 'true'
-        run  : |
+      - name: Değişiklik Kontrolü
+        if: steps.acik_pr.outputs.count == '0'
+        id: degisiklik_kontrol
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "degisiklik=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "degisiklik=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Domain Branch ve PR
+        if: steps.acik_pr.outputs.count == '0' && steps.degisiklik_kontrol.outputs.degisiklik == 'true'
+        run: |
+          BRANCH="domain-degisikligi"
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+          git checkout -B "$BRANCH"
           git add -A
+          git commit             --author="neoncs3 <neoncs3@users.noreply.github.com>"             -m "♻️ Domain Değişikliği"             -m "🔄 mainUrl ve NeonCore domain manifesti otomatik güncellendi."
 
-          git commit --author="neoncs3 <neoncs3@users.noreply.github.com>" \
-            -m "♻️ Domain Değişikliği" \
-            -m "🔄 Otomatik domain güncellemeleri yapıldı."
-          BRANCH="domain-degisikligi"
+          git push origin "$BRANCH" --force
 
-          git checkout -B $BRANCH
-          git push origin $BRANCH --force
+          OPEN_PR=$(gh pr list --repo "$REPO_OWNER/$REPO_NAME"             --head "$BRANCH"             --base "master"             --state open             --json number             --jq 'length')
 
-          curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/pulls \
-            -d @- <<EOF
-          {
-            "title": "♻️ Domain Değişikliği",
-            "head": "$BRANCH",
-            "base": "master",
-            "body": "🔄 Otomatik tespit edilen domain değişiklikleri uygulandı.\n\n📂 İlgili dosyalar güncellendi. Lütfen değişiklikleri gözden geçirin ve onaylayın."
-          }
-          EOF
+          if [[ "$OPEN_PR" == "0" ]]; then
+            gh pr create               --repo "$REPO_OWNER/$REPO_NAME"               --head "$BRANCH"               --base "master"               --title "♻️ Domain Değişikliği"               --body "🔄 Otomatik domain değişikliği algılandı. mainUrl değerleri ve NeonCore manifesti güncellendi."
+          fi
+
+      - name: Açık PR nedeniyle atlandı
+        if: steps.acik_pr.outputs.count != '0'
+        run: echo "Açık domain-degisikligi PR'si bulundu; yeni bir domain PR'si oluşturulmadı."
