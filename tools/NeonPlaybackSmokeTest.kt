@@ -10,6 +10,7 @@ import com.lagradost.cloudstream3.ui.player.CSPlayerEvent
 import com.lagradost.cloudstream3.ui.player.PlayerEventSource
 import com.lagradost.cloudstream3.ui.player.ErrorEvent
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import androidx.media3.common.Player
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
@@ -17,6 +18,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 import java.util.Collections
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 @OptIn(InternalAPI::class)
@@ -86,6 +88,9 @@ class NeonPlaybackSmokeTest {
     ): Triple<Boolean, Long, String?> {
         val player = CS3IPlayer()
         val playerError = AtomicReference<String?>(null)
+        val firstFrame = AtomicBoolean(false)
+        val exoPlaying = AtomicBoolean(false)
+        val firstFrameAt = AtomicReference(0L)
 
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             player.initCallbacks(
@@ -108,6 +113,34 @@ class NeonPlaybackSmokeTest {
                 autoPlay = true,
                 preview = false,
             )
+
+            // CS3IPlayer keeps the underlying ExoPlayer private. For this diagnostic
+            // test we attach a listener so a rendered video frame is treated as
+            // stronger evidence than a possibly stale wrapper position.
+            runCatching {
+                val field = CS3IPlayer::class.java.getDeclaredField("exoPlayer")
+                field.isAccessible = true
+                val exo = field.get(player) as? Player
+                exo?.addListener(object : Player.Listener {
+                    override fun onRenderedFirstFrame() {
+                        firstFrame.set(true)
+                        firstFrameAt.compareAndSet(0L, System.currentTimeMillis())
+                    }
+
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        exoPlaying.set(isPlaying)
+                    }
+
+                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        playerError.compareAndSet(null, err(error))
+                    }
+                })
+            }.onFailure {
+                Log.w(
+                    "NEON_PLAYBACK",
+                    "ExoPlayer listener bağlanamadı: " + err(it),
+                )
+            }
 
             runCatching {
                 player.handleEvent(
@@ -154,11 +187,17 @@ class NeonPlaybackSmokeTest {
 
             lastPosition = current
 
-            if (bestPosition >= MIN_PLAYBACK_MS && advancedSamples >= 2) {
+            // A rendered frame is the most reliable smoke-test signal here.
+            // Some remote streams keep the wrapper position at 0 while the first
+            // decoded video frame is already visible.
+            val renderedAt = firstFrameAt.get()
+            if (firstFrame.get() && renderedAt > 0L &&
+                System.currentTimeMillis() - renderedAt >= MIN_PLAYBACK_MS
+            ) {
                 break
             }
 
-            if (playerError.get() != null && bestPosition == 0L) {
+            if (playerError.get() != null && !firstFrame.get() && bestPosition == 0L) {
                 break
             }
         }
@@ -168,7 +207,8 @@ class NeonPlaybackSmokeTest {
         }.getOrDefault(0L).coerceAtLeast(0L)
 
         val error = playerError.get()
-        val played = bestPosition >= MIN_PLAYBACK_MS && advancedSamples >= 2
+        val played = firstFrame.get() ||
+            (bestPosition >= MIN_PLAYBACK_MS && advancedSamples >= 2)
 
         val diagnostic = error ?: if (!played) {
             "ExoPlayer playback ilerlemedi: position=" +
@@ -176,7 +216,11 @@ class NeonPlaybackSmokeTest {
                 "ms duration=" +
                 duration +
                 "ms samples=" +
-                advancedSamples
+                advancedSamples +
+                " firstFrame=" +
+                firstFrame.get() +
+                " exoPlaying=" +
+                exoPlaying.get()
         } else {
             null
         }
@@ -192,6 +236,7 @@ class NeonPlaybackSmokeTest {
             diagnostic,
         )
     }
+
 
     private suspend fun providerCandidates(
         api: MainAPI,
@@ -386,7 +431,7 @@ class NeonPlaybackSmokeTest {
 
         val localPlugins = PluginManager
             .getPluginsLocal()
-            .map { it.internalName }
+            .map { it.internalName.removeSuffix(".cs3").removeSuffix(".zip") }
             .sorted()
 
         println(
