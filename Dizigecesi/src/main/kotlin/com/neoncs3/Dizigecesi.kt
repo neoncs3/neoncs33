@@ -76,7 +76,7 @@ data class TmdbDetail(
     @JsonProperty("videos") val videos: TmdbVideos? = null
 )
 
-class Dizigecesi : MainAPI() {
+class Dizigecesi : NeonMainAPI() {
     override var mainUrl = "https://dizigecesi.com"
     override var name = "Dizigecesi"
     override val hasMainPage = true
