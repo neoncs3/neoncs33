@@ -5,6 +5,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.lagradost.cloudstream3.plugins.PluginManager
 import com.lagradost.cloudstream3.ui.player.CS3IPlayer
+import com.lagradost.cloudstream3.ui.player.CSPlayerEvent
+import com.lagradost.cloudstream3.ui.player.PlayerEventSource
 import com.lagradost.cloudstream3.ui.player.ErrorEvent
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import kotlinx.coroutines.delay
@@ -76,73 +78,275 @@ class NeonPlaybackSmokeTest {
         }
     }
 
-    private fun realPlay(context: Context, link: ExtractorLink): Triple<Boolean, Long, String?> {
+    private fun realPlay(
+        context: Context,
+        link: ExtractorLink,
+    ): Triple<Boolean, Long, String?> {
         val player = CS3IPlayer()
         val playerError = AtomicReference<String?>(null)
+
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
-            player.initCallbacks({ event -> if (event is ErrorEvent) playerError.set(err(event.error)) }, null)
-            player.loadPlayer(context, false, link, null, 0L, emptySet(), null, true, false)
+            player.initCallbacks(
+                { event ->
+                    if (event is ErrorEvent) {
+                        playerError.compareAndSet(null, err(event.error))
+                    }
+                },
+                null,
+            )
+
+            player.loadPlayer(
+                context = context,
+                sameEpisode = false,
+                link = link,
+                data = null,
+                startPosition = 0L,
+                subtitles = emptySet(),
+                subtitle = null,
+                autoPlay = true,
+                preview = false,
+            )
+
+            runCatching {
+                player.handleEvent(
+                    CSPlayerEvent.Play,
+                    PlayerEventSource.Player,
+                )
+            }
         }
 
-        var position = 0L
+        var lastPosition = 0L
+        var bestPosition = 0L
+        var advancedSamples = 0
         val endAt = System.currentTimeMillis() + PLAYBACK_TIMEOUT_MS
-        while (System.currentTimeMillis() < endAt && position < 1_500L) {
-            Thread.sleep(250L)
-            position = runCatching { player.getPosition() ?: 0L }.getOrDefault(0L).coerceAtLeast(0L)
-            if (playerError.get() != null && position == 0L) break
+
+        while (System.currentTimeMillis() < endAt) {
+            Thread.sleep(500L)
+
+            val isPlayingNow = runCatching {
+                player.getIsPlaying()
+            }.getOrDefault(false)
+
+            if (!isPlayingNow || bestPosition < MIN_PLAYBACK_MS) {
+                InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                    runCatching {
+                        player.handleEvent(
+                            CSPlayerEvent.Play,
+                            PlayerEventSource.Player,
+                        )
+                    }
+                }
+            }
+
+            val current = runCatching {
+                player.getPosition() ?: 0L
+            }.getOrDefault(0L).coerceAtLeast(0L)
+
+            if (current > lastPosition) {
+                advancedSamples++
+            }
+
+            if (current > bestPosition) {
+                bestPosition = current
+            }
+
+            lastPosition = current
+
+            if (bestPosition >= MIN_PLAYBACK_MS && advancedSamples >= 2) {
+                break
+            }
+
+            if (playerError.get() != null && bestPosition == 0L) {
+                break
+            }
         }
 
-        val ok = position >= MIN_PLAYBACK_MS
+        val duration = runCatching {
+            player.getDuration() ?: 0L
+        }.getOrDefault(0L).coerceAtLeast(0L)
+
         val error = playerError.get()
+        val played = bestPosition >= MIN_PLAYBACK_MS && advancedSamples >= 2
+
+        val diagnostic = error ?: if (!played) {
+            "ExoPlayer playback ilerlemedi: position=" +
+                bestPosition +
+                "ms duration=" +
+                duration +
+                "ms samples=" +
+                advancedSamples
+        } else {
+            null
+        }
+
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             runCatching { player.release() }
             runCatching { player.releaseCallbacks() }
         }
-        return Triple(ok, position, error)
+
+        return Triple(
+            played,
+            bestPosition,
+            diagnostic,
+        )
     }
 
-    private suspend fun testProvider(context: Context, target: Target): Result {
-        val api = APIHolder.apis.firstOrNull { it.name.equals(target.name, true) }
-            ?: APIHolder.allProviders.firstOrNull { it.name.equals(target.name, true) }
-            ?: return Result(target.name, "FAIL", error = "Provider bulunamadı")
+    private suspend fun providerCandidates(
+        api: MainAPI,
+        target: Target,
+    ): List<SearchResponse> {
+        val candidates = mutableListOf<SearchResponse>()
 
-        val homeQuery = runCatching {
-            if (!api.hasMainPage) null else {
-                val p = api.mainPage.firstOrNull() ?: return@runCatching null
-                api.getMainPage(1, MainPageRequest(p.name, p.data, p.horizontalImages))
-                    ?.items?.flatMap { it.list }?.firstOrNull()?.name?.split(" ")?.firstOrNull()
+        // Önce gerçek ana sayfa içeriklerini dene. Arama motoru değişiklikleri
+        // yüzünden CI testinin yanlış pozitif/negatif üretmesini azaltır.
+        if (api.hasMainPage) {
+            api.mainPage.take(2).forEach { page ->
+                runCatching {
+                    api.getMainPage(
+                        1,
+                        MainPageRequest(
+                            page.name,
+                            page.data,
+                            page.horizontalImages,
+                        ),
+                    )
+                }.getOrNull()?.items
+                    ?.flatMap { it.list }
+                    ?.take(6)
+                    ?.let(candidates::addAll)
             }
-        }.getOrNull()
+        }
 
-        val queries = (listOfNotNull(homeQuery) + target.queries).distinct()
+        // Ana sayfa boşsa veya oynatma kaynağı çıkmazsa bilinen arama adaylarına geç.
+        for (query in target.queries) {
+            runCatching {
+                api.search(query, 1)?.items.orEmpty().take(3)
+            }.getOrNull()?.let(candidates::addAll)
+        }
+
+        return candidates
+            .filter { it.url.isNotBlank() }
+            .distinctBy { it.url }
+            .take(MAX_CANDIDATES_PER_PROVIDER)
+    }
+
+    private suspend fun testProvider(
+        context: Context,
+        target: Target,
+    ): Result {
+        val api = APIHolder.apis.firstOrNull {
+            it.name.equals(target.name, true)
+        } ?: APIHolder.allProviders.firstOrNull {
+            it.name.equals(target.name, true)
+        } ?: return Result(
+            target.name,
+            "FAIL",
+            error = "Provider bulunamadı",
+        )
+
+        val candidates = providerCandidates(api, target)
+
+        Log.d(
+            "NEON_PLAYBACK",
+            "Provider=" + target.name +
+                " aday=" + candidates.size +
+                " isimler=" +
+                candidates.joinToString(" | ") { it.name },
+        )
+
         var lastError = ""
 
-        for (query in queries) {
-            val results = runCatching { api.search(query, 1)?.items.orEmpty() }.getOrElse {
-                lastError = err(it); emptyList()
-            }
-            for (result in results.take(3)) {
-                val data = runCatching { loadData(api, result) }.getOrElse {
-                    lastError = err(it); null
-                } ?: continue
+        for (result in candidates) {
+            val data = runCatching {
+                loadData(api, result)
+            }.getOrElse {
+                lastError = err(it)
+                null
+            } ?: continue
 
-                val (links, linkError) = resolve(api, data)
-                if (links.isEmpty()) {
-                    lastError = linkError ?: "Gerçek video bağlantısı bulunamadı"
-                    if (antiBot(lastError)) return Result(target.name, "BLOCKED", query, result.name, error = lastError)
-                    continue
+            val (links, linkError) = resolve(api, data)
+
+            if (links.isEmpty()) {
+                lastError = linkError ?: "Gerçek video bağlantısı bulunamadı"
+
+                if (antiBot(lastError)) {
+                    return Result(
+                        provider = target.name,
+                        status = "BLOCKED",
+                        item = result.name,
+                        error = lastError,
+                    )
                 }
 
-                for (link in links.filter { it.url.startsWith("http://") || it.url.startsWith("https://") }.sortedByDescending { it.quality }.take(4)) {
-                    val (played, position, playerError) = realPlay(context, link)
-                    if (played) return Result(target.name, "PASS", query, result.name, links.size, position)
-                    lastError = playerError ?: "ExoPlayer position ilerlemedi: ${position}ms"
-                    if (antiBot(lastError)) return Result(target.name, "BLOCKED", query, result.name, links.size, position, lastError)
+                continue
+            }
+
+            Log.d(
+                "NEON_PLAYBACK",
+                "Provider=" + target.name +
+                    " item=" + result.name +
+                    " links=" + links.size +
+                    " urls=" +
+                    links.take(4).joinToString(" | ") { it.url },
+            )
+
+            val playableLinks = links
+                .filter {
+                    it.url.startsWith("http://") ||
+                        it.url.startsWith("https://")
+                }
+                .sortedByDescending { it.quality }
+                .take(4)
+
+            for (link in playableLinks) {
+                val (played, position, playerError) = realPlay(
+                    context,
+                    link,
+                )
+
+                Log.d(
+                    "NEON_PLAYBACK",
+                    "Provider=" + target.name +
+                        " item=" + result.name +
+                        " played=" + played +
+                        " position=" + position +
+                        " error=" + playerError +
+                        " url=" + link.url,
+                )
+
+                if (played) {
+                    return Result(
+                        provider = target.name,
+                        status = "PASS",
+                        item = result.name,
+                        links = links.size,
+                        positionMs = position,
+                    )
+                }
+
+                lastError = playerError
+                    ?: "ExoPlayer position ilerlemedi: " + position + "ms"
+
+                if (antiBot(lastError)) {
+                    return Result(
+                        provider = target.name,
+                        status = "BLOCKED",
+                        item = result.name,
+                        links = links.size,
+                        positionMs = position,
+                        error = lastError,
+                    )
                 }
             }
         }
 
-        return Result(target.name, if (antiBot(lastError)) "BLOCKED" else "FAIL", error = lastError.ifBlank { "Test sorgularında çalışır sonuç bulunamadı" })
+        return Result(
+            provider = target.name,
+            status = if (antiBot(lastError)) "BLOCKED" else "FAIL",
+            error = lastError.ifBlank {
+                "Test adaylarında çalışan gerçek playback bulunamadı"
+            },
+        )
     }
 
     private fun writeReport(context: Context, results: List<Result>) {
@@ -168,17 +372,68 @@ class NeonPlaybackSmokeTest {
 
     @Test
     fun realPlaybackSmoke() = runBlocking {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        PluginManager.___DO_NOT_CALL_FROM_A_PLUGIN_loadAllLocalPlugins(context, true)
-        delay(2_000L)
-        val results = targets.map { testProvider(context, it) }
-        writeReport(context, results)
-        results.forEach { println("NEON_PLAYBACK provider=${it.provider} status=${it.status} links=${it.links} positionMs=${it.positionMs} query=${it.query} item=${it.item} error=${it.error}") }
+        val context =
+            InstrumentationRegistry.getInstrumentation().targetContext
 
-        assertTrue("Hiç gerçek playback PASS olmadı: $results", results.any { it.status == "PASS" })
-        assertTrue("Gerçek playback FAIL bulundu: ${results.filter { it.status == "FAIL" }}", results.none { it.status == "FAIL" })
+        PluginManager.___DO_NOT_CALL_FROM_A_PLUGIN_loadAllLocalPlugins(
+            context,
+            true,
+        )
+
+        delay(2_000L)
+
+        val localPlugins = PluginManager
+            .getPluginsLocal()
+            .map { it.internalName }
+            .sorted()
+
+        println(
+            "NEON_PLUGINS_LOCAL count=" +
+                localPlugins.size +
+                " names=" +
+                localPlugins.joinToString(","),
+        )
+
+        val expectedPlugins = targets.map { it.name }.toSet()
+        val missingPlugins = expectedPlugins - localPlugins.toSet()
+
+        if (missingPlugins.isNotEmpty()) {
+            println(
+                "NEON_PLUGINS_MISSING " +
+                    missingPlugins.joinToString(","),
+            )
+        }
+
+        val results = targets.map {
+            testProvider(context, it)
+        }
+
+        writeReport(context, results)
+
+        results.forEach {
+            println(
+                "NEON_PLAYBACK provider=" + it.provider +
+                    " status=" + it.status +
+                    " links=" + it.links +
+                    " positionMs=" + it.positionMs +
+                    " query=" + it.query +
+                    " item=" + it.item +
+                    " error=" + it.error,
+            )
+        }
+
+        assertTrue(
+            "Hiç gerçek playback PASS olmadı: " + results,
+            results.any { it.status == "PASS" },
+        )
+
+        assertTrue(
+            "Gerçek playback FAIL bulundu: " +
+                results.filter { it.status == "FAIL" },
+            results.none { it.status == "FAIL" },
+        )
     }
 }
-// smoke trigger v2
+// smoke trigger v7
 
-// real player smoke v5
+// real player smoke v7
