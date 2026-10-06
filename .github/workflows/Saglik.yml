@@ -19,7 +19,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: neon-health-\${{ github.repository }}
+  group: neon-health-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
