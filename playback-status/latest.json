@@ -16,7 +16,7 @@
       "item": null,
       "links": 0,
       "positionMs": 0,
-      "error": "Gerçek video bağlantısı bulunamadı"
+      "error": "loadLinks=false"
     },
     {
       "provider": "DiziPal",

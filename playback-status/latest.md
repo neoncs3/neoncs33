@@ -7,7 +7,7 @@
 | Provider | Durum | Link | Position | Sorgu | İçerik | Hata |
 |---|---|---:|---:|---|---|---|
 | **AsyaFilmIzle** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
-| **DiziBoxizle** | 🔴 FAIL | 0 | 0 ms | - | - | Gerçek video bağlantısı bulunamadı |
+| **DiziBoxizle** | 🔴 FAIL | 0 | 0 ms | - | - | loadLinks=false |
 | **DiziPal** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
 | **Dizigecesi** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
 | **Dramadizilerim** | 🟢 PASS | 1 | 0 ms | - | YERALTI KRALINI BAŞTAN ÇIKAR | - |
