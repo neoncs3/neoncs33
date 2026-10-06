@@ -1,6 +1,7 @@
 package com.lagradost.cloudstream3
 
 import android.content.Context
+import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.lagradost.cloudstream3.plugins.PluginManager
@@ -23,7 +24,8 @@ import java.util.concurrent.atomic.AtomicReference
 class NeonPlaybackSmokeTest {
     companion object {
         private const val MIN_PLAYBACK_MS = 1_500L
-        private const val PLAYBACK_TIMEOUT_MS = 30_000L
+        private const val PLAYBACK_TIMEOUT_MS = 20_000L
+        private const val MAX_CANDIDATES_PER_PROVIDER = 4
     }
 
     data class Target(val name: String, val queries: List<String>)
