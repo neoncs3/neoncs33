@@ -269,31 +269,35 @@ class JetFilmizle : NeonMainAPI() {
             Log.d(JET_TAG, "Dizi bölümleri: " + episodes.size)
 
             return neonEnrichResponse(
-            newTvSeriesLoadResponse(title, pageUrl, TvType.TvSeries, episodes),
-            document = document,
-            baseUrl = pageUrl,
-        ) {
+            newTvSeriesLoadResponse(title, pageUrl, TvType.TvSeries, episodes) {
+
                 posterUrl = poster
                 this.year = year
                 this.plot = description
                 this.tags = tags
                 this.score = Score.from10(rating)
                 addActors(actors)
-            }
+            
+            },
+            document = document,
+            baseUrl = pageUrl,
+        )
         }
 
         return neonEnrichResponse(
-            newMovieLoadResponse(title, pageUrl, TvType.Movie, pageUrl),
-            document = document,
-            baseUrl = pageUrl,
-        ) {
+            newMovieLoadResponse(title, pageUrl, TvType.Movie, pageUrl) {
+
             posterUrl = poster
             this.year = year
             this.plot = description
             this.tags = tags
             this.score = Score.from10(rating)
             addActors(actors)
-        }
+        
+            },
+            document = document,
+            baseUrl = pageUrl,
+        )
     }
     override suspend fun loadLinks(
         data: String,
