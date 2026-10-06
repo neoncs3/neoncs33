@@ -571,12 +571,16 @@ class AsyaFilmIzle : NeonMainAPI() {
 
         if (url.contains("/dizi/", true)) {
             val episodes = parseEpisodes(document, poster, url)
-            return newTvSeriesLoadResponse(
+            return neonEnrichResponse(
+            newTvSeriesLoadResponse(
                 name = title,
                 url = url,
                 type = TvType.TvSeries,
                 episodes = episodes
-            ) {
+            ),
+            document = document,
+            baseUrl = url,
+        ) {
                 posterUrl = poster
                 this.year = year
                 this.plot = plot
@@ -596,11 +600,15 @@ class AsyaFilmIzle : NeonMainAPI() {
             }
         }
 
-        return newMovieLoadResponse(
+        return neonEnrichResponse(
+            newMovieLoadResponse(
             name = title,
             url = url,
             type = TvType.Movie,
             dataUrl = url
+        ),
+            document = document,
+            baseUrl = url,
         ) {
             posterUrl = poster
             this.year = year
