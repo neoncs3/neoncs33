@@ -6,7 +6,7 @@ import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
-import com.lagradost.cloudstream3.utils.newSubtitleFile
+import com.lagradost.cloudstream3.newSubtitleFile
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.net.URI
@@ -415,18 +415,21 @@ object NeonMemoryCache {
     private val values = ConcurrentHashMap<String, Entry>()
 
     fun get(key: String): String? {
-        val entry = values[key] ?: return null
+        val entry = values.get(key) ?: return null
         if (entry.expiresAt <= System.currentTimeMillis()) {
-            values.remove(key, entry)
+            values.remove(key)
             return null
         }
         return entry.value
     }
 
     fun put(key: String, value: String, ttlMs: Long) {
-        values[key] = Entry(
-            value = value,
-            expiresAt = System.currentTimeMillis() + ttlMs.coerceAtLeast(1_000L),
+        values.put(
+            key,
+            Entry(
+                value = value,
+                expiresAt = System.currentTimeMillis() + ttlMs.coerceAtLeast(1_000L),
+            ),
         )
     }
 
