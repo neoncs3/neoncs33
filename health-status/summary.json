@@ -2,7 +2,7 @@
   "providers": [
     {
       "provider": "AsyaFilmIzle",
-      "status": "red",
+      "status": "yellow",
       "domain": "https://asyafilmizle.com",
       "live": {
         "ok": false,
@@ -12,7 +12,7 @@
     },
     {
       "provider": "DiziBoxizle",
-      "status": "red",
+      "status": "yellow",
       "domain": "https://diziboxizle.com",
       "live": {
         "ok": false,
@@ -22,7 +22,7 @@
     },
     {
       "provider": "Dizigecesi",
-      "status": "red",
+      "status": "yellow",
       "domain": "https://dizigecesi.com",
       "live": {
         "ok": false,
@@ -32,7 +32,7 @@
     },
     {
       "provider": "DiziPal",
-      "status": "red",
+      "status": "yellow",
       "domain": "https://dizipal1586.com",
       "live": {
         "ok": false,
@@ -42,7 +42,7 @@
     },
     {
       "provider": "Dramadizilerim",
-      "status": "red",
+      "status": "yellow",
       "domain": "https://dramadizilerim.com",
       "live": {
         "ok": false,
@@ -52,7 +52,7 @@
     },
     {
       "provider": "FilmModu",
-      "status": "red",
+      "status": "yellow",
       "domain": "https://www.filmmodu.one",
       "live": {
         "ok": false,
@@ -62,7 +62,7 @@
     },
     {
       "provider": "JetFilmizle",
-      "status": "red",
+      "status": "yellow",
       "domain": "https://jetfilmizle.now",
       "live": {
         "ok": false,
@@ -72,7 +72,7 @@
     },
     {
       "provider": "SetFilmIzle",
-      "status": "red",
+      "status": "yellow",
       "domain": "https://www.setfilmizle.ltd",
       "live": {
         "ok": false,
@@ -82,7 +82,7 @@
     },
     {
       "provider": "SinemaCX",
-      "status": "red",
+      "status": "yellow",
       "domain": "https://sinemacc.com",
       "live": {
         "ok": false,
@@ -92,7 +92,7 @@
     },
     {
       "provider": "WebDramaTurkey",
-      "status": "red",
+      "status": "yellow",
       "domain": "https://webdramaturkey2.com",
       "live": {
         "ok": false,
@@ -102,6 +102,6 @@
     }
   ],
   "green": 0,
-  "yellow": 0,
-  "red": 10
+  "yellow": 10,
+  "red": 0
 }

@@ -1,4 +1,4 @@
-# 🔴 SinemaCX
+# 🟡 SinemaCX
 
 Domain: https://sinemacc.com
 

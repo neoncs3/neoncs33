@@ -1,4 +1,4 @@
-# 🔴 DiziBoxizle
+# 🟡 DiziBoxizle
 
 Domain: https://diziboxizle.com
 

@@ -1,4 +1,4 @@
-# 🔴 AsyaFilmIzle
+# 🟡 AsyaFilmIzle
 
 Domain: https://asyafilmizle.com
 

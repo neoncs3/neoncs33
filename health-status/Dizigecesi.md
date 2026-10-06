@@ -1,4 +1,4 @@
-# 🔴 Dizigecesi
+# 🟡 Dizigecesi
 
 Domain: https://dizigecesi.com
 

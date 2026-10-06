@@ -1,4 +1,4 @@
-# 🔴 Dramadizilerim
+# 🟡 Dramadizilerim
 
 Domain: https://dramadizilerim.com
 
