@@ -29,10 +29,15 @@ class MainUrlUpdater:
         self.domain_manifest_path = os.path.join(
             self.base_dir, "NeonCore", "domains.json"
         )
-        self.domain_status_path = os.path.join(
-            self.base_dir, "NeonCore", "domain-status.json"
+        self.domain_status_dir = os.path.join(
+            self.base_dir, "domain-status"
         )
-        self.readme_path = os.path.join(self.base_dir, "README.md")
+        self.domain_status_path = os.path.join(
+            self.domain_status_dir, "status.json"
+        )
+        self.domain_status_index_path = os.path.join(
+            self.domain_status_dir, "index.md"
+        )
 
     @property
     def eklentiler(self):
@@ -204,7 +209,7 @@ class MainUrlUpdater:
         }
 
     def _domain_durumlarini_yaz(self, durumlar):
-        os.makedirs(os.path.dirname(self.domain_status_path), exist_ok=True)
+        os.makedirs(self.domain_status_dir, exist_ok=True)
 
         yeni = json.dumps(
             {
@@ -217,28 +222,22 @@ class MainUrlUpdater:
             indent=2,
         ) + "\n"
 
+        changed = False
         eski = ""
         if os.path.isfile(self.domain_status_path):
             with open(self.domain_status_path, "r", encoding="utf-8") as file:
                 eski = file.read()
+        if yeni != eski:
+            with open(self.domain_status_path, "w", encoding="utf-8") as file:
+                file.write(yeni)
+            changed = True
 
-        if yeni == eski:
-            return False
-
-        with open(self.domain_status_path, "w", encoding="utf-8") as file:
-            file.write(yeni)
-
-        return True
-
-    def _readme_yaz(self, durumlar):
-        satirlar = [
-            "# NeonCS CloudStream Eklentileri",
+        index_lines = [
+            "# 🌐 NeonCS Domain Durumları",
             "",
-            "## 🌐 Domain Durumları",
+            "Bu alan KONTROL.py tarafından otomatik güncellenir.",
             "",
-            "Bu tablo, otomatik domain kontrolü tarafından güncellenir.",
-            "",
-            "| Eklenti | Durum | Güncel Domain | Önceki Domain | Değişiklik |",
+            "| Eklenti | Durum | Güncel Domain | Önceki Domain | Tarih |",
             "|---|---|---|---|---|",
         ]
 
@@ -246,7 +245,6 @@ class MainUrlUpdater:
             veri = durumlar[eklenti]
             domain = veri.get("domain", "-")
             status = veri.get("status", "unchanged")
-
             if status == "changed":
                 ikon = "🔄 **DEĞİŞTİ**"
                 previous = veri.get("previous_domain") or "-"
@@ -255,50 +253,60 @@ class MainUrlUpdater:
                 ikon = "✅ **DEĞİŞMEDİ**"
                 previous = "-"
                 changed_at = "-"
-
-            domain_link = (
-                f"[{domain}]({domain})"
-                if domain.startswith("http://") or domain.startswith("https://")
-                else domain
-            )
-            previous_link = (
-                f"[{previous}]({previous})"
-                if previous.startswith("http://") or previous.startswith("https://")
-                else previous
+            index_lines.append(
+                "| **" + eklenti + "** | " + ikon + " | "
+                + "[" + domain + "](" + domain + ") | "
+                + previous + " | " + changed_at + " |"
             )
 
-            satirlar.append(
-                f"| **{eklenti}** | {ikon} | {domain_link} | "
-                f"{previous_link} | {changed_at} |"
+        index_lines.extend([
+            "",
+            "### İkonlar",
+            "",
+            "🔄 **DEĞİŞTİ** = Son kontrolde domain değişti.",
+            "",
+            "✅ **DEĞİŞMEDİ** = Son kontrolde domain aynı kaldı.",
+        ])
+
+        index_yeni = "\n".join(index_lines) + "\n"
+        old_index = ""
+        if os.path.isfile(self.domain_status_index_path):
+            with open(self.domain_status_index_path, "r", encoding="utf-8") as file:
+                old_index = file.read()
+        if index_yeni != old_index:
+            with open(self.domain_status_index_path, "w", encoding="utf-8") as file:
+                file.write(index_yeni)
+            changed = True
+
+        for eklenti in sorted(durumlar):
+            veri = durumlar[eklenti]
+            domain = veri.get("domain", "-")
+            status = veri.get("status", "unchanged")
+            if status == "changed":
+                ikon = "🔄 **DEĞİŞTİ**"
+                previous = veri.get("previous_domain") or "-"
+                changed_at = veri.get("changed_at") or "-"
+            else:
+                ikon = "✅ **DEĞİŞMEDİ**"
+                previous = "-"
+                changed_at = "-"
+            content = (
+                "# " + ikon + " " + eklenti + "\n\n"
+                + "**Güncel domain:** [" + domain + "](" + domain + ")\n\n"
+                + "**Önceki domain:** " + previous + "\n\n"
+                + "**Değişiklik tarihi:** " + changed_at + "\n"
             )
+            path = os.path.join(self.domain_status_dir, eklenti + ".md")
+            old = ""
+            if os.path.isfile(path):
+                with open(path, "r", encoding="utf-8") as file:
+                    old = file.read()
+            if content != old:
+                with open(path, "w", encoding="utf-8") as file:
+                    file.write(content)
+                changed = True
 
-        satirlar.extend(
-            [
-                "",
-                "### İkonlar",
-                "",
-                "🔄 **DEĞİŞTİ** = Domain daha önce otomatik kontrolde değişmiş.",
-                "",
-                "✅ **DEĞİŞMEDİ** = Kayıtlı domain otomatik kontrollerde değişmemiş.",
-                "",
-                "Domain değiştiğinde mainUrl, eklenti sürümü, NeonCore manifesti ve bu tablo aynı otomatik PR içinde güncellenir.",
-            ]
-        )
-
-        yeni = "\n".join(satirlar) + "\n"
-
-        eski = ""
-        if os.path.isfile(self.readme_path):
-            with open(self.readme_path, "r", encoding="utf-8") as file:
-                eski = file.read()
-
-        if yeni == eski:
-            return False
-
-        with open(self.readme_path, "w", encoding="utf-8") as file:
-            file.write(yeni)
-
-        return True
+        return changed
 
     def _domain_manifestini_yaz(self, domains):
         os.makedirs(os.path.dirname(self.domain_manifest_path), exist_ok=True)
@@ -417,14 +425,9 @@ class MainUrlUpdater:
             konsol.log("[=] NeonCore domain manifesti güncel")
 
         if self._domain_durumlarini_yaz(durumlar):
-            konsol.log("[+] Domain durumları güncellendi")
+            konsol.log("[+] Domain-status sistemi güncellendi")
         else:
-            konsol.log("[=] Domain durumları güncel")
-
-        if self._readme_yaz(durumlar):
-            konsol.log("[+] GitHub README domain tablosu güncellendi")
-        else:
-            konsol.log("[=] GitHub README domain tablosu güncel")
+            konsol.log("[=] Domain-status sistemi güncel")
 
 
 if __name__ == "__main__":

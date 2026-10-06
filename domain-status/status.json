@@ -11,15 +11,15 @@
     "previous_domain": null,
     "changed_at": null
   },
-  "DiziPal": {
-    "status": "unchanged",
-    "domain": "https://dizipal1586.com",
-    "previous_domain": null,
-    "changed_at": null
-  },
   "Dizigecesi": {
     "status": "unchanged",
     "domain": "https://dizigecesi.com",
+    "previous_domain": null,
+    "changed_at": null
+  },
+  "DiziPal": {
+    "status": "unchanged",
+    "domain": "https://dizipal1586.com",
     "previous_domain": null,
     "changed_at": null
   },
