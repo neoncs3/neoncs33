@@ -1,22 +1,20 @@
-# 🟡 WebDramaTurkey
+# 🟢 WebDramaTurkey
 
 Domain: https://webdramaturkey2.com
 
-HTTP: ❌ 
+HTTP: ✅ 200
 
 Canlı medya ipucu: 0 media URL, 0 iframe
 
 ## Pipeline
 
-- Search: ❌
-- Load: ❌
-- LoadLinks: ❌
-- Metadata: ❌
-- Video resolver: ❌
-- Subtitles: ❌
-- Cache/fallback: ❌
-- TMDB playback yasağı: ❌
+- Search: ✅
+- Load: ✅
+- LoadLinks: ✅
+- Metadata: ✅
+- Video resolver: ✅
+- Subtitles: ✅
+- Cache/fallback: ✅
+- TMDB playback yasağı: ✅
 
-Kaynak: -
-
-Hata: NeonMainAPI provider source bulunamadı
+Kaynak: WebDramaTurkey/src/main/kotlin/com/neoncs3/WebDramaTurkey.kt

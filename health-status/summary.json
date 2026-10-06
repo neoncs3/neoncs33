@@ -2,106 +2,276 @@
   "providers": [
     {
       "provider": "AsyaFilmIzle",
-      "status": "yellow",
+      "status": "red",
       "domain": "https://asyafilmizle.com",
+      "configured_domain": "https://asyafilmizle.com",
       "live": {
         "ok": false,
-        "error": "NeonMainAPI provider source bulunamadı"
+        "status_code": 403,
+        "final_url": "https://asyafilmizle.com",
+        "bytes": 5667,
+        "title": "Just a moment...",
+        "media_hints": 0,
+        "iframe_hints": 0,
+        "error": null
       },
-      "pipelines": {}
+      "pipelines": {
+        "load": true,
+        "search": true,
+        "loadLinks": true,
+        "metadata": true,
+        "video": true,
+        "subtitles": true,
+        "cache": true,
+        "tmdb_playback_forbidden": true
+      },
+      "source": "AsyaFilmIzle/src/main/kotlin/com/neoncs3/AsyaFilmIzle.kt"
     },
     {
       "provider": "DiziBoxizle",
-      "status": "yellow",
+      "status": "green",
       "domain": "https://diziboxizle.com",
+      "configured_domain": "https://diziboxizle.com",
       "live": {
-        "ok": false,
-        "error": "NeonMainAPI provider source bulunamadı"
+        "ok": true,
+        "status_code": 200,
+        "final_url": "https://diziboxizle.com",
+        "bytes": 248047,
+        "title": "Dizibox İzle - Güncel Yabancı Dizi izle, HD Diziler izle",
+        "media_hints": 0,
+        "iframe_hints": 0,
+        "error": null
       },
-      "pipelines": {}
+      "pipelines": {
+        "load": true,
+        "search": true,
+        "loadLinks": true,
+        "metadata": true,
+        "video": true,
+        "subtitles": true,
+        "cache": true,
+        "tmdb_playback_forbidden": true
+      },
+      "source": "DiziBoxizle/src/main/kotlin/com/neoncs3/DiziBoxizle.kt"
     },
     {
       "provider": "Dizigecesi",
-      "status": "yellow",
+      "status": "red",
       "domain": "https://dizigecesi.com",
+      "configured_domain": "https://dizigecesi.com",
       "live": {
         "ok": false,
-        "error": "NeonMainAPI provider source bulunamadı"
+        "status_code": 403,
+        "final_url": "https://dizigecesi.com",
+        "bytes": 4916,
+        "title": "Attention Required! | Cloudflare",
+        "media_hints": 0,
+        "iframe_hints": 0,
+        "error": null
       },
-      "pipelines": {}
+      "pipelines": {
+        "load": true,
+        "search": true,
+        "loadLinks": true,
+        "metadata": true,
+        "video": true,
+        "subtitles": true,
+        "cache": true,
+        "tmdb_playback_forbidden": true
+      },
+      "source": "Dizigecesi/src/main/kotlin/com/neoncs3/Dizigecesi.kt"
     },
     {
       "provider": "DiziPal",
-      "status": "yellow",
+      "status": "red",
       "domain": "https://dizipal1586.com",
+      "configured_domain": "https://dizipal1586.com",
       "live": {
         "ok": false,
-        "error": "NeonMainAPI provider source bulunamadı"
+        "status_code": 403,
+        "final_url": "https://dizipal1586.com",
+        "bytes": 4550,
+        "title": "Attention Required! | Cloudflare",
+        "media_hints": 0,
+        "iframe_hints": 0,
+        "error": null
       },
-      "pipelines": {}
+      "pipelines": {
+        "load": true,
+        "search": true,
+        "loadLinks": true,
+        "metadata": true,
+        "video": true,
+        "subtitles": true,
+        "cache": true,
+        "tmdb_playback_forbidden": true
+      },
+      "source": "DiziPal/src/main/kotlin/com/neoncs3/DiziPal.kt"
     },
     {
       "provider": "Dramadizilerim",
-      "status": "yellow",
+      "status": "green",
       "domain": "https://dramadizilerim.com",
+      "configured_domain": "https://dramadizilerim.com",
       "live": {
-        "ok": false,
-        "error": "NeonMainAPI provider source bulunamadı"
+        "ok": true,
+        "status_code": 200,
+        "final_url": "https://dramadizilerim.com",
+        "bytes": 193212,
+        "title": "Drama Dizilerim - Çin Drama &amp; Kore Drama İzle (Full HD)",
+        "media_hints": 0,
+        "iframe_hints": 0,
+        "error": null
       },
-      "pipelines": {}
+      "pipelines": {
+        "load": true,
+        "search": true,
+        "loadLinks": true,
+        "metadata": true,
+        "video": true,
+        "subtitles": true,
+        "cache": true,
+        "tmdb_playback_forbidden": true
+      },
+      "source": "Dramadizilerim/src/main/kotlin/com/neoncs3/Dramadizilerim.kt"
     },
     {
       "provider": "FilmModu",
-      "status": "yellow",
+      "status": "green",
       "domain": "https://www.filmmodu.one",
+      "configured_domain": "https://www.filmmodu.one",
       "live": {
-        "ok": false,
-        "error": "NeonMainAPI provider source bulunamadı"
+        "ok": true,
+        "status_code": 200,
+        "final_url": "https://www.filmmodu.one",
+        "bytes": 108039,
+        "title": "Filmmodu: Film izle, 1080p Kalitesinde HD Film izle",
+        "media_hints": 0,
+        "iframe_hints": 0,
+        "error": null
       },
-      "pipelines": {}
+      "pipelines": {
+        "load": true,
+        "search": true,
+        "loadLinks": true,
+        "metadata": true,
+        "video": true,
+        "subtitles": true,
+        "cache": true,
+        "tmdb_playback_forbidden": true
+      },
+      "source": "FilmModu/src/main/kotlin/com/neoncs3/FilmModu.kt"
     },
     {
       "provider": "JetFilmizle",
-      "status": "yellow",
+      "status": "green",
       "domain": "https://jetfilmizle.now",
+      "configured_domain": "https://jetfilmizle.now",
       "live": {
-        "ok": false,
-        "error": "NeonMainAPI provider source bulunamadı"
+        "ok": true,
+        "status_code": 200,
+        "final_url": "https://jetfilmizle.now",
+        "bytes": 284381,
+        "title": "JetFilmizle - Film İzle, Türkçe Dublaj, Altyazılı ve Yerli Filmler",
+        "media_hints": 0,
+        "iframe_hints": 0,
+        "error": null
       },
-      "pipelines": {}
+      "pipelines": {
+        "load": true,
+        "search": true,
+        "loadLinks": true,
+        "metadata": true,
+        "video": true,
+        "subtitles": true,
+        "cache": true,
+        "tmdb_playback_forbidden": true
+      },
+      "source": "JetFilmizle/src/main/kotlin/com/neoncs3/JetFilmizle.kt"
     },
     {
       "provider": "SetFilmIzle",
-      "status": "yellow",
+      "status": "green",
       "domain": "https://www.setfilmizle.ltd",
+      "configured_domain": "https://www.setfilmizle.ltd",
       "live": {
-        "ok": false,
-        "error": "NeonMainAPI provider source bulunamadı"
+        "ok": true,
+        "status_code": 200,
+        "final_url": "https://www.setfilmizle.ltd",
+        "bytes": 110323,
+        "title": "Set Film izle | HD Film | Yabancı Dizi",
+        "media_hints": 1,
+        "iframe_hints": 0,
+        "error": null
       },
-      "pipelines": {}
+      "pipelines": {
+        "load": true,
+        "search": true,
+        "loadLinks": true,
+        "metadata": true,
+        "video": true,
+        "subtitles": true,
+        "cache": true,
+        "tmdb_playback_forbidden": true
+      },
+      "source": "SetFilmIzle/src/main/kotlin/com/neoncs3/SetFilmIzle.kt"
     },
     {
       "provider": "SinemaCX",
       "status": "yellow",
       "domain": "https://sinemacc.com",
+      "configured_domain": "https://sinemacc.com",
       "live": {
-        "ok": false,
-        "error": "NeonMainAPI provider source bulunamadı"
+        "ok": true,
+        "status_code": 200,
+        "final_url": "https://sinemacc.com",
+        "bytes": 143411,
+        "title": "Film izle | Türkçe Dublaj HD Yabancı Filmler | Sinema CC",
+        "media_hints": 0,
+        "iframe_hints": 0,
+        "error": null
       },
-      "pipelines": {}
+      "pipelines": {
+        "load": true,
+        "search": true,
+        "loadLinks": true,
+        "metadata": true,
+        "video": true,
+        "subtitles": false,
+        "cache": false,
+        "tmdb_playback_forbidden": true
+      },
+      "source": "SinemaCX/src/main/kotlin/com/neoncs3/SinemaCX.kt"
     },
     {
       "provider": "WebDramaTurkey",
-      "status": "yellow",
+      "status": "green",
       "domain": "https://webdramaturkey2.com",
+      "configured_domain": "https://webdramaturkey2.com",
       "live": {
-        "ok": false,
-        "error": "NeonMainAPI provider source bulunamadı"
+        "ok": true,
+        "status_code": 200,
+        "final_url": "https://webdramaturkey2.com",
+        "bytes": 207523,
+        "title": "Web Drama Turkey - Kore, Çin, Japon Dizileri İzle",
+        "media_hints": 0,
+        "iframe_hints": 0,
+        "error": null
       },
-      "pipelines": {}
+      "pipelines": {
+        "load": true,
+        "search": true,
+        "loadLinks": true,
+        "metadata": true,
+        "video": true,
+        "subtitles": true,
+        "cache": true,
+        "tmdb_playback_forbidden": true
+      },
+      "source": "WebDramaTurkey/src/main/kotlin/com/neoncs3/WebDramaTurkey.kt"
     }
   ],
-  "green": 0,
-  "yellow": 10,
-  "red": 0
+  "green": 6,
+  "yellow": 1,
+  "red": 3
 }
