@@ -514,17 +514,23 @@ class DiziBoxizle : NeonMainAPI() {
         return document.select("a[href]")
             .mapNotNull { element ->
                 val href = fixUrlNull(element.attr("href")) ?: return@mapNotNull null
+                val label = element.text().trim()
                 val match = EPISODE_PATTERN.find(href)
                     ?: ALT_EPISODE_PATTERN.find(href)
+                    ?: SIMPLE_EPISODE_PATTERN.find(href)
+                    ?: EPISODE_LABEL_PATTERN.find(label)
+
+                if (match == null) return@mapNotNull null
+
+                val season = match.groupValues.getOrNull(1)?.toIntOrNull()
+                    ?: 1
+                val episode = match.groupValues.getOrNull(2)?.toIntOrNull()
                     ?: return@mapNotNull null
 
-                val season = match.groupValues.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
-                val episode = match.groupValues.getOrNull(2)?.toIntOrNull() ?: return@mapNotNull null
-
-                val label = element.text().trim().ifBlank { "$season. Sezon $episode. Bölüm" }
+                val displayLabel = label.ifBlank { "$season. Sezon $episode. Bölüm" }
 
                 newEpisode(href) {
-                    name = label
+                    name = displayLabel
                     this.season = season
                     this.episode = episode
                     posterUrl = posterFromElement(element, href) ?: guessedPoster(href)
@@ -765,7 +771,9 @@ class DiziBoxizle : NeonMainAPI() {
     }
 
     private fun isEpisodeUrl(url: String): Boolean {
-        return EPISODE_PATTERN.containsMatchIn(url) || ALT_EPISODE_PATTERN.containsMatchIn(url)
+        return EPISODE_PATTERN.containsMatchIn(url) ||
+            ALT_EPISODE_PATTERN.containsMatchIn(url) ||
+            SIMPLE_EPISODE_PATTERN.containsMatchIn(url)
     }
 
     private fun isExternalPlayer(url: String): Boolean {
@@ -971,6 +979,17 @@ class DiziBoxizle : NeonMainAPI() {
         // Fallback for /.../sezon-1-bolum-1/ style URLs.
         private val ALT_EPISODE_PATTERN = Regex(
             "(?i)/sezon-(\\d+)-bolum-(\\d+)(?:/|$)"
+        )
+
+        // Some current DiziBOX pages expose episode URLs as /...-1-bolum/.
+        private val SIMPLE_EPISODE_PATTERN = Regex(
+            "(?i)-(\\d+)-bolum(?:/|$)"
+        )
+
+        // Use visible episode text when the site changes the URL slug format.
+        // Captures: season, episode.
+        private val EPISODE_LABEL_PATTERN = Regex(
+            "(?i)(\\d+)\\.\\s*Sezon\\s*(\\d+)\\.\\s*Bölüm"
         )
     }
 }
