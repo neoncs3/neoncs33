@@ -147,12 +147,16 @@ class DiziPal : NeonMainAPI() {
         val isMovie = lower.contains("/movies/") || lower.contains("/movie/")
 
         if (isMovie) {
-            return newMovieLoadResponse(
+            return neonEnrichResponse(
+            newMovieLoadResponse(
                 title,
                 pageUrl,
                 TvType.Movie,
                 pageUrl,
-            ) {
+            ),
+            document = document,
+            baseUrl = pageUrl,
+        ) {
                 posterUrl = poster
                 this.plot = plot
                 this.year = year
@@ -162,11 +166,15 @@ class DiziPal : NeonMainAPI() {
 
         val episodes = parseEpisodes(document, poster)
 
-        return newTvSeriesLoadResponse(
+        return neonEnrichResponse(
+            newTvSeriesLoadResponse(
             title,
             pageUrl,
             TvType.TvSeries,
             episodes,
+        ),
+            document = document,
+            baseUrl = pageUrl,
         ) {
             posterUrl = poster
             this.plot = plot
