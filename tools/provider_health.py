@@ -75,7 +75,7 @@ def analyse(module: Path, domains: dict[str, str], scraper):
     if provider_file is None:
         return {
             "provider": module.name,
-            "status": "red",
+            "status": "yellow",
             "domain": domains.get(module.name, ""),
             "live": {"ok": False, "error": "NeonMainAPI provider source bulunamadı"},
             "pipelines": {},
@@ -84,8 +84,13 @@ def analyse(module: Path, domains: dict[str, str], scraper):
     source = provider_file.read_text(encoding="utf-8", errors="replace")
     configured = extract_main_url(source) or domains.get(module.name, "")
     live = live_check(scraper, configured) if configured else {
-        "ok": False, "status_code": None, "final_url": "", "bytes": 0,
-        "title": "", "media_hints": 0, "iframe_hints": 0,
+        "ok": False,
+        "status_code": None,
+        "final_url": "",
+        "bytes": 0,
+        "title": "",
+        "media_hints": 0,
+        "iframe_hints": 0,
         "error": "mainUrl bulunamadı",
     }
 
@@ -105,8 +110,8 @@ def analyse(module: Path, domains: dict[str, str], scraper):
     }
 
     source_ok = all(
-        pipelines[k]
-        for k in (
+        pipelines[key]
+        for key in (
             "load", "search", "loadLinks", "metadata",
             "video", "subtitles", "cache", "tmdb_playback_forbidden"
         )
