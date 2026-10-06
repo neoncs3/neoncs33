@@ -18,9 +18,26 @@ adb uninstall "${APP_ID}" || true
 ./gradlew :app:installPrereleaseDebug --no-daemon --stacktrace
 
 echo "=== CloudStream depolama yetkisi ==="
-adb shell pm path "${APP_ID}"
-adb shell appops set "${APP_ID}" MANAGE_EXTERNAL_STORAGE allow
+
+# Bu tanılama adımları emulator/Android sürümüne göre 0 dışı dönebilir.
+# Playback testinin sırf AppOps komutu yüzünden başlamasını engelleme.
+echo ">>> Kurulu APK:"
+if ! adb shell pm path "${APP_ID}"; then
+  echo "UYARI: pm path başarısız oldu; uygulamanın gerçekten kurulduğunu ayrıca kontrol edeceğiz."
+fi
+
+echo ">>> MANAGE_EXTERNAL_STORAGE AppOp:"
+if adb shell appops set "${APP_ID}" MANAGE_EXTERNAL_STORAGE allow; then
+  echo "MANAGE_EXTERNAL_STORAGE=allow ayarlandı."
+else
+  echo "UYARI: MANAGE_EXTERNAL_STORAGE AppOp ayarlanamadı; teste devam ediliyor."
+fi
+
 adb shell appops get "${APP_ID}" MANAGE_EXTERNAL_STORAGE || true
+
+echo ">>> External storage kontrolü:"
+adb shell mkdir -p "${PLUGIN_DIR}" || true
+adb shell ls -ld "/sdcard" "/sdcard/Cloudstream3" "${PLUGIN_DIR}" || true
 
 echo "=== Plugin klasörü hazırlanıyor ==="
 adb shell mkdir -p "${PLUGIN_DIR}"
