@@ -1,7 +1,97 @@
 {
-  "results": [],
+  "results": [
+    {
+      "provider": "AsyaFilmIzle",
+      "status": "FAIL",
+      "query": null,
+      "item": null,
+      "links": 0,
+      "positionMs": 0,
+      "error": "Test adaylarında çalışan gerçek playback bulunamadı"
+    },
+    {
+      "provider": "DiziBoxizle",
+      "status": "FAIL",
+      "query": null,
+      "item": null,
+      "links": 0,
+      "positionMs": 0,
+      "error": "Gerçek video bağlantısı bulunamadı"
+    },
+    {
+      "provider": "DiziPal",
+      "status": "FAIL",
+      "query": null,
+      "item": null,
+      "links": 0,
+      "positionMs": 0,
+      "error": "Test adaylarında çalışan gerçek playback bulunamadı"
+    },
+    {
+      "provider": "Dizigecesi",
+      "status": "FAIL",
+      "query": null,
+      "item": null,
+      "links": 0,
+      "positionMs": 0,
+      "error": "Test adaylarında çalışan gerçek playback bulunamadı"
+    },
+    {
+      "provider": "Dramadizilerim",
+      "status": "FAIL",
+      "query": null,
+      "item": null,
+      "links": 0,
+      "positionMs": 0,
+      "error": "Gerçek video bağlantısı bulunamadı"
+    },
+    {
+      "provider": "FilmModu",
+      "status": "FAIL",
+      "query": null,
+      "item": null,
+      "links": 0,
+      "positionMs": 0,
+      "error": "Source error"
+    },
+    {
+      "provider": "JetFilmizle",
+      "status": "FAIL",
+      "query": null,
+      "item": null,
+      "links": 0,
+      "positionMs": 0,
+      "error": "ExoPlayer playback ilerlemedi: position=0ms duration=0ms samples=0 firstFrame=false exoPlaying=true"
+    },
+    {
+      "provider": "SetFilmIzle",
+      "status": "FAIL",
+      "query": null,
+      "item": null,
+      "links": 0,
+      "positionMs": 0,
+      "error": "ExoPlayer playback ilerlemedi: position=0ms duration=0ms samples=0 firstFrame=false exoPlaying=true"
+    },
+    {
+      "provider": "SinemaCX",
+      "status": "FAIL",
+      "query": null,
+      "item": null,
+      "links": 0,
+      "positionMs": 0,
+      "error": "Source error"
+    },
+    {
+      "provider": "WebDramaTurkey",
+      "status": "FAIL",
+      "query": null,
+      "item": null,
+      "links": 0,
+      "positionMs": 0,
+      "error": "loadLinks=false"
+    }
+  ],
   "pass": 0,
   "blocked": 0,
-  "fail": 1,
-  "error": "Playback raporu okunamadı: Expecting value: line 1 column 1 (char 0)"
+  "fail": 10
 }
