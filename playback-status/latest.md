@@ -1,8 +1,18 @@
 # 🎬 NeonCS Gerçek Oynatma Durumu
 
-**PASS:** 0  **BLOCKED:** 0  **FAIL:** 1
+**PASS:** 5  **BLOCKED:** 4  **FAIL:** 1
 
-**Hata:** Playback raporu alınamadı ve logcat içinde NEON_PLAYBACK sonucu bulunamadı
+
 
 | Provider | Durum | Link | Position | Sorgu | İçerik | Hata |
 |---|---|---:|---:|---|---|---|
+| **AsyaFilmIzle** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
+| **DiziBoxizle** | 🔴 FAIL | 0 | 0 ms | - | - | Gerçek video bağlantısı bulunamadı |
+| **DiziPal** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
+| **Dizigecesi** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
+| **Dramadizilerim** | 🟢 PASS | 1 | 0 ms | - | YERALTI KRALINI BAŞTAN ÇIKAR | - |
+| **FilmModu** | 🟡 BLOCKED | 8 | 0 ms | - | Inception | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
+| **JetFilmizle** | 🟢 PASS | 1 | 0 ms | - | Yıldızlararası | - |
+| **SetFilmIzle** | 🟢 PASS | 1 | 0 ms | - | Başlangıç | - |
+| **SinemaCX** | 🟢 PASS | 2 | 0 ms | - | The Batman | - |
+| **WebDramaTurkey** | 🟢 PASS | 2 | 0 ms | - | Moving | - |
