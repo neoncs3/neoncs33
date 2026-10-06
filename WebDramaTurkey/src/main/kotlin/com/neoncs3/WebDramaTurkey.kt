@@ -326,7 +326,11 @@ class WebDramaTurkey : NeonMainAPI() {
         val isProgram = pageUrl.contains("/program/", true)
 
         if (isMovie) {
-            return newMovieLoadResponse(title, pageUrl, TvType.Movie, pageUrl) {
+            return neonEnrichResponse(
+            newMovieLoadResponse(title, pageUrl, TvType.Movie, pageUrl),
+            document = document,
+            baseUrl = pageUrl,
+        ) {
                 posterUrl = poster
                 posterHeaders = mapOf("User-Agent" to USER_AGENT, "Referer" to "$mainUrl/")
                 this.plot = plot
@@ -368,7 +372,11 @@ class WebDramaTurkey : NeonMainAPI() {
         }.distinctBy { it.data }
 
         if (isAnime) {
-            return newAnimeLoadResponse(title, pageUrl, TvType.Anime) {
+            return neonEnrichResponse(
+            newAnimeLoadResponse(title, pageUrl, TvType.Anime),
+            document = document,
+            baseUrl = pageUrl,
+        ) {
                 posterUrl = poster
                 posterHeaders = mapOf("User-Agent" to USER_AGENT, "Referer" to "$mainUrl/")
                 this.plot = plot
@@ -382,7 +390,11 @@ class WebDramaTurkey : NeonMainAPI() {
         }
 
         if (isProgram) {
-            return newTvSeriesLoadResponse(title, pageUrl, TvType.Others, episodes) {
+            return neonEnrichResponse(
+            newTvSeriesLoadResponse(title, pageUrl, TvType.Others, episodes),
+            document = document,
+            baseUrl = pageUrl,
+        ) {
                 posterUrl = poster
                 posterHeaders = mapOf("User-Agent" to USER_AGENT, "Referer" to "$mainUrl/")
                 this.plot = plot
@@ -395,7 +407,11 @@ class WebDramaTurkey : NeonMainAPI() {
             }
         }
 
-        return newTvSeriesLoadResponse(title, pageUrl, TvType.AsianDrama, episodes) {
+        return neonEnrichResponse(
+            newTvSeriesLoadResponse(title, pageUrl, TvType.AsianDrama, episodes),
+            document = document,
+            baseUrl = pageUrl,
+        ) {
             posterUrl = poster
             posterHeaders = mapOf("User-Agent" to USER_AGENT, "Referer" to "$mainUrl/")
             this.plot = plot
