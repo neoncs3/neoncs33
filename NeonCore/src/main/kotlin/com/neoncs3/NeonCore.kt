@@ -39,9 +39,9 @@ open class NeonMainAPI : MainAPI() {
             }
             ?.replace("\\/", "/")
             ?.replace("&amp;", "&")
-            ?.replace("&quot;", """)
+            ?.replace("&quot;", "\"")
             ?.replace("&#39;", "'")
-            ?.replace("\\"", """)
+            ?.replace("\\\"", "\"")
             ?.replace("\\'", "'")
             ?.trim()
             ?.takeIf { it.isNotBlank() }
@@ -62,7 +62,7 @@ open class NeonMainAPI : MainAPI() {
 
     protected fun neonExtractYear(text: String?): Int? {
         val value = text.orEmpty()
-        return Regex("""(?<!\\d)(?:19|20)\\d{2}(?!\\d)""")
+        return Regex("""(?<!\d)(?:19|20)\d{2}(?!\d)""")
             .find(value)
             ?.value
             ?.toIntOrNull()
@@ -71,11 +71,11 @@ open class NeonMainAPI : MainAPI() {
     protected fun neonExtractRating(text: String?): Double? {
         val value = text.orEmpty()
         val labelled = Regex(
-            """(?i)(?:IMDb|IMDB|rating|puan)\\s*[:/\\-]?\\s*(10(?:[.,]0)?|[0-9](?:[.,][0-9])?)"""
+            """(?i)(?:IMDb|IMDB|rating|puan)\s*[:/\\-]?\s*(10(?:[.,]0)?|[0-9](?:[.,][0-9])?)"""
         ).find(value)
 
         val candidate = labelled?.groupValues?.getOrNull(1)
-            ?: Regex("""(?<!\\d)([0-9](?:[.,][0-9])?)(?!\\d)""")
+            ?: Regex("""(?<!\d)([0-9](?:[.,][0-9])?)(?!\d)""")
                 .find(value)
                 ?.groupValues
                 ?.getOrNull(1)
@@ -124,7 +124,7 @@ open class NeonMainAPI : MainAPI() {
 
     protected fun neonMediaQuality(url: String): Int {
         val value = url.lowercase()
-        Regex("""(?<!\\d)(2160|1440|1080|720|576|540|480|360|240|144)(?:p|k)?(?!\\d)""")
+        Regex("""(?<!\d)(2160|1440|1080|720|576|540|480|360|240|144)(?:p|k)?(?!\d)""")
             .find(value)
             ?.groupValues
             ?.getOrNull(1)
@@ -167,7 +167,7 @@ open class NeonMainAPI : MainAPI() {
         if (normalized.isBlank()) return emptyList()
 
         val directPattern = Regex(
-            """(?i)(?:https?:)?//[^"'<>\\s]+?(?:\\.m3u8|\\.mpd|\\.mp4|\\.m4v|\\.webm|\\.mov)(?:\\?[^"'<>\\s]*)?"""
+            """(?i)(?:https?:)?//[^"'<>\s]+?(?:\.m3u8|\.mpd|\.mp4|\.m4v|\.webm|\.mov)(?:\\?[^"'<>\s]*)?"""
         )
 
         return directPattern
@@ -334,9 +334,7 @@ open class NeonMainAPI : MainAPI() {
 
             if (depth < maxDepth) {
                 neonExtractIframeUrls(document, normalized).forEach { iframe ->
-                    runCatching {
-                        visit(iframe, normalized, depth + 1)
-                    }
+                    visit(iframe, normalized, depth + 1)
                 }
             }
         }
