@@ -30,7 +30,11 @@ class NeonPlaybackSmokeTest {
         private const val MAX_CANDIDATES_PER_PROVIDER = 6
     }
 
-    data class Target(val name: String, val queries: List<String>)
+    data class Target(
+        val name: String,
+        val queries: List<String>,
+        val directUrls: List<String> = emptyList(),
+    )
     data class Result(
         val provider: String,
         val status: String,
@@ -43,7 +47,13 @@ class NeonPlaybackSmokeTest {
 
     private val targets = listOf(
         Target("AsyaFilmIzle", listOf("Squid Game", "Wednesday", "The Last of Us")),
-        Target("DiziBoxizle", listOf("Breaking Bad", "Wednesday", "The Last of Us")),
+        Target(
+            "DiziBoxizle",
+            listOf("Breaking Bad", "Wednesday", "The Last of Us"),
+            // A current public episode page is included as an extractor-only control.
+            // This separates search/load failures from loadLinks/provider failures.
+            listOf("https://diziboxizle.com/the-lowdown-1-sezon-1-bolum/"),
+        ),
         Target("DiziPal", listOf("Wednesday", "The Last of Us", "Stranger Things")),
         Target("Dizigecesi", listOf("Wednesday", "The Last of Us", "The Boys")),
         Target("Dramadizilerim", listOf("Squid Game", "Moving", "Hidden Love")),
@@ -307,6 +317,17 @@ class NeonPlaybackSmokeTest {
         target: Target,
     ): List<SearchResponse> {
         val searchCandidates = mutableListOf<SearchResponse>()
+
+        // Direct control URLs test the provider resolver independently from search.
+        for (url in target.directUrls) {
+            searchCandidates.add(
+                newTvSeriesSearchResponse(
+                    name = target.name,
+                    url = url,
+                    type = TvType.TvSeries,
+                )
+            )
+        }
 
         // Playback smoke testinde hedef içerik, ana sayfadaki rastgele güncel
         // içerikten daha değerlidir. Önce bilinen arama sorgularını dene; aksi
