@@ -2,12 +2,12 @@
   "results": [
     {
       "provider": "AsyaFilmIzle",
-      "status": "FAIL",
+      "status": "BLOCKED",
       "query": null,
       "item": null,
       "links": 0,
       "positionMs": 0,
-      "error": "Test adaylarında çalışan gerçek playback bulunamadı"
+      "error": "Provider origin HTTP 403"
     },
     {
       "provider": "DiziBoxizle",
@@ -20,30 +20,30 @@
     },
     {
       "provider": "DiziPal",
-      "status": "FAIL",
+      "status": "BLOCKED",
       "query": null,
       "item": null,
       "links": 0,
       "positionMs": 0,
-      "error": "Test adaylarında çalışan gerçek playback bulunamadı"
+      "error": "Provider origin HTTP 403"
     },
     {
       "provider": "Dizigecesi",
-      "status": "FAIL",
+      "status": "BLOCKED",
       "query": null,
       "item": null,
       "links": 0,
       "positionMs": 0,
-      "error": "Test adaylarında çalışan gerçek playback bulunamadı"
+      "error": "Provider origin HTTP 403"
     },
     {
       "provider": "Dramadizilerim",
-      "status": "FAIL",
+      "status": "PASS",
       "query": null,
-      "item": null,
-      "links": 0,
+      "item": "YENİDEN DOĞDUM: CEHENNEMİMİ ONA VERDİM",
+      "links": 1,
       "positionMs": 0,
-      "error": "Gerçek video bağlantısı bulunamadı"
+      "error": null
     },
     {
       "provider": "FilmModu",
@@ -56,42 +56,42 @@
     },
     {
       "provider": "JetFilmizle",
-      "status": "FAIL",
+      "status": "PASS",
       "query": null,
-      "item": null,
-      "links": 0,
+      "item": "Örümcek-Adam: Yepyeni Bir Gün",
+      "links": 1,
       "positionMs": 0,
-      "error": "ExoPlayer playback ilerlemedi: position=0ms duration=0ms samples=0 firstFrame=false exoPlaying=true"
+      "error": null
     },
     {
       "provider": "SetFilmIzle",
-      "status": "FAIL",
+      "status": "PASS",
       "query": null,
-      "item": null,
-      "links": 0,
+      "item": "Örümcek-Adam: Yepyeni Bir Gün",
+      "links": 1,
       "positionMs": 0,
-      "error": "ExoPlayer playback ilerlemedi: position=0ms duration=0ms samples=0 firstFrame=false exoPlaying=true"
+      "error": null
     },
     {
       "provider": "SinemaCX",
-      "status": "FAIL",
+      "status": "PASS",
       "query": null,
-      "item": null,
-      "links": 0,
+      "item": "The Uprising",
+      "links": 2,
       "positionMs": 0,
-      "error": "Source error"
+      "error": null
     },
     {
       "provider": "WebDramaTurkey",
-      "status": "FAIL",
+      "status": "PASS",
       "query": null,
-      "item": null,
-      "links": 0,
+      "item": "Love Legend - 1. Sezon 16. Bölüm",
+      "links": 3,
       "positionMs": 0,
-      "error": "loadLinks=false"
+      "error": null
     }
   ],
-  "pass": 0,
-  "blocked": 0,
-  "fail": 10
+  "pass": 5,
+  "blocked": 3,
+  "fail": 2
 }
