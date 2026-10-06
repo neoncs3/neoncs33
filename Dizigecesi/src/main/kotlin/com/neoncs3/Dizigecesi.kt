@@ -97,7 +97,14 @@ class Dizigecesi : NeonMainAPI() {
     override val mainPage = mainPageOf(
         "${mainUrl}/diziler" to "Popüler Diziler",
         "${mainUrl}/filmler" to "Yeni Filmler",
-        "${mainUrl}/diziler?filter={%22category%22:%221%22,%22sorting%22:%22newest%22}" to "Aile"
+        "${mainUrl}/tur/aksiyon" to "Aksiyon",
+        "${mainUrl}/tur/bilim-kurgu" to "Bilimkurgu",
+        "${mainUrl}/tur/fantastik" to "Fantastik",
+        "${mainUrl}/tur/gerilim" to "Gerilim",
+        "${mainUrl}/tur/gizem" to "Gizem",
+        "${mainUrl}/tur/korku" to "Korku",
+        "${mainUrl}/tur/romantik" to "Romantik",
+        "${mainUrl}/tur/aile" to "Aile"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
