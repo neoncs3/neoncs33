@@ -213,6 +213,15 @@ class DiziBoxizle : NeonMainAPI() {
         }.decodeEmbeddedText()
 
         val candidates = LinkedHashSet<String>()
+        // Native CloudStream extractors can report true merely because an extractor
+        // matched the URL; that does not guarantee that an ExtractorLink was emitted.
+        // Track emitted links so we can fall back to the local VidMoly/JS parser when
+        // the native extractor matches but produces no playable link.
+        val emittedLinks = java.util.Collections.synchronizedList(mutableListOf<ExtractorLink>())
+        val emitCallback: (ExtractorLink) -> Unit = { link ->
+            emittedLinks.add(link)
+            callback(link)
+        }
 
         // 1) iframe/embed/provider links shown by DiziBOX.
         document.select(
@@ -292,7 +301,7 @@ class DiziBoxizle : NeonMainAPI() {
                     emitMediaLink(
                         clean,
                         episodeUrl,
-                        callback,
+                        emitCallback,
                     )
                     found = true
                 }
@@ -301,29 +310,39 @@ class DiziBoxizle : NeonMainAPI() {
                     // Prefer CloudStream's native extractor first. The current Vidmoly
                     // extractor knows how to normalize /w/... embeds and resolve JWPlayer
                     // sources directly.
+                    val emittedBefore = emittedLinks.size
                     val extracted = runCatching {
                         loadExtractor(
                             clean,
                             episodeUrl,
                             subtitleCallback,
-                            callback,
+                            emitCallback,
                         )
                     }.getOrDefault(false)
+                    val nativeEmitted = emittedLinks.size > emittedBefore
 
-                    // Keep the local provider parser as a fallback for providers/variants
-                    // that are not handled by a native extractor.
-                    val providerFound = if (!extracted) {
+                    // loadExtractor() returns true when an extractor matches the host,
+                    // even when that extractor throws internally or emits no links.
+                    // In that case the local provider parser must still get a chance.
+                    if (extracted && !nativeEmitted) {
+                        Log.w(
+                            "DZBX",
+                            "Native extractor matched but emitted no link; local fallback: $clean",
+                        )
+                    }
+
+                    val providerFound = if (!nativeEmitted) {
                         extractProviderMedia(
                             clean,
                             episodeUrl,
                             subtitleCallback,
-                            callback,
+                            emitCallback,
                         )
                     } else {
                         false
                     }
 
-                    found = providerFound || extracted || found
+                    found = providerFound || nativeEmitted || found
                 }            }
         }
 
