@@ -9,6 +9,7 @@ import re
 import base64
 import json
 from datetime import datetime, timezone
+from urllib.parse import quote, urlparse
 
 
 class MainUrlUpdater:
@@ -31,6 +32,9 @@ class MainUrlUpdater:
         )
         self.domain_status_dir = os.path.join(
             self.base_dir, "domain-status"
+        )
+        self.domain_candidates_path = os.path.join(
+            self.base_dir, "NeonCore", "domain-candidates.json"
         )
         self.domain_status_path = os.path.join(
             self.domain_status_dir, "status.json"
@@ -160,6 +164,82 @@ class MainUrlUpdater:
         match = re.match(r"^https?://[^/]+", url.strip())
         return match.group(0).rstrip("/") if match else None
 
+    def _domain_adaylarini_oku(self):
+        if not os.path.isfile(self.domain_candidates_path):
+            return {}
+        try:
+            with open(self.domain_candidates_path, "r", encoding="utf-8") as file:
+                data = json.load(file)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def _domain_adaylari(self, eklenti_adi, mainurl):
+        data = self._domain_adaylarini_oku().get(eklenti_adi, {})
+        candidates = data.get("candidates", []) if isinstance(data, dict) else []
+        values = [mainurl] + [value for value in candidates if isinstance(value, str)]
+        try:
+            parsed = urlparse(mainurl)
+            host = parsed.hostname or ""
+            if host.startswith("www."):
+                values.append(mainurl.replace("://www.", "://", 1))
+            elif host:
+                values.append(mainurl.replace("://", "://www.", 1))
+        except Exception:
+            pass
+        return list(dict.fromkeys(value.rstrip("/") for value in values if value))
+
+    def _domain_belirtecleri(self, eklenti_adi):
+        data = self._domain_adaylarini_oku().get(eklenti_adi, {})
+        markers = data.get("markers", []) if isinstance(data, dict) else []
+        return [m.lower().strip() for m in markers if isinstance(m, str) and m.strip()]
+
+    def _domain_icerigi_uygun(self, eklenti_adi, response):
+        markers = self._domain_belirtecleri(eklenti_adi)
+        if not markers:
+            return True
+        return any(marker in getattr(response, "text", "")[:1500000].lower() for marker in markers)
+
+    def _arama_ile_domain_ara(self, eklenti_adi, mainurl):
+        query = quote(f'"{eklenti_adi}" "{mainurl}"')
+        try:
+            response = self.oturum.get(
+                "https://html.duckduckgo.com/html/?q=" + query,
+                timeout=15,
+            )
+            if not response.ok:
+                return None
+            html = response.text
+        except Exception:
+            return None
+
+        urls = re.findall(r'href=["\'](https?://[^"\']+)["\']', html, re.I)
+        blocked = {
+            "duckduckgo.com", "google.com", "bing.com", "youtube.com",
+            "facebook.com", "instagram.com", "x.com",
+        }
+        seen = set()
+
+        for value in urls:
+            try:
+                parsed = urlparse(value)
+            except Exception:
+                continue
+            host = (parsed.hostname or "").lower()
+            if not host or host in seen:
+                continue
+            if any(host == item or host.endswith("." + item) for item in blocked):
+                continue
+            seen.add(host)
+            candidate = f"{parsed.scheme}://{host}"
+            try:
+                page = self.oturum.get(candidate, allow_redirects=True, timeout=12)
+                if page.ok and self._domain_icerigi_uygun(eklenti_adi, page):
+                    return self._guvenli_domain(page.url) or candidate
+            except Exception:
+                continue
+        return None
+
     def _domain_durumlarini_oku(self):
         if not os.path.isfile(self.domain_status_path):
             return {}
@@ -176,12 +256,12 @@ class MainUrlUpdater:
         durumlar,
         eklenti_adi,
         mevcut_domain,
-        kontrol_domaini,
+        kontrol_domaini=None,
+        durum="unchanged",
     ):
         eski = durumlar.get(eklenti_adi, {})
-        degisti = mevcut_domain != kontrol_domaini
 
-        if degisti:
+        if durum == "changed" and kontrol_domaini:
             durumlar[eklenti_adi] = {
                 "status": "changed",
                 "domain": kontrol_domaini,
@@ -192,10 +272,10 @@ class MainUrlUpdater:
             }
             return
 
-        if eski.get("status") == "changed":
+        if durum == "unreachable":
             durumlar[eklenti_adi] = {
-                "status": "changed",
-                "domain": kontrol_domaini,
+                "status": "unreachable",
+                "domain": mevcut_domain,
                 "previous_domain": eski.get("previous_domain"),
                 "changed_at": eski.get("changed_at"),
             }
@@ -203,9 +283,9 @@ class MainUrlUpdater:
 
         durumlar[eklenti_adi] = {
             "status": "unchanged",
-            "domain": kontrol_domaini,
-            "previous_domain": None,
-            "changed_at": None,
+            "domain": kontrol_domaini or mevcut_domain,
+            "previous_domain": eski.get("previous_domain"),
+            "changed_at": eski.get("changed_at"),
         }
 
     def _domain_durumlarini_yaz(self, durumlar):
@@ -249,6 +329,10 @@ class MainUrlUpdater:
                 ikon = "🔄 **DEĞİŞTİ**"
                 previous = veri.get("previous_domain") or "-"
                 changed_at = veri.get("changed_at") or "-"
+            elif status == "unreachable":
+                ikon = "⚠️ **ULAŞILAMIYOR**"
+                previous = veri.get("previous_domain") or "-"
+                changed_at = veri.get("changed_at") or "-"
             else:
                 ikon = "✅ **DEĞİŞMEDİ**"
                 previous = "-"
@@ -266,6 +350,8 @@ class MainUrlUpdater:
             "🔄 **DEĞİŞTİ** = Son kontrolde domain değişti.",
             "",
             "✅ **DEĞİŞMEDİ** = Son kontrolde domain aynı kaldı.",
+            "",
+            "⚠️ **ULAŞILAMIYOR** = Domain yanıt vermedi veya içerik doğrulanamadı.",
         ])
 
         index_yeni = "\n".join(index_lines) + "\n"
@@ -365,30 +451,50 @@ class MainUrlUpdater:
 
             final_url = None
 
-            try:
-                if eklenti_adi == "RecTV":
-                    final_url = self._rectv_ver()
-                elif eklenti_adi == "GolgeTV":
-                    final_url = self._golgetv_ver()
-                else:
-                    istek = self.oturum.get(
-                        mainurl,
+            # 1) Kayıtlı domain -> 2) aday domainler -> 3) kontrollü web keşfi.
+            for aday in self._domain_adaylari(eklenti_adi, mainurl):
+                try:
+                    response = self.oturum.get(
+                        aday,
                         allow_redirects=True,
                         timeout=20,
                     )
-                    if not istek.ok:
-                        raise RuntimeError(f"HTTP {istek.status_code}")
-                    final_url = istek.url.rstrip("/")
-            except Exception as hata:
+                    if not response.ok:
+                        raise RuntimeError(f"HTTP {response.status_code}")
+                    if not self._domain_icerigi_uygun(eklenti_adi, response):
+                        raise RuntimeError("site içeriği doğrulanamadı")
+                    final_url = response.url.rstrip("/")
+                    break
+                except Exception as hata:
+                    konsol.log(
+                        f"[!] Aday başarısız : {aday} -> "
+                        f"{type(hata).__name__}: {hata}"
+                    )
+
+            if final_url is None:
+                final_url = self._arama_ile_domain_ara(eklenti_adi, mainurl)
+
+            if final_url is None:
                 konsol.log(f"[!] Kontrol Edilemedi : {mainurl}")
-                konsol.log(f"[!] {type(hata).__name__} : {hata}")
                 domains[eklenti_adi] = self._guvenli_domain(mainurl) or mainurl
+                self._domain_durumunu_guncelle(
+                    durumlar,
+                    eklenti_adi,
+                    mainurl,
+                    durum="unreachable",
+                )
                 continue
 
             final_url = self._guvenli_domain(final_url)
             if not final_url:
                 konsol.log(f"[!] Geçersiz domain yanıtı : {mainurl}")
                 domains[eklenti_adi] = self._guvenli_domain(mainurl) or mainurl
+                self._domain_durumunu_guncelle(
+                    durumlar,
+                    eklenti_adi,
+                    mainurl,
+                    durum="unreachable",
+                )
                 continue
 
             domains[eklenti_adi] = final_url
@@ -397,6 +503,7 @@ class MainUrlUpdater:
                 eklenti_adi,
                 mainurl,
                 final_url,
+                durum="changed" if mainurl != final_url else "unchanged",
             )
             konsol.log(f"[+] Kontrol Edildi   : {mainurl}")
 

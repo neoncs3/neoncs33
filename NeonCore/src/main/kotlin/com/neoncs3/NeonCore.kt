@@ -17,6 +17,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.json.JSONObject
 import java.net.URI
+import kotlinx.coroutines.delay
 
 /**
  * Shared runtime helpers for every NeonCS provider.
@@ -224,11 +225,14 @@ open class NeonMainAPI : MainAPI() {
     }
 
     protected fun neonExtractIframeUrls(document: Document, baseUrl: String = mainUrl): List<String> {
-        return document.select("iframe[src], iframe[data-src], iframe[data-url]")
+        return document.select("iframe[src], iframe[data-src], iframe[data-url], iframe[data-vsrc], iframe[data-video-src], iframe[data-player]")
             .mapNotNull {
                 val value = it.attr("src")
+                    .ifBlank { it.attr("data-vsrc") }
+                    .ifBlank { it.attr("data-video-src") }
                     .ifBlank { it.attr("data-src") }
                     .ifBlank { it.attr("data-url") }
+                    .ifBlank { it.attr("data-player") }
 
                 neonNormalizeUrl(value, baseUrl).takeIf { url -> url.isNotBlank() }
             }
@@ -350,21 +354,21 @@ open class NeonMainAPI : MainAPI() {
             }
 
             val cacheKey = "html:$normalized"
-            val html = NeonMemoryCache.get(cacheKey) ?: runCatching {
-                app.get(
-                    normalized,
-                    headers = neonHeaders + ("Referer" to referer),
-                    referer = referer,
-                    timeout = neonRequestTimeoutMs.toLong(),
-                    allowRedirects = true,
-                ).takeIf { it.isSuccessful }?.text
-            }.getOrNull()?.also {
-                NeonMemoryCache.put(cacheKey, it, neonCacheTtlMs)
+            val cached = NeonMemoryCache.get(cacheKey)
+            val fetched = if (cached != null) {
+                normalized to cached
+            } else {
+                neonGetHtmlWithFallback(normalized, referer)
+                    ?.also { (requestUrl, html) ->
+                        NeonMemoryCache.put(cacheKey, html, neonCacheTtlMs)
+                    }
             }
 
+            val html = fetched?.second
+            val documentBase = fetched?.first ?: normalized
             if (html.isNullOrBlank()) return
 
-            val document = Jsoup.parse(html, normalized)
+            val document = Jsoup.parse(html, documentBase)
 
             neonExtractMediaUrls(html).forEach { media ->
                 if (!mediaSeen.add(media)) return@forEach
@@ -636,6 +640,33 @@ open class NeonMainAPI : MainAPI() {
         ).distinctBy { it.first }
     }
 
+    private suspend fun neonGetHtmlWithFallback(
+        url: String,
+        referer: String,
+        attempts: Int = 2,
+    ): Pair<String, String>? {
+        for ((requestUrl, requestReferer) in neonRuntimeCandidates(url, referer)) {
+            repeat(attempts.coerceIn(1, 3)) { attempt ->
+                val response = runCatching {
+                    app.get(
+                        requestUrl,
+                        headers = neonHeaders + ("Referer" to requestReferer),
+                        referer = requestReferer,
+                        timeout = neonRequestTimeoutMs.toLong(),
+                        allowRedirects = true,
+                    )
+                }.getOrNull()
+
+                if (response?.isSuccessful == true && response.text.isNotBlank()) {
+                    return requestUrl to response.text
+                }
+
+                if (attempt + 1 < attempts) delay(250L)
+            }
+        }
+        return null
+    }
+
     protected suspend fun neonCachedHtml(
         url: String,
         referer: String = mainUrl,
@@ -647,21 +678,10 @@ open class NeonMainAPI : MainAPI() {
         val key = "html:$normalized"
         NeonMemoryCache.get(key)?.let { return it }
 
-        for ((requestUrl, requestReferer) in neonRuntimeCandidates(normalized, referer)) {
-            val html = runCatching {
-                app.get(
-                    requestUrl,
-                    headers = neonHeaders + ("Referer" to requestReferer),
-                    referer = requestReferer,
-                    timeout = neonRequestTimeoutMs.toLong(),
-                    allowRedirects = true,
-                ).takeIf { it.isSuccessful }?.text
-            }.getOrNull()
-
-            if (!html.isNullOrBlank()) {
-                NeonMemoryCache.put(key, html, ttlMs)
-                return html
-            }
+        val fetched = neonGetHtmlWithFallback(normalized, referer)
+        if (fetched != null) {
+            NeonMemoryCache.put(key, fetched.second, ttlMs)
+            return fetched.second
         }
 
         return null

@@ -1,0 +1,103 @@
+{
+  "AsyaFilmIzle": {
+    "candidates": [
+      "https://asyafilmizle.com",
+      "https://www.asyafilmizle.com"
+    ],
+    "markers": [
+      "asyafilmizle",
+      "asya film"
+    ]
+  },
+  "DiziBoxizle": {
+    "candidates": [
+      "https://diziboxizle.com",
+      "https://www.diziboxizle.com"
+    ],
+    "markers": [
+      "dizibox",
+      "diziboxizle"
+    ]
+  },
+  "DiziPal": {
+    "candidates": [
+      "https://dizipal1586.com",
+      "https://www.dizipal1586.com"
+    ],
+    "markers": [
+      "dizipal",
+      "dizipal1586"
+    ]
+  },
+  "Dizigecesi": {
+    "candidates": [
+      "https://dizigecesi.com",
+      "https://www.dizigecesi.com"
+    ],
+    "markers": [
+      "dizigecesi",
+      "dizi gecesi"
+    ]
+  },
+  "Dramadizilerim": {
+    "candidates": [
+      "https://dramadizilerim.com",
+      "https://www.dramadizilerim.com"
+    ],
+    "markers": [
+      "dramadizilerim",
+      "drama dizilerim"
+    ]
+  },
+  "FilmModu": {
+    "candidates": [
+      "https://www.filmmodu.one",
+      "https://filmmodu.one"
+    ],
+    "markers": [
+      "filmmodu",
+      "film modu"
+    ]
+  },
+  "JetFilmizle": {
+    "candidates": [
+      "https://jetfilmizle.now",
+      "https://www.jetfilmizle.now"
+    ],
+    "markers": [
+      "jetfilmizle",
+      "jet film"
+    ]
+  },
+  "SetFilmIzle": {
+    "candidates": [
+      "https://www.setfilmizle.ltd",
+      "https://setfilmizle.ltd"
+    ],
+    "markers": [
+      "setfilmizle",
+      "set film"
+    ]
+  },
+  "SinemaCX": {
+    "candidates": [
+      "https://sinemacc.com",
+      "https://www.sinemacc.com"
+    ],
+    "markers": [
+      "sinemacc",
+      "sinema cc",
+      "sinemacx"
+    ]
+  },
+  "WebDramaTurkey": {
+    "candidates": [
+      "https://webdramaturkey2.com",
+      "https://www.webdramaturkey2.com"
+    ],
+    "markers": [
+      "webdramaturkey",
+      "web drama turkey"
+    ]
+  }
+}
