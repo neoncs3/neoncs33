@@ -110,7 +110,11 @@ class DiziBoxizle : NeonMainAPI() {
         // Movies use /film/{slug}/ on the current site.
         if ("/film/" in path) {
             val title = pageTitle(document) ?: return null
-            return newMovieLoadResponse(title, normalizedUrl, TvType.Movie, normalizedUrl) {
+            return neonEnrichResponse(
+            newMovieLoadResponse(title, normalizedUrl, TvType.Movie, normalizedUrl),
+            document = document,
+            baseUrl = normalizedUrl,
+        ) {
                 posterUrl = posterOf(document)
                 plot = pagePlot(document)
                 year = pageYear(document)
@@ -138,12 +142,16 @@ class DiziBoxizle : NeonMainAPI() {
                 posterUrl = posterOf(document)
             }
 
-            return newTvSeriesLoadResponse(
+            return neonEnrichResponse(
+            newTvSeriesLoadResponse(
                 seriesTitle,
                 normalizedUrl,
                 TvType.TvSeries,
                 listOf(singleEpisode),
-            ) {
+            ),
+            document = document,
+            baseUrl = normalizedUrl,
+        ) {
                 posterUrl = posterOf(document)
                 plot = pagePlot(document)
                 year = pageYear(document)
@@ -157,7 +165,11 @@ class DiziBoxizle : NeonMainAPI() {
 
         if (episodes.isEmpty()) return null
 
-        return newTvSeriesLoadResponse(title, normalizedUrl, TvType.TvSeries, episodes) {
+        return neonEnrichResponse(
+            newTvSeriesLoadResponse(title, normalizedUrl, TvType.TvSeries, episodes),
+            document = document,
+            baseUrl = normalizedUrl,
+        ) {
             posterUrl = posterOf(document)
             plot = pagePlot(document)
             year = pageYear(document)
