@@ -179,3 +179,4 @@ class NeonPlaybackSmokeTest {
         assertTrue("Gerçek playback FAIL bulundu: ${results.filter { it.status == "FAIL" }}", results.none { it.status == "FAIL" })
     }
 }
+// smoke trigger v2
