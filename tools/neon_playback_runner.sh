@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_ID="com.lagradost.cloudstream3.prerelease.debug"
+APP_ID="com.lagradost.cloudstream3.prerelease"
 REPORT="${RUNNER_TEMP}/neon-playback-report.json"
 LOG="${GITHUB_WORKSPACE}/playback-status/logcat.txt"
 INSTRUMENTATION_LOG="${GITHUB_WORKSPACE}/playback-status/instrumentation.log"
@@ -16,6 +16,11 @@ trap 'adb logcat -d -v time > "${LOG}" || true' EXIT
 echo "=== CloudStream temiz kurulum ==="
 adb uninstall "${APP_ID}" || true
 ./gradlew :app:installPrereleaseDebug --no-daemon --stacktrace
+
+echo "=== CloudStream depolama yetkisi ==="
+adb shell pm path "${APP_ID}"
+adb shell appops set "${APP_ID}" MANAGE_EXTERNAL_STORAGE allow
+adb shell appops get "${APP_ID}" MANAGE_EXTERNAL_STORAGE || true
 
 echo "=== Plugin klasörü hazırlanıyor ==="
 adb shell mkdir -p "${PLUGIN_DIR}"
@@ -44,6 +49,7 @@ done
 
 echo "=== Emulator plugin dosyaları ==="
 adb shell ls -lah "${PLUGIN_DIR}"
+adb shell "run-as ${APP_ID} ls -lah ${PLUGIN_DIR}" || true
 
 echo "=== Gerçek CloudStream / ExoPlayer testi ==="
 set +e
