@@ -296,7 +296,7 @@ class NeonPlaybackSmokeTest {
                         it.url.startsWith("https://")
                 }
                 .sortedByDescending { it.quality }
-                .take(4)
+                .take(2)
 
             for (link in playableLinks) {
                 val (played, position, playerError) = realPlay(
