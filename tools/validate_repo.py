@@ -17,7 +17,10 @@ required = [
     "NeonCore/domain-candidates.json",
     "NeonCore/src/main/kotlin/com/neoncs3/NeonCore.kt",
     "tools/provider_health.py",
+    "tools/NeonPlaybackSmokeTest.kt",
+    "tools/format_playback_report.py",
     ".github/workflows/Saglik.yml",
+    ".github/workflows/Oynatma.yml",
 ]
 for item in required:
     if not (ROOT / item).exists():
