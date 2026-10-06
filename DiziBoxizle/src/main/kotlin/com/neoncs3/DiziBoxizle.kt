@@ -111,15 +111,17 @@ class DiziBoxizle : NeonMainAPI() {
         if ("/film/" in path) {
             val title = pageTitle(document) ?: return null
             return neonEnrichResponse(
-            newMovieLoadResponse(title, normalizedUrl, TvType.Movie, normalizedUrl),
-            document = document,
-            baseUrl = normalizedUrl,
-        ) {
+            newMovieLoadResponse(title, normalizedUrl, TvType.Movie, normalizedUrl) {
+
                 posterUrl = posterOf(document)
                 plot = pagePlot(document)
                 year = pageYear(document)
                 pageRating(document)?.let { score = Score.from10(it) }
-            }
+            
+            },
+            document = document,
+            baseUrl = normalizedUrl,
+        )
         }
 
         // The site's "Son Bölümler" list links directly to episode pages.
@@ -148,15 +150,17 @@ class DiziBoxizle : NeonMainAPI() {
                 normalizedUrl,
                 TvType.TvSeries,
                 listOf(singleEpisode),
-            ),
-            document = document,
-            baseUrl = normalizedUrl,
-        ) {
+            ) {
+
                 posterUrl = posterOf(document)
                 plot = pagePlot(document)
                 year = pageYear(document)
                 pageRating(document)?.let { score = Score.from10(it) }
-            }
+            
+            },
+            document = document,
+            baseUrl = normalizedUrl,
+        )
         }
 
         // DiziBOX series pages are root-level slugs, e.g. /the-lowdown/.
@@ -166,15 +170,17 @@ class DiziBoxizle : NeonMainAPI() {
         if (episodes.isEmpty()) return null
 
         return neonEnrichResponse(
-            newTvSeriesLoadResponse(title, normalizedUrl, TvType.TvSeries, episodes),
-            document = document,
-            baseUrl = normalizedUrl,
-        ) {
+            newTvSeriesLoadResponse(title, normalizedUrl, TvType.TvSeries, episodes) {
+
             posterUrl = posterOf(document)
             plot = pagePlot(document)
             year = pageYear(document)
             pageRating(document)?.let { score = Score.from10(it) }
-        }
+        
+            },
+            document = document,
+            baseUrl = normalizedUrl,
+        )
     }
 
     override suspend fun loadLinks(
