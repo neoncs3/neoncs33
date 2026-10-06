@@ -268,7 +268,11 @@ class JetFilmizle : NeonMainAPI() {
 
             Log.d(JET_TAG, "Dizi bölümleri: " + episodes.size)
 
-            return newTvSeriesLoadResponse(title, pageUrl, TvType.TvSeries, episodes) {
+            return neonEnrichResponse(
+            newTvSeriesLoadResponse(title, pageUrl, TvType.TvSeries, episodes),
+            document = document,
+            baseUrl = pageUrl,
+        ) {
                 posterUrl = poster
                 this.year = year
                 this.plot = description
@@ -278,7 +282,11 @@ class JetFilmizle : NeonMainAPI() {
             }
         }
 
-        return newMovieLoadResponse(title, pageUrl, TvType.Movie, pageUrl) {
+        return neonEnrichResponse(
+            newMovieLoadResponse(title, pageUrl, TvType.Movie, pageUrl),
+            document = document,
+            baseUrl = pageUrl,
+        ) {
             posterUrl = poster
             this.year = year
             this.plot = description
