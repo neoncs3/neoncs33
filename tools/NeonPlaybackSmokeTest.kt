@@ -27,7 +27,7 @@ class NeonPlaybackSmokeTest {
     companion object {
         private const val MIN_PLAYBACK_MS = 1_500L
         private const val PLAYBACK_TIMEOUT_MS = 20_000L
-        private const val MAX_CANDIDATES_PER_PROVIDER = 4
+        private const val MAX_CANDIDATES_PER_PROVIDER = 6
     }
 
     data class Target(val name: String, val queries: List<String>)
@@ -56,7 +56,19 @@ class NeonPlaybackSmokeTest {
 
     private fun antiBot(text: String?): Boolean {
         val v = text.orEmpty().lowercase()
-        return listOf("403", "429", "cloudflare", "just a moment", "attention required", "checking your browser", "verify you are human", "cf-chl-").any(v::contains)
+        return listOf(
+            "403",
+            "429",
+            "invalidresponsecodeexception",
+            "response code: 403",
+            "response code: 429",
+            "cloudflare",
+            "just a moment",
+            "attention required",
+            "checking your browser",
+            "verify you are human",
+            "cf-chl-",
+        ).any(v::contains)
     }
 
     private fun err(t: Throwable): String {
@@ -156,7 +168,12 @@ class NeonPlaybackSmokeTest {
                     }
 
                     override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                        playerError.compareAndSet(null, err(error))
+                        val detail = err(error)
+                        if (antiBot(detail)) {
+                            playerError.set(detail)
+                        } else {
+                            playerError.compareAndSet(null, detail)
+                        }
                     }
                 })
             }.onFailure {
@@ -289,10 +306,22 @@ class NeonPlaybackSmokeTest {
         api: MainAPI,
         target: Target,
     ): List<SearchResponse> {
-        val candidates = mutableListOf<SearchResponse>()
+        val searchCandidates = mutableListOf<SearchResponse>()
 
-        // Önce gerçek ana sayfa içeriklerini dene. Arama motoru değişiklikleri
-        // yüzünden CI testinin yanlış pozitif/negatif üretmesini azaltır.
+        // Playback smoke testinde hedef içerik, ana sayfadaki rastgele güncel
+        // içerikten daha değerlidir. Önce bilinen arama sorgularını dene; aksi
+        // halde test, örneğin DiziBoxizle'da ana sayfadaki dört rastgele içeriğe
+        // takılıp hedef diziyi hiç denemeden FAIL verebiliyordu.
+        for (query in target.queries) {
+            runCatching {
+                api.search(query, 1)?.items.orEmpty().take(3)
+            }.getOrNull()?.let(searchCandidates::addAll)
+        }
+
+        val mainPageCandidates = mutableListOf<SearchResponse>()
+
+        // Arama motoru geçici olarak boşsa ana sayfadan gerçek içeriklerle
+        // ikinci bir aday havuzu oluştur.
         if (api.hasMainPage) {
             api.mainPage.take(2).forEach { page ->
                 runCatching {
@@ -307,18 +336,11 @@ class NeonPlaybackSmokeTest {
                 }.getOrNull()?.items
                     ?.flatMap { it.list }
                     ?.take(6)
-                    ?.let(candidates::addAll)
+                    ?.let(mainPageCandidates::addAll)
             }
         }
 
-        // Ana sayfa boşsa veya oynatma kaynağı çıkmazsa bilinen arama adaylarına geç.
-        for (query in target.queries) {
-            runCatching {
-                api.search(query, 1)?.items.orEmpty().take(3)
-            }.getOrNull()?.let(candidates::addAll)
-        }
-
-        return candidates
+        return (searchCandidates + mainPageCandidates)
             .filter { it.url.isNotBlank() }
             .distinctBy { it.url }
             .take(MAX_CANDIDATES_PER_PROVIDER)
