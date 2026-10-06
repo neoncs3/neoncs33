@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_ID="com.lagradost.cloudstream3.prerelease"
+APP_ID="com.lagradost.cloudstream3.prerelease.debug"
 REPORT="${RUNNER_TEMP}/neon-playback-report.json"
 LOG="${GITHUB_WORKSPACE}/playback-status/logcat.txt"
 INSTRUMENTATION_LOG="${GITHUB_WORKSPACE}/playback-status/instrumentation.log"
