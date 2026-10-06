@@ -1,6 +1,107 @@
 {
-  "providers": [],
+  "providers": [
+    {
+      "provider": "AsyaFilmIzle",
+      "status": "red",
+      "domain": "https://asyafilmizle.com",
+      "live": {
+        "ok": false,
+        "error": "NeonMainAPI provider source bulunamadı"
+      },
+      "pipelines": {}
+    },
+    {
+      "provider": "DiziBoxizle",
+      "status": "red",
+      "domain": "https://diziboxizle.com",
+      "live": {
+        "ok": false,
+        "error": "NeonMainAPI provider source bulunamadı"
+      },
+      "pipelines": {}
+    },
+    {
+      "provider": "Dizigecesi",
+      "status": "red",
+      "domain": "https://dizigecesi.com",
+      "live": {
+        "ok": false,
+        "error": "NeonMainAPI provider source bulunamadı"
+      },
+      "pipelines": {}
+    },
+    {
+      "provider": "DiziPal",
+      "status": "red",
+      "domain": "https://dizipal1586.com",
+      "live": {
+        "ok": false,
+        "error": "NeonMainAPI provider source bulunamadı"
+      },
+      "pipelines": {}
+    },
+    {
+      "provider": "Dramadizilerim",
+      "status": "red",
+      "domain": "https://dramadizilerim.com",
+      "live": {
+        "ok": false,
+        "error": "NeonMainAPI provider source bulunamadı"
+      },
+      "pipelines": {}
+    },
+    {
+      "provider": "FilmModu",
+      "status": "red",
+      "domain": "https://www.filmmodu.one",
+      "live": {
+        "ok": false,
+        "error": "NeonMainAPI provider source bulunamadı"
+      },
+      "pipelines": {}
+    },
+    {
+      "provider": "JetFilmizle",
+      "status": "red",
+      "domain": "https://jetfilmizle.now",
+      "live": {
+        "ok": false,
+        "error": "NeonMainAPI provider source bulunamadı"
+      },
+      "pipelines": {}
+    },
+    {
+      "provider": "SetFilmIzle",
+      "status": "red",
+      "domain": "https://www.setfilmizle.ltd",
+      "live": {
+        "ok": false,
+        "error": "NeonMainAPI provider source bulunamadı"
+      },
+      "pipelines": {}
+    },
+    {
+      "provider": "SinemaCX",
+      "status": "red",
+      "domain": "https://sinemacc.com",
+      "live": {
+        "ok": false,
+        "error": "NeonMainAPI provider source bulunamadı"
+      },
+      "pipelines": {}
+    },
+    {
+      "provider": "WebDramaTurkey",
+      "status": "red",
+      "domain": "https://webdramaturkey2.com",
+      "live": {
+        "ok": false,
+        "error": "NeonMainAPI provider source bulunamadı"
+      },
+      "pipelines": {}
+    }
+  ],
   "green": 0,
   "yellow": 0,
-  "red": 0
+  "red": 10
 }
