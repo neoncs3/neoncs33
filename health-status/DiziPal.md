@@ -1,4 +1,4 @@
-# 🔴 DiziPal
+# 🟡 DiziPal
 
 Domain: https://dizipal1586.com
 

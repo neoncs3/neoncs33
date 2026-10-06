@@ -2,14 +2,15 @@
   "providers": [
     {
       "provider": "AsyaFilmIzle",
-      "status": "red",
+      "status": "yellow",
       "domain": "https://asyafilmizle.com",
       "configured_domain": "https://asyafilmizle.com",
       "live": {
         "ok": false,
+        "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://asyafilmizle.com",
-        "bytes": 5667,
+        "bytes": 5709,
         "title": "Just a moment...",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -34,6 +35,7 @@
       "configured_domain": "https://diziboxizle.com",
       "live": {
         "ok": true,
+        "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://diziboxizle.com",
         "bytes": 248047,
@@ -56,14 +58,15 @@
     },
     {
       "provider": "Dizigecesi",
-      "status": "red",
+      "status": "yellow",
       "domain": "https://dizigecesi.com",
       "configured_domain": "https://dizigecesi.com",
       "live": {
         "ok": false,
+        "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://dizigecesi.com",
-        "bytes": 4916,
+        "bytes": 4915,
         "title": "Attention Required! | Cloudflare",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -83,14 +86,15 @@
     },
     {
       "provider": "DiziPal",
-      "status": "red",
+      "status": "yellow",
       "domain": "https://dizipal1586.com",
       "configured_domain": "https://dizipal1586.com",
       "live": {
         "ok": false,
+        "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://dizipal1586.com",
-        "bytes": 4550,
+        "bytes": 4549,
         "title": "Attention Required! | Cloudflare",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -115,6 +119,7 @@
       "configured_domain": "https://dramadizilerim.com",
       "live": {
         "ok": true,
+        "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://dramadizilerim.com",
         "bytes": 193212,
@@ -142,6 +147,7 @@
       "configured_domain": "https://www.filmmodu.one",
       "live": {
         "ok": true,
+        "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://www.filmmodu.one",
         "bytes": 108039,
@@ -169,6 +175,7 @@
       "configured_domain": "https://jetfilmizle.now",
       "live": {
         "ok": true,
+        "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://jetfilmizle.now",
         "bytes": 284381,
@@ -196,6 +203,7 @@
       "configured_domain": "https://www.setfilmizle.ltd",
       "live": {
         "ok": true,
+        "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://www.setfilmizle.ltd",
         "bytes": 110323,
@@ -218,11 +226,12 @@
     },
     {
       "provider": "SinemaCX",
-      "status": "yellow",
+      "status": "green",
       "domain": "https://sinemacc.com",
       "configured_domain": "https://sinemacc.com",
       "live": {
         "ok": true,
+        "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://sinemacc.com",
         "bytes": 143411,
@@ -237,8 +246,8 @@
         "loadLinks": true,
         "metadata": true,
         "video": true,
-        "subtitles": false,
-        "cache": false,
+        "subtitles": true,
+        "cache": true,
         "tmdb_playback_forbidden": true
       },
       "source": "SinemaCX/src/main/kotlin/com/neoncs3/SinemaCX.kt"
@@ -250,6 +259,7 @@
       "configured_domain": "https://webdramaturkey2.com",
       "live": {
         "ok": true,
+        "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://webdramaturkey2.com",
         "bytes": 207523,
@@ -271,7 +281,7 @@
       "source": "WebDramaTurkey/src/main/kotlin/com/neoncs3/WebDramaTurkey.kt"
     }
   ],
-  "green": 6,
-  "yellow": 1,
-  "red": 3
+  "green": 7,
+  "yellow": 3,
+  "red": 0
 }

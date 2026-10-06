@@ -1,4 +1,4 @@
-# 🟡 SinemaCX
+# 🟢 SinemaCX
 
 Domain: https://sinemacc.com
 
@@ -13,8 +13,8 @@ Canlı medya ipucu: 0 media URL, 0 iframe
 - LoadLinks: ✅
 - Metadata: ✅
 - Video resolver: ✅
-- Subtitles: ❌
-- Cache/fallback: ❌
+- Subtitles: ✅
+- Cache/fallback: ✅
 - TMDB playback yasağı: ✅
 
 Kaynak: SinemaCX/src/main/kotlin/com/neoncs3/SinemaCX.kt
