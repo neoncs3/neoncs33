@@ -194,6 +194,21 @@ class MainUrlUpdater:
         markers = data.get("markers", []) if isinstance(data, dict) else []
         return [m.lower().strip() for m in markers if isinstance(m, str) and m.strip()]
 
+    def _anti_bot_korumasini_tespit_et(self, response):
+        status = getattr(response, "status_code", None)
+        if status not in {403, 429, 503}:
+            return False
+        text = getattr(response, "text", "")[:300000].lower()
+        markers = (
+            "cloudflare",
+            "just a moment",
+            "attention required",
+            "checking your browser",
+            "verify you are human",
+            "cf-chl-",
+        )
+        return any(marker in text for marker in markers)
+
     def _domain_icerigi_uygun(self, eklenti_adi, response):
         markers = self._domain_belirtecleri(eklenti_adi)
         if not markers:
@@ -281,6 +296,15 @@ class MainUrlUpdater:
             }
             return
 
+        if durum == "protected":
+            durumlar[eklenti_adi] = {
+                "status": "protected",
+                "domain": mevcut_domain,
+                "previous_domain": eski.get("previous_domain"),
+                "changed_at": eski.get("changed_at"),
+            }
+            return
+
         durumlar[eklenti_adi] = {
             "status": "unchanged",
             "domain": kontrol_domaini or mevcut_domain,
@@ -333,6 +357,10 @@ class MainUrlUpdater:
                 ikon = "⚠️ **ULAŞILAMIYOR**"
                 previous = veri.get("previous_domain") or "-"
                 changed_at = veri.get("changed_at") or "-"
+            elif status == "protected":
+                ikon = "🛡️ **KORUMALI**"
+                previous = veri.get("previous_domain") or "-"
+                changed_at = veri.get("changed_at") or "-"
             else:
                 ikon = "✅ **DEĞİŞMEDİ**"
                 previous = "-"
@@ -352,6 +380,8 @@ class MainUrlUpdater:
             "✅ **DEĞİŞMEDİ** = Son kontrolde domain aynı kaldı.",
             "",
             "⚠️ **ULAŞILAMIYOR** = Domain yanıt vermedi veya içerik doğrulanamadı.",
+            "",
+            "🛡️ **KORUMALI** = Domain Cloudflare/anti-bot yanıtı veriyor; domain değiştiği anlamına gelmez.",
         ])
 
         index_yeni = "\n".join(index_lines) + "\n"
@@ -459,11 +489,15 @@ class MainUrlUpdater:
                         allow_redirects=True,
                         timeout=20,
                     )
-                    if not response.ok:
+                    protected = self._anti_bot_korumasini_tespit_et(response)
+                    if not response.ok and not protected:
                         raise RuntimeError(f"HTTP {response.status_code}")
-                    if not self._domain_icerigi_uygun(eklenti_adi, response):
+                    if not protected and not self._domain_icerigi_uygun(eklenti_adi, response):
                         raise RuntimeError("site içeriği doğrulanamadı")
                     final_url = response.url.rstrip("/")
+                    kontrol_durumu = "protected" if protected else (
+                        "changed" if aday.rstrip("/") != mainurl else "unchanged"
+                    )
                     break
                 except Exception as hata:
                     konsol.log(
@@ -498,12 +532,17 @@ class MainUrlUpdater:
                 continue
 
             domains[eklenti_adi] = final_url
+            if final_url != mainurl:
+                kontrol_durumu = "changed"
+            elif kontrol_durumu != "protected":
+                kontrol_durumu = "unchanged"
+
             self._domain_durumunu_guncelle(
                 durumlar,
                 eklenti_adi,
                 mainurl,
                 final_url,
-                durum="changed" if mainurl != final_url else "unchanged",
+                durum=kontrol_durumu,
             )
             konsol.log(f"[+] Kontrol Edildi   : {mainurl}")
 

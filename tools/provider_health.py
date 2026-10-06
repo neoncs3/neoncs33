@@ -50,6 +50,17 @@ def live_check(scraper, url: str):
         title_match = re.search(r"<title[^>]*>(.*?)</title>", body, re.I | re.S)
         return {
             "ok": bool(response.ok),
+            "anti_bot_blocked": response.status_code in {403, 429, 503} and any(
+                marker in body.lower()
+                for marker in (
+                    "cloudflare",
+                    "just a moment",
+                    "attention required",
+                    "checking your browser",
+                    "verify you are human",
+                    "cf-chl-",
+                )
+            ),
             "status_code": response.status_code,
             "final_url": response.url.rstrip("/"),
             "bytes": len(response.content or b""),
@@ -77,7 +88,7 @@ def analyse(module: Path, domains: dict[str, str], scraper):
             "provider": module.name,
             "status": "yellow",
             "domain": domains.get(module.name, ""),
-            "live": {"ok": False, "error": "NeonMainAPI provider source bulunamadı"},
+            "live": {"ok": False, "anti_bot_blocked": False, "error": "NeonMainAPI provider source bulunamadı"},
             "pipelines": {},
         }
 
@@ -104,8 +115,8 @@ def analyse(module: Path, domains: dict[str, str], scraper):
         "loadLinks": bool(re.search(r"override\s+suspend\s+fun\s+loadLinks\s*\(", source)),
         "metadata": "neonenrichresponse(" in low,
         "video": "neonresolvelinks(" in low or "neonresolvelinkcandidates(" in low,
-        "subtitles": "neonresolvelinks(" in low or "neonemitsubtitle(" in low,
-        "cache": "neoncachedocument(" in low or "neoncachedhtml(" in low or "neonresolvelinks(" in low,
+        "subtitles": "neonresolvelinks(" in low or "neonresolvelinkcandidates(" in low or "neonemitsubtitle(" in low,
+        "cache": "neoncachedocument(" in low or "neoncachedhtml(" in low or "neonresolvelinks(" in low or "neonresolvelinkcandidates(" in low,
         "tmdb_playback_forbidden": "tmdb" not in load_links_area,
     }
 
@@ -117,7 +128,9 @@ def analyse(module: Path, domains: dict[str, str], scraper):
         )
     )
 
-    if not live["ok"]:
+    if live.get("anti_bot_blocked"):
+        status = "yellow"
+    elif not live["ok"]:
         status = "red"
     elif not source_ok:
         status = "yellow"
@@ -197,7 +210,7 @@ def main():
 
     rows.extend([
         "",
-        "🟢 Sağlıklı · 🟡 Yapısal uyarı · 🔴 Domain erişilemiyor.",
+        "🟢 Sağlıklı · 🟡 Yapısal/anti-bot uyarı · 🔴 Domain erişilemiyor.",
         "",
         "Video sütunu providerın gerçek link çözümleme hattını kontrol eder; CI, ExoPlayer ile kullanıcı oturumundaki son oynatmayı tamamen simüle edemez.",
     ])
