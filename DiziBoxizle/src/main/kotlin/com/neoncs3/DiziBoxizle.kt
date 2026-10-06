@@ -128,10 +128,13 @@ class DiziBoxizle : NeonMainAPI() {
         // Expose such a page as a one-episode series so CloudStream can reach loadLinks().
         if (isEpisodeUrl(normalizedUrl)) {
             val episodeTitle = pageTitle(document) ?: return null
-            val match = EPISODE_PATTERN.find(normalizedUrl)
+            val fullMatch = EPISODE_PATTERN.find(normalizedUrl)
                 ?: ALT_EPISODE_PATTERN.find(normalizedUrl)
-            val season = match?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 1
-            val episode = match?.groupValues?.getOrNull(2)?.toIntOrNull() ?: 1
+            val simpleMatch = SIMPLE_EPISODE_PATTERN.find(normalizedUrl)
+            val season = fullMatch?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 1
+            val episode = fullMatch?.groupValues?.getOrNull(2)?.toIntOrNull()
+                ?: simpleMatch?.groupValues?.getOrNull(1)?.toIntOrNull()
+                ?: 1
             val seriesTitle = episodeTitle
                 .replace(Regex("(?i)\\s*\\d+\\.\\s*Sezon\\s*\\d+\\.\\s*Bölüm\\s*$"), "")
                 .trim()
@@ -515,16 +518,21 @@ class DiziBoxizle : NeonMainAPI() {
             .mapNotNull { element ->
                 val href = fixUrlNull(element.attr("href")) ?: return@mapNotNull null
                 val label = element.text().trim()
-                val match = EPISODE_PATTERN.find(href)
+                val fullMatch = EPISODE_PATTERN.find(href)
                     ?: ALT_EPISODE_PATTERN.find(href)
-                    ?: SIMPLE_EPISODE_PATTERN.find(href)
-                    ?: EPISODE_LABEL_PATTERN.find(label)
+                val simpleMatch = SIMPLE_EPISODE_PATTERN.find(href)
+                val labelMatch = EPISODE_LABEL_PATTERN.find(label)
 
-                if (match == null) return@mapNotNull null
+                if (fullMatch == null && simpleMatch == null && labelMatch == null) {
+                    return@mapNotNull null
+                }
 
-                val season = match.groupValues.getOrNull(1)?.toIntOrNull()
+                val season = fullMatch?.groupValues?.getOrNull(1)?.toIntOrNull()
+                    ?: labelMatch?.groupValues?.getOrNull(1)?.toIntOrNull()
                     ?: 1
-                val episode = match.groupValues.getOrNull(2)?.toIntOrNull()
+                val episode = fullMatch?.groupValues?.getOrNull(2)?.toIntOrNull()
+                    ?: simpleMatch?.groupValues?.getOrNull(1)?.toIntOrNull()
+                    ?: labelMatch?.groupValues?.getOrNull(2)?.toIntOrNull()
                     ?: return@mapNotNull null
 
                 val displayLabel = label.ifBlank { "$season. Sezon $episode. Bölüm" }
