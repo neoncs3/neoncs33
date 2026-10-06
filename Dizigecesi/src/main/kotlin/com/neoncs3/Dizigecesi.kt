@@ -278,12 +278,16 @@ class Dizigecesi : NeonMainAPI() {
             .firstOrNull()
 
         if (isMovie) {
-            return newMovieLoadResponse(
+            return neonEnrichResponse(
+            newMovieLoadResponse(
                 title,
                 url,
                 TvType.Movie,
                 url
-            ) {
+            ),
+            document = document,
+            baseUrl = url,
+        ) {
                 posterUrl = poster
                 backgroundPosterUrl = backdrop
                 this.plot = plot
@@ -297,11 +301,15 @@ class Dizigecesi : NeonMainAPI() {
 
         val episodes = parseEpisodes(document, poster)
 
-        return newTvSeriesLoadResponse(
+        return neonEnrichResponse(
+            newTvSeriesLoadResponse(
             title,
             url,
             TvType.TvSeries,
             episodes
+        ),
+            document = document,
+            baseUrl = url,
         ) {
             posterUrl = poster
             backgroundPosterUrl = backdrop
