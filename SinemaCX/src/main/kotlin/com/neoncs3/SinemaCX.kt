@@ -735,33 +735,42 @@ override suspend fun loadLinks(
     fun collectIframes(document: org.jsoup.nodes.Document): LinkedHashSet<String> {
         val result = LinkedHashSet<String>()
 
-        neonExtractPlayerCandidates(document, data).forEach { candidate ->
-            val clean = candidate.substringBefore("?img=")
+        fun addCandidate(raw: String?) {
+            val decoded = raw
+                ?.trim()
+                ?.replace("\\/", "/")
+                ?.takeIf { it.isNotBlank() }
+                ?.let { decodeIframeUrl(it) }
+
+            val url = decoded?.substringBefore("?img=")?.let(::fixUrlNull) ?: return
+
             if (
-                !clean.contains("youtube", true) &&
-                !clean.contains("youtu.be", true) &&
-                !clean.contains("vr_set=", true) &&
-                !clean.contains("/fragman", true) &&
-                !clean.contains("trailer", true)
+                !url.contains("youtube", true) &&
+                !url.contains("youtu.be", true) &&
+                !url.contains("vr_set=", true) &&
+                !url.contains("/fragman", true) &&
+                !url.contains("trailer", true)
             ) {
-                result.add(clean)
+                result.add(url)
             }
         }
 
-        Regex("""(?i)(?:https?:)?//[^"'<>\s]+/video/[A-Za-z0-9_-]+""")
+        // SinemaCX'nin gerçek player iframe'i data-vsrc kullanıyor.
+        // Bazı eski sayfalarda src/data-src/data-url, yeni sayfalarda data-vsrc bulunabiliyor.
+        document.select("iframe").forEach { iframe ->
+            addCandidate(iframe.attr("data-vsrc"))
+            addCandidate(iframe.attr("data-src"))
+            addCandidate(iframe.attr("data-url"))
+            addCandidate(iframe.attr("src"))
+        }
+
+        // NeonCore'un standart player/media adayları.
+        neonExtractPlayerCandidates(document, data).forEach(::addCandidate)
+
+        // Sayfa kaynak kodunda gömülü /video/... adresleri varsa onları da al.
+        Regex("""(?i)(?:https?:)?//[^"'<>\s]+/video/[A-Za-z0-9_-]+(?:\?[^"'<>\s]*)?""")
             .findAll(document.html())
-            .forEach { match ->
-                decodeIframeUrl(match.value)?.let { iframe ->
-                    val clean = iframe.substringBefore("?img=")
-                    if (
-                        !clean.contains("youtube", true) &&
-                        !clean.contains("youtu.be", true) &&
-                        !clean.contains("/fragman", true)
-                    ) {
-                        result.add(clean)
-                    }
-                }
-            }
+            .forEach { match -> addCandidate(match.value) }
 
         return result
     }
