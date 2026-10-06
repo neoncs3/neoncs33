@@ -11,6 +11,7 @@ on:
       - "**/*.kt"
       - "NeonCore/**"
       - "tools/provider_health.py"
+      - "KONTROL.py"
       - ".github/workflows/Saglik.yml"
       - "repo.json"
 
