@@ -162,22 +162,59 @@ open class NeonMainAPI : MainAPI() {
     }
 
     protected fun neonExtractMediaUrls(raw: String?): List<String> {
-        val normalized = neonCleanText(raw).orEmpty()
+        val normalized = neonCleanText(raw)
+            ?.replace("\\/", "/")
+            ?.replace("\\u0026", "&")
+            ?.replace("&#x2F;", "/")
+            .orEmpty()
         if (normalized.isBlank()) return emptyList()
 
         val directPattern = Regex(
-            """(?i)(?:https?:)?//[^"'<>\s]+?(?:\.m3u8|\.mpd|\.mp4|\.m4v|\.webm|\.mov)(?:\?[^"'<>\s]*)?"""
+            """(?i)(?:https?:)?//[^"'<>\\s]+?(?:\\.m3u8|\\.mpd|\\.mp4|\\.m4v|\\.webm|\\.mov)(?:\\?[^"'<>\\s]*)?"""
         )
 
-        return directPattern
-            .findAll(normalized)
+        val attributePattern = Regex(
+            """(?is)(?:src|file|source|stream|url|videoSource|securedLink|hls|playlist)\\s*[:=]\\s*["']([^"'<>\\s]+)["']"""
+        )
+
+        return buildList {
+            directPattern.findAll(normalized).forEach { add(it.value) }
+            attributePattern.findAll(normalized).forEach { add(it.groupValues[1]) }
+        }
             .mapNotNull {
-                neonNormalizeUrl(it.value)
-                    .trimEnd('"', '\'', ')', ']', '}', ',', ';')
+                neonNormalizeUrl(it)
+                    .trimEnd('"', '\\'', ')', ']', '}', ',', ';')
                     .takeIf(::neonIsMediaUrl)
             }
             .distinct()
-            .toList()
+    }
+
+    protected fun neonExtractPlayerCandidates(document: Document, baseUrl: String = mainUrl): List<String> {
+        val result = LinkedHashSet<String>()
+
+        neonExtractIframeUrls(document, baseUrl).forEach { result.add(it) }
+
+        document.select(
+            "video[src], video source[src], [data-video], [data-file], [data-source], " +
+                "[data-video-url], [data-stream], [data-hls], [data-url]"
+        ).forEach { node ->
+            sequenceOf(
+                node.attr("src"),
+                node.attr("data-video"),
+                node.attr("data-file"),
+                node.attr("data-source"),
+                node.attr("data-video-url"),
+                node.attr("data-stream"),
+                node.attr("data-hls"),
+                node.attr("data-url"),
+            ).filter { it.isNotBlank() }.forEach { raw ->
+                val url = neonNormalizeUrl(raw, baseUrl)
+                if (url.isNotBlank()) result.add(url)
+            }
+        }
+
+        neonExtractMediaUrls(document.html()).forEach { result.add(it) }
+        return result.toList()
     }
 
     protected fun neonExtractIframeUrls(document: Document, baseUrl: String = mainUrl): List<String> {
@@ -345,6 +382,35 @@ open class NeonMainAPI : MainAPI() {
         return found
     }
 
+    protected suspend fun neonResolveLinkCandidates(
+        candidates: Iterable<String>,
+        sourceName: String = name,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit,
+        maxDepth: Int = 2,
+    ): Boolean {
+        var found = false
+        val seen = LinkedHashSet<String>()
+
+        for (candidate in candidates) {
+            val normalized = neonNormalizeUrl(candidate).ifBlank { candidate.trim() }
+            if (normalized.isBlank() || !seen.add(normalized)) continue
+
+            if (neonResolveLinks(
+                    data = normalized,
+                    sourceName = sourceName,
+                    subtitleCallback = subtitleCallback,
+                    callback = callback,
+                    maxDepth = maxDepth,
+                )
+            ) {
+                found = true
+            }
+        }
+
+        return found
+    }
+
     protected suspend fun neonCachedHtml(
         url: String,
         referer: String = mainUrl,
@@ -412,7 +478,8 @@ object NeonMemoryCache {
         val expiresAt: Long,
     )
 
-    private val values = mutableMapOf<String, Entry>()
+    private val values = LinkedHashMap<String, Entry>()
+    private const val MAX_ENTRIES = 128
 
     @Synchronized
     fun get(key: String): String? {
@@ -426,6 +493,11 @@ object NeonMemoryCache {
 
     @Synchronized
     fun put(key: String, value: String, ttlMs: Long) {
+        values.remove(key)
+        while (values.size >= MAX_ENTRIES) {
+            val eldest = values.entries.firstOrNull()?.key ?: break
+            values.remove(eldest)
+        }
         values[key] = Entry(
             value = value,
             expiresAt = System.currentTimeMillis() + ttlMs.coerceAtLeast(1_000L),
