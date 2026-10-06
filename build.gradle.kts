@@ -56,6 +56,14 @@ subprojects {
     android {
         namespace = "com.neoncs3"
 
+        // Compile NeonCore directly into every provider package so each .cs3
+        // remains standalone and does not depend on another runtime plugin.
+        sourceSets {
+            getByName("main") {
+                java.srcDir(rootProject.file("NeonCore/src/main/kotlin"))
+            }
+        }
+
         defaultConfig {
             minSdk = 21
             compileSdkVersion(35)
