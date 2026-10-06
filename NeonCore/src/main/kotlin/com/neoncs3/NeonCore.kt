@@ -2,6 +2,10 @@ package com.neoncs3
 
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.USER_AGENT
+import com.lagradost.cloudstream3.Actor
+import com.lagradost.cloudstream3.Score
+import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
+import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -380,6 +384,136 @@ open class NeonMainAPI : MainAPI() {
 
         visit(root, mainUrl, 0)
         return found
+    }
+
+    protected fun neonExtractGenres(document: Document): List<String> {
+        return document.select(
+            "a[href*='/tur/'], a[href*='/genre/'], a[href*='/kategori/'], " +
+                "[class*='genre'] a, [class*='tur'] a"
+        )
+            .map { neonCleanText(it.text()).orEmpty() }
+            .filter { it.length in 2..40 }
+            .distinct()
+    }
+
+    protected fun neonExtractDuration(document: Document): Int? {
+        return Regex(
+            """(?i)(?:^|\\s)(\\d{1,3})\\s*(?:dakika|dk|min(?:ute)?s?)\\b"""
+        )
+            .find(document.text())
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.toIntOrNull()
+            ?.takeIf { it in 1..600 }
+    }
+
+    protected fun neonExtractActors(document: Document, baseUrl: String = mainUrl): List<Actor> {
+        return document.select(
+            "a[href*='/oyuncu/'], a[href*='/actor/'], .actor, .actors li, .oyuncu-k, " +
+                ".oyuncular li, .cast li, .cast .item, [class*='oyuncu']"
+        )
+            .mapNotNull { node ->
+                val name = listOf(
+                    node.attr("title"),
+                    node.selectFirst("span.name, .name, .actor-name, .oyuncu-isim, .isim")?.text(),
+                    node.selectFirst("img")?.attr("alt"),
+                    node.text(),
+                )
+                    .mapNotNull { neonCleanText(it) }
+                    .firstOrNull { it.length in 2..80 }
+                    ?: return@mapNotNull null
+
+                if (name.equals("Oyuncular", true) || name.equals("Oyuncuları", true)) {
+                    return@mapNotNull null
+                }
+
+                val imageRaw = sequenceOf(
+                    node.selectFirst("img")?.attr("data-src"),
+                    node.selectFirst("img")?.attr("data-lazy-src"),
+                    node.selectFirst("img")?.attr("data-original"),
+                    node.selectFirst("img")?.attr("src"),
+                ).firstOrNull { it.isNotBlank() }
+
+                Actor(
+                    name = name,
+                    image = neonNormalizeUrl(imageRaw, baseUrl)
+                        .takeIf { it.isNotBlank() }
+                )
+            }
+            .distinctBy { it.name }
+            .take(40)
+    }
+
+    protected fun neonExtractTrailer(document: Document, baseUrl: String = mainUrl): String? {
+        val html = document.html().replace("\\\\/", "/")
+        val youtube = Regex(
+            """(?i)(?:https?:)?//(?:www\\.)?(?:youtube\\.com/(?:watch\\?v=|embed/)|youtu\\.be/)[^"'< >\\s]+"""
+        )
+            .find(html)
+            ?.value
+            ?.let { neonNormalizeUrl(it, baseUrl) }
+
+        if (!youtube.isNullOrBlank()) return youtube
+
+        return document.select("a[href], iframe[src], [data-trailer], [data-video]")
+            .mapNotNull { node ->
+                sequenceOf(
+                    node.attr("data-trailer"),
+                    node.attr("src"),
+                    node.attr("href"),
+                    node.attr("data-video"),
+                )
+                    .firstOrNull { it.isNotBlank() }
+                    ?.let { neonNormalizeUrl(it, baseUrl) }
+            }
+            .firstOrNull { it.contains("youtube.com", true) || it.contains("youtu.be", true) }
+    }
+
+    protected suspend fun neonEnrichResponse(
+        response: LoadResponse,
+        document: Document,
+        baseUrl: String = mainUrl,
+    ): LoadResponse {
+        if (response.posterUrl.isNullOrBlank()) {
+            neonPoster(document, baseUrl)?.let { response.posterUrl = it }
+        }
+
+        if (response.year == null) {
+            response.year = neonExtractYear(document.text())
+        }
+
+        if (response.plot.isNullOrBlank()) {
+            response.plot = neonPlot(document)
+        }
+
+        if (response.score == null) {
+            neonExtractRating(document.text())?.let { response.score = Score.from10(it.toString()) }
+        }
+
+        if (response.tags.isNullOrEmpty()) {
+            neonExtractGenres(document).takeIf { it.isNotEmpty() }?.let { response.tags = it }
+        }
+
+        if (response.duration == null) {
+            response.duration = neonExtractDuration(document)
+        }
+
+        if (response.actors.isNullOrEmpty()) {
+            val actors = neonExtractActors(document, baseUrl)
+            if (actors.isNotEmpty()) {
+                response.addActors(actors)
+            }
+        }
+
+        if (response.trailers.isEmpty()) {
+            neonExtractTrailer(document, baseUrl)?.let { response.addTrailer(it) }
+        }
+
+        if (response.backgroundPosterUrl.isNullOrBlank() && response.posterUrl != null) {
+            response.backgroundPosterUrl = response.posterUrl
+        }
+
+        return response
     }
 
     protected suspend fun neonResolveLinkCandidates(
