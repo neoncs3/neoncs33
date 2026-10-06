@@ -293,7 +293,17 @@ class Dramadizilerim : NeonMainAPI() {
 
         // Duplicate çağrılarda bile başarı dönmesi CloudStream tarafında daha
         // güvenli davranış verir; callback'e hiç medya düşmediyse false döner.
-        return directCandidates.isNotEmpty() || !iframeUrl.isNullOrBlank()
+        var found = directCandidates.isNotEmpty() || !iframeUrl.isNullOrBlank()
+        if (!found) {
+            found = neonResolveLinks(
+                data = data,
+                sourceName = "$name - NeonCore",
+                subtitleCallback = subtitleCallback,
+                callback = callback,
+            )
+        }
+
+        return found
     }
 
     // ------------------------------------------------------------------------
