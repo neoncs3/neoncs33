@@ -167,7 +167,7 @@ open class NeonMainAPI : MainAPI() {
         if (normalized.isBlank()) return emptyList()
 
         val directPattern = Regex(
-            """(?i)(?:https?:)?//[^"'<>\s]+?(?:\.m3u8|\.mpd|\.mp4|\.m4v|\.webm|\.mov)(?:\\?[^"'<>\s]*)?"""
+            """(?i)(?:https?:)?//[^"'<>\s]+?(?:\.m3u8|\.mpd|\.mp4|\.m4v|\.webm|\.mov)(?:\?[^"'<>\s]*)?"""
         )
 
         return directPattern
