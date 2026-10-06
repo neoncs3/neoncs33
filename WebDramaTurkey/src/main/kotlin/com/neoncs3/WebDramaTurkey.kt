@@ -10,7 +10,7 @@ import java.net.URLEncoder
 
 private const val WDT_TAG = "WebDramaTurkey"
 
-class WebDramaTurkey : MainAPI() {
+class WebDramaTurkey : NeonMainAPI() {
 
     override var mainUrl = "https://webdramaturkey2.com"
     override var name = "WebDramaTurkey"
