@@ -97,7 +97,7 @@ class Dizigecesi : NeonMainAPI() {
     override val mainPage = mainPageOf(
         "${mainUrl}/diziler" to "Popüler Diziler",
         "${mainUrl}/filmler" to "Yeni Filmler",
-        "${mainUrl}/populer" to "En Popüler"
+        "${mainUrl}/diziler?filter={%22category%22:%221%22,%22sorting%22:%22newest%22}" to "Aile"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
