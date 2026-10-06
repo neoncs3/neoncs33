@@ -663,6 +663,15 @@ class Dizigecesi : NeonMainAPI() {
         }
 
         Log.d(DG_TAG, "loadLinks sonucu found=" + found)
+        if (!found) {
+            found = neonResolveLinks(
+                data = data,
+                sourceName = "$name - NeonCore",
+                subtitleCallback = subtitleCallback,
+                callback = callback,
+            )
+        }
+
         return found
     }
 
