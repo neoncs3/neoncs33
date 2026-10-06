@@ -40,19 +40,19 @@
       "provider": "Dramadizilerim",
       "status": "PASS",
       "query": null,
-      "item": "YENİDEN DOĞDUM: CEHENNEMİMİ ONA VERDİM",
+      "item": "Hamile Külkedisi: Kayıp Taht Varisi",
       "links": 1,
       "positionMs": 0,
       "error": null
     },
     {
       "provider": "FilmModu",
-      "status": "FAIL",
+      "status": "BLOCKED",
       "query": null,
-      "item": null,
-      "links": 0,
+      "item": "The Bad Guys 2",
+      "links": 6,
       "positionMs": 0,
-      "error": "Source error"
+      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403"
     },
     {
       "provider": "JetFilmizle",
@@ -92,6 +92,6 @@
     }
   ],
   "pass": 5,
-  "blocked": 3,
-  "fail": 2
+  "blocked": 4,
+  "fail": 1
 }
