@@ -253,10 +253,8 @@ class FilmModu : NeonMainAPI() {
             .firstOrNull()
 
         return neonEnrichResponse(
-            newMovieLoadResponse(title, url, TvType.Movie, url),
-            document = document,
-            baseUrl = url,
-        ) {
+            newMovieLoadResponse(title, url, TvType.Movie, url) {
+
             posterUrl = poster
             posterHeaders = mapOf(
                 "User-Agent" to USER_AGENT,
@@ -269,7 +267,11 @@ class FilmModu : NeonMainAPI() {
             rating?.let { score = Score.from10(it) }
             addActors(actors)
             addTrailer(trailer)
-        }
+        
+            },
+            document = document,
+            baseUrl = url,
+        )
     }
 
     override suspend fun loadLinks(
