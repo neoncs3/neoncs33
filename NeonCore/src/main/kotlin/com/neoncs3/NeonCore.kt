@@ -187,7 +187,7 @@ open class NeonMainAPI : MainAPI() {
         }
             .mapNotNull {
                 neonNormalizeUrl(it)
-                    .trimEnd('"', '\\'', ')', ']', '}', ',', ';')
+                    .trimEnd('"', '\'', ')', ']', '}', ',', ';')
                     .takeIf(::neonIsMediaUrl)
             }
             .distinct()
