@@ -1486,5 +1486,14 @@ class AsyaFilmIzle : NeonMainAPI() {
             }
         }
 
+        if (!found) {
+            found = neonResolveLinks(
+                data = data,
+                sourceName = "AsyaFilmIzle Fallback",
+                subtitleCallback = subtitleCallback,
+                callback = callback,
+            )
+        }
+
         return found
     }}
