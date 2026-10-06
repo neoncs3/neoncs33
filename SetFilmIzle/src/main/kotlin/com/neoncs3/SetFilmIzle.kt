@@ -673,6 +673,15 @@ class SetFilmIzle : NeonMainAPI() {
             processed = true
         }
 
+        if (!processed) {
+            processed = neonResolveLinks(
+                data = data,
+                sourceName = "$name - NeonCore",
+                subtitleCallback = subtitleCallback,
+                callback = callback,
+            )
+        }
+
         return processed
     }
 
@@ -1134,16 +1143,7 @@ class SetFilmIzle : NeonMainAPI() {
             add(match.value, null)
         }
 
-        if (!found) {
-        found = neonResolveLinks(
-            data = data,
-            sourceName = "$name - NeonCore",
-            subtitleCallback = subtitleCallback,
-            callback = callback,
-        )
-    }
-
-    return found.map { it.key to it.value }
+        return found.map { it.key to it.value }
     }
 
     private suspend fun emitSubtitle(
