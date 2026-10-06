@@ -3,6 +3,7 @@ package com.neoncs3
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.SubtitleFile
+import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
@@ -10,7 +11,6 @@ import com.lagradost.cloudstream3.newSubtitleFile
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.net.URI
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Shared runtime helpers for every NeonCS provider.
@@ -412,10 +412,11 @@ object NeonMemoryCache {
         val expiresAt: Long,
     )
 
-    private val values = ConcurrentHashMap<String, Entry>()
+    private val values = mutableMapOf<String, Entry>()
 
+    @Synchronized
     fun get(key: String): String? {
-        val entry = values.get(key) ?: return null
+        val entry = values[key] ?: return null
         if (entry.expiresAt <= System.currentTimeMillis()) {
             values.remove(key)
             return null
@@ -423,16 +424,15 @@ object NeonMemoryCache {
         return entry.value
     }
 
+    @Synchronized
     fun put(key: String, value: String, ttlMs: Long) {
-        values.put(
-            key,
-            Entry(
-                value = value,
-                expiresAt = System.currentTimeMillis() + ttlMs.coerceAtLeast(1_000L),
-            ),
+        values[key] = Entry(
+            value = value,
+            expiresAt = System.currentTimeMillis() + ttlMs.coerceAtLeast(1_000L),
         )
     }
 
+    @Synchronized
     fun clear() {
         values.clear()
     }
