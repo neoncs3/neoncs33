@@ -59,7 +59,30 @@ class NeonPlaybackSmokeTest {
         return listOf("403", "429", "cloudflare", "just a moment", "attention required", "checking your browser", "verify you are human", "cf-chl-").any(v::contains)
     }
 
-    private fun err(t: Throwable): String = (t.message ?: t::class.java.simpleName).replace("\n", " ").take(1400)
+    private fun err(t: Throwable): String {
+        val parts = LinkedHashSet<String>()
+        var current: Throwable? = t
+        var depth = 0
+
+        while (current != null && depth < 6) {
+            val type = current::class.java.simpleName
+            val message = current.message
+                ?.replace("\n", " ")
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+
+            if (message != null) {
+                parts.add("$type: $message")
+            } else {
+                parts.add(type)
+            }
+
+            current = current.cause
+            depth++
+        }
+
+        return parts.joinToString(" <- ").take(1400)
+    }
 
     private suspend fun loadData(api: MainAPI, result: SearchResponse): String? {
         val load = api.load(result.url) ?: return null
