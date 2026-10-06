@@ -1,6 +1,6 @@
 {
-    "name": "Turkish Providers Repository | @KayraCs3",
-    "description": "Türkçe içerikli eklenti havuzu",
+    "name": "NeonCS Turkish Providers",
+    "description": "NeonCS için otomatik derlenen Türkçe CloudStream eklenti havuzu",
     "manifestVersion": 1,
     "pluginLists": [
       "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/plugins.json"
