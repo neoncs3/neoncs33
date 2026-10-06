@@ -78,36 +78,7 @@ jobs:
 
       - name: Playback raporunu oluştur
         if: always()
-        shell: bash
-        run: |
-          mkdir -p playback-status
-          if [ -f neon-playback-report.json ]; then
-            python3 - <<'PY'
-import json
-from pathlib import Path
-
-d = json.loads(Path('neon-playback-report.json').read_text(encoding='utf-8'))
-rows = [
-    '# 🎬 NeonCS Gerçek Oynatma Durumu',
-    '',
-    f"**PASS:** {d.get('pass', 0)}  **BLOCKED:** {d.get('blocked', 0)}  **FAIL:** {d.get('fail', 0)}",
-    '',
-    '| Provider | Durum | Link | Position | Sorgu | İçerik | Hata |',
-    '|---|---|---:|---:|---|---|---|',
-]
-for x in d.get('results', []):
-    icon = {'PASS': '🟢', 'BLOCKED': '🟡', 'FAIL': '🔴'}.get(x['status'], '⚪')
-    rows.append(
-        f"| **{x['provider']}** | {icon} {x['status']} | {x['links']} | {x['positionMs']} ms | "
-        f"{x.get('query') or '-'} | {x.get('item') or '-'} | {x.get('error') or '-'} |"
-    )
-Path('playback-status/latest.md').write_text('\n'.join(rows) + '\n', encoding='utf-8')
-Path('playback-status/latest.json').write_text(json.dumps(d, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-PY
-          else
-            printf '%s\n' '# 🎬 NeonCS Gerçek Oynatma Durumu' '' 'Playback raporu oluşturulamadı.' > playback-status/latest.md
-          fi
-
+        run: python3 tools/format_playback_report.py
       - name: Playback tanı kayıtlarını yükle
         if: always()
         uses: actions/upload-artifact@v4
