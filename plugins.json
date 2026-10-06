@@ -41,10 +41,10 @@
     },
     {
         "iconUrl": "https://dizigecesi.com/favicon.ico",
-        "fileHash": "sha256-d7b12506271cee7131723864f18157f59ad174c349e3ace7db37279f06cb6a09",
+        "fileHash": "sha256-86340638e5d252de165f287b4dc77271cef99b89620727d4c3100e14b9bd11a2",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 71077,
+        "fileSize": 71113,
         "status": 1,
         "language": "tr",
         "authors": [
