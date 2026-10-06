@@ -150,11 +150,15 @@ class Dramadizilerim : NeonMainAPI() {
             return response
         }
 
-        return newTvSeriesLoadResponse(
+        return neonEnrichResponse(
+            newTvSeriesLoadResponse(
             title,
             url,
             TvType.TvSeries,
             episodeList
+        ),
+            document = doc,
+            baseUrl = url,
         ) {
             posterUrl = poster
             this.plot = plot
