@@ -237,7 +237,6 @@ jobs:
 
           ./gradlew clean make makePluginsJson \
             --no-daemon \
-            --refresh-dependencies \
             --stacktrace
 
           echo ""
