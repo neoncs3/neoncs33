@@ -80,14 +80,23 @@ cp "${RUNNER_TEMP}/instrumentation.log" "${INSTRUMENTATION_LOG}" || true
 
 echo "=== Playback raporu alınıyor ==="
 rm -f "${REPORT}"
-adb exec-out run-as "${APP_ID}" cat files/neon-playback-report.json > "${REPORT}" || true
+rm -f "${REPORT}" "${GITHUB_WORKSPACE}/neon-playback-report.json"
 
-if [ -s "${REPORT}" ]; then
-  cp "${REPORT}" "${GITHUB_WORKSPACE}/neon-playback-report.json"
-  cat "${REPORT}"
+# Prefer the app-private report when run-as is available. GitHub emulator images
+# can reject run-as; in that case format_playback_report.py will reconstruct the
+# report directly from playback-status/logcat.txt.
+if adb exec-out run-as "${APP_ID}" cat files/neon-playback-report.json > "${REPORT}" 2>/dev/null; then
+  if [ -s "${REPORT}" ]; then
+    if python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); raise SystemExit(0 if isinstance(d,dict) and isinstance(d.get("results"),list) else 1)' "${REPORT}"; then
+      cp "${REPORT}" "${GITHUB_WORKSPACE}/neon-playback-report.json"
+      cat "${REPORT}"
+    else
+      echo "UYARI: run-as raporu geçerli JSON değil; logcat raporu kullanılacak."
+      rm -f "${REPORT}"
+    fi
+  fi
 else
-  echo '{"results":[],"pass":0,"blocked":0,"fail":1,"error":"Instrumentation raporu alınamadı"}' > "${GITHUB_WORKSPACE}/neon-playback-report.json"
-  cat "${GITHUB_WORKSPACE}/neon-playback-report.json"
+  echo "UYARI: run-as rapor dosyasına erişilemedi; logcat raporu kullanılacak."
 fi
 
 echo "=== TEST_EXIT=${TEST_EXIT} ==="
