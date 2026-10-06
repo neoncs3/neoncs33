@@ -450,20 +450,35 @@ class SinemaCX : NeonMainAPI() {
 
         val apiUrl = "$apiBase/player/index.php?data=$videoId&do=getVideo"
 
-        fun extractStream(body: String): String? {
-            return Regex(""""securedLink"\s*:\s*"([^"]+)"""")
-                .find(body)
-                ?.groupValues
-                ?.getOrNull(1)
-                ?.replace("\\/", "/")
-                ?: Regex(""""videoSource"\s*:\s*"([^"]+)"""")
-                    .find(body)
-                    ?.groupValues
-                    ?.getOrNull(1)
-                    ?.replace("\\/", "/")
-                ?: Regex("""https?://[^"'\s<>]+\.m3u8[^"'\s<>]*""")
-                    .find(body)
-                    ?.value
+        fun extractStreams(body: String): List<String> {
+            val urls = linkedSetOf<String>()
+
+            listOf(
+                "securedLink",
+                "videoSource",
+                "file",
+                "source",
+                "stream",
+                "url"
+            ).forEach { key ->
+                Regex(""""$key"\s*:\s*"([^"]+)"""")
+                    .findAll(body)
+                    .forEach { match ->
+                        match.groupValues.getOrNull(1)
+                            ?.replace("\\/", "/")
+                            ?.replace("\\u0026", "&")
+                            ?.trim()
+                            ?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+                            ?.let(urls::add)
+                    }
+            }
+
+            Regex("""https?://[^"'\s<>]+(?:\.m3u8|\.mp4)(?:\?[^"'\s<>]*)?""")
+                .findAll(body)
+                .map { it.value }
+                .forEach(urls::add)
+
+            return urls.toList()
         }
 
         // Önce gerçek film URL'si ile isteği yap.
@@ -486,10 +501,10 @@ class SinemaCX : NeonMainAPI() {
             ).text
         }.getOrDefault("")
 
-        var streamUrl = extractStream(apiResponse)
+        var streamUrls = extractStreams(apiResponse)
 
         // Bazı eski kaynaklar r değerinde sadece ana siteyi kabul ediyor.
-        if (streamUrl.isNullOrBlank()) {
+        if (streamUrls.isEmpty()) {
             apiResponse = runCatching {
                 app.post(
                     apiUrl,
@@ -509,10 +524,10 @@ class SinemaCX : NeonMainAPI() {
                 ).text
             }.getOrDefault("")
 
-            streamUrl = extractStream(apiResponse)
+            streamUrls = extractStreams(apiResponse)
         }
 
-        if (streamUrl.isNullOrBlank()) {
+        if (streamUrls.isEmpty()) {
             Log.e(SCX_TAG, "Filmizle kaynak vermedi: " + cleanIframe)
             return false
         }
@@ -523,27 +538,34 @@ class SinemaCX : NeonMainAPI() {
             "$apiBase/"
         }
 
-        callback(
-            newExtractorLink(
-                source = "FilmizleIn",
-                name = sourceLabel,
-                url = streamUrl,
-                type = if (streamUrl.contains(".m3u8", true)) {
-                    ExtractorLinkType.M3U8
-                } else {
-                    ExtractorLinkType.VIDEO
-                }
-            ) {
-                quality = Qualities.P1080.value
-                referer = streamRef
-                headers = mapOf(
-                    "Referer" to streamRef,
-                    "User-Agent" to SCX_UA
-                )
-            }
-        )
+        var emittedAny = false
+        streamUrls.forEachIndexed { index, streamUrl ->
+            val linkName = if (index == 0) sourceLabel else "$" + "{sourceLabel} | Alternatif " + (index + 1)
 
-        return true
+            callback(
+                newExtractorLink(
+                    source = "FilmizleIn",
+                    name = linkName,
+                    url = streamUrl,
+                    type = if (streamUrl.contains(".m3u8", true)) {
+                        ExtractorLinkType.M3U8
+                    } else {
+                        ExtractorLinkType.VIDEO
+                    }
+                ) {
+                    quality = Qualities.P1080.value
+                    referer = streamRef
+                    headers = mapOf(
+                        "Referer" to streamRef,
+                        "User-Agent" to SCX_UA
+                    )
+                }
+            )
+            emittedAny = true
+        }
+
+        Log.d(SCX_TAG, "Filmizle link sayısı=" + streamUrls.size + ": " + cleanIframe)
+        return emittedAny
     }
 
     override suspend fun load(url: String): LoadResponse? {
