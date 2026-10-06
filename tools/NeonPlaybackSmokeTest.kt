@@ -19,6 +19,10 @@ import java.util.concurrent.atomic.AtomicReference
 @OptIn(InternalAPI::class)
 @RunWith(AndroidJUnit4::class)
 class NeonPlaybackSmokeTest {
+    companion object {
+        private const val MIN_PLAYBACK_MS = 1_500L
+        private const val PLAYBACK_TIMEOUT_MS = 30_000L
+    }
 
     data class Target(val name: String, val queries: List<String>)
     data class Result(
@@ -81,14 +85,14 @@ class NeonPlaybackSmokeTest {
         }
 
         var position = 0L
-        val endAt = System.currentTimeMillis() + 30_000L
+        val endAt = System.currentTimeMillis() + PLAYBACK_TIMEOUT_MS
         while (System.currentTimeMillis() < endAt && position < 1_500L) {
             Thread.sleep(250L)
             position = runCatching { player.getPosition() ?: 0L }.getOrDefault(0L).coerceAtLeast(0L)
             if (playerError.get() != null && position == 0L) break
         }
 
-        val ok = position >= 1_500L
+        val ok = position >= MIN_PLAYBACK_MS
         val error = playerError.get()
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             runCatching { player.release() }
