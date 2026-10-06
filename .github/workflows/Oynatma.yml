@@ -1,6 +1,11 @@
 name: NeonCS Gerçek Oynatma Testi
 
 on:
+  push:
+    branches:
+      - master
+    paths:
+      - "tools/NeonPlaybackSmokeTest.kt"
   workflow_run:
     workflows:
       - CloudStream Derleyici
@@ -17,7 +22,7 @@ concurrency:
 
 jobs:
   playback:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: NeonCS kaynaklarını al
