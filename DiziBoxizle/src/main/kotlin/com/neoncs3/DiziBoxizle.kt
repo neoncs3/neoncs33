@@ -307,6 +307,15 @@ class DiziBoxizle : NeonMainAPI() {
             }
         }
 
+        if (!found) {
+            found = neonResolveLinks(
+                data = data,
+                sourceName = "DiziBoxizle Fallback",
+                subtitleCallback = subtitleCallback,
+                callback = callback,
+            )
+        }
+
         return found
     }
 
