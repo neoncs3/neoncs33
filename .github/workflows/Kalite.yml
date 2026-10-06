@@ -32,3 +32,9 @@ jobs:
 
       - name: Python sözdizimi
         run: python3 -m compileall -q tools KONTROL.py
+
+      - name: Sağlık sistemi yapısal kontrolü
+        run: |
+          test -f tools/provider_health.py
+          test -f .github/workflows/Saglik.yml
+          test -f NeonCore/domain-candidates.json

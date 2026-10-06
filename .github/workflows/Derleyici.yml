@@ -16,6 +16,8 @@ on:
       - "**/*.jpeg"
       - "**/*.png"
       - "**/*.gif"
+      - "domain-status/**"
+      - "health-status/**"
 
 permissions:
   contents: write
