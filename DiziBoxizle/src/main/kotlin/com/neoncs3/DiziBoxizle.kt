@@ -118,6 +118,7 @@ class DiziBoxizle : NeonMainAPI() {
                 plot = pagePlot(document)
                 year = pageYear(document)
                 pageRating(document)?.let { score = Score.from10(it) }
+                genres = pageGenres(document)
             
             },
             document = document,
@@ -160,6 +161,7 @@ class DiziBoxizle : NeonMainAPI() {
                 plot = pagePlot(document)
                 year = pageYear(document)
                 pageRating(document)?.let { score = Score.from10(it) }
+                genres = pageGenres(document)
             
             },
             document = document,
@@ -180,6 +182,7 @@ class DiziBoxizle : NeonMainAPI() {
             plot = pagePlot(document)
             year = pageYear(document)
             pageRating(document)?.let { score = Score.from10(it) }
+                genres = pageGenres(document)
         
             },
             document = document,
@@ -906,6 +909,67 @@ class DiziBoxizle : NeonMainAPI() {
         // Do not scan the entire document as a final fallback: that often returns the
         // website footer/copyright year (for example 2026) instead of the title's year.
         return null
+    }
+
+    private fun pageGenres(document: Document): List<String> {
+        val result = linkedSetOf<String>()
+
+        // DiziBox uses genre/category links on title pages. Prefer links because
+        // they are less likely to capture unrelated words from the page.
+        document.select(
+            "a[href*='/tur/'], a[href*='/kategori/'], " +
+                ".genres a, .genre a, .genres a[href], .genre a[href], " +
+                ".movie-genres a, .dizi-genres a, .categories a"
+        ).forEach { element ->
+            val value = element.text()
+                .replace(Regex("(?i)^(t[uü]r|t[uü]rler|kategori|kategoriler)\\s*:\\s*"), "")
+                .trim()
+            if (value.isNotBlank()) result.add(normalizeGenre(value))
+        }
+
+        // Some templates expose the genres as plain text instead of links.
+        if (result.isEmpty()) {
+            val candidates = document.select(
+                ".genres, .genre, .movie-genres, .dizi-genres, .categories, " +
+                    "[class*='genre'], [class*='kategori']"
+            ).flatMap { it.text().split(",", "|", "•", "·", "/") }
+
+            candidates.forEach { raw ->
+                val value = raw
+                    .replace(Regex("(?i)^(t[uü]r|t[uü]rler|kategori|kategoriler)\\s*:\\s*"), "")
+                    .trim()
+                if (value.isNotBlank() && value.length <= 40) {
+                    result.add(normalizeGenre(value))
+                }
+            }
+        }
+
+        return result.filter { it.isNotBlank() }.distinct().take(10)
+    }
+
+    private fun normalizeGenre(value: String): String {
+        val key = value.trim().lowercase()
+        return when (key) {
+            "action", "aksiyon" -> "Aksiyon"
+            "adventure", "macera" -> "Macera"
+            "animation", "animasyon" -> "Animasyon"
+            "comedy", "komedi" -> "Komedi"
+            "crime", "suç", "suc" -> "Suç"
+            "documentary", "belgesel" -> "Belgesel"
+            "drama", "dram" -> "Dram"
+            "family", "aile" -> "Aile"
+            "fantasy", "fantastik" -> "Fantastik"
+            "history", "tarih" -> "Tarih"
+            "horror", "korku" -> "Korku"
+            "music", "müzik", "muzik" -> "Müzik"
+            "mystery", "gizem" -> "Gizem"
+            "romance", "romantik" -> "Romantik"
+            "science fiction", "sci-fi", "bilim kurgu", "bilimkurgu" -> "Bilim Kurgu"
+            "thriller", "gerilim" -> "Gerilim"
+            "war", "savaş", "savas" -> "Savaş"
+            "western" -> "Western"
+            else -> value.trim()
+        }
     }
 
     private fun pageRating(document: Document): Double? {
