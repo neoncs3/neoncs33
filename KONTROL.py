@@ -8,6 +8,7 @@ import os
 import re
 import base64
 import json
+from datetime import datetime, timezone
 
 
 class MainUrlUpdater:
@@ -28,6 +29,10 @@ class MainUrlUpdater:
         self.domain_manifest_path = os.path.join(
             self.base_dir, "NeonCore", "domains.json"
         )
+        self.domain_status_path = os.path.join(
+            self.base_dir, "NeonCore", "domain-status.json"
+        )
+        self.readme_path = os.path.join(self.base_dir, "README.md")
 
     @property
     def eklentiler(self):
@@ -150,6 +155,151 @@ class MainUrlUpdater:
         match = re.match(r"^https?://[^/]+", url.strip())
         return match.group(0).rstrip("/") if match else None
 
+    def _domain_durumlarini_oku(self):
+        if not os.path.isfile(self.domain_status_path):
+            return {}
+
+        try:
+            with open(self.domain_status_path, "r", encoding="utf-8") as file:
+                veri = json.load(file)
+            return veri if isinstance(veri, dict) else {}
+        except Exception:
+            return {}
+
+    def _domain_durumunu_guncelle(
+        self,
+        durumlar,
+        eklenti_adi,
+        mevcut_domain,
+        kontrol_domaini,
+    ):
+        eski = durumlar.get(eklenti_adi, {})
+        degisti = mevcut_domain != kontrol_domaini
+
+        if degisti:
+            durumlar[eklenti_adi] = {
+                "status": "changed",
+                "domain": kontrol_domaini,
+                "previous_domain": mevcut_domain,
+                "changed_at": datetime.now(timezone.utc).replace(
+                    microsecond=0
+                ).isoformat().replace("+00:00", "Z"),
+            }
+            return
+
+        if eski.get("status") == "changed":
+            durumlar[eklenti_adi] = {
+                "status": "changed",
+                "domain": kontrol_domaini,
+                "previous_domain": eski.get("previous_domain"),
+                "changed_at": eski.get("changed_at"),
+            }
+            return
+
+        durumlar[eklenti_adi] = {
+            "status": "unchanged",
+            "domain": kontrol_domaini,
+            "previous_domain": None,
+            "changed_at": None,
+        }
+
+    def _domain_durumlarini_yaz(self, durumlar):
+        os.makedirs(os.path.dirname(self.domain_status_path), exist_ok=True)
+
+        yeni = json.dumps(
+            {
+                key: durumlar[key]
+                for key in sorted(durumlar)
+                if isinstance(key, str)
+                and isinstance(durumlar[key], dict)
+            },
+            ensure_ascii=False,
+            indent=2,
+        ) + "\n"
+
+        eski = ""
+        if os.path.isfile(self.domain_status_path):
+            with open(self.domain_status_path, "r", encoding="utf-8") as file:
+                eski = file.read()
+
+        if yeni == eski:
+            return False
+
+        with open(self.domain_status_path, "w", encoding="utf-8") as file:
+            file.write(yeni)
+
+        return True
+
+    def _readme_yaz(self, durumlar):
+        satirlar = [
+            "# NeonCS CloudStream Eklentileri",
+            "",
+            "## 🌐 Domain Durumları",
+            "",
+            "Bu tablo, otomatik domain kontrolü tarafından güncellenir.",
+            "",
+            "| Eklenti | Durum | Güncel Domain | Önceki Domain | Değişiklik |",
+            "|---|---|---|---|---|",
+        ]
+
+        for eklenti in sorted(durumlar):
+            veri = durumlar[eklenti]
+            domain = veri.get("domain", "-")
+            status = veri.get("status", "unchanged")
+
+            if status == "changed":
+                ikon = "🔄 **DEĞİŞTİ**"
+                previous = veri.get("previous_domain") or "-"
+                changed_at = veri.get("changed_at") or "-"
+            else:
+                ikon = "✅ **DEĞİŞMEDİ**"
+                previous = "-"
+                changed_at = "-"
+
+            domain_link = (
+                f"[{domain}]({domain})"
+                if domain.startswith("http://") or domain.startswith("https://")
+                else domain
+            )
+            previous_link = (
+                f"[{previous}]({previous})"
+                if previous.startswith("http://") or previous.startswith("https://")
+                else previous
+            )
+
+            satirlar.append(
+                f"| **{eklenti}** | {ikon} | {domain_link} | "
+                f"{previous_link} | {changed_at} |"
+            )
+
+        satirlar.extend(
+            [
+                "",
+                "### İkonlar",
+                "",
+                "🔄 **DEĞİŞTİ** = Domain daha önce otomatik kontrolde değişmiş.",
+                "",
+                "✅ **DEĞİŞMEDİ** = Kayıtlı domain otomatik kontrollerde değişmemiş.",
+                "",
+                "Domain değiştiğinde mainUrl, eklenti sürümü, NeonCore manifesti ve bu tablo aynı otomatik PR içinde güncellenir.",
+            ]
+        )
+
+        yeni = "\n".join(satirlar) + "\n"
+
+        eski = ""
+        if os.path.isfile(self.readme_path):
+            with open(self.readme_path, "r", encoding="utf-8") as file:
+                eski = file.read()
+
+        if yeni == eski:
+            return False
+
+        with open(self.readme_path, "w", encoding="utf-8") as file:
+            file.write(yeni)
+
+        return True
+
     def _domain_manifestini_yaz(self, domains):
         os.makedirs(os.path.dirname(self.domain_manifest_path), exist_ok=True)
 
@@ -198,6 +348,7 @@ class MainUrlUpdater:
 
     def guncelle(self):
         domains = {}
+        durumlar = self._domain_durumlarini_oku()
         kaynaklar = self.mainurl_listesi
 
         for dosya, mainurl in kaynaklar.items():
@@ -233,6 +384,12 @@ class MainUrlUpdater:
                 continue
 
             domains[eklenti_adi] = final_url
+            self._domain_durumunu_guncelle(
+                durumlar,
+                eklenti_adi,
+                mainurl,
+                final_url,
+            )
             konsol.log(f"[+] Kontrol Edildi   : {mainurl}")
 
             if mainurl == final_url:
@@ -258,6 +415,16 @@ class MainUrlUpdater:
             konsol.log("[+] NeonCore domain manifesti güncellendi")
         else:
             konsol.log("[=] NeonCore domain manifesti güncel")
+
+        if self._domain_durumlarini_yaz(durumlar):
+            konsol.log("[+] Domain durumları güncellendi")
+        else:
+            konsol.log("[=] Domain durumları güncel")
+
+        if self._readme_yaz(durumlar):
+            konsol.log("[+] GitHub README domain tablosu güncellendi")
+        else:
+            konsol.log("[=] GitHub README domain tablosu güncel")
 
 
 if __name__ == "__main__":
