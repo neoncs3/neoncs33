@@ -389,7 +389,7 @@ open class NeonMainAPI : MainAPI() {
                 app.get(
                     normalized,
                     headers = neonHeaders,
-                    timeout = timeoutMs,
+                    timeout = timeoutMs.toLong(),
                     allowRedirects = true,
                 ).takeIf { it.isSuccessful }?.text
             }.getOrNull() ?: continue
