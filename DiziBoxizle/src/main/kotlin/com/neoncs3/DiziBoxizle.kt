@@ -13,7 +13,7 @@ import java.net.URLEncoder
 import java.net.URI
 
 
-class DiziBoxizle : MainAPI() {
+class DiziBoxizle : NeonMainAPI() {
 
     override var mainUrl = "https://diziboxizle.com"
     override var name = "DiziBoxizle"
