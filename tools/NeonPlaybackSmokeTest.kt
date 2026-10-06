@@ -91,6 +91,7 @@ class NeonPlaybackSmokeTest {
         val firstFrame = AtomicBoolean(false)
         val exoPlaying = AtomicBoolean(false)
         val firstFrameAt = AtomicReference(0L)
+        var exo: Player? = null
 
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             player.initCallbacks(
@@ -120,7 +121,7 @@ class NeonPlaybackSmokeTest {
             runCatching {
                 val field = CS3IPlayer::class.java.getDeclaredField("exoPlayer")
                 field.isAccessible = true
-                val exo = field.get(player) as? Player
+                exo = field.get(player) as? Player
                 exo?.addListener(object : Player.Listener {
                     override fun onRenderedFirstFrame() {
                         firstFrame.set(true)
@@ -150,6 +151,23 @@ class NeonPlaybackSmokeTest {
             }
         }
 
+        // loadPlayer() creates ExoPlayer asynchronously. Do not assume that the
+        // first-frame listener is attached before rendering starts; poll the same
+        // internal state CloudStream updates from onRenderedFirstFrame().
+        val firstFrameField = runCatching {
+            CS3IPlayer::class.java.getDeclaredField("hasUsedFirstRender").also { it.isAccessible = true }
+        }.getOrNull()
+
+        fun refreshFirstFrameState() {
+            if (firstFrame.get()) return
+            val rendered = runCatching { firstFrameField?.getBoolean(player) == true }.getOrDefault(false)
+            if (rendered) {
+                firstFrame.set(true)
+                firstFrameAt.compareAndSet(0L, System.currentTimeMillis())
+                Log.d("NEON_PLAYBACK", "Rendered first frame detected via CS3IPlayer state")
+            }
+        }
+
         var lastPosition = 0L
         var bestPosition = 0L
         var advancedSamples = 0
@@ -157,6 +175,7 @@ class NeonPlaybackSmokeTest {
 
         while (System.currentTimeMillis() < endAt) {
             Thread.sleep(500L)
+            refreshFirstFrameState()
 
             val isPlayingNow = runCatching {
                 player.getIsPlaying()
@@ -173,6 +192,8 @@ class NeonPlaybackSmokeTest {
                 }
             }
 
+            refreshFirstFrameState()
+
             val current = runCatching {
                 player.getPosition() ?: 0L
             }.getOrDefault(0L).coerceAtLeast(0L)
@@ -187,9 +208,11 @@ class NeonPlaybackSmokeTest {
 
             lastPosition = current
 
-            // A rendered frame is the most reliable smoke-test signal here.
-            // Some remote streams keep the wrapper position at 0 while the first
-            // decoded video frame is already visible.
+            // A rendered frame is the strongest smoke-test signal. We accept both
+            // the listener callback and CS3IPlayer's own first-render state so a
+            // callback that fired before our reflective listener was attached is
+            // not reported as a false negative.
+            refreshFirstFrameState()
             val renderedAt = firstFrameAt.get()
             if (firstFrame.get() && renderedAt > 0L &&
                 System.currentTimeMillis() - renderedAt >= MIN_PLAYBACK_MS
@@ -207,6 +230,7 @@ class NeonPlaybackSmokeTest {
         }.getOrDefault(0L).coerceAtLeast(0L)
 
         val error = playerError.get()
+        refreshFirstFrameState()
         val played = firstFrame.get() ||
             (bestPosition >= MIN_PLAYBACK_MS && advancedSamples >= 2)
 
@@ -481,6 +505,6 @@ class NeonPlaybackSmokeTest {
         )
     }
 }
-// smoke trigger v7
+// smoke trigger v8
 
-// real player smoke v7
+// real player smoke v8
