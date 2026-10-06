@@ -153,15 +153,17 @@ class DiziPal : NeonMainAPI() {
                 pageUrl,
                 TvType.Movie,
                 pageUrl,
-            ),
-            document = document,
-            baseUrl = pageUrl,
-        ) {
+            ) {
+
                 posterUrl = poster
                 this.plot = plot
                 this.year = year
                 rating?.let { score = Score.from10(it) }
-            }
+            
+            },
+            document = document,
+            baseUrl = pageUrl,
+        )
         }
 
         val episodes = parseEpisodes(document, poster)
@@ -172,15 +174,17 @@ class DiziPal : NeonMainAPI() {
             pageUrl,
             TvType.TvSeries,
             episodes,
-        ),
-            document = document,
-            baseUrl = pageUrl,
         ) {
+
             posterUrl = poster
             this.plot = plot
             this.year = year
             rating?.let { score = Score.from10(it) }
-        }
+        
+            },
+            document = document,
+            baseUrl = pageUrl,
+        )
     }
 
     override suspend fun loadLinks(
