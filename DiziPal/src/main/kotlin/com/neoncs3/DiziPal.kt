@@ -393,6 +393,15 @@ class DiziPal : NeonMainAPI() {
             }
         }
 
+        if (!found) {
+            found = neonResolveLinks(
+                data = data,
+                sourceName = "DiziPal Fallback",
+                subtitleCallback = subtitleCallback,
+                callback = callback,
+            )
+        }
+
         return found
     }
 
