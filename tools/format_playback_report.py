@@ -16,11 +16,30 @@ if not report.exists():
     )
     raise SystemExit(0)
 
-data = json.loads(report.read_text(encoding="utf-8"))
+try:
+    raw = report.read_text(encoding="utf-8").strip()
+    data = json.loads(raw) if raw else {
+        "results": [],
+        "pass": 0,
+        "blocked": 0,
+        "fail": 1,
+        "error": "Playback raporu boş veya alınamadı",
+    }
+except (OSError, json.JSONDecodeError) as exc:
+    data = {
+        "results": [],
+        "pass": 0,
+        "blocked": 0,
+        "fail": 1,
+        "error": f"Playback raporu okunamadı: {exc}",
+    }
+
 rows = [
     "# 🎬 NeonCS Gerçek Oynatma Durumu",
     "",
     f"**PASS:** {data.get('pass', 0)}  **BLOCKED:** {data.get('blocked', 0)}  **FAIL:** {data.get('fail', 0)}",
+    "",
+    f"**Hata:** {data.get('error')}" if data.get("error") else "",
     "",
     "| Provider | Durum | Link | Position | Sorgu | İçerik | Hata |",
     "|---|---|---:|---:|---|---|---|",
