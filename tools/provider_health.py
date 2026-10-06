@@ -17,10 +17,10 @@ EXCLUDED = {
 }
 
 MEDIA_RE = re.compile(
-    r"""(?i)(?:https?:)?//[^"'<>\\s]+?(?:\\.m3u8|\\.mpd|\\.mp4|\\.m4v|\\.webm|\\.mov)"""
+    r"""(?i)(?:https?:)?//[^"'<>\s]+?(?:\.m3u8|\.mpd|\.mp4|\.m4v|\.webm|\.mov)"""
 )
 IFRAME_RE = re.compile(
-    r"""(?i)<iframe\\b[^>]*(?:src|data-src|data-url|data-vsrc|data-video-src|data-player)=["'][^"']+["']"""
+    r"""(?i)<iframe\b[^>]*(?:src|data-src|data-url|data-vsrc|data-video-src|data-player)=["'][^"']+["']"""
 )
 
 def read_json(path: Path, fallback):
@@ -35,12 +35,12 @@ def find_provider_file(module: Path):
         return None
     for path in source.rglob("*.kt"):
         text = path.read_text(encoding="utf-8", errors="replace")
-        if re.search(r"class\\s+\\w+\\s*:\\s*NeonMainAPI\\s*\\(\\s*\\)", text):
+        if re.search(r"class\s+\w+\s*:\s*NeonMainAPI\s*\(\s*\)", text):
             return path
     return None
 
 def extract_main_url(text: str):
-    match = re.search(r'override\\s+var\\s+mainUrl\\s*=\\s*"([^"]+)"', text)
+    match = re.search(r'override\s+var\s+mainUrl\s*=\s*"([^"]+)"', text)
     return match.group(1).strip().rstrip("/") if match else None
 
 def live_check(scraper, url: str):
@@ -53,7 +53,7 @@ def live_check(scraper, url: str):
             "status_code": response.status_code,
             "final_url": response.url.rstrip("/"),
             "bytes": len(response.content or b""),
-            "title": re.sub(r"\\s+", " ", title_match.group(1)).strip()[:120] if title_match else "",
+            "title": re.sub(r"\s+", " ", title_match.group(1)).strip()[:120] if title_match else "",
             "media_hints": len(MEDIA_RE.findall(body)),
             "iframe_hints": len(IFRAME_RE.findall(body)),
             "error": None,
@@ -99,9 +99,9 @@ def analyse(module: Path, domains: dict[str, str], scraper):
     load_links_area = low[pos:pos + 16000] if pos >= 0 else ""
 
     pipelines = {
-        "load": bool(re.search(r"override\\s+suspend\\s+fun\\s+load\\s*\\(", source)),
-        "search": bool(re.search(r"override\\s+suspend\\s+fun\\s+search\\s*\\(", source)),
-        "loadLinks": bool(re.search(r"override\\s+suspend\\s+fun\\s+loadLinks\\s*\\(", source)),
+        "load": bool(re.search(r"override\s+suspend\s+fun\s+load\s*\(", source)),
+        "search": bool(re.search(r"override\s+suspend\s+fun\s+search\s*\(", source)),
+        "loadLinks": bool(re.search(r"override\s+suspend\s+fun\s+loadLinks\s*\(", source)),
         "metadata": "neonenrichresponse(" in low,
         "video": "neonresolvelinks(" in low or "neonresolvelinkcandidates(" in low,
         "subtitles": "neonresolvelinks(" in low or "neonemitsubtitle(" in low,
