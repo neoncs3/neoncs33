@@ -9,7 +9,7 @@ import org.jsoup.nodes.Element
 import java.net.URI
 import java.net.URLDecoder
 
-class AsyaFilmIzle : MainAPI() {
+class AsyaFilmIzle : NeonMainAPI() {
     override var mainUrl = "https://asyafilmizle.com"
     override var name = "AsyaFilmİzle"
     override var lang = "tr"
