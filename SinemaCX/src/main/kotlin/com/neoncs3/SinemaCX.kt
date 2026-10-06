@@ -540,7 +540,7 @@ class SinemaCX : NeonMainAPI() {
 
         var emittedAny = false
         streamUrls.forEachIndexed { index, streamUrl ->
-            val linkName = if (index == 0) sourceLabel else "$" + "{sourceLabel} | Alternatif " + (index + 1)
+            val linkName = if (index == 0) sourceLabel else sourceLabel + " | Alternatif " + (index + 1)
 
             callback(
                 newExtractorLink(
