@@ -384,6 +384,7 @@ class SinemaCX : NeonMainAPI() {
     private suspend fun extractFilmizleLink(
         iframeUrl: String,
         filmReferer: String,
+        sourceLabel: String,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
@@ -525,7 +526,7 @@ class SinemaCX : NeonMainAPI() {
         callback(
             newExtractorLink(
                 source = "FilmizleIn",
-                name = "SinemaCX | 1080p",
+                name = sourceLabel,
                 url = streamUrl,
                 type = if (streamUrl.contains(".m3u8", true)) {
                     ExtractorLinkType.M3U8
@@ -753,6 +754,8 @@ override suspend fun loadLinks(
         return result
     }
 
+    var sourceCounter = 0
+
     suspend fun resolveDocument(
         document: org.jsoup.nodes.Document,
         filmUrl: String
@@ -760,31 +763,36 @@ override suspend fun loadLinks(
         val iframes = collectIframes(document)
         Log.d(SCX_TAG, "Player adayları=" + iframes.size)
 
-        // Önce Filmizle/Panel kaynaklarının tamamını dene.
+        if (iframes.isEmpty()) return false
+
+        var foundAny = false
+
+        // Aynı sayfadaki Filmizle/Panel kaynaklarının TAMAMINI dene.
         for (iframe in iframes) {
             if (
                 iframe.contains("player.filmizle.in", true) ||
                 iframe.contains("panel.sinema.cx", true)
             ) {
-                if (extractFilmizleLink(
-                        iframeUrl = iframe,
-                        filmReferer = filmUrl,
-                        subtitleCallback = subtitleCallback,
-                        callback = callback
-                    )
-                ) {
-                    return true
-                }
+                val sourceNumber = ++sourceCounter
+                val found = extractFilmizleLink(
+                    iframeUrl = iframe,
+                    filmReferer = filmUrl,
+                    sourceLabel = "SinemaCX | Kaynak $sourceNumber | 1080p",
+                    subtitleCallback = subtitleCallback,
+                    callback = callback
+                )
+                if (found) foundAny = true
             }
         }
 
-        // Doğrudan m3u8/mp4 varsa kullan.
+        // Aynı sayfadaki doğrudan m3u8/mp4 kaynaklarının TAMAMINI ekle.
         for (iframe in iframes) {
             if (iframe.contains(".m3u8", true) || iframe.contains(".mp4", true)) {
+                val sourceNumber = ++sourceCounter
                 callback(
                     newExtractorLink(
                         source = this.name,
-                        name = "SinemaCX | Doğrudan Kaynak",
+                        name = "SinemaCX | Kaynak $sourceNumber | Doğrudan",
                         url = iframe,
                         type = if (iframe.contains(".m3u8", true)) {
                             ExtractorLinkType.M3U8
@@ -800,11 +808,11 @@ override suspend fun loadLinks(
                         )
                     }
                 )
-                return true
+                foundAny = true
             }
         }
 
-        // Diğer CloudStream extractor'ları.
+        // Diğer CloudStream extractor'ları da ilk başarılıda kesmeden dene.
         for (iframe in iframes) {
             if (
                 iframe.contains("player.filmizle.in", true) ||
@@ -816,15 +824,18 @@ override suspend fun loadLinks(
             }
 
             val found = runCatching {
+                var emitted = false
                 loadExtractor(iframe, filmUrl, subtitleCallback) { link ->
+                    emitted = true
                     callback(link)
                 }
+                emitted
             }.getOrDefault(false)
 
-            if (found) return true
+            if (found) foundAny = true
         }
 
-        return false
+        return foundAny
     }
 
     val firstResponse = runCatching {
@@ -842,10 +853,8 @@ override suspend fun loadLinks(
 
     if (!firstResponse.isSuccessful) return false
 
-    // Önce normal film sayfası.
-    if (resolveDocument(firstResponse.document, data)) {
-        return true
-    }
+    // Normal film sayfasındaki TÜM player kaynaklarını topla.
+    var foundAny = resolveDocument(firstResponse.document, data)
 
     // İlk sayfada player bozuk/eksikse, başarısızlıktan SONRA /2/ sayfasını dene.
     val part2Url = firstResponse.document
@@ -870,9 +879,14 @@ override suspend fun loadLinks(
 
         if (secondResponse?.isSuccessful == true) {
             if (resolveDocument(secondResponse.document, part2Url)) {
-                return true
+                foundAny = true
             }
         }
+    }
+
+    if (foundAny) {
+        Log.d(SCX_TAG, "Toplanan video kaynakları tamamlandı: " + data)
+        return true
     }
 
     Log.e(SCX_TAG, "Hiçbir video kaynağı çözülemedi: " + data)
