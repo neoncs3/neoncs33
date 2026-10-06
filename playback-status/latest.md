@@ -1,7 +1,8 @@
 # 🎬 NeonCS Gerçek Oynatma Durumu
 
-Android emulator üzerinde gerçek CloudStream ExoPlayer testi ile güncellenir.
+**PASS:** 0  **BLOCKED:** 0  **FAIL:** 1
 
-🟢 PASS = ExtractorLink gerçek CS3IPlayer ile açıldı ve position 1500 ms üzerine çıktı.
-🟡 BLOCKED = Test ortamı anti-bot/Cloudflare tarafından engellendi.
-🔴 FAIL = Link bulundu fakat gerçek playback ilerlemedi.
+**Hata:** Playback raporu okunamadı: Expecting value: line 1 column 1 (char 0)
+
+| Provider | Durum | Link | Position | Sorgu | İçerik | Hata |
+|---|---|---:|---:|---|---|---|
