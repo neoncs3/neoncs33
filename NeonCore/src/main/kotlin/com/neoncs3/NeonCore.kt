@@ -174,11 +174,11 @@ open class NeonMainAPI : MainAPI() {
         if (normalized.isBlank()) return emptyList()
 
         val directPattern = Regex(
-            """(?i)(?:https?:)?//[^"'<>\\s]+?(?:\\.m3u8|\\.mpd|\\.mp4|\\.m4v|\\.webm|\\.mov)(?:\\?[^"'<>\\s]*)?"""
+            """(?i)(?:https?:)?//[^"'<>\s]+?(?:\.m3u8|\.mpd|\.mp4|\.m4v|\.webm|\.mov)(?:\?[^"'<>\s]*)?"""
         )
 
         val attributePattern = Regex(
-            """(?is)(?:src|file|source|stream|url|videoSource|securedLink|hls|playlist)\\s*[:=]\\s*["']([^"'<>\\s]+)["']"""
+            """(?is)(?:src|file|source|stream|url|videoSource|securedLink|hls|playlist)\s*[:=]\s*["']([^"'<>\s]+)["']"""
         )
 
         return buildList {
@@ -398,7 +398,7 @@ open class NeonMainAPI : MainAPI() {
 
     protected fun neonExtractDuration(document: Document): Int? {
         return Regex(
-            """(?i)(?:^|\\s)(\\d{1,3})\\s*(?:dakika|dk|min(?:ute)?s?)\\b"""
+            """(?i)(?:^|\s)(\d{1,3})\s*(?:dakika|dk|min(?:ute)?s?)\b"""
         )
             .find(document.text())
             ?.groupValues
@@ -447,7 +447,7 @@ open class NeonMainAPI : MainAPI() {
     protected fun neonExtractTrailer(document: Document, baseUrl: String = mainUrl): String? {
         val html = document.html().replace("\\\\/", "/")
         val youtube = Regex(
-            """(?i)(?:https?:)?//(?:www\\.)?(?:youtube\\.com/(?:watch\\?v=|embed/)|youtu\\.be/)[^"'< >\\s]+"""
+            """(?i)(?:https?:)?//(?:www\.)?(?:youtube\.com/(?:watch\?v=|embed/)|youtu\.be/)[^"'<>\s]+"""
         )
             .find(html)
             ?.value
