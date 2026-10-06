@@ -15,6 +15,7 @@ import com.lagradost.cloudstream3.utils.newExtractorLink
 import com.lagradost.cloudstream3.newSubtitleFile
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
+import org.json.JSONObject
 import java.net.URI
 
 /**
@@ -546,6 +547,95 @@ open class NeonMainAPI : MainAPI() {
         return found
     }
 
+    private companion object {
+        const val NEON_DOMAIN_MANIFEST_URL =
+            "https://raw.githubusercontent.com/neoncs3/neoncs33/master/NeonCore/domains.json"
+        const val NEON_DOMAIN_MANIFEST_CACHE_KEY = "neon:domain-manifest"
+        const val NEON_DOMAIN_MANIFEST_TTL_MS = 21_600_000L
+    }
+
+    private suspend fun neonRemoteDomain(): String? {
+        val providerName = name.trim()
+        if (providerName.isBlank()) return null
+
+        val raw = NeonMemoryCache.get(NEON_DOMAIN_MANIFEST_CACHE_KEY) ?: runCatching {
+            app.get(
+                NEON_DOMAIN_MANIFEST_URL + "?v=" +
+                    (System.currentTimeMillis() / NEON_DOMAIN_MANIFEST_TTL_MS),
+                headers = neonHeaders,
+                timeout = neonRequestTimeoutMs.toLong(),
+                allowRedirects = true,
+            ).takeIf { it.isSuccessful }?.text
+        }.getOrNull()?.also {
+            NeonMemoryCache.put(
+                NEON_DOMAIN_MANIFEST_CACHE_KEY,
+                it,
+                NEON_DOMAIN_MANIFEST_TTL_MS,
+            )
+        } ?: return null
+
+        return runCatching {
+            val value = JSONObject(raw).optString(providerName).trim()
+            if (value.isBlank()) return@runCatching null
+
+            val uri = URI(value)
+            if (uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank()) {
+                null
+            } else {
+                buildString {
+                    append(uri.scheme)
+                    append("://")
+                    append(uri.host)
+                    if (uri.port > 0) append(":").append(uri.port)
+                }.trimEnd('/')
+            }
+        }.getOrNull()
+    }
+
+    private suspend fun neonRuntimeCandidates(
+        normalized: String,
+        referer: String,
+    ): List<Pair<String, String>> {
+        val mainUri = runCatching { URI(mainUrl) }.getOrNull()
+            ?: return listOf(normalized to referer)
+        val requestUri = runCatching { URI(normalized) }.getOrNull()
+            ?: return listOf(normalized to referer)
+
+        if (!mainUri.host.isNullOrBlank() &&
+            !requestUri.host.isNullOrBlank() &&
+            !requestUri.host.equals(mainUri.host, ignoreCase = true)
+        ) {
+            return listOf(normalized to referer)
+        }
+
+        val remoteDomain = neonRemoteDomain()
+        if (remoteDomain.isNullOrBlank()) {
+            return listOf(normalized to referer)
+        }
+
+        val remoteUri = runCatching { URI(remoteDomain) }.getOrNull()
+            ?: return listOf(normalized to referer)
+
+        if (remoteUri.host.equals(mainUri.host, ignoreCase = true)) {
+            return listOf(normalized to referer)
+        }
+
+        val rewritten = runCatching {
+            URI(
+                remoteUri.scheme,
+                remoteUri.rawAuthority,
+                requestUri.rawPath,
+                requestUri.rawQuery,
+                requestUri.rawFragment,
+            ).toString()
+        }.getOrNull() ?: return listOf(normalized to referer)
+
+        return listOf(
+            rewritten to "$remoteDomain/",
+            normalized to referer,
+        ).distinctBy { it.first }
+    }
+
     protected suspend fun neonCachedHtml(
         url: String,
         referer: String = mainUrl,
@@ -557,18 +647,24 @@ open class NeonMainAPI : MainAPI() {
         val key = "html:$normalized"
         NeonMemoryCache.get(key)?.let { return it }
 
-        val html = runCatching {
-            app.get(
-                normalized,
-                headers = neonHeaders + ("Referer" to referer),
-                referer = referer,
-                timeout = neonRequestTimeoutMs.toLong(),
-                allowRedirects = true,
-            ).takeIf { it.isSuccessful }?.text
-        }.getOrNull() ?: return null
+        for ((requestUrl, requestReferer) in neonRuntimeCandidates(normalized, referer)) {
+            val html = runCatching {
+                app.get(
+                    requestUrl,
+                    headers = neonHeaders + ("Referer" to requestReferer),
+                    referer = requestReferer,
+                    timeout = neonRequestTimeoutMs.toLong(),
+                    allowRedirects = true,
+                ).takeIf { it.isSuccessful }?.text
+            }.getOrNull()
 
-        NeonMemoryCache.put(key, html, ttlMs)
-        return html
+            if (!html.isNullOrBlank()) {
+                NeonMemoryCache.put(key, html, ttlMs)
+                return html
+            }
+        }
+
+        return null
     }
 
     protected suspend fun neonCachedDocument(
@@ -576,7 +672,9 @@ open class NeonMainAPI : MainAPI() {
         referer: String = mainUrl,
         ttlMs: Long = neonCacheTtlMs,
     ): Document? {
-        return neonCachedHtml(url, referer, ttlMs)?.let { Jsoup.parse(it, neonNormalizeUrl(url, referer)) }
+        return neonCachedHtml(url, referer, ttlMs)?.let {
+            Jsoup.parse(it, neonNormalizeUrl(url, referer))
+        }
     }
 
     protected suspend fun neonFindHealthyDomain(
