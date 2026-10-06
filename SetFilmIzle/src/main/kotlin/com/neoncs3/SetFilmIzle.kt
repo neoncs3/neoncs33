@@ -204,12 +204,16 @@ class SetFilmIzle : NeonMainAPI() {
 
         if (isSeries) {
             val episodes = parseEpisodes(document, poster)
-            return newTvSeriesLoadResponse(
+            return neonEnrichResponse(
+            newTvSeriesLoadResponse(
                 title,
                 pageUrl,
                 TvType.TvSeries,
                 episodes,
-            ) {
+            ),
+            document = document,
+            baseUrl = pageUrl,
+        ) {
                 posterUrl = poster
                 this.plot = plot
                 this.year = year
@@ -217,11 +221,15 @@ class SetFilmIzle : NeonMainAPI() {
             }
         }
 
-        return newMovieLoadResponse(
+        return neonEnrichResponse(
+            newMovieLoadResponse(
             title,
             pageUrl,
             TvType.Movie,
             buildLinkData(document, pageUrl),
+        ),
+            document = document,
+            baseUrl = pageUrl,
         ) {
             posterUrl = poster
             this.plot = plot
