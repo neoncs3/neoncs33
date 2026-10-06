@@ -876,6 +876,14 @@ override suspend fun loadLinks(
     }
 
     Log.e(SCX_TAG, "Hiçbir video kaynağı çözülemedi: " + data)
+    val neonFound = neonResolveLinks(
+        data = data,
+        sourceName = "$name - NeonCore",
+        subtitleCallback = subtitleCallback,
+        callback = callback,
+    )
+    if (neonFound) return true
+
     return false
 }
 
