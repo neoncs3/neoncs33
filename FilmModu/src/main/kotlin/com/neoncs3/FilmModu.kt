@@ -252,7 +252,11 @@ class FilmModu : NeonMainAPI() {
             }
             .firstOrNull()
 
-        return newMovieLoadResponse(title, url, TvType.Movie, url) {
+        return neonEnrichResponse(
+            newMovieLoadResponse(title, url, TvType.Movie, url),
+            document = document,
+            baseUrl = url,
+        ) {
             posterUrl = poster
             posterHeaders = mapOf(
                 "User-Agent" to USER_AGENT,
