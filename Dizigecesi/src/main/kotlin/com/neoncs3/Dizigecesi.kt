@@ -284,10 +284,8 @@ class Dizigecesi : NeonMainAPI() {
                 url,
                 TvType.Movie,
                 url
-            ),
-            document = document,
-            baseUrl = url,
-        ) {
+            ) {
+
                 posterUrl = poster
                 backgroundPosterUrl = backdrop
                 this.plot = plot
@@ -296,7 +294,11 @@ class Dizigecesi : NeonMainAPI() {
                 score?.let { this.score = Score.from10(it.toString()) }
                 addActors(actors)
                 trailer?.let { addTrailer(it) }
-            }
+            
+            },
+            document = document,
+            baseUrl = url,
+        )
         }
 
         val episodes = parseEpisodes(document, poster)
@@ -307,10 +309,8 @@ class Dizigecesi : NeonMainAPI() {
             url,
             TvType.TvSeries,
             episodes
-        ),
-            document = document,
-            baseUrl = url,
         ) {
+
             posterUrl = poster
             backgroundPosterUrl = backdrop
             this.plot = plot
@@ -319,7 +319,11 @@ class Dizigecesi : NeonMainAPI() {
             score?.let { this.score = Score.from10(it.toString()) }
             addActors(actors)
             trailer?.let { addTrailer(it) }
-        }
+        
+            },
+            document = document,
+            baseUrl = url,
+        )
     }
 
     private suspend fun fetchTmdbDetail(
