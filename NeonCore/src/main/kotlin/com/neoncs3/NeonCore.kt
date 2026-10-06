@@ -312,7 +312,7 @@ open class NeonMainAPI : MainAPI() {
                     normalized,
                     headers = neonHeaders + ("Referer" to referer),
                     referer = referer,
-                    timeout = neonRequestTimeoutMs,
+                    timeout = neonRequestTimeoutMs.toLong(),
                     allowRedirects = true,
                 ).takeIf { it.isSuccessful }?.text
             }.getOrNull()?.also {
@@ -361,7 +361,7 @@ open class NeonMainAPI : MainAPI() {
                 normalized,
                 headers = neonHeaders + ("Referer" to referer),
                 referer = referer,
-                timeout = neonRequestTimeoutMs,
+                timeout = neonRequestTimeoutMs.toLong(),
                 allowRedirects = true,
             ).takeIf { it.isSuccessful }?.text
         }.getOrNull() ?: return null
