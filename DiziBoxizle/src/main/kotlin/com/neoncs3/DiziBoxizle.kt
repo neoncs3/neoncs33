@@ -527,7 +527,7 @@ class DiziBoxizle : NeonMainAPI() {
                 .replace("vidmoly.to", "vidmoly.biz", ignoreCase = true)
                 .replace("vidmoly.net", "vidmoly.biz", ignoreCase = true)
 
-            val firstResponse = runCatching {
+            val firstResponse = try {
                 app.get(
                     normalized,
                     headers = mapOf(
@@ -540,8 +540,8 @@ class DiziBoxizle : NeonMainAPI() {
                     ),
                     referer = episodeUrl,
                 )
-            }.getOrElse {
-                Log.e("DZBX", "VidMoly HTTP exception page=" + normalized + " error=" + it.message)
+            } catch (error: Exception) {
+                Log.e("DZBX", "VidMoly HTTP exception page=" + normalized + " error=" + error.message)
                 continue
             }
 
