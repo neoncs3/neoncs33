@@ -80,7 +80,16 @@ jobs:
           OPEN_PR=$(gh pr list --repo "$REPO_OWNER/$REPO_NAME"             --head "$BRANCH"             --base "master"             --state open             --json number             --jq 'length')
 
           if [[ "$OPEN_PR" == "0" ]]; then
-            gh pr create               --repo "$REPO_OWNER/$REPO_NAME"               --head "$BRANCH"               --base "master"               --title "♻️ Domain Değişikliği"               --body "🔄 Otomatik domain değişikliği algılandı. mainUrl değerleri ve NeonCore manifesti güncellendi."
+            echo ">>> Otomatik domain PR oluşturuluyor..."
+            if gh pr create               --repo "$REPO_OWNER/$REPO_NAME"               --head "$BRANCH"               --base "master"               --title "♻️ Domain Değişikliği"               --body "🔄 Otomatik domain değişikliği algılandı. mainUrl değerleri ve NeonCore manifesti güncellendi."; then
+              echo "[+] Domain PR başarıyla oluşturuldu."
+            else
+              echo "::warning::GitHub Actions token'ı PR oluşturmaya izin vermiyor. Domain branch'i başarıyla push edildi; PR manuel olarak oluşturulabilir."
+              echo "::notice::Branch: $BRANCH -> master"
+              # Domain kontrolünün sırf PR oluşturma politikası nedeniyle
+              # kırmızı görünmesini engelle.
+              exit 0
+            fi
           fi
 
       - name: Açık PR nedeniyle atlandı
