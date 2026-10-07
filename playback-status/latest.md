@@ -10,7 +10,7 @@
 | **DiziBoxizle** | 🔴 FAIL | 0 | 0 ms | - | - | loadLinks=false |
 | **DiziPal** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
 | **Dizigecesi** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
-| **Dramadizilerim** | 🟢 PASS | 1 | 0 ms | - | Sözleşmeli Koca, Gerçek Aşk | - |
+| **Dramadizilerim** | 🟢 PASS | 1 | 0 ms | - | ANTİK TANRIYLA YASAK AŞK | - |
 | **FilmModu** | 🟡 BLOCKED | 8 | 0 ms | - | Inception | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
 | **JetFilmizle** | 🟢 PASS | 1 | 0 ms | - | Yıldızlararası | - |
 | **SetFilmIzle** | 🟢 PASS | 1 | 0 ms | - | Başlangıç | - |
