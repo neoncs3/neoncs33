@@ -8,6 +8,7 @@ import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import com.lagradost.cloudstream3.utils.getAndUnpack
+import com.lagradost.cloudstream3.extractors.helper.JWPlayerHelper
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
@@ -532,9 +533,7 @@ class DiziBoxizle : NeonMainAPI() {
                 .replace("vidmoly.to", "vidmoly.biz", ignoreCase = true)
                 .replace("vidmoly.net", "vidmoly.biz", ignoreCase = true)
 
-            val html = runCatching {
-                // Keep this request intentionally simple. Some VidMoly mirrors reject
-                // the site's Referer/Sec-Fetch headers but accept a normal browser UA.
+            val response = runCatching {
                 app.get(
                     normalized,
                     headers = mapOf(
@@ -544,8 +543,57 @@ class DiziBoxizle : NeonMainAPI() {
                         "Accept-Language" to "tr-TR,tr;q=0.9,en;q=0.8",
                     ),
                     referer = episodeUrl,
-                ).text
+                )
             }.getOrNull() ?: continue
+
+            val document = response.document
+            val html = response.text
+
+            // First use the same JWPlayer parser CloudStream's VidMoly extractor uses,
+            // but inspect every script. The upstream extractor only selects scripts whose
+            // raw text literally contains "sources:", which can miss quoted/packed variants.
+            for (scriptElement in document.select("script")) {
+                val scriptData = scriptElement.data().ifBlank { scriptElement.html() }
+                if (scriptData.isBlank()) continue
+
+                val unpacked = runCatching { getAndUnpack(scriptData) }
+                    .getOrNull()
+                    ?.takeIf { it.isNotBlank() && it != scriptData }
+
+                val scriptCandidates = listOfNotNull(scriptData, unpacked).distinct()
+                for (script in scriptCandidates) {
+                    if (!JWPlayerHelper.canParseJwScript(script)) continue
+
+                    val emittedBefore = candidates.size
+                    val callbackCount = java.util.concurrent.atomic.AtomicInteger(0)
+                    val helperCallback: (ExtractorLink) -> Unit = { link ->
+                        callbackCount.incrementAndGet()
+                        callback(link)
+                    }
+
+                    runCatching {
+                        JWPlayerHelper.extractStreamLinks(
+                            script = script,
+                            sourceName = name,
+                            mainUrl = originOf(normalized) ?: "https://vidmoly.biz",
+                            callback = helperCallback,
+                            subtitleCallback = { },
+                            headers = mapOf(
+                                "User-Agent" to BROWSER_USER_AGENT,
+                                "Referer" to (originOf(normalized)?.plus("/") ?: normalized),
+                            ),
+                        )
+                    }
+
+                    if (callbackCount.get() > 0) {
+                        Log.d(
+                            "DZBX",
+                            "VidMoly JWPlayer kaynak bulundu: $normalized links=${callbackCount.get()}",
+                        )
+                        return true
+                    }
+                }
+            }
 
             val searchable = buildString {
                 append(html.decodeEmbeddedText())
@@ -560,33 +608,36 @@ class DiziBoxizle : NeonMainAPI() {
 
             val streamUrls = LinkedHashSet<String>()
 
-            // VidMoly's current classic player exposes the HLS source as:
-            // file: "https://...m3u8..."
+            // Explicit JWPlayer source fields. Support absolute and relative URLs and all
+            // common HLS manifest extensions used by VidMoly.
             Regex(
-                """(?is)\bfile\s*[:=]\s*["'](https?://[^"']+(?:\.m3u8|\.mpd|\.txt)(?:\?[^"']+)?)["']"""
-            ).findAll(searchable).forEach {
-                streamUrls.add(it.groupValues[1].trim())
-            }
+                """(?is)\b(?:file|src|url|source|hls)\s*[:=]\s*["']((?:https?:)?//[^"']+\.(?:m3u8|mpd|txt|mp4)(?:\?[^"']+)?|/[^"']+\.(?:m3u8|mpd|txt|mp4)(?:\?[^"']+)?)["']"""
+            ).findAll(searchable)
+                .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
+                .forEach(streamUrls::add)
 
-            // Also support src/url/source/hls variants used by mirrors.
+            // Generic manifest URL fallback for providers that build the source object
+            // dynamically instead of using a literal file/src key.
             Regex(
-                """(?is)\b(?:src|url|source|hls)\s*[:=]\s*["'](https?://[^"']+(?:\.m3u8|\.mpd|\.txt)(?:\?[^"']+)?)["']"""
-            ).findAll(searchable).forEach {
-                streamUrls.add(it.groupValues[1].trim())
-            }
+                """(?is)((?:https?:)?//[^\s"'<>]+(?:master|index|playlist)[^\s"'<>]*\.(?:m3u8|txt)(?:\?[^\s"'<>]*)?)"""
+            ).findAll(searchable)
+                .map { it.groupValues[1].trimEnd(')', ']', '}', ';', ',') }
+                .forEach(streamUrls::add)
+
+            Regex(
+                """(?is)(/[^\s"'<>]+(?:master|index|playlist)[^\s"'<>]*\.(?:m3u8|txt)(?:\?[^\s"'<>]*)?)"""
+            ).findAll(searchable)
+                .map { it.groupValues[1].trimEnd(')', ']', '}', ';', ',') }
+                .forEach(streamUrls::add)
 
             VMEAS_M3U8_PATTERN.findAll(searchable).forEach {
                 streamUrls.add(it.value.trimEnd(')', ']', '}', ';', ','))
             }
 
-            Regex(
-                """(?i)/(?:[^"'\s<>]+)/(?:[^"'\s<>]+)?(?:master\.txt|master\.m3u8|index[^"'\s<>]*\.m3u8)(?:\?[^"'\s<>]*)?"""
-            ).findAll(searchable).forEach {
-                streamUrls.add(it.value.trimEnd(')', ']', '}', ';', ','))
-            }
-
-            for (streamUrl in streamUrls) {
+            for (rawStreamUrl in streamUrls) {
+                val streamUrl = normalizeProviderMediaUrl(rawStreamUrl, normalized)
                 if (!isMediaUrl(streamUrl)) continue
+
                 emitMediaLink(streamUrl, normalized, callback)
                 Log.d("DZBX", "VidMoly direct source: $streamUrl")
                 return true
