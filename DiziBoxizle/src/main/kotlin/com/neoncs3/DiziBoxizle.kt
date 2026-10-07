@@ -313,36 +313,65 @@ class DiziBoxizle : NeonMainAPI() {
                     // Prefer CloudStream's native extractor first. The current Vidmoly
                     // extractor knows how to normalize /w/... embeds and resolve JWPlayer
                     // sources directly.
-                    val emittedBefore = emittedLinks.size
-                    val extracted = runCatching {
-                        loadExtractor(
-                            clean,
-                            episodeUrl,
-                            subtitleCallback,
-                            emitCallback,
-                        )
-                    }.getOrDefault(false)
-                    val nativeEmitted = emittedLinks.size > emittedBefore
+                    // DiziBOX currently uses VidMoly and OK.ru for the real
+                    // player. Resolve these hosts directly first instead of relying only on
+                    // CloudStream's generic extractor registry.
+                    val directProviderFound = when {
+                        isOkRuPlayer(clean) -> {
+                            extractOkRuMedia(
+                                clean,
+                                emitCallback,
+                            )
+                        }
 
-                    // loadExtractor() returns true when an extractor matches the host,
-                    // even when that extractor throws internally or emits no links.
-                    // In that case the local provider parser must still get a chance.
-                    if (extracted && !nativeEmitted) {
-                        Log.w(
-                            "DZBX",
-                            "Native extractor matched but emitted no link; local fallback: $clean",
-                        )
+                        isVidMolyPlayer(clean) -> {
+                            extractVidMolyMedia(
+                                clean,
+                                episodeUrl,
+                                emitCallback,
+                            )
+                        }
+
+                        else -> false
                     }
 
-                    val providerFound = if (!nativeEmitted) {
-                        extractProviderMedia(
-                            clean,
-                            episodeUrl,
-                            subtitleCallback,
-                            emitCallback,
-                        )
+                    val nativeEmitted: Boolean
+                    val providerFound: Boolean
+
+                    if (directProviderFound) {
+                        nativeEmitted = false
+                        providerFound = true
                     } else {
-                        false
+                        val emittedBefore = emittedLinks.size
+                        val extracted = runCatching {
+                            loadExtractor(
+                                clean,
+                                episodeUrl,
+                                subtitleCallback,
+                                emitCallback,
+                            )
+                        }.getOrDefault(false)
+                        nativeEmitted = emittedLinks.size > emittedBefore
+
+                        // A native extractor may claim a host even when it does not
+                        // return a usable stream. Give the local parser a second chance.
+                        if (extracted && !nativeEmitted) {
+                            Log.w(
+                                "DZBX",
+                                "Native extractor matched but emitted no link; local fallback: $clean",
+                            )
+                        }
+
+                        providerFound = if (!nativeEmitted) {
+                            extractProviderMedia(
+                                clean,
+                                episodeUrl,
+                                subtitleCallback,
+                                emitCallback,
+                            )
+                        } else {
+                            false
+                        }
                     }
 
                     found = providerFound || nativeEmitted || found
@@ -425,6 +454,210 @@ class DiziBoxizle : NeonMainAPI() {
                 headers = mediaHeaders
             }
         )
+    }
+
+
+    private fun isOkRuPlayer(url: String): Boolean {
+        val value = url.lowercase()
+        return value.contains("ok.ru") || value.contains("odnoklassniki")
+    }
+
+    private fun isVidMolyPlayer(url: String): Boolean {
+        val value = url.lowercase()
+        return value.contains("vidmoly")
+    }
+
+    private suspend fun extractVidMolyMedia(
+        providerUrl: String,
+        episodeUrl: String,
+        callback: (ExtractorLink) -> Unit,
+    ): Boolean {
+        val candidates = LinkedHashSet<String>()
+        candidates.add(providerUrl)
+
+        // Current DiziBOX pages may expose /w/{id}, /v/{id}, or the classic embed form.
+        vidMolyClassicUrl(providerUrl)?.let(candidates::add)
+
+        for (pageUrl in candidates) {
+            val normalized = pageUrl
+                .replace("vidmoly.to", "vidmoly.biz", ignoreCase = true)
+                .replace("vidmoly.net", "vidmoly.biz", ignoreCase = true)
+
+            val html = runCatching {
+                // Keep this request intentionally simple. Some VidMoly mirrors reject
+                // the site's Referer/Sec-Fetch headers but accept a normal browser UA.
+                app.get(
+                    normalized,
+                    headers = mapOf(
+                        "User-Agent" to USER_AGENT,
+                        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                        "Accept-Language" to "tr-TR,tr;q=0.9,en;q=0.8",
+                    ),
+                ).text
+            }.getOrNull() ?: continue
+
+            val searchable = buildString {
+                append(html.decodeEmbeddedText())
+                runCatching { getAndUnpack(html) }
+                    .getOrNull()
+                    ?.takeIf { it.isNotBlank() && it != html }
+                    ?.let {
+                        append("\n")
+                        append(it.decodeEmbeddedText())
+                    }
+            }
+
+            val streamUrls = LinkedHashSet<String>()
+
+            // VidMoly's current classic player exposes the HLS source as:
+            // file: "https://...m3u8..."
+            Regex(
+                """(?is)\bfile\s*[:=]\s*["'](https?://[^"']+\.m3u8(?:\?[^"']+)?)["']"""
+            ).findAll(searchable).forEach {
+                streamUrls.add(it.groupValues[1].trim())
+            }
+
+            // Also support src/url/source/hls variants used by mirrors.
+            Regex(
+                """(?is)\b(?:src|url|source|hls)\s*[:=]\s*["'](https?://[^"']+(?:\.m3u8|\.mpd)(?:\?[^"']+)?)["']"""
+            ).findAll(searchable).forEach {
+                streamUrls.add(it.groupValues[1].trim())
+            }
+
+            VMEAS_M3U8_PATTERN.findAll(searchable).forEach {
+                streamUrls.add(it.value.trimEnd(')', ']', '}', ';', ','))
+            }
+
+            for (streamUrl in streamUrls) {
+                if (!isMediaUrl(streamUrl)) continue
+                emitMediaLink(streamUrl, normalized, callback)
+                Log.d("DZBX", "VidMoly direct source: $streamUrl")
+                return true
+            }
+        }
+
+        Log.w("DZBX", "VidMoly source bulunamadı: $providerUrl")
+        return false
+    }
+
+    private suspend fun extractOkRuMedia(
+        providerUrl: String,
+        callback: (ExtractorLink) -> Unit,
+    ): Boolean {
+        val normalized = if (providerUrl.startsWith("//")) "https:$providerUrl" else providerUrl
+
+        val html = runCatching {
+            app.get(
+                normalized,
+                headers = mapOf(
+                    "User-Agent" to USER_AGENT,
+                    "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language" to "tr-TR,tr;q=0.9,en;q=0.8",
+                ),
+            ).text
+        }.getOrNull() ?: return false
+
+        val dataOptions = Regex(
+            """(?is)\bdata-options\s*=\s*["']([^"']+)["']"""
+        ).find(html)?.groupValues?.getOrNull(1)
+
+        if (dataOptions.isNullOrBlank()) {
+            Log.w("DZBX", "OK.ru data-options bulunamadı: $normalized")
+            return false
+        }
+
+        val decoded = dataOptions
+            .decodeEmbeddedText()
+            .replace("&apos;", "'")
+            .replace("&#39;", "'")
+            .replace("&#039;", "'")
+
+        val root = runCatching { org.json.JSONObject(decoded) }.getOrNull()
+            ?: return false
+
+        val flashvars = root.optJSONObject("flashvars") ?: return false
+
+        var metadataObject: org.json.JSONObject? = flashvars.optJSONObject("metadata")
+        if (metadataObject == null) {
+            val metadataRaw = flashvars.optString("metadata")
+            if (metadataRaw.isNotBlank()) {
+                metadataObject = runCatching {
+                    org.json.JSONObject(metadataRaw)
+                }.getOrNull()
+            }
+        }
+
+        val metadata = metadataObject ?: flashvars
+        var found = false
+
+        val videos = metadata.optJSONArray("videos")
+            ?: flashvars.optJSONArray("videos")
+
+        if (videos != null) {
+            val qualityMap = mapOf(
+                "full" to Qualities.P1080.value,
+                "hd" to Qualities.P720.value,
+                "sd" to Qualities.P480.value,
+                "low" to Qualities.P360.value,
+                "lowest" to Qualities.P240.value,
+                "mobile" to Qualities.P240.value,
+            )
+
+            for (i in 0 until videos.length()) {
+                val video = videos.optJSONObject(i) ?: continue
+                val mediaUrl = video.optString("url").trim()
+                if (mediaUrl.isBlank()) continue
+
+                val label = video.optString("name").ifBlank { "OK.ru" }
+                val quality = qualityMap[label.lowercase()]
+                    ?: qualityFromUrl(mediaUrl)
+
+                callback(
+                    newExtractorLink(
+                        source = name,
+                        name = "OK.ru",
+                        url = mediaUrl,
+                        type = ExtractorLinkType.VIDEO,
+                    ) {
+                        referer = normalized
+                        this.quality = quality
+                        headers = mapOf(
+                            "User-Agent" to USER_AGENT,
+                            "Referer" to normalized,
+                        )
+                    }
+                )
+
+                Log.d("DZBX", "OK.ru MP4: quality=$label url=$mediaUrl")
+                found = true
+            }
+        }
+
+        val hlsUrl = metadata.optString("hlsManifestUrl").ifBlank {
+            flashvars.optString("hlsManifestUrl")
+        }
+
+        if (hlsUrl.isNotBlank()) {
+            callback(
+                newExtractorLink(
+                    source = name,
+                    name = "OK.ru HLS",
+                    url = hlsUrl,
+                    type = ExtractorLinkType.M3U8,
+                ) {
+                    referer = normalized
+                    quality = Qualities.P1080.value
+                    headers = mapOf(
+                        "User-Agent" to USER_AGENT,
+                        "Referer" to normalized,
+                    )
+                }
+            )
+            Log.d("DZBX", "OK.ru HLS: $hlsUrl")
+            found = true
+        }
+
+        return found
     }
 
     private suspend fun extractProviderMedia(
@@ -850,6 +1083,11 @@ class DiziBoxizle : NeonMainAPI() {
             .replace("\\u003A", ":", ignoreCase = true)
             .replace("&amp;", "&", ignoreCase = true)
             .replace("&quot;", "\"", ignoreCase = true)
+            .replace("&apos;", "'", ignoreCase = true)
+            .replace("&#39;", "'", ignoreCase = true)
+            .replace("&#039;", "'", ignoreCase = true)
+            .replace("&lt;", "<", ignoreCase = true)
+            .replace("&gt;", ">", ignoreCase = true)
             .replace("&#x2F;", "/", ignoreCase = true)
             .replace("&#47;", "/", ignoreCase = true)
             .replace("\\u0026", "&", ignoreCase = true)
@@ -1098,5 +1336,3 @@ class DiziBoxizle : NeonMainAPI() {
         private val EPISODE_LABEL_PATTERN = Regex(
             "(?i)(\\d+)\\.\\s*Sezon\\s*(\\d+)\\.\\s*Bölüm"
         )
-    }
-}
