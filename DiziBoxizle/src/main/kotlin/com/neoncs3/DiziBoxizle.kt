@@ -29,7 +29,7 @@ class DiziBoxizle : NeonMainAPI() {
     )
 
     private val requestHeaders = mapOf(
-        "User-Agent" to USER_AGENT,
+        "User-Agent" to BROWSER_USER_AGENT,
         "Accept-Language" to "tr-TR,tr;q=0.9,en;q=0.8",
         "Referer" to "$mainUrl/",
     )
@@ -511,10 +511,12 @@ class DiziBoxizle : NeonMainAPI() {
                 app.get(
                     normalized,
                     headers = mapOf(
-                        "User-Agent" to USER_AGENT,
+                        "User-Agent" to BROWSER_USER_AGENT,
+                        "Sec-Fetch-Dest" to "iframe",
                         "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                         "Accept-Language" to "tr-TR,tr;q=0.9,en;q=0.8",
                     ),
+                    referer = episodeUrl,
                 ).text
             }.getOrNull() ?: continue
 
@@ -547,6 +549,12 @@ class DiziBoxizle : NeonMainAPI() {
             }
 
             VMEAS_M3U8_PATTERN.findAll(searchable).forEach {
+                streamUrls.add(it.value.trimEnd(')', ']', '}', ';', ','))
+            }
+
+            Regex(
+                """(?i)/(?:[^"'\s<>]+)/(?:[^"'\s<>]+)?(?:master\.txt|master\.m3u8|index[^"'\s<>]*\.m3u8)(?:\?[^"'\s<>]*)?"""
+            ).findAll(searchable).forEach {
                 streamUrls.add(it.value.trimEnd(')', ']', '}', ';', ','))
             }
 
@@ -1319,6 +1327,10 @@ class DiziBoxizle : NeonMainAPI() {
     }
 
     companion object {
+        private const val BROWSER_USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
+
         // VidMoly classic embeds commonly expose:
         // sources: [{ file: "https://.../master.m3u8?..." }]
         private val PROVIDER_SOURCE_PATTERN = Regex(
