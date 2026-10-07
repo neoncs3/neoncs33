@@ -290,7 +290,19 @@ class DiziBoxizle : NeonMainAPI() {
 
         var found = false
 
-        for (candidate in candidates) {
+        // Prefer OK.ru direct media first. The DiziBOX web player intentionally
+        // displays a 15-second startup gate around the VidMoly iframe; when an OK.ru
+        // mirror is available, its direct MP4/HLS stream avoids that page-level delay.
+        val orderedCandidates = candidates.toList().sortedBy { candidate ->
+            when {
+                isOkRuPlayer(candidate) -> 0
+                isMediaUrl(candidate) -> 1
+                isVidMolyPlayer(candidate) -> 2
+                else -> 3
+            }
+        }
+
+        for (candidate in orderedCandidates) {
             val clean = candidate.decodeEmbeddedText()
 
             when {
