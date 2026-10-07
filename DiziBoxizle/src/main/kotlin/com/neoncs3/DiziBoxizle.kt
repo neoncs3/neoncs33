@@ -234,6 +234,23 @@ class DiziBoxizle : NeonMainAPI() {
             extractUrlFromElement(element)?.let(candidates::add)
         }
 
+        // Raw HTML fallback: some lazy/malformed iframe markup is not preserved as a
+        // normal Jsoup iframe node, although the provider URL remains in the source.
+        Regex(
+            """(?is)<iframe[^>]+(?:src|data-src|data-lazy-src|data-original)\s*=\s*["']([^"']+)["']"""
+        ).findAll(rawHtml)
+            .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
+            .map { fixUrl(it) }
+            .filter { isExternalPlayer(it) || isMediaUrl(it) }
+            .forEach(candidates::add)
+
+        // Provider URLs can also be embedded directly inside page JavaScript/JSON.
+        Regex(
+            """https?://[^\s"'<>]*(?:vidmoly|ok\.ru|odnoklassniki)[^\s"'<>]*"""
+        ).findAll(rawHtml)
+            .map { it.value.trimEnd(')', ']', '}', ';', ',') }
+            .forEach(candidates::add)
+
         // 2) Common provider buttons/anchors (for example Vidmoly/Ok.ru).
         document.select(
             "a[href], button, [role='button'], [data-url], [data-href], [data-src], [data-link]"
@@ -292,6 +309,15 @@ class DiziBoxizle : NeonMainAPI() {
         VMEAS_M3U8_PATTERN.findAll(rawHtml)
             .map { it.value.trimEnd(')', ']', '}', ';') }
             .forEach(candidates::add)
+        // Catch direct master/index/playlist URLs even when the player script
+        // does not label them with file/src/url/source/hls.
+        Regex(
+            """https?://[^\s"'<>]+(?:master|index|playlist)[^\s"'<>]*\.(?:m3u8|txt)(?:\?[^\s"'<>]*)?"""
+        ).findAll(rawHtml)
+            .map { it.value.trimEnd(')', ']', '}', ';', ',') }
+            .filter { isMediaUrl(it) }
+            .forEach(candidates::add)
+
         Log.d(
             "DZBX",
             "loadLinks episode=${episodeUrl} candidates=${candidates.size} " +
@@ -435,10 +461,11 @@ class DiziBoxizle : NeonMainAPI() {
         callback: (ExtractorLink) -> Unit,
     ) {
         val type = when {
-            Regex("(?i)\\.(?:m3u8)(?:$|\\?)").containsMatchIn(mediaUrl) -> ExtractorLinkType.M3U8
-            Regex("(?i)\\.(?:mpd)(?:$|\\?)").containsMatchIn(mediaUrl) -> ExtractorLinkType.DASH
+            Regex("(?i)\.(?:m3u8|txt)(?:$|\?)").containsMatchIn(mediaUrl) -> ExtractorLinkType.M3U8
+            Regex("(?i)\.(?:mpd)(?:$|\?)").containsMatchIn(mediaUrl) -> ExtractorLinkType.DASH
             else -> ExtractorLinkType.VIDEO
         }
+
 
         val providerOrigin = originOf(sourcePage)
         val isProviderPage = sourcePage.contains("vidmoly", ignoreCase = true) ||
@@ -536,7 +563,7 @@ class DiziBoxizle : NeonMainAPI() {
             // VidMoly's current classic player exposes the HLS source as:
             // file: "https://...m3u8..."
             Regex(
-                """(?is)\bfile\s*[:=]\s*["'](https?://[^"']+(?:\.m3u8|\.txt)(?:\?[^"']+)?)["']"""
+                """(?is)\bfile\s*[:=]\s*["'](https?://[^"']+(?:\.m3u8|\.mpd|\.txt)(?:\?[^"']+)?)["']"""
             ).findAll(searchable).forEach {
                 streamUrls.add(it.groupValues[1].trim())
             }
@@ -1102,8 +1129,25 @@ class DiziBoxizle : NeonMainAPI() {
 
     private fun isMediaUrl(url: String): Boolean {
         val value = url.lowercase()
-        return Regex("(?i)\\.(m3u8|mpd|mp4|webm)(?:$|[?#])").containsMatchIn(value) ||
-            (value.contains("/hls2/") && value.contains(".m3u8")) ||
+
+        val directMedia = Regex(
+            "(?i)\.(m3u8|mpd|mp4|webm)(?:$|[?#])"
+        ).containsMatchIn(value)
+
+        // VidMoly can expose an HLS master playlist as master.txt.
+        // Only playlist-like .txt paths are accepted here so subtitles/text files
+        // are not mistaken for video streams.
+        val hlsTextManifest = Regex(
+            "(?i)/(?:[^/?#]+/)*(?:master|index|playlist)\.txt(?:$|[?#])"
+        ).containsMatchIn(value)
+
+        val hls2TextManifest =
+            value.contains("/hls2/") &&
+                Regex("(?i)\.(?:m3u8|txt)(?:$|[?#])").containsMatchIn(value)
+
+        return directMedia ||
+            hlsTextManifest ||
+            hls2TextManifest ||
             (value.contains(".vmeas.cloud/") && value.contains(".m3u8"))
     }
 
@@ -1339,7 +1383,7 @@ class DiziBoxizle : NeonMainAPI() {
 
         // Fallback for variants using src/url/source/hls directly.
         private val PROVIDER_ANY_SOURCE_PATTERN = Regex(
-            "(?is)\\b(?:file|src|url|source|hls)\\s*[:=]\\s*[\"'](https?://[^\"']+(?:m3u8|mpd)(?:\\?[^\"']+)?)['\"]"
+            "(?is)\b(?:file|src|url|source|hls)\s*[:=]\s*[\"'](https?://[^\"']+(?:m3u8|mpd|txt)(?:\?[^\"']+)?)['\"]"
         )
 
         private val VMEAS_M3U8_PATTERN = Regex(
