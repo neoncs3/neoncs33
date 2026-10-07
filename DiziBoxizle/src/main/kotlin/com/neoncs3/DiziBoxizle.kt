@@ -536,14 +536,14 @@ class DiziBoxizle : NeonMainAPI() {
             // VidMoly's current classic player exposes the HLS source as:
             // file: "https://...m3u8..."
             Regex(
-                """(?is)\bfile\s*[:=]\s*["'](https?://[^"']+\.m3u8(?:\?[^"']+)?)["']"""
+                """(?is)\bfile\s*[:=]\s*["'](https?://[^"']+(?:\.m3u8|\.txt)(?:\?[^"']+)?)["']"""
             ).findAll(searchable).forEach {
                 streamUrls.add(it.groupValues[1].trim())
             }
 
             // Also support src/url/source/hls variants used by mirrors.
             Regex(
-                """(?is)\b(?:src|url|source|hls)\s*[:=]\s*["'](https?://[^"']+(?:\.m3u8|\.mpd)(?:\?[^"']+)?)["']"""
+                """(?is)\b(?:src|url|source|hls)\s*[:=]\s*["'](https?://[^"']+(?:\.m3u8|\.mpd|\.txt)(?:\?[^"']+)?)["']"""
             ).findAll(searchable).forEach {
                 streamUrls.add(it.groupValues[1].trim())
             }
