@@ -540,10 +540,26 @@ class DiziBoxizle : NeonMainAPI() {
                     ),
                     referer = episodeUrl,
                 )
-            }.getOrNull() ?: continue
+            }.getOrElse {
+                Log.e("DZBX", "VidMoly HTTP exception page=" + normalized + " error=" + it.message)
+                continue
+            }
 
             var html = firstResponse.text
             var providerDocument = firstResponse.document
+
+            Log.d(
+                "DZBX",
+                "VidMoly HTTP page=" + normalized +
+                    " code=" + firstResponse.code +
+                    " bytes=" + html.length +
+                    " title=" + (providerDocument.title().take(80)) +
+                    " pleaseWait=" + html.contains("Please wait", ignoreCase = true) +
+                    " sources=" + html.contains("sources", ignoreCase = true) +
+                    " hls=" + html.contains("hls", ignoreCase = true) +
+                    " m3u8=" + html.contains(".m3u8", ignoreCase = true) +
+                    " masterTxt=" + html.contains("master.txt", ignoreCase = true),
+            )
 
             // VidMoly can return a challenge page before exposing the player data.
             if (html.contains("<title>Please wait", ignoreCase = true)) {
@@ -570,7 +586,17 @@ class DiziBoxizle : NeonMainAPI() {
                     if (challengeResponse != null) {
                         html = challengeResponse.text
                         providerDocument = challengeResponse.document
-                        Log.d("DZBX", "VidMoly challenge passed: " + challengeUrl)
+                        Log.d(
+                            "DZBX",
+                            "VidMoly challenge response code=" + challengeResponse.code +
+                                " bytes=" + html.length +
+                                " title=" + providerDocument.title().take(80) +
+                                " sources=" + html.contains("sources", ignoreCase = true) +
+                                " hls=" + html.contains("hls", ignoreCase = true) +
+                                " m3u8=" + html.contains(".m3u8", ignoreCase = true),
+                        )
+                    } else {
+                        Log.w("DZBX", "VidMoly challenge request failed: " + challengeUrl)
                     }
                 }
             }
@@ -634,16 +660,39 @@ class DiziBoxizle : NeonMainAPI() {
 
             Log.d(
                 "DZBX",
-                "VidMoly page=" + normalized + " streamCandidates=" + streamUrls.size +
-                    " " + streamUrls.take(10).joinToString(" | "),
+                "VidMoly parsed page=" + normalized +
+                    " scripts=" + providerDocument.select("script").size +
+                    " htmlBytes=" + html.length +
+                    " streamCandidates=" + streamUrls.size +
+                    " sourcesPattern=" + Regex("""(?is)\\bsources\\s*[:=]""").containsMatchIn(searchable) +
+                    " filePattern=" + Regex("""(?is)\\bfile\\s*[:=]""").containsMatchIn(searchable) +
+                    " hlsPattern=" + Regex("""(?is)\\bhls\\d+\\s*[:=]""").containsMatchIn(searchable),
             )
+
+            if (streamUrls.isEmpty()) {
+                val lower = searchable.lowercase()
+                val sourcePos = lower.indexOf("sources")
+                val hlsPos = lower.indexOf("hls")
+                Log.w(
+                    "DZBX",
+                    "VidMoly NO_STREAM sourcePos=" + sourcePos +
+                        " hlsPos=" + hlsPos +
+                        " page=" + normalized,
+                )
+            }
 
             for (rawStreamUrl in streamUrls) {
                 val streamUrl = normalizeProviderMediaUrl(rawStreamUrl, normalized)
                 if (!isMediaUrl(streamUrl)) continue
 
                 emitMediaLink(streamUrl, normalized, callback)
-                Log.d("DZBX", "VidMoly direct source: " + streamUrl)
+                Log.d(
+                    "DZBX",
+                    "VidMoly DIRECT_LINK emitted type=" +
+                        if (Regex("(?i)\\.(?:m3u8|txt)(?:$|[?#])").containsMatchIn(streamUrl))
+                            "M3U8" else "VIDEO" +
+                        " url=" + streamUrl,
+                )
                 return true
             }
         }
