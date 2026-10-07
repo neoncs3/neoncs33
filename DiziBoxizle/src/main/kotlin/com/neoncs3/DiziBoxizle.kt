@@ -546,8 +546,39 @@ class DiziBoxizle : NeonMainAPI() {
                 )
             }.getOrNull() ?: continue
 
-            val document = response.document
-            val html = response.text
+            var document = response.document
+            var html = response.text
+
+            // VidMoly may first return a lightweight "Please wait" challenge page.
+            // Follow the current ?g=<hex> challenge once before parsing the player source.
+            if (html.contains("<title>Please wait", ignoreCase = true)) {
+                val waitId = Regex("""\?g=([a-fA-F0-9]+)""")
+                    .find(html)
+                    ?.groupValues
+                    ?.getOrNull(1)
+
+                if (!waitId.isNullOrBlank()) {
+                    val challengeUrl = "$normalized?g=$waitId"
+                    val challengeResponse = runCatching {
+                        app.get(
+                            challengeUrl,
+                            headers = mapOf(
+                                "User-Agent" to BROWSER_USER_AGENT,
+                                "Referer" to normalized,
+                                "Upgrade-Insecure-Requests" to "1",
+                                "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                                "Accept-Language" to "tr-TR,tr;q=0.9,en;q=0.8",
+                            ),
+                        )
+                    }.getOrNull()
+
+                    if (challengeResponse != null) {
+                        document = challengeResponse.document
+                        html = challengeResponse.text
+                        Log.d("DZBX", "VidMoly wait challenge passed: $challengeUrl")
+                    }
+                }
+            }
 
             // First use the same JWPlayer parser CloudStream's VidMoly extractor uses,
             // but inspect every script. The upstream extractor only selects scripts whose
@@ -607,6 +638,14 @@ class DiziBoxizle : NeonMainAPI() {
             }
 
             val streamUrls = LinkedHashSet<String>()
+
+            // VidMoly can expose a plain JS "sources" property instead of the exact
+            // quoted structure expected by the native JWPlayer parser.
+            Regex(
+                """(?is)sources[^'"\\r\\n]*['"]([^'"]+)['"]"""
+            ).findAll(searchable)
+                .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
+                .forEach(streamUrls::add)
 
             // Explicit JWPlayer source fields. Support absolute and relative URLs and all
             // common HLS manifest extensions used by VidMoly.
