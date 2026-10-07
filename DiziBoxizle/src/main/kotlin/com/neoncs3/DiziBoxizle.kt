@@ -543,6 +543,7 @@ class DiziBoxizle : NeonMainAPI() {
             }.getOrNull() ?: continue
 
             var html = firstResponse.text
+            var providerDocument = firstResponse.document
 
             // VidMoly can return a challenge page before exposing the player data.
             if (html.contains("<title>Please wait", ignoreCase = true)) {
@@ -568,6 +569,7 @@ class DiziBoxizle : NeonMainAPI() {
 
                     if (challengeResponse != null) {
                         html = challengeResponse.text
+                        providerDocument = challengeResponse.document
                         Log.d("DZBX", "VidMoly challenge passed: " + challengeUrl)
                     }
                 }
@@ -575,7 +577,7 @@ class DiziBoxizle : NeonMainAPI() {
 
             val searchable = buildString {
                 append(html.decodeEmbeddedText())
-                firstResponse.document.select("script, noscript, template").forEach { element ->
+                providerDocument.select("script, noscript, template").forEach { element ->
                     append("\n")
                     append(element.data().decodeEmbeddedText())
                     append("\n")
