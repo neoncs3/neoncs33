@@ -225,7 +225,7 @@ class DiziBoxizle : NeonMainAPI() {
 
         // 1) iframe/embed/provider links shown by DiziBOX.
         document.select(
-            "iframe[src], iframe[data-src], iframe[data-lazy-src], iframe[data-original], [data-iframe], [data-embed], [data-video], [data-player], "
+            "iframe[src], iframe[data-src], iframe[data-lazy-src], iframe[data-original], [data-iframe], [data-embed], [data-video], [data-player], " +
                 "[data-embed-url], [data-player-url], [data-video-url], [data-stream]"
         ).forEach { element ->
             extractUrlFromElement(element)?.let(candidates::add)
