@@ -275,6 +275,16 @@ class DiziBoxizle : NeonMainAPI() {
             .filter { isMediaUrl(it) || isExternalPlayer(it) }
             .forEach(candidates::add)
 
+        // Some JWPlayer/VidMoly pages keep a relative HLS source such as
+        // /hls2/.../master.txt or /stream/.../master.m3u8 in the script.
+        Regex(
+            """(?is)(?:file|src|url|source|hls)\s*[:=]\s*["'](\/(?:[^"'\s<>]+(?:\.m3u8|\.txt)(?:\?[^"'\s<>]*)?))["']"""
+        ).findAll(rawHtml)
+            .mapNotNull { it.groupValues.getOrNull(1) }
+            .map { fixUrl(it) }
+            .filter(::isMediaUrl)
+            .forEach(candidates::add)
+
         // 5) VMEAS HLS URLs.
         //    Handles both /index-v1-a1.m3u8?... and master.m3u8?... URLs,
         //    including paths such as
