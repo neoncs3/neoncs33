@@ -461,8 +461,8 @@ class DiziBoxizle : NeonMainAPI() {
         callback: (ExtractorLink) -> Unit,
     ) {
         val type = when {
-            Regex("(?i)\.(?:m3u8|txt)(?:$|\?)").containsMatchIn(mediaUrl) -> ExtractorLinkType.M3U8
-            Regex("(?i)\.(?:mpd)(?:$|\?)").containsMatchIn(mediaUrl) -> ExtractorLinkType.DASH
+            Regex("(?i)\\.(?:m3u8|txt)(?:$|\\?)").containsMatchIn(mediaUrl) -> ExtractorLinkType.M3U8
+            Regex("(?i)\\.(?:mpd)(?:$|\\?)").containsMatchIn(mediaUrl) -> ExtractorLinkType.DASH
             else -> ExtractorLinkType.VIDEO
         }
 
@@ -1131,19 +1131,19 @@ class DiziBoxizle : NeonMainAPI() {
         val value = url.lowercase()
 
         val directMedia = Regex(
-            "(?i)\.(m3u8|mpd|mp4|webm)(?:$|[?#])"
+            "(?i)\\.(m3u8|mpd|mp4|webm)(?:$|[?#])"
         ).containsMatchIn(value)
 
         // VidMoly can expose an HLS master playlist as master.txt.
         // Only playlist-like .txt paths are accepted here so subtitles/text files
         // are not mistaken for video streams.
         val hlsTextManifest = Regex(
-            "(?i)/(?:[^/?#]+/)*(?:master|index|playlist)\.txt(?:$|[?#])"
+            "(?i)/(?:[^/?#]+/)*(?:master|index|playlist)\\.txt(?:$|[?#])"
         ).containsMatchIn(value)
 
         val hls2TextManifest =
             value.contains("/hls2/") &&
-                Regex("(?i)\.(?:m3u8|txt)(?:$|[?#])").containsMatchIn(value)
+                Regex("(?i)\\.(?:m3u8|txt)(?:$|[?#])").containsMatchIn(value)
 
         return directMedia ||
             hlsTextManifest ||
@@ -1383,7 +1383,7 @@ class DiziBoxizle : NeonMainAPI() {
 
         // Fallback for variants using src/url/source/hls directly.
         private val PROVIDER_ANY_SOURCE_PATTERN = Regex(
-            "(?is)\b(?:file|src|url|source|hls)\s*[:=]\s*[\"'](https?://[^\"']+(?:m3u8|mpd|txt)(?:\?[^\"']+)?)['\"]"
+            "(?is)\\b(?:file|src|url|source|hls)\\s*[:=]\\s*[\"'](https?://[^\"']+(?:m3u8|mpd|txt)(?:\\?[^\"']+)?)['\"]"
         )
 
         private val VMEAS_M3U8_PATTERN = Regex(
