@@ -118,6 +118,7 @@ class DiziBoxizle : NeonMainAPI() {
                 plot = pagePlot(document)
                 year = pageYear(document)
                 pageRating(document)?.let { score = Score.from10(it) }
+pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
             
             },
             document = document,
@@ -160,6 +161,7 @@ class DiziBoxizle : NeonMainAPI() {
                 plot = pagePlot(document)
                 year = pageYear(document)
                 pageRating(document)?.let { score = Score.from10(it) }
+pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
             
             },
             document = document,
@@ -180,6 +182,7 @@ class DiziBoxizle : NeonMainAPI() {
             plot = pagePlot(document)
             year = pageYear(document)
             pageRating(document)?.let { score = Score.from10(it) }
+pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
         
             },
             document = document,
@@ -229,6 +232,15 @@ class DiziBoxizle : NeonMainAPI() {
                 "[data-embed-url], [data-player-url], [data-video-url], [data-stream]"
         ).forEach { element ->
             extractUrlFromElement(element)?.let(candidates::add)
+        }
+
+        // Film pages expose additional players through a <select><option value="..."> list.
+        document.select(
+            "select option[value], option[data-url], option[data-href], option[data-src], option[data-link]"
+        ).forEach { element ->
+            extractUrlFromElement(element)?.let { url ->
+                if (isExternalPlayer(url) || isMediaUrl(url)) candidates.add(url)
+            }
         }
 
         // Raw HTML fallback: some lazy/malformed iframe markup is not preserved as a
@@ -919,19 +931,31 @@ class DiziBoxizle : NeonMainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
-        val providerCandidates = LinkedHashSet<String>()
-        providerCandidates.add(providerUrl)
-        vidMolyClassicUrl(providerUrl)?.let(providerCandidates::add)
+        val queue = java.util.ArrayDeque<String>()
+        val visited = linkedSetOf<String>()
 
-        var found = false
+        fun enqueue(url: String?) {
+            val clean = url?.decodeEmbeddedText()?.trim().orEmpty()
+            if (clean.isBlank()) return
+            if (!(isExternalPlayer(clean) || isMediaUrl(clean))) return
+            if (visited.size >= 10) return
+            if (!visited.contains(clean) && !queue.contains(clean)) queue.addLast(clean)
+        }
 
-        for (pageUrl in providerCandidates) {
-            val providerResponse = runCatching {
+        enqueue(providerUrl)
+        vidMolyClassicUrl(providerUrl)?.let(::enqueue)
+
+        while (queue.isNotEmpty() && visited.size < 10) {
+            val pageUrl = queue.removeFirst()
+            if (!visited.add(pageUrl)) continue
+
+            val response = runCatching {
                 app.get(
                     pageUrl,
                     headers = mapOf(
-                        "User-Agent" to USER_AGENT,
+                        "User-Agent" to BROWSER_USER_AGENT,
                         "Referer" to episodeUrl,
+                        "Origin" to (originOf(episodeUrl) ?: mainUrl),
                         "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                         "Accept-Language" to "tr-TR,tr;q=0.9,en;q=0.8",
                         "Sec-Fetch-Dest" to "iframe",
@@ -942,10 +966,10 @@ class DiziBoxizle : NeonMainAPI() {
                 )
             }.getOrNull() ?: continue
 
-            val providerDocument = providerResponse.document
-            val providerHtml = buildString {
-                append(providerDocument.html())
-                providerDocument.select("script, noscript, template").forEach {
+            val document = response.document
+            val html = buildString {
+                append(document.html())
+                document.select("script, noscript, template").forEach {
                     append("\n")
                     append(it.data())
                     append("\n")
@@ -953,44 +977,66 @@ class DiziBoxizle : NeonMainAPI() {
                 }
             }.decodeEmbeddedText()
 
-            // Search both raw and unpacked JavaScript.
-            val unpackedHtml = runCatching { getAndUnpack(providerHtml) }
-                .getOrDefault(providerHtml)
-            val searchableHtml = if (unpackedHtml == providerHtml) {
-                providerHtml
-            } else {
-                providerHtml + "\n" + unpackedHtml
-            }
-
+            val unpacked = runCatching { getAndUnpack(html) }.getOrDefault(html)
+            val searchable = if (unpacked == html) html else html + "\n" + unpacked
             val sourceUrls = LinkedHashSet<String>()
 
-            PROVIDER_SOURCE_PATTERN.findAll(searchableHtml)
+            PROVIDER_SOURCE_PATTERN.findAll(searchable)
                 .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
-                .map { it.decodeEmbeddedText() }
-                .forEach(sourceUrls::add)
+                .forEach { sourceUrls.add(it.decodeEmbeddedText()) }
 
-            PROVIDER_ANY_SOURCE_PATTERN.findAll(searchableHtml)
+            PROVIDER_ANY_SOURCE_PATTERN.findAll(searchable)
                 .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
-                .map { it.decodeEmbeddedText() }
-                .forEach(sourceUrls::add)
+                .forEach { sourceUrls.add(it.decodeEmbeddedText()) }
 
-            VMEAS_M3U8_PATTERN.findAll(searchableHtml)
+            VMEAS_M3U8_PATTERN.findAll(searchable)
                 .map { it.value.trimEnd(')', ']', '}', ';', ',') }
                 .forEach(sourceUrls::add)
 
-            GENERIC_M3U8_PATTERN.findAll(searchableHtml)
+            GENERIC_M3U8_PATTERN.findAll(searchable)
                 .map { it.value.trimEnd(')', ']', '}', ';', ',') }
                 .forEach(sourceUrls::add)
 
-            for (rawSource in sourceUrls) {
-                val mediaUrl = normalizeProviderMediaUrl(rawSource, pageUrl)
-                if (!isMediaUrl(mediaUrl)) continue
+            Regex(
+                """(?i)(?:(?:https?:)?//|/)[^\s"'<>]+?\.(?:m3u8|mpd|mp4|webm|txt)(?:\?[^\s"'<>]*)?"""
+            ).findAll(searchable)
+                .map { it.value.trimEnd(')', ']', '}', ';', ',') }
+                .forEach(sourceUrls::add)
 
-                emitMediaLink(mediaUrl, pageUrl, callback)
-                found = true
+            document.select(
+                "iframe[src], iframe[data-src], iframe[data-lazy-src], iframe[data-original], " +
+                    "[data-iframe], [data-embed], [data-video], [data-player], [data-embed-url], " +
+                    "[data-player-url], [data-video-url], [data-stream], " +
+                    "select option[value], option[data-url], option[data-href], option[data-src], option[data-link]"
+            ).forEach { element ->
+                extractUrlFromElement(element)?.let(::enqueue)
             }
 
-            providerDocument.select("track[src], track[data-src]").forEach { track ->
+            Regex(
+                """https?://[^\s"'<>]*(?:vidmoly|ok\.ru|odnoklassniki|oynatloload)[^\s"'<>]*"""
+            ).findAll(searchable)
+                .map { it.value.trimEnd(')', ']', '}', ';', ',') }
+                .forEach(::enqueue)
+
+            Log.d(
+                "DZBX",
+                "Provider page=" + pageUrl +
+                    " code=" + response.code +
+                    " visited=" + visited.size +
+                    " queued=" + queue.size +
+                    " sources=" + sourceUrls.size,
+            )
+
+            sourceUrls.forEach { rawSource ->
+                val mediaUrl = normalizeProviderMediaUrl(rawSource, pageUrl)
+                if (isMediaUrl(mediaUrl)) {
+                    emitMediaLink(mediaUrl, pageUrl, callback)
+                    Log.d("DZBX", "Provider direct source: " + mediaUrl)
+                    return true
+                }
+            }
+
+            document.select("track[src], track[data-src]").forEach { track ->
                 val subtitle = track.attr("src").ifBlank { track.attr("data-src") }
                 if (subtitle.isNotBlank()) {
                     subtitleCallback(
@@ -1001,11 +1047,9 @@ class DiziBoxizle : NeonMainAPI() {
                     )
                 }
             }
-
-            if (found) return true
         }
 
-        return found
+        return false
     }
 
     private fun normalizeProviderMediaUrl(raw: String, pageUrl: String): String {
@@ -1322,6 +1366,7 @@ class DiziBoxizle : NeonMainAPI() {
     private fun extractUrlFromElement(element: Element): String? {
         val attrs = listOf(
             "href",
+            "value",
             "src",
             "data-url",
             "data-href",
@@ -1479,42 +1524,48 @@ class DiziBoxizle : NeonMainAPI() {
     private fun pageGenres(document: Document): List<String> {
         val result = linkedSetOf<String>()
 
-        // DiziBox uses genre/category links on title pages. Prefer links because
-        // they are less likely to capture unrelated words from the page.
-        document.select(
-            "a[href*='/tur/'], a[href*='/kategori/'], " +
-                ".genres a, .genre a, .genres a[href], .genre a[href], " +
-                ".movie-genres a, .dizi-genres a, .categories a"
-        ).forEach { element ->
-            val value = element.text()
-                .replace(Regex("(?i)^(t[uü]r|t[uü]rler|kategori|kategoriler)\\s*:\\s*"), "")
-                .trim()
-            if (value.isNotBlank()) result.add(normalizeGenre(value))
+        document.select("script[type='application/ld+json']").forEach { script ->
+            val json = script.data().ifBlank { script.html() }
+
+            Regex("""(?is)["']genre["']\s*:\s*\[(.*?)\]""")
+                .find(json)?.groupValues?.getOrNull(1)?.let { raw ->
+                    Regex("""["']([^"']{2,40})["']""").findAll(raw)
+                        .map { it.groupValues[1] }
+                        .forEach { result.add(normalizeGenre(it)) }
+                }
+
+            Regex("""(?is)["']genre["']\s*:\s*["']([^"']{2,40})["']""")
+                .find(json)?.groupValues?.getOrNull(1)
+                ?.let { result.add(normalizeGenre(it)) }
         }
 
-        // Some templates expose the genres as plain text instead of links.
         if (result.isEmpty()) {
-            val candidates = document.select(
-                ".genres, .genre, .movie-genres, .dizi-genres, .categories, " +
-                    "[class*='genre'], [class*='kategori']"
-            ).flatMap { it.text().split(",", "|", "•", "·", "/") }
+            val info = document.getElementsContainingOwnText("Bilgileri").firstOrNull()
+                ?: document.getElementsContainingText("Bilgileri").firstOrNull()
 
-            candidates.forEach { raw ->
-                val value = raw
-                    .replace(Regex("(?i)^(t[uü]r|t[uü]rler|kategori|kategoriler)\\s*:\\s*"), "")
-                    .trim()
-                if (value.isNotBlank() && value.length <= 40) {
-                    result.add(normalizeGenre(value))
-                }
+            var current: Element? = info
+            repeat(5) {
+                val node = current ?: return@repeat
+                node.select("a[href*='/tur/'], a[href*='/genre/'], a[href*='/kategori/']")
+                    .forEach { element ->
+                        val value = normalizeGenre(element.text())
+                        if (value.length in 2..40) result.add(value)
+                    }
+                current = node.parent()
             }
         }
 
-        return result.filter { it.isNotBlank() }.distinct().take(10)
+        return result.filter { it.isNotBlank() }.distinct().take(8)
     }
 
     private fun normalizeGenre(value: String): String {
-        val key = value.trim().lowercase()
-        return when (key) {
+        val cleaned = value
+            .trim()
+            .replace(Regex("(?i)^t[uü]r(?:ler)?\s*:\s*"), "")
+            .replace(Regex("(?i)\s+(?:filmleri|filmi|dizileri|dizisi|diziler|filmler)$"), "")
+            .trim()
+
+        return when (cleaned.lowercase()) {
             "action", "aksiyon" -> "Aksiyon"
             "adventure", "macera" -> "Macera"
             "animation", "animasyon" -> "Animasyon"
@@ -1533,18 +1584,43 @@ class DiziBoxizle : NeonMainAPI() {
             "thriller", "gerilim" -> "Gerilim"
             "war", "savaş", "savas" -> "Savaş"
             "western" -> "Western"
-            else -> value.trim()
+            else -> cleaned
         }
     }
 
     private fun pageRating(document: Document): Double? {
         val text = document.text()
-        return Regex("(?i)(?:IMDb|IMDB)\\s*[:/]?\\s*([0-9]+(?:[.,][0-9]+)?)")
+
+        // The header contains "IMDb 7+ Diziler"; requiring "/ 10" isolates the
+        // actual title score and ignores the member-score block.
+        Regex("""(?is)\bIMDb\s*([0-9]+(?:[.,][0-9])?)\s*/\s*10\b""")
             .find(text)
-            ?.groupValues
-            ?.getOrNull(1)
+            ?.groupValues?.getOrNull(1)
             ?.replace(',', '.')
             ?.toDoubleOrNull()
+            ?.takeIf { it in 0.0..10.0 }
+            ?.let { return it }
+
+        val selectors = listOf(
+            "[itemprop='ratingValue']",
+            ".imdb-rating", ".imdb", ".rating-value", ".movie-rating", ".film-rating",
+            "[class*='imdb'][class*='puan']", "[class*='rating'][class*='value']"
+        )
+
+        for (selector in selectors) {
+            val value = document.select(selector)
+                .joinToString(" ") { it.text() + " " + it.attr("content") }
+
+            Regex("""(?<!\d)(10(?:[.,]0)?|[0-9](?:[.,][0-9])?)(?!\d)""")
+                .find(value)
+                ?.groupValues?.getOrNull(1)
+                ?.replace(',', '.')
+                ?.toDoubleOrNull()
+                ?.takeIf { it in 0.0..10.0 }
+                ?.let { return it }
+        }
+
+        return null
     }
 
     private fun posterOf(document: Document): String? {
