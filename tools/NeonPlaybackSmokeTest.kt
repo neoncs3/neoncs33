@@ -49,7 +49,7 @@ class NeonPlaybackSmokeTest {
         Target("AsyaFilmIzle", listOf("Squid Game", "Wednesday", "The Last of Us")),
         Target(
             "DiziBoxizle",
-            listOf("Breaking Bad", "Wednesday", "The Last of Us"),
+            listOf("Breaking Bad", "Wednesday", "The Last of Us", "Tanrının Zırhı"),
             // A current public episode page is included as an extractor-only control.
             // This separates search/load failures from loadLinks/provider failures.
             listOf(
