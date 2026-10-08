@@ -949,23 +949,77 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
             val pageUrl = queue.removeFirst()
             if (!visited.add(pageUrl)) continue
 
-            val response = runCatching {
-                app.get(
-                    pageUrl,
-                    headers = mapOf(
+            val browserHeaders = mapOf(
+                "User-Agent" to BROWSER_USER_AGENT,
+                "Referer" to episodeUrl,
+                "Origin" to (originOf(episodeUrl) ?: mainUrl),
+                "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Cache-Control" to "no-cache",
+                "Pragma" to "no-cache",
+                "Upgrade-Insecure-Requests" to "1",
+                "Sec-Fetch-Dest" to "iframe",
+                "Sec-Fetch-Mode" to "navigate",
+                "Sec-Fetch-Site" to "cross-site",
+                "Sec-Fetch-User" to "?1",
+                "sec-ch-ua" to ""Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"",
+                "sec-ch-ua-mobile" to "?0",
+                "sec-ch-ua-platform" to ""Android"",
+            )
+
+            var response = runCatching {
+                app.get(pageUrl, headers = browserHeaders, referer = episodeUrl)
+            }.getOrNull()
+
+            if (response == null || response.code !in 200..399) {
+                val retryProfiles = listOf(
+                    browserHeaders + mapOf(
+                        "Referer" to pageUrl,
+                        "Origin" to (originOf(pageUrl) ?: mainUrl),
+                        "Sec-Fetch-Dest" to "document",
+                        "Sec-Fetch-Site" to "same-origin",
+                    ),
+                    browserHeaders + mapOf(
+                        "Referer" to "$mainUrl/",
+                        "Origin" to mainUrl,
+                        "Sec-Fetch-Site" to "same-site",
+                    ),
+                    mapOf(
                         "User-Agent" to BROWSER_USER_AGENT,
                         "Referer" to episodeUrl,
-                        "Origin" to (originOf(episodeUrl) ?: mainUrl),
                         "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                         "Accept-Language" to "tr-TR,tr;q=0.9,en;q=0.8",
                         "Sec-Fetch-Dest" to "iframe",
                         "Sec-Fetch-Mode" to "navigate",
                         "Sec-Fetch-Site" to "cross-site",
-                        "Sec-Fetch-User" to "?1",
                     ),
-                    referer = episodeUrl,
                 )
-            }.getOrNull() ?: continue
+
+                for ((retryIndex, profile) in retryProfiles.withIndex()) {
+                    val retry = runCatching {
+                        app.get(pageUrl, headers = profile, referer = profile["Referer"] ?: episodeUrl)
+                    }.getOrNull()
+                    Log.d(
+                        "DZBX",
+                        "Provider retry=" + retryIndex +
+                            " page=" + pageUrl +
+                            " code=" + (retry?.code ?: -1),
+                    )
+                    if (retry != null && retry.code in 200..399) {
+                        response = retry
+                        break
+                    }
+                }
+            }
+
+            if (response == null || response.code !in 200..399) {
+                Log.w(
+                    "DZBX",
+                    "Provider blocked page=" + pageUrl +
+                        " code=" + (response?.code ?: -1),
+                )
+                continue
+            }
 
             val document = response.document
             val html = buildString {
