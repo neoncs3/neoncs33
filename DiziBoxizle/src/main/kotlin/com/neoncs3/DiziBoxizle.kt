@@ -529,25 +529,116 @@ class DiziBoxizle : NeonMainAPI() {
                 .replace("vidmoly.to", "vidmoly.biz", ignoreCase = true)
                 .replace("vidmoly.net", "vidmoly.biz", ignoreCase = true)
 
-            val headers = mapOf(
-                "user-agent" to BROWSER_USER_AGENT,
-                "Sec-Fetch-Dest" to "iframe",
-            )
-
-            val response = runCatching {
+            val firstResponse = runCatching {
                 app.get(
                     normalized,
-                    headers = headers,
+                    headers = mapOf(
+                        "User-Agent" to BROWSER_USER_AGENT,
+                        "Sec-Fetch-Dest" to "iframe",
+                        "Sec-Fetch-Mode" to "navigate",
+                        "Sec-Fetch-Site" to "cross-site",
+                        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                        "Accept-Language" to "tr-TR,tr;q=0.9,en;q=0.8",
+                    ),
                     referer = episodeUrl,
                 )
-            }.getOrNull() ?: continue
+            }.getOrElse {
+                Log.e(
+                    "DZBX",
+                    "VidMoly HTTP exception page=" + normalized +
+                        " error=" + it.message,
+                )
+                continue
+            }
 
-            val document = response.document
+            var html = firstResponse.text
+            var providerDocument = firstResponse.document
 
-            // First use CloudStream's maintained JWPlayer parser. This is the same
-            // parsing strategy used by the upstream VidMoly extractor and handles
-            // both .m3u8 and master.txt manifests.
-            for (script in document.select("script")) {
+            Log.d(
+                "DZBX",
+                "VidMoly HTTP page=" + normalized +
+                    " code=" + firstResponse.code +
+                    " bytes=" + html.length +
+                    " title=" + providerDocument.title().take(80) +
+                    " pleaseWait=" + html.contains("Please wait", ignoreCase = true) +
+                    " sources=" + html.contains("sources", ignoreCase = true) +
+                    " hls=" + html.contains("hls", ignoreCase = true) +
+                    " m3u8=" + html.contains(".m3u8", ignoreCase = true) +
+                    " masterTxt=" + html.contains("master.txt", ignoreCase = true),
+            )
+
+            // VidMoly may return a challenge page before exposing player data.
+            if (html.contains("<title>Please wait", ignoreCase = true)) {
+                val waitId = Regex("""\?g=([a-fA-F0-9]+)""")
+                    .find(html)
+                    ?.groupValues
+                    ?.getOrNull(1)
+
+                if (!waitId.isNullOrBlank()) {
+                    val challengeUrl = normalized + "?g=" + waitId
+                    val challengeResponse = runCatching {
+                        app.get(
+                            challengeUrl,
+                            headers = mapOf(
+                                "User-Agent" to BROWSER_USER_AGENT,
+                                "Referer" to normalized,
+                                "Upgrade-Insecure-Requests" to "1",
+                                "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                                "Accept-Language" to "tr-TR,tr;q=0.9,en;q=0.8",
+                            ),
+                        )
+                    }.getOrNull()
+
+                    if (challengeResponse != null) {
+                        html = challengeResponse.text
+                        providerDocument = challengeResponse.document
+
+                        Log.d(
+                            "DZBX",
+                            "VidMoly challenge response code=" +
+                                challengeResponse.code +
+                                " bytes=" + html.length +
+                                " title=" + providerDocument.title().take(80) +
+                                " sources=" + html.contains("sources", ignoreCase = true) +
+                                " hls=" + html.contains("hls", ignoreCase = true) +
+                                " m3u8=" + html.contains(".m3u8", ignoreCase = true) +
+                                " masterTxt=" +
+                                html.contains("master.txt", ignoreCase = true),
+                        )
+                    } else {
+                        Log.w(
+                            "DZBX",
+                            "VidMoly challenge request failed: " + challengeUrl,
+                        )
+                    }
+                }
+            }
+
+            val searchable = buildString {
+                append(html.decodeEmbeddedText())
+
+                providerDocument.select("script, noscript, template").forEach { element ->
+                    append("\n")
+                    append(element.data().decodeEmbeddedText())
+                    append("\n")
+                    append(element.html().decodeEmbeddedText())
+
+                    val scriptData = element.data().ifBlank { element.html() }
+                    runCatching { getAndUnpack(scriptData) }
+                        .getOrNull()
+                        ?.takeIf { unpacked ->
+                            unpacked.isNotBlank() && unpacked != scriptData
+                        }
+                        ?.let { unpacked ->
+                            append("\n")
+                            append(unpacked.decodeEmbeddedText())
+                        }
+                }
+            }
+
+            // Use CloudStream's maintained JWPlayer parser first. This is the same
+            // parsing path used by the upstream VidMoly extractor.
+            for (script in providerDocument.select("script")) {
                 val scriptData = script.data().ifBlank { script.html() }
                 if (!JWPlayerHelper.canParseJwScript(scriptData)) continue
 
@@ -588,43 +679,84 @@ class DiziBoxizle : NeonMainAPI() {
                 }
             }
 
-            // Secondary path for packed/obfuscated player scripts.
-            val html = runCatching { response.text }.getOrNull().orEmpty()
-            val unpacked = runCatching { getAndUnpack(html) }.getOrDefault(html)
-            val searchable = if (unpacked != html) {
-                html.decodeEmbeddedText() + "\n" + unpacked.decodeEmbeddedText()
-            } else {
-                html.decodeEmbeddedText()
-            }
-
             val streamUrls = LinkedHashSet<String>()
 
+            // Standard JWPlayer/VidMoly source fields.
             Regex(
-                """(?is)\bfile\s*[:=]\s*["'](https?://[^"']+(?:\.m3u8|\.txt)(?:\?[^"']+)?)["']"""
-            ).findAll(searchable).forEach {
-                streamUrls.add(it.groupValues[1].trim())
-            }
+                """(?is)\b(?:file|src|url|source|hls)\s*[:=]\s*["']((?:https?:)?//[^"']+\.(?:m3u8|mpd|txt|mp4)(?:\?[^"']+)?|/[^"']+\.(?:m3u8|mpd|txt|mp4)(?:\?[^"']+)?)["']"""
+            ).findAll(searchable)
+                .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
+                .forEach(streamUrls::add)
 
+            // sources: [{ file: "..." }] and sources:[{file:'...'}] variants.
             Regex(
-                """(?is)\b(?:src|url|source|hls)\s*[:=]\s*["'](https?://[^"']+(?:\.m3u8|\.mpd|\.txt)(?:\?[^"']+)?)["']"""
-            ).findAll(searchable).forEach {
-                streamUrls.add(it.groupValues[1].trim())
-            }
+                """(?is)sources\s*[:=]\s*\[\s*\{[^}]*?file\s*[:=]\s*["']([^"']+)["']"""
+            ).findAll(searchable)
+                .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
+                .forEach(streamUrls::add)
 
-            VMEAS_M3U8_PATTERN.findAll(searchable).forEach {
-                streamUrls.add(it.value.trimEnd(')', ']', '}', ';', ','))
-            }
-
+            // Common VidMoly HLS variables.
             Regex(
-                """(?i)https?://[^"'\s<>]+(?:\.m3u8|master\.txt)(?:\?[^"'\s<>]*)?"""
-            ).findAll(searchable).forEach {
-                streamUrls.add(it.value.trimEnd(')', ']', '}', ';', ','))
+                """(?is)["']?(?:hls\d+|master|index|playlist)["']?\s*[:=]\s*["']((?:https?:)?//[^"']+\.(?:m3u8|txt)(?:\?[^"']+)?|/[^"']+\.(?:m3u8|txt)(?:\?[^"']+)?)["']"""
+            ).findAll(searchable)
+                .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
+                .forEach(streamUrls::add)
+
+            // Generic HLS/CDN fallback, including newer VidMoly CDN hostnames.
+            Regex(
+                """(?i)(?:(?:https?:)?//|/)[^\s"'<>]+?\.(?:m3u8|mpd|txt|mp4)(?:\?[^\s"'<>]*)?"""
+            ).findAll(searchable)
+                .map { it.value.trimEnd(')', ']', '}', ';', ',') }
+                .filter { value ->
+                    value.contains("/hls", ignoreCase = true) ||
+                        value.contains("master", ignoreCase = true) ||
+                        value.contains("index", ignoreCase = true) ||
+                        value.contains("playlist", ignoreCase = true) ||
+                        value.contains("vmeas", ignoreCase = true) ||
+                        value.contains("vmwesa", ignoreCase = true)
+                }
+                .forEach(streamUrls::add)
+
+            Log.d(
+                "DZBX",
+                "VidMoly parsed page=" + normalized +
+                    " scripts=" + providerDocument.select("script").size +
+                    " htmlBytes=" + html.length +
+                    " streamCandidates=" + streamUrls.size +
+                    " sourcesPattern=" +
+                    Regex("""(?is)\bsources\s*[:=]""").containsMatchIn(searchable) +
+                    " filePattern=" +
+                    Regex("""(?is)\bfile\s*[:=]""").containsMatchIn(searchable) +
+                    " hlsPattern=" +
+                    Regex("""(?is)\bhls\d+\s*[:=]""").containsMatchIn(searchable),
+            )
+
+            if (streamUrls.isEmpty()) {
+                val lower = searchable.lowercase()
+                Log.w(
+                    "DZBX",
+                    "VidMoly NO_STREAM sourcePos=" +
+                        lower.indexOf("sources") +
+                        " hlsPos=" +
+                        lower.indexOf("hls") +
+                        " page=" + normalized,
+                )
             }
 
-            for (streamUrl in streamUrls) {
+            for (rawStreamUrl in streamUrls) {
+                val streamUrl = normalizeProviderMediaUrl(rawStreamUrl, normalized)
                 if (!isMediaUrl(streamUrl)) continue
+
                 emitMediaLink(streamUrl, normalized, callback)
-                Log.d("DZBX", "VidMoly fallback source: " + streamUrl)
+                Log.d(
+                    "DZBX",
+                    "VidMoly DIRECT_LINK emitted type=" +
+                        if (Regex("(?i)\\.(?:m3u8|txt)(?:$|[?#])").containsMatchIn(streamUrl))
+                            "M3U8"
+                        else
+                            "VIDEO" +
+                                " url=" + streamUrl,
+                )
                 return true
             }
         }
