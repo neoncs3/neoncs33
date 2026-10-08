@@ -1165,7 +1165,13 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
                             )
 
                             if (postResponse.code in 200..399 && postBody.isNotBlank()) {
-                                appendApiPayloadCandidates(postBody, apiUrl, enqueue, sourceUrls = null)
+                                extractApiMediaCandidates(postBody, apiUrl).forEach { candidate ->
+                                    if (isMediaUrl(candidate)) {
+                                        sourceUrls.add(candidate)
+                                    } else {
+                                        enqueue(candidate)
+                                    }
+                                }
                             }
                         }
                     }
@@ -1422,22 +1428,6 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
             .forEach(result::add)
 
         return result.toList()
-    }
-
-    private suspend fun appendApiPayloadCandidates(
-        body: String,
-        baseUrl: String,
-        enqueue: (String) -> Unit,
-        sourceUrls: MutableSet<String>?,
-    ) {
-        val candidates = extractApiMediaCandidates(body, baseUrl)
-        candidates.forEach { candidate ->
-            if (isMediaUrl(candidate)) {
-                sourceUrls?.add(candidate)
-            } else {
-                enqueue(candidate)
-            }
-        }
     }
 
     private fun isTrailerProviderUrl(url: String): Boolean {
