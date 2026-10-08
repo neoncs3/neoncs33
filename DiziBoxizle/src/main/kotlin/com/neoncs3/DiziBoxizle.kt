@@ -222,8 +222,13 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
         // the native extractor matches but produces no playable link.
         val emittedLinks = java.util.Collections.synchronizedList(mutableListOf<ExtractorLink>())
         val emitCallback: (ExtractorLink) -> Unit = { link ->
-            emittedLinks.add(link)
-            callback(link)
+            val linkUrl = link.url.trim()
+            if (isKnownNonMediaUrl(linkUrl) || isTrailerProviderUrl(linkUrl)) {
+                Log.d("DZBX", "Ignoring non-playback ExtractorLink url=" + linkUrl)
+            } else {
+                emittedLinks.add(link)
+                callback(link)
+            }
         }
 
         // 1) iframe/embed/provider links shown by DiziBOX.
@@ -1264,6 +1269,7 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
 
                 if (likelyMediaSource &&
                     !isKnownNonMediaUrl(mediaUrl) &&
+                    !isTrailerProviderUrl(mediaUrl) &&
                     !isProviderStaticAsset(mediaUrl) &&
                     !mediaUrl.contains("/player/v/8.19.1/notice.txt", ignoreCase = true)
                 ) {
@@ -1291,6 +1297,13 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
         }
 
         return false
+    }
+
+    private fun isTrailerProviderUrl(url: String): Boolean {
+        val value = url.trim().lowercase()
+        return value.contains("youtube.com/embed/") ||
+            value.contains("youtube-nocookie.com/embed/") ||
+            value.contains("youtu.be/")
     }
 
     private fun isKnownNonMediaUrl(url: String): Boolean {
