@@ -40,7 +40,7 @@
       "provider": "Dramadizilerim",
       "status": "PASS",
       "query": null,
-      "item": "ANTİK TANRIYLA YASAK AŞK",
+      "item": "ZOMBİ KAMPI(Dublajlı)",
       "links": 1,
       "positionMs": 0,
       "error": null
@@ -76,7 +76,7 @@
       "provider": "SinemaCX",
       "status": "PASS",
       "query": null,
-      "item": "The Batman",
+      "item": "Başlangıç",
       "links": 2,
       "positionMs": 0,
       "error": null
@@ -86,7 +86,7 @@
       "status": "PASS",
       "query": null,
       "item": "Moving",
-      "links": 2,
+      "links": 1,
       "positionMs": 0,
       "error": null
     }

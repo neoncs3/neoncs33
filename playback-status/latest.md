@@ -10,9 +10,9 @@
 | **DiziBoxizle** | 🔴 FAIL | 0 | 0 ms | - | - | loadLinks=false |
 | **DiziPal** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
 | **Dizigecesi** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
-| **Dramadizilerim** | 🟢 PASS | 1 | 0 ms | - | ANTİK TANRIYLA YASAK AŞK | - |
+| **Dramadizilerim** | 🟢 PASS | 1 | 0 ms | - | ZOMBİ KAMPI(Dublajlı) | - |
 | **FilmModu** | 🟡 BLOCKED | 8 | 0 ms | - | Inception | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
 | **JetFilmizle** | 🟢 PASS | 1 | 0 ms | - | Yıldızlararası | - |
 | **SetFilmIzle** | 🟢 PASS | 1 | 0 ms | - | Başlangıç | - |
-| **SinemaCX** | 🟢 PASS | 2 | 0 ms | - | The Batman | - |
-| **WebDramaTurkey** | 🟢 PASS | 2 | 0 ms | - | Moving | - |
+| **SinemaCX** | 🟢 PASS | 2 | 0 ms | - | Başlangıç | - |
+| **WebDramaTurkey** | 🟢 PASS | 1 | 0 ms | - | Moving | - |
