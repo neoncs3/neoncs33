@@ -43,7 +43,7 @@
       "item": null,
       "links": 0,
       "positionMs": 0,
-      "error": "Gerçek video bağlantısı bulunamadı"
+      "error": "ExoPlayer sürdürülebilir playback doğrulanamadı: position=0ms duration=0ms samples=0 firstFrame=true exoPlaying=true"
     },
     {
       "provider": "FilmModu",

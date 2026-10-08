@@ -10,7 +10,7 @@
 | **DiziBoxizle** | 🔴 FAIL | 0 | 0 ms | - | - | ExoPlayer sürdürülebilir playback doğrulanamadı: position=0ms duration=0ms samples=0 firstFrame=true exoPlaying=true |
 | **DiziPal** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
 | **Dizigecesi** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
-| **Dramadizilerim** | 🔴 FAIL | 0 | 0 ms | - | - | Gerçek video bağlantısı bulunamadı |
+| **Dramadizilerim** | 🔴 FAIL | 0 | 0 ms | - | - | ExoPlayer sürdürülebilir playback doğrulanamadı: position=0ms duration=0ms samples=0 firstFrame=true exoPlaying=true |
 | **FilmModu** | 🟡 BLOCKED | 8 | 0 ms | - | Inception | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
 | **JetFilmizle** | 🔴 FAIL | 0 | 0 ms | - | - | ExoPlayer sürdürülebilir playback doğrulanamadı: position=0ms duration=0ms samples=0 firstFrame=true exoPlaying=true |
 | **SetFilmIzle** | 🔴 FAIL | 0 | 0 ms | - | - | ExoPlayer sürdürülebilir playback doğrulanamadı: position=0ms duration=0ms samples=0 firstFrame=true exoPlaying=true |
