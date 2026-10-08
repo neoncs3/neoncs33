@@ -950,6 +950,7 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
         fun enqueue(url: String?) {
             val clean = url?.decodeEmbeddedText()?.trim().orEmpty()
             if (clean.isBlank()) return
+            if (isKnownNonMediaUrl(clean)) return
             if (isProviderStaticAsset(clean) && !isMediaUrl(clean)) return
             if (!(
                     isExternalPlayer(clean) ||
@@ -1207,7 +1208,7 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
                 """(?i)(?:https?:)?//[^\s"'<>]+"""
             ).findAll(searchable)
                 .map { it.value.trimEnd(')', ']', '}', ';', ',') }
-                .filter { isMediaUrl(it) || isOynatloLoadNetworkUrl(it) && !isProviderStaticAsset(it) }
+                .filter { !isKnownNonMediaUrl(it) && (isMediaUrl(it) || (isOynatloLoadNetworkUrl(it) && !isProviderStaticAsset(it))) }
                 .forEach { candidate ->
                     // Same-provider URLs are followed as request candidates; they are
                     // not emitted unless they look like a media response.
@@ -1262,6 +1263,7 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
                 )
 
                 if (likelyMediaSource &&
+                    !isKnownNonMediaUrl(mediaUrl) &&
                     !isProviderStaticAsset(mediaUrl) &&
                     !mediaUrl.contains("/player/v/8.19.1/notice.txt", ignoreCase = true)
                 ) {
@@ -1289,6 +1291,34 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
         }
 
         return false
+    }
+
+    private fun isKnownNonMediaUrl(url: String): Boolean {
+        val value = url.trim().lowercase()
+        if (value.isBlank()) return true
+
+        // Social/share widgets found in the provider's page are not playable media.
+        val socialHosts = listOf(
+            "reddit.com", "www.reddit.com",
+            "tumblr.com", "www.tumblr.com",
+            "facebook.com", "www.facebook.com",
+            "twitter.com", "www.twitter.com",
+            "x.com", "www.x.com",
+            "pinterest.com", "www.pinterest.com",
+            "linkedin.com", "www.linkedin.com",
+            "vk.com", "www.vk.com",
+        )
+        if (socialHosts.any { value.contains("://$it/") || value.contains("://$it?") }) {
+            return true
+        }
+
+        return value.contains("/widgets/share/") ||
+            value.contains("/submit?") ||
+            value.contains("/share?") ||
+            value.contains("/share/") ||
+            value.contains("/intent/") ||
+            value.contains("canonicalurl=[url]") ||
+            value.contains("url=[url]")
     }
 
     private fun isOynatloLoadNetworkUrl(url: String): Boolean {
