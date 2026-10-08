@@ -1188,10 +1188,14 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
 
             PROVIDER_SOURCE_PATTERN.findAll(searchable)
                 .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
+                .filterNot(::isKnownNonMediaUrl)
+                .filterNot(::isProviderStaticAsset)
                 .forEach { sourceUrls.add(it.decodeEmbeddedText()) }
 
             PROVIDER_ANY_SOURCE_PATTERN.findAll(searchable)
                 .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
+                .filterNot(::isKnownNonMediaUrl)
+                .filterNot(::isProviderStaticAsset)
                 .forEach { sourceUrls.add(it.decodeEmbeddedText()) }
 
             VMEAS_M3U8_PATTERN.findAll(searchable)
