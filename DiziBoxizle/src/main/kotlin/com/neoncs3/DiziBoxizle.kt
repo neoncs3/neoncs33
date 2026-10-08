@@ -963,7 +963,7 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
                 "Sec-Fetch-Site" to "cross-site",
                 "Sec-Fetch-User" to "?1",
                 "sec-ch-ua" to "\"Chromium\";v=\"140\", \"Not=A?Brand\";v=\"24\", \"Google Chrome\";v=\"140\"",
-                "sec-ch-ua-mobile" to "?0",
+                "sec-ch-ua-mobile" to "?1",
                 "sec-ch-ua-platform" to "\"Android\"",
             )
 
@@ -1827,8 +1827,8 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
 
     companion object {
         private const val BROWSER_USER_AGENT =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
+            "Mozilla/5.0 (Linux; Android 11; Mobile) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36"
 
         // VidMoly classic embeds commonly expose:
         // sources: [{ file: "https://.../master.m3u8?..." }]
