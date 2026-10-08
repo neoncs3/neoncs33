@@ -1060,6 +1060,17 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
             val providerBody = response?.text.orEmpty()
             val bodyHasMedia = isMediaUrlInText(providerBody)
 
+            // OynatloLoad API endpoints return JSON/plain-text rather than HTML.
+            // Keep the raw response in the searchable payload so JSON fields such as
+            // url/file/src/stream are not lost by Jsoup parsing.
+            Log.d(
+                "DZBX",
+                "Provider body=" + providerBody
+                    .replace("\n", " ")
+                    .replace("\r", " ")
+                    .take(1800),
+            )
+
             // Keep a 403 OynatloLoad response only when it already contains a real
             // player/media payload. This lets the resolver handle a provider response
             // that uses HTTP 403 as an application-level gate instead of discarding it
@@ -1080,6 +1091,8 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
 
             val document = response.document
             val html = buildString {
+                append(providerBody)
+                append("\n")
                 append(document.html())
                 document.select("script, noscript, template").forEach {
                     append("\n")
@@ -1095,6 +1108,70 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
             // external JavaScript file instead of inline HTML. Fetch a small bounded
             // set of scripts from the provider page and inspect them as well.
             val externalScriptText = StringBuilder()
+
+            // The embed's API calls commonly need the numeric embed id as a POST/GET
+            // parameter. Generate a small bounded set of request variants instead of
+            // treating the bare endpoint URL as a page.
+            val embedId = Regex("""(?i)/embed/(\d+)""")
+                .find(providerUrl)
+                ?.groupValues
+                ?.getOrNull(1)
+
+            if (!embedId.isNullOrBlank() && isOynatloLoadApiEndpoint(pageUrl)) {
+                val apiVariants = linkedSetOf<String>()
+                apiVariants.add(pageUrl.trimEnd('/'))
+                apiVariants.add(pageUrl.trimEnd('/') + "/" + embedId)
+                apiVariants.add(pageUrl.trimEnd('/') + "?id=" + embedId)
+                apiVariants.add(pageUrl.trimEnd('/') + "?videoId=" + embedId)
+
+                val postPayloads = listOf(
+                    mapOf("id" to embedId),
+                    mapOf("video_id" to embedId),
+                    mapOf("videoId" to embedId),
+                    mapOf("id" to embedId, "video_id" to embedId, "videoId" to embedId),
+                )
+
+                for (apiUrl in apiVariants) {
+                    enqueue(apiUrl)
+                    for (payload in postPayloads) {
+                        val postResponse = runCatching {
+                            app.post(
+                                apiUrl,
+                                data = payload,
+                                headers = mapOf(
+                                    "User-Agent" to BROWSER_USER_AGENT,
+                                    "Referer" to providerUrl,
+                                    "Origin" to (originOf(providerUrl) ?: mainUrl),
+                                    "Accept" to "application/json,text/plain,*/*;q=0.8",
+                                    "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
+                                    "X-Requested-With" to "XMLHttpRequest",
+                                ),
+                                referer = providerUrl,
+                            )
+                        }.getOrNull()
+
+                        if (postResponse != null) {
+                            val postBody = postResponse.text
+                            Log.d(
+                                "DZBX",
+                                "Provider POST api=" + apiUrl +
+                                    " payload=" + payload +
+                                    " code=" + postResponse.code +
+                                    " bytes=" + postBody.length +
+                                    " body=" + postBody
+                                        .replace("\n", " ")
+                                        .replace("\r", " ")
+                                        .take(1200),
+                            )
+
+                            if (postResponse.code in 200..399 && postBody.isNotBlank()) {
+                                appendApiPayloadCandidates(postBody, apiUrl, enqueue, sourceUrls = null)
+                            }
+                        }
+                    }
+                }
+            }
+
             document.select("script[src]").take(6).forEach { script ->
                 val scriptUrl = runCatching {
                     URI(pageUrl).resolve(script.attr("src")).toString()
@@ -1185,6 +1262,10 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
                 }
 
             val sourceUrls = LinkedHashSet<String>()
+
+            // Parse direct media URLs already present in the API response body.
+            extractApiMediaCandidates(providerBody, pageUrl)
+                .forEach(sourceUrls::add)
 
             PROVIDER_SOURCE_PATTERN.findAll(searchable)
                 .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
@@ -1305,6 +1386,58 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
         }
 
         return false
+    }
+
+    private fun isOynatloLoadApiEndpoint(url: String): Boolean {
+        val value = url.lowercase()
+        return value.contains("oynatloload.top/api/")
+    }
+
+    private fun extractApiMediaCandidates(body: String, baseUrl: String): List<String> {
+        if (body.isBlank()) return emptyList()
+        val result = linkedSetOf<String>()
+
+        Regex(
+            """(?i)(?:https?:)?//[^\s"'<>\\]+"""
+        ).findAll(body)
+            .map { it.value.trimEnd(')', ']', '}', ',', ';', '"', '\\') }
+            .filterNot(::isKnownNonMediaUrl)
+            .filterNot(::isProviderStaticAsset)
+            .forEach(result::add)
+
+        Regex(
+            """(?is)["'](?:file|src|url|source|stream|video|media|hls|mp4|m3u8|manifest|playUrl|streamUrl|videoUrl|mediaUrl)["']\s*:\s*["']([^"']+)["']"""
+        ).findAll(body)
+            .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
+            .mapNotNull { raw ->
+                when {
+                    raw.startsWith("http://", true) || raw.startsWith("https://", true) -> raw
+                    raw.startsWith("//") -> "https:$raw"
+                    raw.startsWith("/") -> runCatching { URI(baseUrl).resolve(raw).toString() }.getOrNull()
+                    else -> null
+                }
+            }
+            .filterNot(::isKnownNonMediaUrl)
+            .filterNot(::isProviderStaticAsset)
+            .forEach(result::add)
+
+        return result.toList()
+    }
+
+    private suspend fun appendApiPayloadCandidates(
+        body: String,
+        baseUrl: String,
+        enqueue: (String) -> Unit,
+        sourceUrls: MutableSet<String>?,
+    ) {
+        val candidates = extractApiMediaCandidates(body, baseUrl)
+        candidates.forEach { candidate ->
+            if (isMediaUrl(candidate)) {
+                sourceUrls?.add(candidate)
+            } else {
+                enqueue(candidate)
+            }
+        }
     }
 
     private fun isTrailerProviderUrl(url: String): Boolean {
