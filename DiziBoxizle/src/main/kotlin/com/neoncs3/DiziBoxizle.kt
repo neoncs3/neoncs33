@@ -1208,13 +1208,14 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
             ).findAll(searchable)
                 .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
                 .filterNot(::isKnownNonMediaUrl)
+                .filterNot(::isProviderStaticAsset)
                 .forEach(sourceUrls::add)
 
             Regex(
                 """(?i)(?:https?:)?//[^\s"'<>]+"""
             ).findAll(searchable)
                 .map { it.value.trimEnd(')', ']', '}', ';', ',') }
-                .filter { !isKnownNonMediaUrl(it) && (isMediaUrl(it) || (isOynatloLoadNetworkUrl(it) && !isProviderStaticAsset(it))) }
+                .filter { !isKnownNonMediaUrl(it) && !isProviderStaticAsset(it) && (isMediaUrl(it) || (isOynatloLoadNetworkUrl(it) && !isProviderStaticAsset(it))) }
                 .forEach { candidate ->
                     // Same-provider URLs are followed as request candidates; they are
                     // not emitted unless they look like a media response.
@@ -1273,6 +1274,7 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
                     !isKnownNonMediaUrl(mediaUrl) &&
                     !isTrailerProviderUrl(mediaUrl) &&
                     !isProviderStaticAsset(mediaUrl) &&
+                    !isOynatloLoadNetworkUrl(mediaUrl) &&
                     !mediaUrl.contains("/player/v/8.19.1/notice.txt", ignoreCase = true)
                 ) {
                     emitMediaLink(mediaUrl, pageUrl, callback)
@@ -1368,15 +1370,17 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
     }
 
     private fun isProviderStaticAsset(url: String): Boolean {
-        val value = url.lowercase()
+        val value = url.trim().lowercase()
         return value.contains("/notice.txt") ||
-            value.endsWith(".js") ||
-            value.contains(".js?") ||
-            value.endsWith(".css") ||
-            value.contains(".css?") ||
-            value.endsWith(".map") ||
-            value.contains(".map?") ||
-            Regex("""\.(?:png|jpe?g|gif|webp|svg|ico|woff2?|ttf)(?:[?#]|$)""")
+            value.contains("/beacon.min.js") ||
+            value.contains("static.cloudflareinsights.com") ||
+            Regex("""(?:^|[/._-])[^/?#]*\.js(?:[/\?#]|$)""")
+                .containsMatchIn(value) ||
+            Regex("""(?:^|[/._-])[^/?#]*\.css(?:[/\?#]|$)""")
+                .containsMatchIn(value) ||
+            Regex("""(?:^|[/._-])[^/?#]*\.map(?:[/\?#]|$)""")
+                .containsMatchIn(value) ||
+            Regex("""\.(?:png|jpe?g|gif|webp|svg|ico|woff2?|ttf)(?:[/\?#]|$)""")
                 .containsMatchIn(value)
     }
 
