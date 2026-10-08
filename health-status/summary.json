@@ -10,7 +10,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://asyafilmizle.com",
-        "bytes": 5624,
+        "bytes": 5709,
         "title": "Just a moment...",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -58,18 +58,19 @@
     },
     {
       "provider": "Dizigecesi",
-      "status": "red",
+      "status": "yellow",
       "domain": "https://dizigecesi.com",
       "configured_domain": "https://dizigecesi.com",
       "live": {
         "ok": false,
-        "status_code": null,
+        "anti_bot_blocked": true,
+        "status_code": 403,
         "final_url": "https://dizigecesi.com",
-        "bytes": 0,
-        "title": "",
+        "bytes": 4918,
+        "title": "Attention Required! | Cloudflare",
         "media_hints": 0,
         "iframe_hints": 0,
-        "error": "ConnectionError: ('Connection aborted.', ConnectionResetError(104, 'Connection reset by peer'))"
+        "error": null
       },
       "pipelines": {
         "load": true,
@@ -93,7 +94,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://dizipal1587.com",
-        "bytes": 4549,
+        "bytes": 4552,
         "title": "Attention Required! | Cloudflare",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -281,6 +282,6 @@
     }
   ],
   "green": 7,
-  "yellow": 2,
-  "red": 1
+  "yellow": 3,
+  "red": 0
 }
