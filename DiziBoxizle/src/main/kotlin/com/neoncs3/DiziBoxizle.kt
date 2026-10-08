@@ -950,6 +950,7 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
         fun enqueue(url: String?) {
             val clean = url?.decodeEmbeddedText()?.trim().orEmpty()
             if (clean.isBlank()) return
+            if (isProviderStaticAsset(clean) && !isMediaUrl(clean)) return
             if (!(
                     isExternalPlayer(clean) ||
                     isMediaUrl(clean) ||
@@ -1729,7 +1730,10 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
             VMEAS_M3U8_PATTERN.containsMatchIn(decoded) ||
             GENERIC_M3U8_PATTERN.containsMatchIn(decoded) ||
             Regex(
-                """(?i)(?:https?:)?//[^\s"'<>]+\.(?:m3u8|mpd|mp4|webm|txt)(?:\?[^\s"'<>]*)?"""
+                """(?i)(?:https?:)?//[^\s"'<>]+\.(?:m3u8|mpd|mp4|webm)(?:\?[^\s"'<>]*)?"""
+            ).containsMatchIn(decoded) ||
+            Regex(
+                """(?i)(?:https?:)?//[^\s"'<>]+/(?:[^\s"'<>]+/)*(?:master|index|playlist)\.txt(?:\?[^\s"'<>]*)?"""
             ).containsMatchIn(decoded)
     }
 
