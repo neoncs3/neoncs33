@@ -1207,6 +1207,7 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
                 """(?is)\b(?:file|src|url|source|hls|stream|video|media|fileUrl|streamUrl|videoUrl|mediaUrl)\s*[:=]\s*["']((?:https?:)?//[^"']+|/[^"']+)["']"""
             ).findAll(searchable)
                 .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
+                .filterNot(::isKnownNonMediaUrl)
                 .forEach(sourceUrls::add)
 
             Regex(
@@ -1224,6 +1225,7 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
                 """(?i)(?:(?:https?:)?//|/)[^\s"'<>]+?\.(?:m3u8|mpd|mp4|webm)(?:\?[^\s"'<>]*)?"""
             ).findAll(searchable)
                 .map { it.value.trimEnd(')', ']', '}', ';', ',') }
+                .filterNot(::isKnownNonMediaUrl)
                 .forEach(sourceUrls::add)
 
             document.select(
