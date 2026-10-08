@@ -1577,7 +1577,7 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
 
         // Preserve the current embed id while tolerating the provider's occasional
         // slash-normalization differences.
-        if (path.matches(Regex("(?i)/embed/\d+/?"))) {
+        if (path.matches(Regex("""(?i)/embed/\d+/?"""))) {
             variants.add(
                 "https://oynatloload.top" +
                     path.trimEnd('/') +
