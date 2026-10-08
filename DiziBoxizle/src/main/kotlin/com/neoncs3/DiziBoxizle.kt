@@ -943,9 +943,12 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
         }
 
         enqueue(providerUrl)
+        if (isOynatloLoadPlayer(providerUrl)) {
+            oynatloLoadVariants(providerUrl).drop(1).forEach(::enqueue)
+        }
         vidMolyClassicUrl(providerUrl)?.let(::enqueue)
 
-        while (queue.isNotEmpty() && visited.size < 10) {
+        while (queue.isNotEmpty() && visited.size < 20) {
             val pageUrl = queue.removeFirst()
             if (!visited.add(pageUrl)) continue
 
@@ -984,6 +987,17 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
                         "Origin" to mainUrl,
                         "Sec-Fetch-Site" to "same-site",
                     ),
+                    // OynatloLoad/Cloudflare can reject an explicit Origin header on
+                    // a top-level navigation even though a normal mobile browser accepts it.
+                    browserHeaders
+                        .minus("Origin")
+                        .plus(
+                            mapOf(
+                                "Referer" to "$mainUrl/",
+                                "Sec-Fetch-Dest" to "document",
+                                "Sec-Fetch-Site" to "same-site",
+                            )
+                        ),
                     mapOf(
                         "User-Agent" to BROWSER_USER_AGENT,
                         "Referer" to episodeUrl,
@@ -1003,7 +1017,8 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
                         "DZBX",
                         "Provider retry=" + retryIndex +
                             " page=" + pageUrl +
-                            " code=" + (retry?.code ?: -1),
+                            " code=" + (retry?.code ?: -1) +
+                            " bytes=" + (retry?.text?.length ?: 0),
                     )
                     if (retry != null && retry.code in 200..399) {
                         response = retry
@@ -1012,11 +1027,23 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
                 }
             }
 
-            if (response == null || response.code !in 200..399) {
+            val providerBody = response?.text.orEmpty()
+            val bodyHasMedia = isMediaUrlInText(providerBody)
+
+            // Keep a 403 OynatloLoad response only when it already contains a real
+            // player/media payload. This lets the resolver handle a provider response
+            // that uses HTTP 403 as an application-level gate instead of discarding it
+            // before source parsing.
+            if (response == null ||
+                (response.code !in 200..399 &&
+                    !(isOynatloLoadPlayer(pageUrl) && bodyHasMedia))
+            ) {
                 Log.w(
                     "DZBX",
                     "Provider blocked page=" + pageUrl +
-                        " code=" + (response?.code ?: -1),
+                        " code=" + (response?.code ?: -1) +
+                        " bytes=" + providerBody.length +
+                        " mediaInBody=" + bodyHasMedia,
                 )
                 continue
             }
@@ -1536,6 +1563,47 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
         return EPISODE_PATTERN.containsMatchIn(url) ||
             ALT_EPISODE_PATTERN.containsMatchIn(url) ||
             SIMPLE_EPISODE_PATTERN.containsMatchIn(url)
+    }
+
+    private fun isOynatloLoadPlayer(url: String): Boolean {
+        return url.contains("oynatloload.top", ignoreCase = true)
+    }
+
+    private fun oynatloLoadVariants(url: String): List<String> {
+        val normalized = url.trim().decodeEmbeddedText()
+        val uri = runCatching { URI(normalized) }.getOrNull() ?: return listOf(normalized)
+        val path = uri.path.orEmpty()
+        val variants = linkedSetOf(normalized)
+
+        // Preserve the current embed id while tolerating the provider's occasional
+        // slash-normalization differences.
+        if (path.matches(Regex("(?i)/embed/\d+/?"))) {
+            variants.add(
+                "https://oynatloload.top" +
+                    path.trimEnd('/') +
+                    "/" +
+                    (uri.rawQuery?.let { "?$it" }.orEmpty())
+            )
+            variants.add(
+                "https://oynatloload.top" +
+                    path.trimEnd('/') +
+                    (uri.rawQuery?.let { "?$it" }.orEmpty())
+            )
+        }
+
+        return variants.toList()
+    }
+
+    private fun isMediaUrlInText(value: String): Boolean {
+        if (value.isBlank()) return false
+        val decoded = value.decodeEmbeddedText()
+        return PROVIDER_SOURCE_PATTERN.containsMatchIn(decoded) ||
+            PROVIDER_ANY_SOURCE_PATTERN.containsMatchIn(decoded) ||
+            VMEAS_M3U8_PATTERN.containsMatchIn(decoded) ||
+            GENERIC_M3U8_PATTERN.containsMatchIn(decoded) ||
+            Regex(
+                """(?i)(?:https?:)?//[^\s"'<>]+\.(?:m3u8|mpd|mp4|webm|txt)(?:\?[^\s"'<>]*)?"""
+            ).containsMatchIn(decoded)
     }
 
     private fun isExternalPlayer(url: String): Boolean {
