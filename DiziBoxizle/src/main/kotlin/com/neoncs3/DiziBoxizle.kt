@@ -1023,7 +1023,7 @@ class DiziBoxizle : NeonMainAPI() {
         val path = runCatching { URI(url).path }.getOrNull() ?: return null
         val id = Regex("(?i)/w/([a-z0-9]+)$").find(path)?.groupValues?.getOrNull(1)
             ?: Regex("(?i)/v/([a-z0-9]+)$").find(path)?.groupValues?.getOrNull(1)
-            ?: Regex("(?i)/embed-([a-z0-9]+)\.html$").find(path)?.groupValues?.getOrNull(1)
+            ?: Regex("(?i)/embed-([a-z0-9]+)\\.html$").find(path)?.groupValues?.getOrNull(1)
             ?: return null
 
         return "https://vidmoly.biz/embed-$id.html"
@@ -1032,7 +1032,7 @@ class DiziBoxizle : NeonMainAPI() {
     private fun vidMolyVariants(url: String): List<String> {
         val uri = runCatching { URI(url) }.getOrNull() ?: return listOf(url)
         val path = uri.path.orEmpty()
-        val id = Regex("(?i)/embed-([a-z0-9]+)\.html$").find(path)?.groupValues?.getOrNull(1)
+        val id = Regex("(?i)/embed-([a-z0-9]+)\\.html$").find(path)?.groupValues?.getOrNull(1)
             ?: Regex("(?i)/w/([a-z0-9]+)$").find(path)?.groupValues?.getOrNull(1)
             ?: Regex("(?i)/v/([a-z0-9]+)$").find(path)?.groupValues?.getOrNull(1)
             ?: return listOf(url)
