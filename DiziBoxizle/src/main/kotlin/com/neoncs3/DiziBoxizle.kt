@@ -950,9 +950,19 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
         fun enqueue(url: String?) {
             val clean = url?.decodeEmbeddedText()?.trim().orEmpty()
             if (clean.isBlank()) return
-            if (!(isExternalPlayer(clean) || isMediaUrl(clean))) return
-            if (visited.size >= 10) return
-            if (!visited.contains(clean) && !queue.contains(clean)) queue.addLast(clean)
+            if (!(
+                    isExternalPlayer(clean) ||
+                    isMediaUrl(clean) ||
+                    isOynatloLoadNetworkUrl(clean)
+                )
+            ) return
+            if (visited.size >= 20) return
+            if (!visited.contains(clean) && !queue.contains(clean)) {
+                queue.addLast(clean)
+                if (isOynatloLoadNetworkUrl(clean)) {
+                    Log.d("DZBX", "Provider network candidate=" + clean)
+                }
+            }
         }
 
         enqueue(providerUrl)
@@ -1110,9 +1120,10 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
                 append(externalScriptText)
             }.decodeEmbeddedText()
 
-            // Capture JS redirects and player source assignments, including relative paths.
+            // Capture JS redirects, player source assignments and network request URLs,
+            // including relative paths used by OynatloLoad's client-side resolver.
             Regex(
-                """(?is)(?:location(?:\.href)?|window\.location|window\.open|player\.(?:src|source)|(?:file|src|url|source|href|dataUrl))\s*(?:=|\(|:)\s*["']([^"']+)["']"""
+                """(?is)(?:location(?:\.href)?|window\.location|window\.open|player\.(?:src|source)|(?:file|src|url|source|href|dataUrl|sourceUrl|streamUrl|videoUrl|mediaUrl|endpoint|apiUrl|requestUrl))\s*(?:=|\(|:)\s*["']([^"']+)["']"""
             ).findAll(searchable)
                 .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
                 .forEach { raw ->
@@ -1126,11 +1137,30 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
                     }
                     if (!resolved.isNullOrBlank()) {
                         val value = resolved.trimEnd(')', ']', '}', ';', ',')
-                        if (isMediaUrl(value) || isExternalPlayer(value)) {
+                        if (isMediaUrl(value) || isExternalPlayer(value) || isOynatloLoadNetworkUrl(value)) {
                             enqueue(value)
                         }
                     }
                 }
+
+            // OynatloLoad builds its actual stream request in JavaScript. Extract all
+            // same-provider absolute/relative request strings, but ignore static assets.
+            Regex(
+                """(?i)(?:https?:)?//[^\s"'<>]+"""
+            ).findAll(searchable)
+                .map { it.value.trimEnd(')', ']', '}', ';', ',') }
+                .filter(::isOynatloLoadNetworkUrl)
+                .forEach(::enqueue)
+
+            Regex(
+                """(?is)(?:["'])(/(?:api|ajax|data|source|sources|stream|video|media|file|play|player|embed|watch|v/)[^"'\s<>]*)(?:["'])"""
+            ).findAll(searchable)
+                .mapNotNull { it.groupValues.getOrNull(1) }
+                .mapNotNull { raw ->
+                    runCatching { URI(pageUrl).resolve(raw).toString() }.getOrNull()
+                }
+                .filter(::isOynatloLoadNetworkUrl)
+                .forEach(::enqueue)
 
             // HTML meta-refresh redirects are common in lightweight player wrappers.
             Regex(
@@ -1165,8 +1195,26 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
                 .map { it.value.trimEnd(')', ']', '}', ';', ',') }
                 .forEach(sourceUrls::add)
 
+            // Provider wrappers sometimes use extensionless signed CDN URLs.
             Regex(
-                """(?i)(?:(?:https?:)?//|/)[^\s"'<>]+?\.(?:m3u8|mpd|mp4|webm|txt)(?:\?[^\s"'<>]*)?"""
+                """(?is)\b(?:file|src|url|source|hls|stream|video|media|fileUrl|streamUrl|videoUrl|mediaUrl)\s*[:=]\s*["']((?:https?:)?//[^"']+|/[^"']+)["']"""
+            ).findAll(searchable)
+                .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
+                .forEach(sourceUrls::add)
+
+            Regex(
+                """(?i)(?:https?:)?//[^\s"'<>]+"""
+            ).findAll(searchable)
+                .map { it.value.trimEnd(')', ']', '}', ';', ',') }
+                .filter { isMediaUrl(it) || isOynatloLoadNetworkUrl(it) && !isProviderStaticAsset(it) }
+                .forEach { candidate ->
+                    // Same-provider URLs are followed as request candidates; they are
+                    // not emitted unless they look like a media response.
+                    if (isMediaUrl(candidate)) sourceUrls.add(candidate)
+                }
+
+            Regex(
+                """(?i)(?:(?:https?:)?//|/)[^\s"'<>]+?\.(?:m3u8|mpd|mp4|webm)(?:\?[^\s"'<>]*)?"""
             ).findAll(searchable)
                 .map { it.value.trimEnd(')', ']', '}', ';', ',') }
                 .forEach(sourceUrls::add)
@@ -1212,8 +1260,9 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
                         " likelyMedia=" + likelyMediaSource,
                 )
 
-                if (likelyMediaSource && !mediaUrl.contains("/player/", ignoreCase = true) &&
-                    !mediaUrl.contains(".js", ignoreCase = true)
+                if (likelyMediaSource &&
+                    !isProviderStaticAsset(mediaUrl) &&
+                    !mediaUrl.contains("/player/v/8.19.1/notice.txt", ignoreCase = true)
                 ) {
                     emitMediaLink(mediaUrl, pageUrl, callback)
                     emittedProviderSource = true
@@ -1239,6 +1288,50 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
         }
 
         return false
+    }
+
+    private fun isOynatloLoadNetworkUrl(url: String): Boolean {
+        val normalized = url.trim().decodeEmbeddedText()
+        val host = runCatching { URI(normalized).host.orEmpty() }.getOrNull().orEmpty().lowercase()
+        if (!host.equals("oynatloload.top", ignoreCase = true)) return false
+
+        val path = runCatching { URI(normalized).path.orEmpty() }.getOrNull().orEmpty().lowercase()
+        val query = runCatching { URI(normalized).rawQuery.orEmpty() }.getOrNull().orEmpty().lowercase()
+
+        if (isProviderStaticAsset(normalized)) return false
+
+        // Keep actual APIs/request endpoints and dynamic player resources.
+        return path.contains("/api/") ||
+            path.contains("/ajax/") ||
+            path.contains("/source") ||
+            path.contains("/stream") ||
+            path.contains("/video") ||
+            path.contains("/media") ||
+            path.contains("/file") ||
+            path.contains("/play") ||
+            path.contains("/watch") ||
+            path.endsWith(".php") ||
+            path.endsWith(".json") ||
+            query.contains("source=") ||
+            query.contains("src=") ||
+            query.contains("file=") ||
+            query.contains("video=") ||
+            query.contains("stream=") ||
+            query.contains("media=") ||
+            query.contains("id=")
+    }
+
+    private fun isProviderStaticAsset(url: String): Boolean {
+        val value = url.lowercase()
+        return value.contains("/notice.txt") ||
+            value.endsWith(".js") ||
+            value.contains(".js?") ||
+            value.endsWith(".css") ||
+            value.contains(".css?") ||
+            value.endsWith(".map") ||
+            value.contains(".map?") ||
+            Regex("""\.(?:png|jpe?g|gif|webp|svg|ico|woff2?|ttf)(?:[?#]|$)""")
+                .containsMatchIn(value)
     }
 
     private fun normalizeProviderMediaUrl(raw: String, pageUrl: String): String {
