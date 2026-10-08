@@ -53,6 +53,7 @@ class NeonPlaybackSmokeTest {
             // A current public episode page is included as an extractor-only control.
             // This separates search/load failures from loadLinks/provider failures.
             listOf(
+                "https://diziboxizle.com/film/tanrinin-zirhi/",
                 "https://diziboxizle.com/the-lowdown-1-sezon-1-bolum/",
                 "https://diziboxizle.com/race-for-the-crown-1-sezon-1-bolum/",
             ),
