@@ -325,11 +325,19 @@ class NeonPlaybackSmokeTest {
         // Direct control URLs test the provider resolver independently from search.
         for (url in target.directUrls) {
             searchCandidates.add(
-                api.newTvSeriesSearchResponse(
-                    name = target.name,
-                    url = url,
-                    type = TvType.TvSeries,
-                )
+                if (url.contains("/film/", ignoreCase = true)) {
+                    api.newMovieSearchResponse(
+                        name = target.name,
+                        url = url,
+                        type = TvType.Movie,
+                    )
+                } else {
+                    api.newTvSeriesSearchResponse(
+                        name = target.name,
+                        url = url,
+                        type = TvType.TvSeries,
+                    )
+                }
             )
         }
 
