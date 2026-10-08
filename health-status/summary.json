@@ -10,7 +10,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://asyafilmizle.com",
-        "bytes": 5709,
+        "bytes": 5624,
         "title": "Just a moment...",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -38,7 +38,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://diziboxizle.com",
-        "bytes": 254694,
+        "bytes": 254795,
         "title": "Dizibox İzle - Güncel Yabancı Dizi izle, HD Diziler izle",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -58,19 +58,18 @@
     },
     {
       "provider": "Dizigecesi",
-      "status": "yellow",
+      "status": "red",
       "domain": "https://dizigecesi.com",
       "configured_domain": "https://dizigecesi.com",
       "live": {
         "ok": false,
-        "anti_bot_blocked": true,
-        "status_code": 403,
+        "status_code": null,
         "final_url": "https://dizigecesi.com",
-        "bytes": 4917,
-        "title": "Attention Required! | Cloudflare",
+        "bytes": 0,
+        "title": "",
         "media_hints": 0,
         "iframe_hints": 0,
-        "error": null
+        "error": "ConnectionError: ('Connection aborted.', ConnectionResetError(104, 'Connection reset by peer'))"
       },
       "pipelines": {
         "load": true,
@@ -94,7 +93,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://dizipal1587.com",
-        "bytes": 4551,
+        "bytes": 4549,
         "title": "Attention Required! | Cloudflare",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -262,7 +261,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://webdramaturkey2.com",
-        "bytes": 206776,
+        "bytes": 217623,
         "title": "Web Drama Turkey - Kore, Çin, Japon Dizileri İzle",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -282,6 +281,6 @@
     }
   ],
   "green": 7,
-  "yellow": 3,
-  "red": 0
+  "yellow": 2,
+  "red": 1
 }
