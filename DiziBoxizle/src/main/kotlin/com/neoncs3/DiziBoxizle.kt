@@ -1198,7 +1198,23 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
             var emittedProviderSource = false
             sourceUrls.forEach { rawSource ->
                 val mediaUrl = normalizeProviderMediaUrl(rawSource, pageUrl)
-                if (isMediaUrl(mediaUrl)) {
+
+                // Provider source fields are authoritative. OynatloLoad can return
+                // signed/extensionless CDN URLs, so the older isMediaUrl() extension
+                // check could incorrectly discard the only real source.
+                val likelyMediaSource = mediaUrl.startsWith("http://", ignoreCase = true) ||
+                    mediaUrl.startsWith("https://", ignoreCase = true)
+
+                Log.d(
+                    "DZBX",
+                    "Provider source raw=" + rawSource +
+                        " normalized=" + mediaUrl +
+                        " likelyMedia=" + likelyMediaSource,
+                )
+
+                if (likelyMediaSource && !mediaUrl.contains("/player/", ignoreCase = true) &&
+                    !mediaUrl.contains(".js", ignoreCase = true)
+                ) {
                     emitMediaLink(mediaUrl, pageUrl, callback)
                     emittedProviderSource = true
                     Log.d("DZBX", "Provider direct source: " + mediaUrl)
