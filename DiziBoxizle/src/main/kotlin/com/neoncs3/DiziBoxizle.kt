@@ -355,7 +355,7 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
 
             nestedDocument.select(
                 "iframe[src], iframe[data-src], iframe[data-lazy-src], iframe[data-original], " +
-                    "[data-iframe], [data-embed], [data-video], [data-player], [data-embed-url], " +
+                    "video[src], source[src], [data-iframe], [data-embed], [data-video], [data-player], [data-embed-url], " +
                     "[data-player-url], [data-video-url], [data-stream], a[href]"
             ).forEach { element ->
                 val nestedUrl = extractUrlFromElement(element) ?: return@forEach
@@ -963,6 +963,7 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
                         "Sec-Fetch-Site" to "cross-site",
                         "Sec-Fetch-User" to "?1",
                     ),
+                    referer = episodeUrl,
                 )
             }.getOrNull() ?: continue
 
@@ -978,7 +979,80 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
             }.decodeEmbeddedText()
 
             val unpacked = runCatching { getAndUnpack(html) }.getOrDefault(html)
-            val searchable = if (unpacked == html) html else html + "\n" + unpacked
+
+            // Some player wrappers keep the real source or redirect logic in an
+            // external JavaScript file instead of inline HTML. Fetch a small bounded
+            // set of scripts from the provider page and inspect them as well.
+            val externalScriptText = StringBuilder()
+            document.select("script[src]").take(6).forEach { script ->
+                val scriptUrl = runCatching {
+                    URI(pageUrl).resolve(script.attr("src")).toString()
+                }.getOrNull() ?: return@forEach
+
+                runCatching {
+                    app.get(
+                        scriptUrl,
+                        headers = mapOf(
+                            "User-Agent" to BROWSER_USER_AGENT,
+                            "Referer" to pageUrl,
+                            "Accept" to "application/javascript,text/javascript,*/*;q=0.8",
+                            "Accept-Language" to "tr-TR,tr;q=0.9,en;q=0.8",
+                        ),
+                        referer = pageUrl,
+                    ).text
+                }.getOrNull()?.let {
+                    externalScriptText.append("\n")
+                    externalScriptText.append(it.decodeEmbeddedText())
+                }
+            }
+
+            val searchable = buildString {
+                append(html)
+                if (unpacked != html) {
+                    append("\n")
+                    append(unpacked)
+                }
+                append("\n")
+                append(externalScriptText)
+            }.decodeEmbeddedText()
+
+            // Capture JS redirects and player source assignments, including relative paths.
+            Regex(
+                """(?is)(?:location(?:\.href)?|window\.location|window\.open|player\.(?:src|source)|(?:file|src|url|source|href|dataUrl))\s*(?:=|\(|:)\s*["']([^"']+)["']"""
+            ).findAll(searchable)
+                .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
+                .forEach { raw ->
+                    val resolved = when {
+                        raw.startsWith("http://", ignoreCase = true) ||
+                            raw.startsWith("https://", ignoreCase = true) -> raw
+                        raw.startsWith("//") -> "https:$raw"
+                        raw.startsWith("/") || raw.startsWith("./") || raw.startsWith("../") ->
+                            runCatching { URI(pageUrl).resolve(raw).toString() }.getOrNull()
+                        else -> null
+                    }
+                    if (!resolved.isNullOrBlank()) {
+                        val value = resolved.trimEnd(')', ']', '}', ';', ',')
+                        if (isMediaUrl(value) || isExternalPlayer(value)) {
+                            enqueue(value)
+                        }
+                    }
+                }
+
+            // HTML meta-refresh redirects are common in lightweight player wrappers.
+            Regex(
+                """(?is)<meta[^>]+http-equiv\s*=\s*["']refresh["'][^>]+content\s*=\s*["'][^"']*url=([^"']+)["']"""
+            ).findAll(searchable)
+                .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
+                .forEach { raw ->
+                    val resolved = when {
+                        raw.startsWith("http://", ignoreCase = true) ||
+                            raw.startsWith("https://", ignoreCase = true) -> raw
+                        raw.startsWith("//") -> "https:$raw"
+                        else -> runCatching { URI(pageUrl).resolve(raw).toString() }.getOrNull()
+                    }
+                    if (!resolved.isNullOrBlank()) enqueue(resolved)
+                }
+
             val sourceUrls = LinkedHashSet<String>()
 
             PROVIDER_SOURCE_PATTERN.findAll(searchable)
