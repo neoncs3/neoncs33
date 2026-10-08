@@ -8,7 +8,6 @@ import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import com.lagradost.cloudstream3.utils.getAndUnpack
-import com.lagradost.cloudstream3.extractors.helper.JWPlayerHelper
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
@@ -392,7 +391,6 @@ class DiziBoxizle : NeonMainAPI() {
                         val extracted = runCatching {
                             loadExtractor(
                                 clean,
-                                episodeUrl,
                                 subtitleCallback,
                                 emitCallback,
                             )
@@ -517,7 +515,6 @@ class DiziBoxizle : NeonMainAPI() {
     private suspend fun extractVidMolyMedia(
         providerUrl: String,
         episodeUrl: String,
-        subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
         val candidates = LinkedHashSet<String>()
@@ -529,7 +526,7 @@ class DiziBoxizle : NeonMainAPI() {
                 .replace("vidmoly.to", "vidmoly.biz", ignoreCase = true)
                 .replace("vidmoly.net", "vidmoly.biz", ignoreCase = true)
 
-            val firstResponse = runCatching {
+            val firstResponse = try {
                 app.get(
                     normalized,
                     headers = mapOf(
@@ -542,11 +539,11 @@ class DiziBoxizle : NeonMainAPI() {
                     ),
                     referer = episodeUrl,
                 )
-            }.getOrElse {
+            } catch (error: Exception) {
                 Log.e(
                     "DZBX",
                     "VidMoly HTTP exception page=" + normalized +
-                        " error=" + it.message,
+                        " error=" + error.message,
                 )
                 continue
             }
@@ -567,7 +564,6 @@ class DiziBoxizle : NeonMainAPI() {
                     " masterTxt=" + html.contains("master.txt", ignoreCase = true),
             )
 
-            // VidMoly may return a challenge page before exposing player data.
             if (html.contains("<title>Please wait", ignoreCase = true)) {
                 val waitId = Regex("""\?g=([a-fA-F0-9]+)""")
                     .find(html)
@@ -576,7 +572,7 @@ class DiziBoxizle : NeonMainAPI() {
 
                 if (!waitId.isNullOrBlank()) {
                     val challengeUrl = normalized + "?g=" + waitId
-                    val challengeResponse = runCatching {
+                    val challengeResponse = try {
                         app.get(
                             challengeUrl,
                             headers = mapOf(
@@ -587,12 +583,17 @@ class DiziBoxizle : NeonMainAPI() {
                                 "Accept-Language" to "tr-TR,tr;q=0.9,en;q=0.8",
                             ),
                         )
-                    }.getOrNull()
+                    } catch (error: Exception) {
+                        Log.w(
+                            "DZBX",
+                            "VidMoly challenge HTTP exception: " + error.message,
+                        )
+                        null
+                    }
 
                     if (challengeResponse != null) {
                         html = challengeResponse.text
                         providerDocument = challengeResponse.document
-
                         Log.d(
                             "DZBX",
                             "VidMoly challenge response code=" +
@@ -605,18 +606,12 @@ class DiziBoxizle : NeonMainAPI() {
                                 " masterTxt=" +
                                 html.contains("master.txt", ignoreCase = true),
                         )
-                    } else {
-                        Log.w(
-                            "DZBX",
-                            "VidMoly challenge request failed: " + challengeUrl,
-                        )
                     }
                 }
             }
 
             val searchable = buildString {
                 append(html.decodeEmbeddedText())
-
                 providerDocument.select("script, noscript, template").forEach { element ->
                     append("\n")
                     append(element.data().decodeEmbeddedText())
@@ -636,73 +631,27 @@ class DiziBoxizle : NeonMainAPI() {
                 }
             }
 
-            // Use CloudStream's maintained JWPlayer parser first. This is the same
-            // parsing path used by the upstream VidMoly extractor.
-            for (script in providerDocument.select("script")) {
-                val scriptData = script.data().ifBlank { script.html() }
-                if (!JWPlayerHelper.canParseJwScript(scriptData)) continue
-
-                val emitted = java.util.Collections.synchronizedList(
-                    mutableListOf<ExtractorLink>()
-                )
-
-                runCatching {
-                    JWPlayerHelper.extractStreamLinks(
-                        script = scriptData,
-                        sourceName = name,
-                        mainUrl = normalized,
-                        callback = {
-                            emitted.add(it)
-                            callback(it)
-                        },
-                        subtitleCallback = subtitleCallback,
-                        headers = mapOf(
-                            "User-Agent" to BROWSER_USER_AGENT,
-                        ),
-                    )
-                }.onFailure {
-                    Log.w(
-                        "DZBX",
-                        "VidMoly JWPlayer parser hata: " + it.message,
-                    )
-                }
-
-                if (emitted.isNotEmpty()) {
-                    Log.d(
-                        "DZBX",
-                        "VidMoly JWPlayer source bulundu: " +
-                            normalized +
-                            " links=" +
-                            emitted.size,
-                    )
-                    return true
-                }
-            }
-
             val streamUrls = LinkedHashSet<String>()
 
-            // Standard JWPlayer/VidMoly source fields.
+            // JWPlayer/VidMoly source variants.
             Regex(
                 """(?is)\b(?:file|src|url|source|hls)\s*[:=]\s*["']((?:https?:)?//[^"']+\.(?:m3u8|mpd|txt|mp4)(?:\?[^"']+)?|/[^"']+\.(?:m3u8|mpd|txt|mp4)(?:\?[^"']+)?)["']"""
             ).findAll(searchable)
                 .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
                 .forEach(streamUrls::add)
 
-            // sources: [{ file: "..." }] and sources:[{file:'...'}] variants.
             Regex(
                 """(?is)sources\s*[:=]\s*\[\s*\{[^}]*?file\s*[:=]\s*["']([^"']+)["']"""
             ).findAll(searchable)
                 .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
                 .forEach(streamUrls::add)
 
-            // Common VidMoly HLS variables.
             Regex(
                 """(?is)["']?(?:hls\d+|master|index|playlist)["']?\s*[:=]\s*["']((?:https?:)?//[^"']+\.(?:m3u8|txt)(?:\?[^"']+)?|/[^"']+\.(?:m3u8|txt)(?:\?[^"']+)?)["']"""
             ).findAll(searchable)
                 .mapNotNull { it.groupValues.getOrNull(1)?.trim() }
                 .forEach(streamUrls::add)
 
-            // Generic HLS/CDN fallback, including newer VidMoly CDN hostnames.
             Regex(
                 """(?i)(?:(?:https?:)?//|/)[^\s"'<>]+?\.(?:m3u8|mpd|txt|mp4)(?:\?[^\s"'<>]*)?"""
             ).findAll(searchable)
@@ -722,26 +671,8 @@ class DiziBoxizle : NeonMainAPI() {
                 "VidMoly parsed page=" + normalized +
                     " scripts=" + providerDocument.select("script").size +
                     " htmlBytes=" + html.length +
-                    " streamCandidates=" + streamUrls.size +
-                    " sourcesPattern=" +
-                    Regex("""(?is)\bsources\s*[:=]""").containsMatchIn(searchable) +
-                    " filePattern=" +
-                    Regex("""(?is)\bfile\s*[:=]""").containsMatchIn(searchable) +
-                    " hlsPattern=" +
-                    Regex("""(?is)\bhls\d+\s*[:=]""").containsMatchIn(searchable),
+                    " streamCandidates=" + streamUrls.size,
             )
-
-            if (streamUrls.isEmpty()) {
-                val lower = searchable.lowercase()
-                Log.w(
-                    "DZBX",
-                    "VidMoly NO_STREAM sourcePos=" +
-                        lower.indexOf("sources") +
-                        " hlsPos=" +
-                        lower.indexOf("hls") +
-                        " page=" + normalized,
-                )
-            }
 
             for (rawStreamUrl in streamUrls) {
                 val streamUrl = normalizeProviderMediaUrl(rawStreamUrl, normalized)
@@ -750,12 +681,7 @@ class DiziBoxizle : NeonMainAPI() {
                 emitMediaLink(streamUrl, normalized, callback)
                 Log.d(
                     "DZBX",
-                    "VidMoly DIRECT_LINK emitted type=" +
-                        if (Regex("(?i)\\.(?:m3u8|txt)(?:$|[?#])").containsMatchIn(streamUrl))
-                            "M3U8"
-                        else
-                            "VIDEO" +
-                                " url=" + streamUrl,
+                    "VidMoly direct source: " + streamUrl,
                 )
                 return true
             }
