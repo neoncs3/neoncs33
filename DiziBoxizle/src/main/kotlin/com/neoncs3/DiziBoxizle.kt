@@ -1195,13 +1195,18 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
                     " sources=" + sourceUrls.size,
             )
 
+            var emittedProviderSource = false
             sourceUrls.forEach { rawSource ->
                 val mediaUrl = normalizeProviderMediaUrl(rawSource, pageUrl)
                 if (isMediaUrl(mediaUrl)) {
                     emitMediaLink(mediaUrl, pageUrl, callback)
+                    emittedProviderSource = true
                     Log.d("DZBX", "Provider direct source: " + mediaUrl)
-                    return true
                 }
+            }
+
+            if (emittedProviderSource) {
+                return true
             }
 
             document.select("track[src], track[data-src]").forEach { track ->
