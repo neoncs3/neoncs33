@@ -962,9 +962,9 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
                 "Sec-Fetch-Mode" to "navigate",
                 "Sec-Fetch-Site" to "cross-site",
                 "Sec-Fetch-User" to "?1",
-                "sec-ch-ua" to ""Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"",
+                "sec-ch-ua" to "\"Chromium\";v=\"140\", \"Not=A?Brand\";v=\"24\", \"Google Chrome\";v=\"140\"",
                 "sec-ch-ua-mobile" to "?0",
-                "sec-ch-ua-platform" to ""Android"",
+                "sec-ch-ua-platform" to "\"Android\"",
             )
 
             var response = runCatching {
