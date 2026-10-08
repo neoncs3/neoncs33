@@ -1561,8 +1561,8 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
     private fun normalizeGenre(value: String): String {
         val cleaned = value
             .trim()
-            .replace(Regex("(?i)^t[uü]r(?:ler)?\s*:\s*"), "")
-            .replace(Regex("(?i)\s+(?:filmleri|filmi|dizileri|dizisi|diziler|filmler)$"), "")
+            .replace(Regex("""(?i)^t[uü]r(?:ler)?\s*:\s*"""), "")
+            .replace(Regex("""(?i)\s+(?:filmleri|filmi|dizileri|dizisi|diziler|filmler)$"""), "")
             .trim()
 
         return when (cleaned.lowercase()) {
