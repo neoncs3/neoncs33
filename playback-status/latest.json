@@ -11,12 +11,12 @@
     },
     {
       "provider": "DiziBoxizle",
-      "status": "PASS",
+      "status": "FAIL",
       "query": null,
-      "item": "DiziBoxizle",
-      "links": 7,
+      "item": null,
+      "links": 0,
       "positionMs": 0,
-      "error": null
+      "error": "ExoPlayer sürdürülebilir playback doğrulanamadı: position=0ms duration=0ms samples=0 firstFrame=true exoPlaying=true"
     },
     {
       "provider": "DiziPal",
@@ -38,12 +38,12 @@
     },
     {
       "provider": "Dramadizilerim",
-      "status": "PASS",
+      "status": "FAIL",
       "query": null,
-      "item": "The Dragon King's Fated Male Bride",
-      "links": 1,
+      "item": null,
+      "links": 0,
       "positionMs": 0,
-      "error": null
+      "error": "Gerçek video bağlantısı bulunamadı"
     },
     {
       "provider": "FilmModu",
@@ -56,42 +56,42 @@
     },
     {
       "provider": "JetFilmizle",
-      "status": "PASS",
+      "status": "FAIL",
       "query": null,
-      "item": "Yıldızlararası",
-      "links": 1,
+      "item": null,
+      "links": 0,
       "positionMs": 0,
-      "error": null
+      "error": "ExoPlayer sürdürülebilir playback doğrulanamadı: position=0ms duration=0ms samples=0 firstFrame=true exoPlaying=true"
     },
     {
       "provider": "SetFilmIzle",
-      "status": "PASS",
+      "status": "FAIL",
       "query": null,
-      "item": "Başlangıç",
-      "links": 1,
+      "item": null,
+      "links": 0,
       "positionMs": 0,
-      "error": null
+      "error": "ExoPlayer sürdürülebilir playback doğrulanamadı: position=0ms duration=0ms samples=0 firstFrame=true exoPlaying=true"
     },
     {
       "provider": "SinemaCX",
-      "status": "PASS",
+      "status": "FAIL",
       "query": null,
-      "item": "Başlangıç",
-      "links": 2,
+      "item": null,
+      "links": 0,
       "positionMs": 0,
-      "error": null
+      "error": "ExoPlaybackException: Source error <- UnrecognizedInputFormatException: None of the available extractors (FlvExtractor, FlacExtractor, WavExtractor, FragmentedMp4Extractor, Mp4Extractor, AmrExtractor, PsExtractor, OggExtractor, TsExtractor, UpdatedMatroskaExtractor, AdtsExtractor, Ac3Extractor, Ac4Extractor, Mp3Extractor, AviExtractor, JpegExtractor, PngExtractor, WebpExtractor, BmpExtractor, HeifExtractor, AvifExtractor) could read the stream. {contentIsMalformed=false, dataType=1} sniff failures: [NoDeclaredBrand, NoDeclaredBrand]"
     },
     {
       "provider": "WebDramaTurkey",
-      "status": "PASS",
+      "status": "FAIL",
       "query": null,
-      "item": "Moving",
-      "links": 1,
+      "item": null,
+      "links": 0,
       "positionMs": 0,
-      "error": null
+      "error": "loadLinks=false"
     }
   ],
-  "pass": 6,
+  "pass": 0,
   "blocked": 4,
-  "fail": 0
+  "fail": 6
 }
