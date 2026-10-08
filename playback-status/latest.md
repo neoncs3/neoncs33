@@ -1,13 +1,13 @@
 # 🎬 NeonCS Gerçek Oynatma Durumu
 
-**PASS:** 5  **BLOCKED:** 4  **FAIL:** 1
+**PASS:** 6  **BLOCKED:** 4  **FAIL:** 0
 
 
 
 | Provider | Durum | Link | Position | Sorgu | İçerik | Hata |
 |---|---|---:|---:|---|---|---|
 | **AsyaFilmIzle** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
-| **DiziBoxizle** | 🔴 FAIL | 0 | 0 ms | - | - | loadLinks=false |
+| **DiziBoxizle** | 🟢 PASS | 7 | 0 ms | - | DiziBoxizle | - |
 | **DiziPal** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
 | **Dizigecesi** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
 | **Dramadizilerim** | 🟢 PASS | 1 | 0 ms | - | ZOMBİ KAMPI(Dublajlı) | - |

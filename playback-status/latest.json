@@ -11,12 +11,12 @@
     },
     {
       "provider": "DiziBoxizle",
-      "status": "FAIL",
+      "status": "PASS",
       "query": null,
-      "item": null,
-      "links": 0,
+      "item": "DiziBoxizle",
+      "links": 7,
       "positionMs": 0,
-      "error": "loadLinks=false"
+      "error": null
     },
     {
       "provider": "DiziPal",
@@ -91,7 +91,7 @@
       "error": null
     }
   ],
-  "pass": 5,
+  "pass": 6,
   "blocked": 4,
-  "fail": 1
+  "fail": 0
 }
