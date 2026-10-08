@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicReference
 @RunWith(AndroidJUnit4::class)
 class NeonPlaybackSmokeTest {
     companion object {
-        private const val MIN_PLAYBACK_MS = 1_500L
+        private const val MIN_PLAYBACK_MS = 3_000L
         private const val PLAYBACK_TIMEOUT_MS = 20_000L
         private const val MAX_CANDIDATES_PER_PROVIDER = 6
     }
@@ -262,15 +262,21 @@ class NeonPlaybackSmokeTest {
 
             lastPosition = current
 
-            // A rendered frame is the strongest smoke-test signal. We accept both
-            // the listener callback and CS3IPlayer's own first-render state so a
-            // callback that fired before our reflective listener was attached is
-            // not reported as a false negative.
+            // First-frame alone is not enough: a broken/preview source can render
+            // one frame and then fail or be released. Require actual position advance
+            // from at least two samples after the first frame.
             refreshFirstFrameState()
             val renderedAt = firstFrameAt.get()
-            if (firstFrame.get() && renderedAt > 0L &&
-                System.currentTimeMillis() - renderedAt >= MIN_PLAYBACK_MS
+            if (firstFrame.get() &&
+                renderedAt > 0L &&
+                System.currentTimeMillis() - renderedAt >= MIN_PLAYBACK_MS &&
+                bestPosition >= 1_500L &&
+                advancedSamples >= 2
             ) {
+                break
+            }
+
+            if (playerError.get() != null) {
                 break
             }
 
@@ -285,11 +291,12 @@ class NeonPlaybackSmokeTest {
 
         val error = playerError.get()
         refreshFirstFrameState()
-        val played = firstFrame.get() ||
-            (bestPosition >= MIN_PLAYBACK_MS && advancedSamples >= 2)
+        val played = firstFrame.get() &&
+            bestPosition >= 1_500L &&
+            advancedSamples >= 2
 
         val diagnostic = error ?: if (!played) {
-            "ExoPlayer playback ilerlemedi: position=" +
+            "ExoPlayer sürdürülebilir playback doğrulanamadı: position=" +
                 bestPosition +
                 "ms duration=" +
                 duration +
