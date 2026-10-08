@@ -532,46 +532,59 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
             else -> ExtractorLinkType.VIDEO
         }
 
-
         val providerOrigin = originOf(sourcePage)
         val isProviderPage = sourcePage.contains("vidmoly", ignoreCase = true) ||
             sourcePage.contains("moly", ignoreCase = true) ||
             sourcePage.contains("oynatloload.top", ignoreCase = true)
 
-        // media-internals shows playback inside the VidMoly frame.
-        // Use the provider origin as the HLS Referer/Origin instead of DiziBox.
-        val mediaReferer = if (isProviderPage) {
-            providerOrigin?.plus("/") ?: sourcePage
+        // CDN'ler Referer/Origin kombinasyonunu farklı şekilde doğrulayabiliyor.
+        // İlk mirror normal provider başlıklarıyla, diğerleri güvenli fallback
+        // profilleriyle yayınlanır. CloudStream hata alırsa sonraki mirror'a geçebilir.
+        val profiles = linkedSetOf<Pair<String, Map<String, String>>>()
+
+        fun addProfile(label: String, referer: String, origin: String? = null) {
+            val headers = linkedMapOf(
+                "User-Agent" to USER_AGENT,
+                "Referer" to referer,
+                "Accept" to "*/*",
+                "Accept-Language" to "tr-TR,tr;q=0.9,en;q=0.8",
+            )
+            origin?.takeIf { isProviderPage }?.let { headers["Origin"] = it }
+            profiles.add(label to headers)
+        }
+
+        val providerReferer = providerOrigin?.plus("/") ?: sourcePage
+
+        if (isProviderPage) {
+            addProfile("Provider", providerReferer, providerOrigin)
+            addProfile("Provider no-Origin", providerReferer)
+            addProfile("DiziBox", sourcePage)
         } else {
-            sourcePage
+            addProfile("Source", sourcePage)
         }
 
-        val mediaHeaders = linkedMapOf(
-            "User-Agent" to USER_AGENT,
-            "Referer" to mediaReferer,
-            "Accept" to "*/*",
-            "Accept-Language" to "tr-TR,tr;q=0.9,en;q=0.8",
-        )
-
-        if (isProviderPage && providerOrigin != null) {
-            mediaHeaders["Origin"] = providerOrigin
+        profiles.forEach { (label, headers) ->
+            callback(
+                newExtractorLink(
+                    source = name,
+                    name = hostLabel(mediaUrl) + " • " + label,
+                    url = mediaUrl,
+                    type = type,
+                ) {
+                    referer = headers["Referer"] ?: sourcePage
+                    quality = qualityFromUrl(mediaUrl)
+                    this.headers = headers
+                }
+            )
         }
 
-        callback(
-            newExtractorLink(
-                source = name,
-                name = hostLabel(mediaUrl),
-                url = mediaUrl,
-                type = type,
-            ) {
-                referer = mediaReferer
-                quality = qualityFromUrl(mediaUrl)
-                headers = mediaHeaders
-            }
+        Log.d(
+            "DZBX",
+            "Media mirrors=" + profiles.size +
+                " url=" + mediaUrl +
+                " sourcePage=" + sourcePage,
         )
     }
-
-
     private fun isOkRuPlayer(url: String): Boolean {
         val value = url.lowercase()
         return value.contains("ok.ru") || value.contains("odnoklassniki")
