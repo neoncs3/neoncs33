@@ -315,10 +315,68 @@ class DiziBoxizle : NeonMainAPI() {
             .filter { isMediaUrl(it) }
             .forEach(candidates::add)
 
+        // DiziBOX can expose alternative player pages as same-site server switches
+        // such as /2/, /3/ or ?server=2. The first page may contain a blocked VidMoly
+        // embed while another server exposes a usable player, so resolve those pages too.
+        val nestedServerPages = candidates.toList()
+            .filter { isDiziBoxServerPage(it, episodeUrl) }
+            .take(6)
+
+        for (serverPage in nestedServerPages) {
+            val nestedResponse = runCatching {
+                app.get(
+                    serverPage,
+                    headers = requestHeaders + ("Referer" to episodeUrl),
+                )
+            }.getOrNull() ?: continue
+
+            val nestedDocument = nestedResponse.document
+            val nestedHtml = buildString {
+                append(nestedDocument.html())
+                nestedDocument.select("script, noscript, template").forEach { element ->
+                    append("\n")
+                    append(element.data())
+                    append("\n")
+                    append(element.html())
+                }
+            }.decodeEmbeddedText()
+
+            nestedDocument.select(
+                "iframe[src], iframe[data-src], iframe[data-lazy-src], iframe[data-original], " +
+                    "[data-iframe], [data-embed], [data-video], [data-player], [data-embed-url], " +
+                    "[data-player-url], [data-video-url], [data-stream], a[href]"
+            ).forEach { element ->
+                val nestedUrl = extractUrlFromElement(element) ?: return@forEach
+                if (isExternalPlayer(nestedUrl) || isMediaUrl(nestedUrl)) {
+                    candidates.add(nestedUrl)
+                }
+            }
+
+            Regex(
+                """https?://[^\s"'<>]*(?:vidmoly|ok\.ru|odnoklassniki)[^\s"'<>]*"""
+            ).findAll(nestedHtml)
+                .map { it.value.trimEnd(')', ']', '}', ';', ',') }
+                .forEach(candidates::add)
+
+            Regex(
+                """https?://[^\s"'<>]+(?:master|index|playlist)[^\s"'<>]*\.(?:m3u8|txt)(?:\?[^\s"'<>]*)?"""
+            ).findAll(nestedHtml)
+                .map { it.value.trimEnd(')', ']', '}', ';', ',') }
+                .filter { isMediaUrl(it) }
+                .forEach(candidates::add)
+
+            Log.d(
+                "DZBX",
+                "nested server page=" + serverPage +
+                    " code=" + nestedResponse.code +
+                    " candidatesNow=" + candidates.size,
+            )
+        }
+
         Log.d(
             "DZBX",
             "loadLinks episode=${episodeUrl} candidates=${candidates.size} " +
-                candidates.take(12).joinToString(" | "),
+                candidates.take(16).joinToString(" | "),
         )
 
         var found = false
@@ -517,14 +575,13 @@ class DiziBoxizle : NeonMainAPI() {
         episodeUrl: String,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
-        val candidates = LinkedHashSet<String>()
-        candidates.add(providerUrl)
-        vidMolyClassicUrl(providerUrl)?.let(candidates::add)
+        // VidMoly has multiple live aliases. Do not force every request to .biz:
+        // an embed can be blocked on one alias while the same public embed works on
+        // another. Preserve the embed id/path and try the known aliases in order.
+        val candidates = vidMolyVariants(providerUrl)
 
         for (pageUrl in candidates) {
             val normalized = pageUrl
-                .replace("vidmoly.to", "vidmoly.biz", ignoreCase = true)
-                .replace("vidmoly.net", "vidmoly.biz", ignoreCase = true)
 
             val firstResponse = try {
                 app.get(
@@ -558,11 +615,56 @@ class DiziBoxizle : NeonMainAPI() {
                     " bytes=" + html.length +
                     " title=" + providerDocument.title().take(80) +
                     " pleaseWait=" + html.contains("Please wait", ignoreCase = true) +
+                    " accessBlocked=" + isVidMolyAccessBlocked(html, providerDocument) +
                     " sources=" + html.contains("sources", ignoreCase = true) +
                     " hls=" + html.contains("hls", ignoreCase = true) +
                     " m3u8=" + html.contains(".m3u8", ignoreCase = true) +
                     " masterTxt=" + html.contains("master.txt", ignoreCase = true),
             )
+
+            // A 200 response can still be an authorization page instead of the
+            // actual player. First try the normal cross-site iframe request; when
+            // VidMoly explicitly says the video is not authorized to be embedded,
+            // retry the same public embed directly on the provider origin.
+            if (isVidMolyAccessBlocked(html, providerDocument)) {
+                Log.w("DZBX", "VidMoly Access Blocked: " + normalized)
+
+                val directResponse = runCatching {
+                    app.get(
+                        normalized,
+                        headers = mapOf(
+                            "User-Agent" to BROWSER_USER_AGENT,
+                            "Sec-Fetch-Dest" to "document",
+                            "Sec-Fetch-Mode" to "navigate",
+                            "Sec-Fetch-Site" to "same-origin",
+                            "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                            "Accept-Language" to "tr-TR,tr;q=0.9,en;q=0.8",
+                        ),
+                        referer = normalized,
+                    )
+                }.getOrNull()
+
+                if (directResponse != null) {
+                    val directHtml = directResponse.text
+                    val directDocument = directResponse.document
+
+                    Log.d(
+                        "DZBX",
+                        "VidMoly direct retry page=" + normalized +
+                            " code=" + directResponse.code +
+                            " bytes=" + directHtml.length +
+                            " title=" + directDocument.title().take(80) +
+                            " accessBlocked=" +
+                            isVidMolyAccessBlocked(directHtml, directDocument) +
+                            " m3u8=" + directHtml.contains(".m3u8", ignoreCase = true),
+                    )
+
+                    if (!isVidMolyAccessBlocked(directHtml, directDocument)) {
+                        html = directHtml
+                        providerDocument = directDocument
+                    }
+                }
+            }
 
             if (html.contains("<title>Please wait", ignoreCase = true)) {
                 val waitId = Regex("""\?g=([a-fA-F0-9]+)""")
@@ -921,12 +1023,67 @@ class DiziBoxizle : NeonMainAPI() {
         val path = runCatching { URI(url).path }.getOrNull() ?: return null
         val id = Regex("(?i)/w/([a-z0-9]+)$").find(path)?.groupValues?.getOrNull(1)
             ?: Regex("(?i)/v/([a-z0-9]+)$").find(path)?.groupValues?.getOrNull(1)
-            ?: Regex("(?i)/embed-([a-z0-9]+)\\.html$").find(path)?.groupValues?.getOrNull(1)
+            ?: Regex("(?i)/embed-([a-z0-9]+)\.html$").find(path)?.groupValues?.getOrNull(1)
             ?: return null
 
-        val origin = originOf(url) ?: "https://vidmoly.biz"
-        return "$origin/embed-$id.html"
+        return "https://vidmoly.biz/embed-$id.html"
     }
+
+    private fun vidMolyVariants(url: String): List<String> {
+        val uri = runCatching { URI(url) }.getOrNull() ?: return listOf(url)
+        val path = uri.path.orEmpty()
+        val id = Regex("(?i)/embed-([a-z0-9]+)\.html$").find(path)?.groupValues?.getOrNull(1)
+            ?: Regex("(?i)/w/([a-z0-9]+)$").find(path)?.groupValues?.getOrNull(1)
+            ?: Regex("(?i)/v/([a-z0-9]+)$").find(path)?.groupValues?.getOrNull(1)
+            ?: return listOf(url)
+
+        val query = uri.rawQuery?.let { "?$it" }.orEmpty()
+        val embedPath = "/embed-$id.html$query"
+
+        return listOf(
+            "https://vidmoly.biz$embedPath",
+            "https://vidmoly.to$embedPath",
+            "https://vidmoly.me$embedPath",
+            "https://vidmoly.net$embedPath",
+        ).distinct()
+    }
+
+    private fun isVidMolyAccessBlocked(
+        html: String,
+        document: Document,
+    ): Boolean {
+        val value = (document.title() + " " + html.take(12_000)).lowercase()
+        return value.contains("access blocked") ||
+            value.contains("not authorized to embed") ||
+            value.contains("not authorized to be embedded") ||
+            value.contains("not allowed to embed this video")
+    }
+
+    private fun isDiziBoxServerPage(url: String, episodeUrl: String): Boolean {
+        val candidateOrigin = originOf(url) ?: return false
+        val episodeOrigin = originOf(episodeUrl) ?: return false
+        if (!candidateOrigin.equals(episodeOrigin, ignoreCase = true)) return false
+
+        val uri = runCatching { URI(url) }.getOrNull() ?: return false
+        val path = uri.path.orEmpty().lowercase()
+
+        val numericServerPath = Regex(
+            """/\d+/?$"""
+        ).containsMatchIn(path)
+
+        val namedServerPath = Regex(
+            """/(?:server|source|player|kaynak)-?\d+/?$"""
+        ).containsMatchIn(path)
+
+        val queryServer = uri.rawQuery?.let {
+            Regex(
+                """(?:^|&)(?:server|source|player|kaynak)=\d+(?:&|$)"""
+            ).containsMatchIn(it)
+        } ?: false
+
+        return numericServerPath || namedServerPath || queryServer
+    }
+
     private fun originOf(url: String): String? {
         return runCatching {
             val uri = URI(url)
