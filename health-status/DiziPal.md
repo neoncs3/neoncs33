@@ -1,6 +1,6 @@
 # 🟡 DiziPal
 
-Domain: https://dizipal1587.com
+Domain: https://dizipal1588.com
 
 HTTP: ❌ 403
 
