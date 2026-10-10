@@ -20,7 +20,7 @@ import javax.crypto.spec.SecretKeySpec
 
 class DiziPal : NeonMainAPI() {
 
-    override var mainUrl = "https://dizipal1586.com"
+    override var mainUrl = "https://dizipal1588.com"
     override var name = "DiziPal"
     override var lang = "tr"
     override val hasMainPage = true

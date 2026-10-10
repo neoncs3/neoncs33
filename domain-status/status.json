@@ -1,6 +1,6 @@
 {
   "AsyaFilmIzle": {
-    "status": "unchanged",
+    "status": "protected",
     "domain": "https://asyafilmizle.com",
     "previous_domain": null,
     "changed_at": null
@@ -11,15 +11,15 @@
     "previous_domain": null,
     "changed_at": null
   },
-  "Dizigecesi": {
-    "status": "unchanged",
-    "domain": "https://dizigecesi.com",
-    "previous_domain": null,
-    "changed_at": null
-  },
   "DiziPal": {
-    "status": "unchanged",
-    "domain": "https://dizipal1586.com",
+    "status": "changed",
+    "domain": "https://dizipal1588.com",
+    "previous_domain": "https://dizipal1586.com",
+    "changed_at": "2026-10-10T15:18:45Z"
+  },
+  "Dizigecesi": {
+    "status": "protected",
+    "domain": "https://dizigecesi.com",
     "previous_domain": null,
     "changed_at": null
   },

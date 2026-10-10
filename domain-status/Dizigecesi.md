@@ -1,4 +1,4 @@
-# ✅ **DEĞİŞMEDİ** Dizigecesi
+# 🛡️ **KORUMALI** Dizigecesi
 
 **Güncel domain:** [https://dizigecesi.com](https://dizigecesi.com)
 
