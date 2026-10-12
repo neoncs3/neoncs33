@@ -1,0 +1,104 @@
+name: Otomatik Eklenti Oluşturucu
+
+on:
+  workflow_dispatch:
+    inputs:
+      site_url:
+        description: "Eklenti oluşturulacak sitenin ana URL'si"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: auto-plugin-generator-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    name: URL'yi analiz et, eklentiyi oluştur ve derlemeyi kontrol et
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Kaynak depoyu al
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Python 3.12 kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Gerekli analiz paketlerini kur
+        run: python -m pip install --disable-pip-version-check requests beautifulsoup4
+
+      - name: Üretici kendi testini çalıştırsın
+        run: python3 tools/auto_plugin_generator.py --self-test
+
+      - name: Girilen URL'den eklenti üret
+        env:
+          SITE_URL: ${{ inputs.site_url }}
+        run: python3 tools/auto_plugin_generator.py "$SITE_URL"
+
+      - name: Kaynak biçimini ve değişiklikleri kontrol et
+        run: |
+          set -e
+          git diff --check
+          python3 -m py_compile tools/auto_plugin_generator.py
+
+      - name: Üretilen eklentiyi depoya kaydet
+        id: save
+        shell: bash
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Yeni dosya farkı yok; mevcut kaynakla derleme kontrolü yapılacak."
+          else
+            git commit -m "Otomatik CloudStream eklentisi oluştur"
+            git push origin HEAD:master
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: CloudStream derlemesini başlat
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT_SHA: ${{ steps.save.outputs.sha }}
+        shell: bash
+        run: |
+          set -e
+          OLD_IDS=$(gh run list --workflow Derleyici.yml --branch master --event workflow_dispatch --limit 50 --json databaseId --jq '[.[].databaseId] | join(",")')
+          gh workflow run Derleyici.yml --ref master
+
+          RUN_ID=""
+          for attempt in $(seq 1 60); do
+            RUN_ID=$(gh run list --workflow Derleyici.yml --branch master --event workflow_dispatch --limit 30 --json databaseId,headSha --jq --arg sha "$COMMIT_SHA" --arg old "$OLD_IDS" '[.[] | select(.headSha == $sha) | select((("," + $old + ",") | contains("," + (.databaseId|tostring) + ",")) | not)][0].databaseId // empty')
+            if [ -n "$RUN_ID" ]; then
+              break
+            fi
+            sleep 10
+          done
+
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::Derleyici workflow'u başlatıldı ancak çalıştırma kimliği bulunamadı."
+            exit 1
+          fi
+
+          echo "Derleme çalıştırması: https://github.com/${{ github.repository }}/actions/runs/$RUN_ID"
+          gh run watch "$RUN_ID" --exit-status --interval 15
+
+      - name: Gerçek oynatma testinin durumunu bildir
+        if: always()
+        run: |
+          echo "Kaynak analizi, oluşturma ve derleme günlükleri bu çalıştırmada tutulur."
+          echo "Başarılı derlemeden sonra NeonCS Gerçek Oynatma Testi workflow'u devreye girer."
+          echo "Oynatma sonucu: https://github.com/${{ github.repository }}/actions/workflows/Oynatma.yml"
