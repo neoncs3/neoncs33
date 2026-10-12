@@ -10,6 +10,42 @@ report = ROOT / "neon-playback-report.json"
 logcat = ROOT / "playback-status" / "logcat.txt"
 out_dir = ROOT / "playback-status"
 out_dir.mkdir(parents=True, exist_ok=True)
+instrumentation_log = out_dir / "instrumentation.log"
+
+
+def summarize_instrumentation_failure() -> str | None:
+    """Keep useful compiler/Gradle diagnostics when playback never reached the test."""
+    if not instrumentation_log.exists():
+        return None
+    try:
+        raw = instrumentation_log.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
+    raw = re.sub(r"\\x1b\\[[0-9;]*m", "", raw)
+    patterns = (
+        re.compile(r"^e: file://.*$", re.IGNORECASE),
+        re.compile(r"^> Task .* FAILED$", re.IGNORECASE),
+        re.compile(r"^Execution failed for task .*", re.IGNORECASE),
+        re.compile(r"^FAILURE: .*", re.IGNORECASE),
+        re.compile(r"^\s*What went wrong:.*", re.IGNORECASE),
+        re.compile(r"^.*(?:Unresolved reference|Syntax error|Compilation error|No value passed|Type mismatch).*$", re.IGNORECASE),
+    )
+    findings: list[str] = []
+    seen: set[str] = set()
+    for line in raw.splitlines():
+        clean = line.strip()
+        if not clean or not any(pattern.search(clean) for pattern in patterns):
+            continue
+        clean = clean[:500]
+        if clean not in seen:
+            seen.add(clean)
+            findings.append(clean)
+
+    if not findings:
+        return None
+    return " | ".join(findings[-8:])[:2200]
+
 
 def parse_logcat() -> dict | None:
     if not logcat.exists():
@@ -81,12 +117,14 @@ if data is None:
     data = parse_logcat()
 
 if data is None:
+    diagnostic = summarize_instrumentation_failure()
+    generic = "Playback raporu alınamadı ve logcat içinde NEON_PLAYBACK sonucu bulunamadı"
     data = {
         "results": [],
         "pass": 0,
         "blocked": 0,
         "fail": 1,
-        "error": "Playback raporu alınamadı ve logcat içinde NEON_PLAYBACK sonucu bulunamadı",
+        "error": generic + (f". Tanı: {diagnostic}" if diagnostic else ""),
     }
 
 rows = [
