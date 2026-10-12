@@ -44,7 +44,7 @@ class AutoDdizimagCom : NeonMainAPI() {
 
     private fun isSiteUrl(url: String): Boolean =
         (url.startsWith("http://", true) || url.startsWith("https://", true)) &&
-            (siteHost(url) == siteHost(mainUrl) || siteHost(url) == "dizimag.one")
+            siteHost(url) == siteHost(mainUrl)
 
     // dizimag.onl exposes this root-level URL in page scripts, but it is not a playable video.
     // Ignore known non-playable media endpoints exposed by this site.
@@ -65,17 +65,6 @@ class AutoDdizimagCom : NeonMainAPI() {
             Regex("""(?i)^https?://(?:www\.)?ddizimag\.com(?=[:/?#]|$)"""),
             "https://dizimag.onl"
         )
-    }
-
-    // The primary mirror's current player iframe is blocked; derive the same episode
-    // on the alternate mirror and try it only as a fallback.
-    private fun alternateEpisodeUrl(raw: String): String? {
-        val uri = runCatching { URI(raw) }.getOrNull() ?: return null
-        if (siteHost(raw) != "dizimag.onl") return null
-        val match = Regex("""(?i)^/dizi/([^/]+)/sezon-(\d+)/bolum-(\d+)/?$""")
-            .matchEntire(uri.path.orEmpty()) ?: return null
-        val slug = match.groupValues[1].takeIf { it.matches(Regex("""[a-z0-9-]+""")) } ?: return null
-        return "https://dizimag.one/${slug}-${match.groupValues[2]}-sezon-${match.groupValues[3]}-bolum/"
     }
 
     private fun isLikelyPlayerUrl(url: String): Boolean {
@@ -791,17 +780,12 @@ class AutoDdizimagCom : NeonMainAPI() {
                 }
                 .distinct()
         }.orEmpty()
-        val alternateMirrorCandidate = alternateEpisodeUrl(normalized)
 
         if (externalPlayerFrames.isNotEmpty()) {
             candidates.addAll(externalPlayerFrames)
             Log.d(name.uppercase().take(23), "external player iframe prioritized; continuing page media/script discovery count=${externalPlayerFrames.size}")
         } else {
             candidates.add(normalized)
-        }
-        if (!alternateMirrorCandidate.isNullOrBlank() && alternateMirrorCandidate != normalized) {
-            candidates.add(alternateMirrorCandidate)
-            Log.d(name.uppercase().take(23), "alternate episode mirror candidate added")
         }
 
         if (document != null) {
@@ -902,7 +886,7 @@ class AutoDdizimagCom : NeonMainAPI() {
 
         var resolverFound = false
         for (candidate in resolverCandidates) {
-            val candidateReferer = if (candidate == alternateMirrorCandidate) candidate else normalized
+            val candidateReferer = normalized
             val candidateFound = neonResolveLinks(
                 data = candidate,
                 sourceName = name,
