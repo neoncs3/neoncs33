@@ -34,6 +34,7 @@ class NeonPlaybackSmokeTest {
         val name: String,
         val queries: List<String>,
         val directUrls: List<String> = emptyList(),
+        val pluginInternalName: String? = null,
     )
     data class Result(
         val provider: String,
@@ -68,6 +69,30 @@ class NeonPlaybackSmokeTest {
         Target("SinemaCX", listOf("Inception", "Interstellar", "The Batman")),
         Target("WebDramaTurkey", listOf("Squid Game", "Moving", "Alchemy of Souls")),
     )
+
+    private fun allTargets(): List<Target> {
+        val knownNames = targets.map { it.name }.toSet()
+        val generatedProviders = APIHolder.allProviders
+            .filter { it.javaClass.simpleName.startsWith("Auto") }
+            .filterNot { it.name in knownNames }
+            .distinctBy { it.javaClass.simpleName }
+            .map { provider ->
+                Target(
+                    name = provider.name,
+                    queries = listOf(
+                        "Inception",
+                        "Wednesday",
+                        "The Last of Us",
+                        "Squid Game",
+                        "Film",
+                        "Dizi",
+                    ),
+                    pluginInternalName = provider.javaClass.simpleName,
+                )
+            }
+
+        return targets + generatedProviders
+    }
 
     private fun antiBot(text: String?): Boolean {
         val v = text.orEmpty().lowercase()
@@ -598,7 +623,14 @@ class NeonPlaybackSmokeTest {
                 localPlugins.joinToString(","),
         )
 
-        val expectedPlugins = targets.map { it.name }.toSet()
+        val activeTargets = allTargets()
+        val autoTargets = activeTargets.filter { it.pluginInternalName != null }
+        println(
+            "NEON_AUTO_PROVIDERS count=" + autoTargets.size +
+                " names=" + autoTargets.joinToString(",") { it.name },
+        )
+
+        val expectedPlugins = activeTargets.map { it.pluginInternalName ?: it.name }.toSet()
         val missingPlugins = expectedPlugins - localPlugins.toSet()
 
         if (missingPlugins.isNotEmpty()) {
@@ -608,7 +640,7 @@ class NeonPlaybackSmokeTest {
             )
         }
 
-        val results = targets.map {
+        val results = activeTargets.map {
             testProvider(context, it)
         }
 
