@@ -20,6 +20,27 @@
         "name": "AsyaFilmIzle"
     },
     {
+        "iconUrl": "https://ddizimag.com/favicon.ico",
+        "fileHash": "sha256-d802b975e71ff44f5a31e48f3f8b4a438b7dffd37992eaeceab7b4d91b1a66db",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
+        "fileSize": 63951,
+        "status": 1,
+        "language": "tr",
+        "authors": [
+            "neoncs3"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 1,
+        "internalName": "AutoDdizimagCom",
+        "description": "URL analizinden otomatik olu\u015fturuldu: ddizimag.com",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/AutoDdizimagCom.cs3",
+        "name": "AutoDdizimagCom"
+    },
+    {
         "iconUrl": "https://klubnichka.live/favicon.ico",
         "fileHash": "sha256-62208f535f2439e68dad9e4e538b61b220dc0ed9dc74390783b83e1f594c8eab",
         "apiVersion": 1,
