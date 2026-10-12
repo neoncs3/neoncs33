@@ -52,6 +52,9 @@ if playback_test.exists():
         errors.append("Oynatma smoke testindeki SearchResponse/sorgu ikilisi güvenli okunmuyor.")
     if "generatedSampleQueries(provider)" not in playback_text or "neonSmokeTestQueries" not in playback_text:
         errors.append("Otomatik eklentiler için siteden bulunan gerçek başlıklar oynatma testine aktarılmıyor.")
+    for token in ("safeUrlForLog(", "safeDiagnostic(", "JSONArray()", "JSONObject()", "attemptDiagnostics"):
+        if token not in playback_text:
+            errors.append(f"Oynatma tanılama güvenlik/ayrıntı özelliği eksik: {token}")
 
 generator = ROOT / "tools/auto_plugin_generator.py"
 if generator.exists():

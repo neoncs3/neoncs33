@@ -17,6 +17,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import java.net.URI
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
@@ -129,6 +132,26 @@ class NeonPlaybackSmokeTest {
         ).any(v::contains)
     }
 
+    private fun safeUrlForLog(raw: String): String {
+        return runCatching {
+            val uri = URI(raw)
+            URI(uri.scheme, null, uri.host, uri.port, uri.path, null, null).toString()
+        }.getOrElse {
+            raw.substringBefore("?").substringBefore("#")
+        }
+    }
+
+    private fun safeDiagnostic(raw: String): String {
+        val urlPattern = Regex("""(?i)https?://[^\s"'<>]+""")
+        val withoutUrlQueries = urlPattern.replace(raw) { match ->
+            safeUrlForLog(match.value)
+        }
+        return withoutUrlQueries.replace(
+            Regex("""(?i)\b(token|sig|signature|expires|auth|key|policy)=([^&\s]+)"""),
+            "$1=[redacted]",
+        ).take(1200)
+    }
+
     private fun err(t: Throwable): String {
         val parts = LinkedHashSet<String>()
         var current: Throwable? = t
@@ -151,7 +174,7 @@ class NeonPlaybackSmokeTest {
             depth++
         }
 
-        return parts.joinToString(" <- ").take(1400)
+        return safeDiagnostic(parts.joinToString(" <- ")).take(1200)
     }
 
     private suspend fun loadData(api: MainAPI, result: SearchResponse): String? {
@@ -420,7 +443,7 @@ class NeonPlaybackSmokeTest {
                     ?.flatMap { it.list }
                     ?.take(6)
                     .orEmpty()
-                mainPageCandidates.addAll(items.map { it to null })
+                mainPageCandidates.addAll(items.map { it to "Ana sayfa yedeği" })
             }
         }
 
@@ -483,6 +506,7 @@ class NeonPlaybackSmokeTest {
         var lastItem: String? = null
         var lastLinkCount = 0
         var lastPositionMs = 0L
+        val attemptDiagnostics = mutableListOf<String>()
 
         for ((result, query) in candidates) {
             lastQuery = query
@@ -495,9 +519,8 @@ class NeonPlaybackSmokeTest {
                 null
             }
             if (data.isNullOrBlank()) {
-                if (lastError.isBlank()) {
-                    lastError = "İçerik veri adresi alınamadı: " + result.url
-                }
+                if (lastError.isBlank()) lastError = "İçerik veri adresi alınamadı"
+                attemptDiagnostics.add((query ?: "doğrudan") + ": " + result.name + " -> veri adresi yok")
                 continue
             }
 
@@ -505,7 +528,8 @@ class NeonPlaybackSmokeTest {
             lastLinkCount = maxOf(lastLinkCount, links.size)
 
             if (links.isEmpty()) {
-                lastError = linkError ?: "Gerçek video bağlantısı bulunamadı"
+                lastError = safeDiagnostic(linkError ?: "Gerçek video bağlantısı bulunamadı")
+                attemptDiagnostics.add((query ?: "doğrudan") + ": " + result.name + " -> bağlantı yok (" + lastError.take(180) + ")")
 
                 if (antiBot(lastError)) {
                     return Result(
@@ -527,7 +551,7 @@ class NeonPlaybackSmokeTest {
                     " item=" + result.name +
                     " links=" + links.size +
                     " urls=" +
-                    links.take(4).joinToString(" | ") { it.url },
+                    links.take(4).joinToString(" | ") { safeUrlForLog(it.url) },
             )
 
             val playableLinks = links
@@ -550,8 +574,8 @@ class NeonPlaybackSmokeTest {
                         " item=" + result.name +
                         " played=" + played +
                         " position=" + position +
-                        " error=" + playerError +
-                        " url=" + link.url,
+                        " error=" + safeDiagnostic(playerError.orEmpty()) +
+                        " url=" + safeUrlForLog(link.url),
                 )
 
                 if (played) {
@@ -566,8 +590,9 @@ class NeonPlaybackSmokeTest {
                 }
 
                 lastPositionMs = maxOf(lastPositionMs, position)
-                lastError = playerError
-                    ?: "ExoPlayer position ilerlemedi: " + position + "ms"
+                lastError = safeDiagnostic(playerError
+                    ?: "ExoPlayer position ilerlemedi: " + position + "ms")
+                attemptDiagnostics.add((query ?: "doğrudan") + ": " + result.name + " -> oynatma başarısız (" + lastError.take(180) + ")")
 
                 if (antiBot(lastError)) {
                     return Result(
@@ -590,31 +615,39 @@ class NeonPlaybackSmokeTest {
             item = lastItem,
             links = lastLinkCount,
             positionMs = lastPositionMs,
-            error = lastError.ifBlank {
-                "Test adaylarında çalışan gerçek playback bulunamadı"
-            },
+            error = buildString {
+                append(lastError.ifBlank { "Test adaylarında çalışan gerçek playback bulunamadı" })
+                if (attemptDiagnostics.isNotEmpty()) {
+                    append(". Aday denemeleri: ")
+                    append(attemptDiagnostics.takeLast(6).joinToString("; ").take(700))
+                }
+            }.take(1200),
         )
     }
 
     private fun writeReport(context: Context, results: List<Result>) {
-        val json = buildString {
-            append("{\"results\":[")
-            results.forEachIndexed { i, r ->
-                if (i > 0) append(",")
-                append("{\"provider\":\"").append(r.provider.replace("\"", "\\\"")).append("\",")
-                append("\"status\":\"").append(r.status).append("\",")
-                append("\"query\":").append(r.query?.let { "\"${it.replace("\"", "\\\"")}\"" } ?: "null").append(",")
-                append("\"item\":").append(r.item?.let { "\"${it.replace("\"", "\\\"")}\"" } ?: "null").append(",")
-                append("\"links\":").append(r.links).append(",")
-                append("\"positionMs\":").append(r.positionMs).append(",")
-                append("\"error\":").append(r.error?.let { "\"${it.replace("\"", "\\\"")}\"" } ?: "null")
-                append("}")
-            }
-            append("],\"pass\":").append(results.count { it.status == "PASS" })
-            append(",\"blocked\":").append(results.count { it.status == "BLOCKED" })
-            append(",\"fail\":").append(results.count { it.status == "FAIL" }).append("}")
+        val entries = JSONArray()
+        results.forEach { result ->
+            entries.put(
+                JSONObject()
+                    .put("provider", result.provider)
+                    .put("status", result.status)
+                    .put("query", result.query ?: JSONObject.NULL)
+                    .put("item", result.item ?: JSONObject.NULL)
+                    .put("links", result.links)
+                    .put("positionMs", result.positionMs)
+                    .put("error", result.error?.let { safeDiagnostic(it) } ?: JSONObject.NULL)
+            )
         }
-        File(context.filesDir, "neon-playback-report.json").writeText(json)
+
+        val report = JSONObject()
+            .put("results", entries)
+            .put("pass", results.count { it.status == "PASS" })
+            .put("blocked", results.count { it.status == "BLOCKED" })
+            .put("fail", results.count { it.status == "FAIL" })
+
+        File(context.filesDir, "neon-playback-report.json")
+            .writeText(report.toString(2), Charsets.UTF_8)
     }
 
     @Test
