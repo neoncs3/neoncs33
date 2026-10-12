@@ -65,9 +65,9 @@ class NeonPlaybackSmokeTest {
         ),
         Target(
             "Dizimag",
-            listOf("House of the Dragon", "Eşref Rüya", "Daha 17"),
+            listOf("Below", "House of the Dragon", "Eşref Rüya"),
             // A public episode page isolates Dizimag player extraction from catalogue/search parsing.
-            listOf("https://ddizimag.com/dizi/house-of-the-dragon/sezon-1/bolum-1"),
+            listOf("https://dizimag.onl/dizi/below/sezon-1/bolum-1"),
         ),
         Target("DiziPal", listOf("Wednesday", "The Last of Us", "Stranger Things")),
         Target("Dizigecesi", listOf("Wednesday", "The Last of Us", "The Boys")),
