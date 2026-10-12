@@ -334,6 +334,7 @@ open class NeonMainAPI : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
         maxDepth: Int = 2,
+        referer: String = mainUrl,
     ): Boolean {
         val root = neonNormalizeUrl(data).ifBlank { data }
         if (root.isBlank()) return false
@@ -389,7 +390,7 @@ open class NeonMainAPI : MainAPI() {
             }
         }
 
-        visit(root, mainUrl, 0)
+        visit(root, referer, 0)
         return found
     }
 
@@ -529,6 +530,7 @@ open class NeonMainAPI : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
         maxDepth: Int = 2,
+        referer: String = mainUrl,
     ): Boolean {
         var found = false
         val seen = LinkedHashSet<String>()
@@ -543,6 +545,7 @@ open class NeonMainAPI : MainAPI() {
                     subtitleCallback = subtitleCallback,
                     callback = callback,
                     maxDepth = maxDepth,
+                    referer = referer,
                 )
             ) {
                 found = true

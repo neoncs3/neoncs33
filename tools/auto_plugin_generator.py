@@ -1823,6 +1823,7 @@ __MAIN_PAGES__
             subtitleCallback = subtitleCallback,
             callback = forwardingCallback,
             maxDepth = 4,
+            referer = normalized,
         )
 
         // Some embedded players require the site's regular CloudStream extractor.
@@ -2219,6 +2220,7 @@ def run_self_test() -> None:
     assert "override suspend fun search(query: String)" in generated
     assert "override suspend fun loadLinks(" in generated
     assert "neonResolveLinkCandidates(" in generated
+    assert "referer = normalized" in generated
     assert "private fun isYouTubeMediaLink(link: ExtractorLink): Boolean" in generated
     assert "private fun isLikelyPlayerUrl(url: String): Boolean" in generated
     assert '(?:^|[/_.?=&-])(?:player|embed|iframe|video|stream|play|watch|manifest|media|playlist|source)' in generated

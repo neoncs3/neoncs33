@@ -885,6 +885,7 @@ class AutoDdizimagCom : NeonMainAPI() {
             subtitleCallback = subtitleCallback,
             callback = forwardingCallback,
             maxDepth = 4,
+            referer = normalized,
         )
 
         // Some embedded players require the site's regular CloudStream extractor.
