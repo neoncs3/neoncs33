@@ -19,7 +19,7 @@ Her rapor, HTML taramasında görülen sinyallere dayalı 100 üzerinden bir **a
 
 ## Derleme ve oynatma
 
-Otomatik oluşturucu önce kendi testini ve kaynak biçimi kontrolünü çalıştırır. Ardından yeni modülü depoya kaydeder, CloudStream Derleyici iş akışını başlatır ve bu derleme sonucunu bekler. Derleme başarılı olursa NeonCS Gerçek Oynatma Testi akışı devreye girerek emülatörde oynatma tanılamasını çalıştırır. Derleme ve oynatma durumları Actions sekmesinden izlenir.
+Otomatik oluşturucu önce kendi testini ve kaynak biçimi kontrolünü çalıştırır. Ardından yeni modülü depoya kaydeder, CloudStream Derleyici iş akışını başlatır ve bu derleme sonucunu bekler. Derleme başarılı olursa NeonCS Gerçek Oynatma Testi akışı devreye girer; test, sabit test sağlayıcılarına ek olarak builds/plugins.json içindeki tüm otomatik oluşturulmuş Auto*.cs3 paketlerini de emülatöre yükler. Yüklenen paketlerin manifest hash'i ve boyutu doğrulanır; ardından arama, detay sayfası, bağlantı çözümleme ve ExoPlayer üzerinden gerçek oynatma denenir. Derleme ve oynatma durumları Actions sekmesinden izlenir.
 
 ## Gerçekçi sınırlar
 
