@@ -232,24 +232,9 @@ class NeonPlaybackSmokeTest {
             Thread.sleep(500L)
             refreshFirstFrameState()
 
-            // Prefer ExoPlayer's actual playing signal over a wrapper status that
-            // may lag behind. Do not resend Play just because position is still 0:
-            // repeatedly sending Play can restart playback and prevent progress.
-            val isPlayingNow = runCatching {
-                player.getIsPlaying()
-            }.getOrDefault(false) || exoPlaying.get()
-
-            if (!isPlayingNow) {
-                InstrumentationRegistry.getInstrumentation().runOnMainSync {
-                    runCatching {
-                        player.handleEvent(
-                            CSPlayerEvent.Play,
-                            PlayerEventSource.Player,
-                        )
-                    }
-                }
-            }
-
+            // Play was requested once before entering the polling loop.
+            // Do not repeatedly send Play while the stream is preparing: that can
+            // reset startup and mask whether the underlying source really advances.
             refreshFirstFrameState()
 
             var current = 0L
