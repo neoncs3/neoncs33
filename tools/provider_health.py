@@ -88,6 +88,8 @@ def analyse(module: Path, domains: dict[str, str], scraper):
             "provider": module.name,
             "status": "yellow",
             "domain": domains.get(module.name, ""),
+            "configured_domain": domains.get(module.name, ""),
+            "live_domain": domains.get(module.name, ""),
             "live": {"ok": False, "anti_bot_blocked": False, "error": "NeonMainAPI provider source bulunamadı"},
             "pipelines": {},
         }
@@ -140,8 +142,10 @@ def analyse(module: Path, domains: dict[str, str], scraper):
     return {
         "provider": module.name,
         "status": status,
-        "domain": live["final_url"] or configured,
+        # "domain" is the URL configured in the source; redirects are reported separately.
+        "domain": configured,
         "configured_domain": configured,
+        "live_domain": live["final_url"] or configured,
         "live": live,
         "pipelines": pipelines,
         "source": str(provider_file.relative_to(ROOT)),
@@ -191,7 +195,7 @@ def main():
         "",
         "Bu rapor tools/provider_health.py tarafından otomatik güncellenir.",
         "",
-        "| Eklenti | Durum | Domain | HTTP | Video | Altyazı | Metadata | Cache |",
+        "| Eklenti | Durum | Kodda kayıtlı domain | HTTP yönlendirmesi | HTTP | Medya ipucu | Resolver kodu | Altyazı kodu | Metadata | Cache |",
         "|---|---|---|---|---|---|---|---|",
     ]
 
@@ -200,8 +204,10 @@ def main():
         p = item["pipelines"]
         icon = {"green": "🟢", "yellow": "🟡", "red": "🔴"}[item["status"]]
         rows.append(
-            f"| **{item['provider']}** | {icon} | {item.get('domain', '-') or '-'} | "
-            f"{'✅' if live.get('ok') else '❌'} | "
+            f"| **{item['provider']}** | {icon} | {item.get('configured_domain', item.get('domain', '-')) or '-'} | "
+            f"{live.get('final_url', item.get('live_domain', '-')) or '-'} | "
+            f"{'✅' if live.get('ok') else '❌'} ({live.get('status_code') or '-'}) | "
+            f"{live.get('media_hints', 0)} / {live.get('iframe_hints', 0)} | "
             f"{'✅' if p.get('video') else '❌'} | "
             f"{'✅' if p.get('subtitles') else '❌'} | "
             f"{'✅' if p.get('metadata') else '❌'} | "
@@ -210,9 +216,11 @@ def main():
 
     rows.extend([
         "",
-        "🟢 Sağlıklı · 🟡 Yapısal/anti-bot uyarı · 🔴 Domain erişilemiyor.",
+        "🟢 HTTP erişimi + yapısal kaynak kontrolleri geçti · 🟡 Anti-bot veya yapısal uyarı · 🔴 HTTP erişimi başarısız.",
         "",
-        "Video sütunu providerın gerçek link çözümleme hattını kontrol eder; CI, ExoPlayer ile kullanıcı oturumundaki son oynatmayı tamamen simüle edemez.",
+        "Önemli: Resolver/altyazı/metadata sütunları kaynak kodunda beklenen işlevlerin bulunduğunu denetler; gerçek video bağlantısının çalıştığını kanıtlamaz. Gerçek link çözümleme ve ExoPlayer testi için playback-status/latest.md raporuna bakın.",
+        "",
+        "Kodda kayıtlı domain ile son HTTP yönlendirme adresi bilerek ayrı gösterilir; yönlendirme tek başına otomatik mainUrl değişikliği değildir.",
     ])
     write_if_changed(OUT_DIR / "index.md", "\n".join(rows) + "\n")
 
@@ -223,11 +231,19 @@ def main():
         lines = [
             f"# {icon} {item['provider']}",
             "",
-            f"Domain: {item.get('domain', '-') or '-'}",
+            f"Kodda kayıtlı domain: {item.get('configured_domain', item.get('domain', '-')) or '-'}",
+            "",
+            f"Son HTTP URL: {live.get('final_url', item.get('live_domain', '-')) or '-'}",
             "",
             f"HTTP: {'✅' if live.get('ok') else '❌'} {live.get('status_code') or ''}",
             "",
+            f"Anti-bot engeli: {'evet' if live.get('anti_bot_blocked') else 'hayır'}",
+            "",
+            f"Sayfa başlığı: {live.get('title') or '-'}",
+            "",
             f"Canlı medya ipucu: {live.get('media_hints', 0)} media URL, {live.get('iframe_hints', 0)} iframe",
+            "",
+            "Not: Bu rapor kaynak kodunun yapısını ve site HTTP erişimini ölçer; gerçek oynatma sonucu değildir. Gerçek oynatma için playback-status/latest.md raporunu inceleyin.",
             "",
             "## Pipeline",
             "",
