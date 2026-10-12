@@ -14,7 +14,7 @@
       "status": "BLOCKED",
       "query": null,
       "item": "DiziBoxizle",
-      "links": 41,
+      "links": 42,
       "positionMs": 0,
       "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403"
     },
@@ -60,7 +60,7 @@
       "query": "Interstellar",
       "item": "Yıldızlararası",
       "links": 1,
-      "positionMs": 3175,
+      "positionMs": 2904,
       "error": null
     },
     {
@@ -69,7 +69,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 1,
-      "positionMs": 3383,
+      "positionMs": 3088,
       "error": null
     },
     {
@@ -78,7 +78,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 2,
-      "positionMs": 2856,
+      "positionMs": 2861,
       "error": null
     },
     {
@@ -86,15 +86,15 @@
       "status": "PASS",
       "query": "Moving",
       "item": "Moving",
-      "links": 1,
-      "positionMs": 3070,
+      "links": 2,
+      "positionMs": 2962,
       "error": null
     },
     {
       "provider": "TvDiziler",
       "status": "FAIL",
       "query": null,
-      "item": "Aşk 101",
+      "item": "Squid Game HD",
       "links": 0,
       "positionMs": 0,
       "error": "loadLinks=false"
