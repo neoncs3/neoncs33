@@ -20,11 +20,11 @@
         "name": "AsyaFilmIzle"
     },
     {
-        "iconUrl": "https://ddizimag.com/favicon.ico",
-        "fileHash": "sha256-cfeab39829c6b6e7ccb5b3207844dce7613e0f1934989cc4935530d5570bbb41",
+        "iconUrl": "https://dizimag.onl/favicon.ico",
+        "fileHash": "sha256-82dff279f724926dc3d3c338395036230b354506a9c58f53b4904d40f0074415",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 68659,
+        "fileSize": 68656,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -36,7 +36,7 @@
         ],
         "version": 1,
         "internalName": "AutoDdizimagCom",
-        "description": "URL analizinden otomatik olu\u015fturuldu: ddizimag.com",
+        "description": "URL analizinden otomatik olu\u015fturuldu: dizimag.onl",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/AutoDdizimagCom.cs3",
         "name": "AutoDdizimagCom"
     },
