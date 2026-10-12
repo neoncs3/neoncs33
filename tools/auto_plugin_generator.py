@@ -219,27 +219,38 @@ def normalized_filter_text(value: str) -> str:
 
 
 UTILITY_LABELS = {
-    "yorum", "yorumlar", "comments", "comment",
+    "yorum", "yorumlar", "comments", "comment", "replies",
     "kesfet", "kesif", "explore", "discover",
     "takvim", "takvimi", "calendar", "schedule",
     "dizi takvimi", "film takvimi", "tv schedule",
-    "tartisma", "tartismalar", "discussion", "discussions",
-    "baslik", "basliklar", "topic", "topics", "forum",
+    "tartisma", "tartismalar", "discussion", "discussions", "discuss",
+    "baslik", "basliklar", "topic", "topics", "forum", "forums",
+    "thread", "threads", "konu", "konular", "sohbet", "sohbetler",
     "community", "topluluk", "gundem", "haberler", "duyurular",
     "login", "register", "giris", "kayit", "hesabim", "profil",
-    "ayarlar", "iletisim", "hakkimizda", "yardim",
+    "profilim", "profiller", "profile", "profiles", "user", "users",
+    "user profile", "user profiles", "my profile", "member", "members",
+    "uye", "uyeler", "uye profili", "kullanici", "kullanicilar",
+    "kullanici profili", "author", "authors", "account", "accounts",
+    "my account", "ayarlar", "iletisim", "hakkimizda", "yardim",
     "privacy policy", "terms", "about us", "contact us",
 }
 
-
 UTILITY_PATHS = {
-    "yorum", "yorumlar", "comment", "comments",
+    "yorum", "yorumlar", "comment", "comments", "replies",
     "kesfet", "kesif", "explore", "discover",
     "takvim", "takvimi", "calendar", "schedule",
     "dizi takvimi", "film takvimi",
-    "tartisma", "tartismalar", "discussion", "discussions",
-    "baslik", "basliklar", "topic", "topics", "forum",
+    "tartisma", "tartismalar", "discussion", "discussions", "discuss",
+    "baslik", "basliklar", "topic", "topics", "forum", "forums",
+    "thread", "threads", "konu", "konular", "sohbet", "sohbetler",
     "community", "topluluk", "gundem", "duyurular",
+    "profile", "profiles", "profile php", "profil", "profiller", "profilim",
+    "user", "users", "user php", "member", "members", "members php",
+    "author", "authors", "author php", "account", "accounts", "my account",
+    "u", "uye", "uyeler", "uye profili", "kullanici", "kullanicilar",
+    "kullanici profili", "avatar", "avatars", "activity", "notifications",
+    "messages", "inbox", "groups", "group", "settings", "dashboard",
 }
 
 
@@ -247,13 +258,75 @@ def is_utility_link(label: str, url: str) -> bool:
     normalized_label = normalized_filter_text(label)
     if normalized_label in UTILITY_LABELS:
         return True
+    if any(
+        normalized_label.startswith(prefix + " ")
+        for prefix in (
+            "user profile", "my profile", "uye profili", "kullanici profili",
+            "tartisma", "discussion", "forum", "thread", "topic", "konu",
+            "yorum", "comment", "reply", "profil", "profile",
+        )
+    ):
+        return True
+
+    parsed = urlsplit(url)
+    raw_segments = [part for part in parsed.path.split("/") if part]
+    if any(part.startswith("@") for part in raw_segments):
+        return True
     segments = [
         normalized_filter_text(part.replace("-", " ").replace("_", " "))
-        for part in urlsplit(url).path.split("/")
-        if part
+        for part in raw_segments
     ]
-    return any(segment in UTILITY_PATHS for segment in segments)
+    if any(segment in UTILITY_PATHS for segment in segments):
+        return True
 
+    query = parse_qs(parsed.query, keep_blank_values=True)
+    profile_or_discussion_keys = {
+        "user", "userid", "user_id", "profile", "profile_id", "member",
+        "member_id", "author", "author_id", "thread", "thread_id", "topic",
+        "topic_id", "discussion", "comment", "reply", "post_id",
+    }
+    if any(normalized_filter_text(key) in {
+        normalized_filter_text(item) for item in profile_or_discussion_keys
+    } for key in query):
+        return True
+    return False
+
+
+def is_non_catalog_anchor(anchor: Tag, href: str, label: str) -> bool:
+    if is_utility_link(label, href):
+        return True
+    if "author" in " ".join(anchor.get("rel", [])).lower():
+        return True
+
+    hints: list[str] = []
+    node = anchor
+    for _ in range(4):
+        if not isinstance(node, Tag):
+            break
+        hints.extend([
+            str(node.get("id", "")),
+            " ".join(node.get("class", []) if isinstance(node.get("class"), list) else [str(node.get("class", ""))]),
+            str(node.get("itemprop", "")),
+            str(node.get("role", "")),
+            str(node.get("data-role", "")),
+        ])
+        node = node.parent
+    image = anchor.find("img")
+    if image:
+        hints.extend([
+            str(image.get("alt", "")), str(image.get("title", "")),
+            str(image.get("class", "")), str(image.get("src", "")),
+            str(image.get("data-src", "")), str(image.get("data-lazy-src", "")),
+        ])
+    hint_text = normalized_filter_text(" ".join(hints))
+    profile_discussion_hints = (
+        "profile", "user profile", "user card", "member card", "user name",
+        "user avatar", "member avatar", "author box", "author link",
+        "thread card", "discussion", "forum topic", "topic card",
+        "comment link", "comment list", "reply list", "avatar",
+        "user photo", "profile photo", "profile picture", "member profile",
+    )
+    return any(marker in hint_text for marker in profile_discussion_hints)
 
 def valid_link_target(url: str, origin: str) -> bool:
     if not same_site(url, origin):
@@ -261,6 +334,8 @@ def valid_link_target(url: str, origin: str) -> bool:
     parts = urlsplit(url)
     path = (parts.path or "/").lower()
     if path in {"", "/"}:
+        return False
+    if is_utility_link("", url):
         return False
     if any(path.endswith(ext) for ext in (
         ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".ico", ".css",
@@ -337,7 +412,7 @@ def analyse_site(raw_url: str) -> dict:
         label = clean_label(anchor.get("aria-label", "") or anchor.get("title", "") or anchor.get_text(" ", strip=True))
         if not label or not same_site(href, origin):
             continue
-        if is_utility_link(label, href):
+        if is_non_catalog_anchor(anchor, href, label):
             continue
         if is_category_link(label, href) and urlsplit(href).path.strip("/"):
             if valid_link_target(href, origin) and href.rstrip("/") != home.rstrip("/"):
@@ -599,15 +674,18 @@ __MAIN_PAGES__
             .trim()
 
     private val navigationOnlyLabels = setOf(
-        "yorum", "yorumlar", "comment", "comments",
+        "yorum", "yorumlar", "comment", "comments", "replies",
         "kesfet", "kesif", "explore", "discover",
         "takvim", "takvimi", "calendar", "schedule",
         "dizi takvimi", "film takvimi", "tv schedule",
-        "tartisma", "tartismalar", "discussion", "discussions",
-        "baslik", "basliklar", "topic", "topics", "forum",
+        "tartisma", "tartismalar", "discussion", "discussions", "discuss",
+        "baslik", "basliklar", "topic", "topics", "forum", "forums",
+        "thread", "threads", "konu", "konular", "sohbet", "sohbetler",
         "community", "topluluk", "gundem", "duyurular",
-        "login", "register", "giris", "kayit", "hesabim", "profil",
-        "ayarlar", "iletisim", "hakkimizda", "yardim",
+        "login", "register", "giris", "kayit", "hesabim", "profil", "profilim",
+        "profile", "profiles", "user", "users", "member", "members",
+        "author", "authors", "account", "accounts", "uye", "uyeler",
+        "kullanici", "kullanicilar", "ayarlar", "iletisim", "hakkimizda", "yardim",
         "privacy policy", "terms", "about us", "contact us",
         "ana sayfa", "home", "menu", "menü",
         "dizi", "diziler", "film", "filmler", "movies", "series",
@@ -616,23 +694,30 @@ __MAIN_PAGES__
     )
 
     private val utilityLabelPrefixes = setOf(
-        "yorum", "yorumlar", "comment", "comments",
-        "kesfet", "kesif", "explore", "discover",
-        "takvim", "takvimi", "calendar", "schedule",
-        "dizi takvimi", "film takvimi", "tv schedule",
-        "tartisma", "tartismalar", "discussion", "discussions",
-        "baslik", "basliklar", "topic", "topics", "forum",
-        "community", "topluluk", "gundem", "duyurular"
+        "yorum", "yorumlar", "comment", "comments", "reply", "replies",
+        "kesfet", "kesif", "explore", "discover", "takvim", "takvimi",
+        "calendar", "schedule", "dizi takvimi", "film takvimi", "tv schedule",
+        "tartisma", "tartismalar", "discussion", "discussions", "discuss",
+        "baslik", "basliklar", "topic", "topics", "forum", "forums",
+        "thread", "threads", "konu", "konular", "sohbet", "sohbetler",
+        "community", "topluluk", "gundem", "duyurular",
+        "profil", "profile", "user profile", "member profile",
+        "kullanici profili", "uye profili", "my profile"
     )
 
     private val navigationOnlyPaths = setOf(
-        "yorum", "yorumlar", "comment", "comments",
-        "kesfet", "kesif", "explore", "discover",
-        "takvim", "takvimi", "calendar", "schedule",
-        "dizi takvimi", "film takvimi",
-        "tartisma", "tartismalar", "discussion", "discussions",
-        "baslik", "basliklar", "topic", "topics", "forum",
-        "community", "topluluk", "gundem", "duyurular"
+        "yorum", "yorumlar", "comment", "comments", "replies",
+        "kesfet", "kesif", "explore", "discover", "takvim", "takvimi",
+        "calendar", "schedule", "dizi takvimi", "film takvimi",
+        "tartisma", "tartismalar", "discussion", "discussions", "discuss",
+        "baslik", "basliklar", "topic", "topics", "forum", "forums",
+        "thread", "threads", "konu", "konular", "sohbet", "sohbetler",
+        "community", "topluluk", "gundem", "duyurular",
+        "profile", "profiles", "profil", "profiller", "profilim",
+        "user", "users", "member", "members", "author", "authors",
+        "account", "accounts", "u", "uye", "uyeler", "kullanici",
+        "kullanicilar", "avatar", "avatars", "activity", "notifications",
+        "messages", "inbox", "groups", "group", "settings", "dashboard"
     )
 
     private fun isNavigationChrome(anchor: Element): Boolean {
@@ -645,34 +730,31 @@ __MAIN_PAGES__
                 return true
             }
 
-            val hint = (current.id() + " " + current.className()).lowercase()
-                .replace('_', '-')
+            val hint = normalizedFilterText(current.id() + " " + current.className())
             if (listOf(
-                    "site-header", "site-nav", "navbar", "main-nav", "primary-nav",
-                    "main-menu", "primary-menu", "top-menu", "menu-item", "sidebar",
-                    "breadcrumb", "comments-nav", "site-footer", "footer-menu"
-                ).any { hint.contains(it) }) {
-                return true
-            }
-            node = current.parent()
-        }
-        return false
-    }
-
-    private fun isNavigationItem(title: String, url: String): Boolean {
+                    "site header", "site nav", "navbar", "main nav", "primary nav",
+                    "main menu", "primary menu", "top menu", "menu item", "sidebar",
+                    "breadcrumb", "comments nav", "site footer", "footer menu",
+                    "profile", "user profile", "user card", "member card", "avatar",
+                    "author box", "author link", "discussion", "thread card",
+                    "forum    private fun isNavigationItem(title: String, url: String): Boolean {
         val label = normalizedFilterText(title)
         if (label in navigationOnlyLabels ||
             utilityLabelPrefixes.any { label == it || label.startsWith("$it ") }) {
             return true
         }
 
-        val segments = runCatching { URI(url).path.orEmpty() }
-            .getOrDefault("")
-            .split("/")
-            .filter { it.isNotBlank() }
-            .map { normalizedFilterText(it.replace('-', ' ').replace('_', ' ')) }
-
+        val uri = runCatching { URI(url) }.getOrNull() ?: return true
+        val rawSegments = uri.path.orEmpty().split("/").filter { it.isNotBlank() }
+        if (rawSegments.any { it.startsWith("@") }) return true
+        val segments = rawSegments.map {
+            normalizedFilterText(it.replace('-', ' ').replace('_', ' '))
+        }
         if (segments.any { it in navigationOnlyPaths }) return true
+        val query = uri.rawQuery.orEmpty()
+        if (Regex(
+                """(?i)(?:^|&)(?:user|userid|user_id|profile|profile_id|member|member_id|author|author_id|thread|thread_id|topic|topic_id|discussion|comment|reply|post_id)="""
+            ).containsMatchIn(query)) return true
         if (segments.size == 1 && segments.first() in setOf(
                 "dizi", "diziler", "film", "filmler", "movies", "series",
                 "home", "ana sayfa", "kesfet", "takvim", "yorumlar"
@@ -688,10 +770,15 @@ __MAIN_PAGES__
         val uri = runCatching { URI(url) }.getOrNull() ?: return false
         val path = uri.path.orEmpty().lowercase()
         val file = path.substringAfterLast('/')
+        if (listOf(
+                "/avatar/", "/avatars/", "/user/", "/users/", "/profile/",
+                "/profiles/", "/member/", "/members/", "/author/", "/authors/"
+            ).any { path.contains(it) }) return false
         val placeholderMarkers = listOf(
             "placeholder", "no-image", "no_image", "noimage", "no-poster",
             "noposter", "blank.gif", "transparent", "avatar", "favicon",
-            "spinner", "loading", "pixel", "missing", "not-found"
+            "spinner", "loading", "pixel", "missing", "not-found",
+            "user-photo", "profile-photo", "member-photo", "author-photo"
         )
         if (placeholderMarkers.any { file.contains(it) }) return false
         if (Regex("""(?i)^logo(?:[-_].*)?\.(?:png|jpe?g|webp|gif|svg|ico)$""")
@@ -711,7 +798,9 @@ __MAIN_PAGES__
                 "/login", "/register", "/giris", "/kayit", "/iletisim", "/contact",
                 "/privacy", "/terms", "/feed", "/yorum", "/comment", "/kesfet",
                 "/discover", "/takvim", "/calendar", "/tartisma", "/discussion",
-                "/baslik", "/topics", "/forum"
+                "/baslik", "/topics", "/forum", "/profile", "/profil", "/user",
+                "/member", "/author", "/account", "/uye", "/kullanici", "/threads",
+                "/thread", "/konu", "/konular", "/community", "/sohbet", "/replies"
             ).any { path.contains(it) }) return false
         if (path.endsWith(".jpg") || path.endsWith(".jpeg") || path.endsWith(".png") ||
             path.endsWith(".webp") || path.endsWith(".gif") || path.endsWith(".css") ||
@@ -732,6 +821,14 @@ __MAIN_PAGES__
 
     private fun imageUrl(image: Element?, baseUrl: String): String? {
         if (image == null) return null
+        val imageHint = normalizedFilterText(
+            image.attr("class") + " " + image.id() + " " +
+                image.attr("alt") + " " + image.attr("title")
+        )
+        if (listOf(
+                "avatar", "user photo", "profile photo", "profile picture",
+                "member photo", "author photo", "account photo", "user profile"
+            ).any { imageHint.contains(it) }) return null
         return sequenceOf(
             image.attr("data-src"),
             image.attr("data-lazy-src"),
@@ -1272,6 +1369,16 @@ def run_self_test() -> None:
     assert is_utility_link("Keşfet", "https://example.org/kesfet")
     assert is_utility_link("Tartışmalar", "https://example.org/tartismalar")
     assert is_utility_link("Başlıklar", "https://example.org/basliklar")
+    assert is_utility_link("bir kullanici", "https://example.org/profile/hkncan")
+    assert is_utility_link("hkncan", "https://example.org/users/hkncan")
+    assert is_utility_link("Konu", "https://example.org/threads/dizi-onerileri")
+    assert is_utility_link("uye", "https://example.org/@hkncan")
+    profile_anchor = BeautifulSoup(
+        '<a class="profile-link" href="/hkncan"><img src="/images/avatar-hkncan.webp"></a>',
+        "html.parser",
+    ).select_one("a")
+    assert profile_anchor is not None
+    assert is_non_catalog_anchor(profile_anchor, "https://example.org/hkncan", "hkncan")
     assert not is_utility_link("Wednesday", "https://example.org/wednesday")
     assert normalize_input("https://example.org/") == "https://example.org/"
     demo = {
@@ -1293,8 +1400,10 @@ def run_self_test() -> None:
     assert "neonResolveLinkCandidates(" in generated
     assert "posterFor(anchor, baseUrl) ?: return null" in generated
     assert "isNavigationItem(title, href)" in generated
+    assert "navigationOnlyPaths" in generated
     assert "isValidPosterUrl(poster)" in generated
     assert "isNavigationChrome(it)" in generated
+    assert "profile photo" in generated
     assert "__CLASS__" not in generated and "__ORIGIN__" not in generated
     print("AUTO PLUGIN GENERATOR SELF-TEST: PASSED")
 
