@@ -733,7 +733,7 @@ class AutoDdizimagCom : NeonMainAPI() {
         val normalized = normalize(data)
         if (normalized.isBlank()) return false
         val pagePath = runCatching { URI(normalized).path.orEmpty() }.getOrDefault("/")
-        Log.d("DIZIMAG", "loadLinks start path=$pagePath")
+        Log.d(name.uppercase().take(23), "loadLinks start path=$pagePath")
 
         // The site often adds player URLs lazily or stores them in player scripts.
         // Probe the episode page first, then resolve its iframe/media candidates.
@@ -835,7 +835,7 @@ class AutoDdizimagCom : NeonMainAPI() {
         }
 
         // A resolver may report a candidate even if the callback deliberately filtered it.
-        Log.d("DIZIMAG", "loadLinks finished candidates=${candidates.size}; emitted=${emitted.size}")
+        Log.d(name.uppercase().take(23), "loadLinks finished candidates=${candidates.size}; emitted=${emitted.size}")
         return emitted.isNotEmpty()
     }
 }
