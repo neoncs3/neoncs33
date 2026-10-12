@@ -1,8 +1,9 @@
 name: CloudStream Derleyici
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Serialize all build triggers because they publish to the same builds branch.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 on:
   workflow_dispatch:
@@ -415,4 +416,20 @@ jobs:
           echo "GIT PUSH"
           echo "=========================================="
 
-          git push origin builds
+          # A separate publisher may update builds while this run is compiling.
+          # Retry after fetching/rebasing instead of failing the successful build on a push race.
+          for attempt in 1 2 3 4 5; do
+            if git push origin builds; then
+              exit 0
+            fi
+
+            echo "Push başarısız (deneme ${attempt}); builds dalı güncellenecek."
+            git fetch origin builds
+            if ! git rebase origin/builds; then
+              echo "::error::Derleme çıktıları builds dalındaki değişikliklerle çakıştı."
+              exit 1
+            fi
+          done
+
+          echo "::error::Derleme çıktıları beş denemede builds dalına gönderilemedi."
+          exit 1

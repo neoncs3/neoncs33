@@ -73,25 +73,26 @@ jobs:
       - name: CloudStream derlemesini başlat
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COMMIT_SHA: ${{ steps.save.outputs.sha }}
         shell: bash
         run: |
           set -e
           OLD_IDS=$(gh run list --workflow Derleyici.yml --branch master --event workflow_dispatch --limit 50 --json databaseId --jq '[.[].databaseId]')
+          STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           gh workflow run Derleyici.yml --ref master
 
           RUN_ID=""
           for attempt in $(seq 1 60); do
-            gh run list --workflow Derleyici.yml --branch master --event workflow_dispatch --limit 30 --json databaseId,headSha > "$RUNNER_TEMP/derleyici-runs.json"
-            RUN_ID=$(jq -r --arg sha "$COMMIT_SHA" --argjson old "$OLD_IDS" '[.[] | select(.headSha == $sha) | select(.databaseId as $id | ($old | index($id)) == null)][0].databaseId // empty' "$RUNNER_TEMP/derleyici-runs.json")
+            gh run list --workflow Derleyici.yml --branch master --event workflow_dispatch --limit 50 --json databaseId,createdAt > "$RUNNER_TEMP/derleyici-runs.json"
+            RUN_ID=$(jq -r --arg started "$STARTED_AT" --argjson old "$OLD_IDS" '[.[] | select(.databaseId as $id | ($old | index($id)) == null) | select(.createdAt >= $started)][0].databaseId // empty' "$RUNNER_TEMP/derleyici-runs.json")
             if [ -n "$RUN_ID" ]; then
               break
             fi
-            sleep 10
+            sleep 5
           done
 
           if [ -z "$RUN_ID" ]; then
-            echo "::error::Derleyici workflow'u başlatıldı ancak çalıştırma kimliği bulunamadı."
+            echo "::error::Derleyici workflow'u başlatıldı ancak yeni workflow_dispatch çalıştırması bulunamadı."
+            gh run list --workflow Derleyici.yml --branch master --limit 15
             exit 1
           fi
 
