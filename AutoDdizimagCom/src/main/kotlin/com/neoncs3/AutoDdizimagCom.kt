@@ -78,6 +78,12 @@ class AutoDdizimagCom : NeonMainAPI() {
             host.endsWith(".youtube-nocookie.com")
     }
 
+    private fun isYouTubeMediaLink(link: ExtractorLink): Boolean {
+        val host = runCatching { URI(link.url).host.orEmpty().lowercase().removePrefix("www.") }.getOrDefault("")
+        return isYouTubePageUrl(link.url) || host == "googlevideo.com" ||
+            host.endsWith(".googlevideo.com") || link.name.contains("youtube", ignoreCase = true)
+    }
+
     // Player settings are sometimes stored in JSON/JavaScript instead of iframe or video tags.
     private fun playerUrlsFromText(raw: String, baseUrl: String): List<String> {
         val text = raw
@@ -824,15 +830,21 @@ class AutoDdizimagCom : NeonMainAPI() {
             }
         }
 
-        // Remove dead endpoints and YouTube page URLs before any resolver or extractor can turn a trailer into a media link.
+        // Remove direct YouTube pages before recursively resolving provider candidates.
         candidates.removeAll { isBrokenSiteManifest(it) || isYouTubePageUrl(it) }
+
+        val candidateSummary = candidates.joinToString(" | ") { raw -> runCatching { val uri = URI(raw); uri.host.orEmpty() + uri.path.orEmpty() }.getOrDefault("invalid-url") }
+        Log.d(name.uppercase().take(23), "loadLinks candidates=${candidates.size}: ${candidateSummary.take(2600)}")
 
         val emitted = LinkedHashSet<String>()
         val forwardingCallback: (ExtractorLink) -> Unit = { link ->
-            // Do not expose the site's non-existent root manifest as a media link.
-            if (!isBrokenSiteManifest(link.url) && emitted.add(link.url)) callback(link)
+            when {
+                isBrokenSiteManifest(link.url) -> Log.d(name.uppercase().take(23), "filtered dead manifest")
+                isYouTubeMediaLink(link) -> Log.d(name.uppercase().take(23), "filtered YouTube trailer source name=${link.name}")
+                emitted.add(link.url) -> callback(link)
+            }
         }
-        neonResolveLinkCandidates(
+        val resolverFound = neonResolveLinkCandidates(
             candidates = candidates,
             sourceName = name,
             subtitleCallback = subtitleCallback,
@@ -849,7 +861,7 @@ class AutoDdizimagCom : NeonMainAPI() {
         }
 
         // A resolver may report a candidate even if the callback deliberately filtered it.
-        Log.d(name.uppercase().take(23), "loadLinks finished candidates=${candidates.size}; emitted=${emitted.size}")
+        Log.d(name.uppercase().take(23), "loadLinks finished candidates=${candidates.size}; resolverFound=$resolverFound; emitted=${emitted.size}")
         return emitted.isNotEmpty()
     }
 }
