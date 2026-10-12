@@ -77,6 +77,14 @@ jobs:
           set -e
           python3 tools/validate_repo.py
 
+      - name: Otomatik eklenti oluşturucu testi
+        working-directory: ${{ github.workspace }}/src
+        shell: bash
+        run: |
+          set -e
+          python3 -m pip install --disable-pip-version-check requests beautifulsoup4
+          python3 tools/auto_plugin_generator.py --self-test
+
       - name: JDK 17 Ayarla
         uses: actions/setup-java@v4
         with:
