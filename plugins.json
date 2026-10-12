@@ -21,22 +21,21 @@
     },
     {
         "iconUrl": "https://klubnichka.live/favicon.ico",
-        "fileHash": "sha256-849d5fae13ea2480f7811985716113c00578707b092a34281a3ce685560bd751",
+        "fileHash": "sha256-c1242faacd66525474d6a24d326349b19c8849763ab9b463d296622dbb7cfbee",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 43188,
+        "fileSize": 43187,
         "status": 1,
         "language": "tr",
         "authors": [
             "neoncs3"
         ],
         "tvTypes": [
-            "Movie",
-            "TvSeries"
+            "NSFW"
         ],
-        "version": 2,
+        "version": 3,
         "internalName": "AutoKlubnichkaLive",
-        "description": "URL analizinden otomatik olu\u015fturuldu: klubnichka.live",
+        "description": "18+ canl\u0131 yay\u0131n sa\u011flay\u0131c\u0131s\u0131 (klubnichka.live)",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/AutoKlubnichkaLive.cs3",
         "name": "AutoKlubnichkaLive"
     },
