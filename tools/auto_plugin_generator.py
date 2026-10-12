@@ -992,10 +992,14 @@ __MAIN_PAGES__
             siteHost(url) == siteHost(mainUrl)
 
     // ddizimag.com exposes this root-level URL in page scripts, but it is not a playable video.
-    private fun isBrokenSiteManifest(raw: String): Boolean {
+    // Ignore known non-playable media endpoints exposed by this site.
+    // The root manifest and episode-shaped CDN playlists return errors instead of media.
+    private fun isBrokenSiteMediaUrl(raw: String): Boolean {
         val uri = runCatching { URI(raw) }.getOrNull() ?: return false
-        return siteHost(raw) == siteHost(mainUrl) &&
-            uri.path.orEmpty().trimEnd('/').equals("/manifest.webm", ignoreCase = true)
+        if (siteHost(raw) != siteHost(mainUrl)) return false
+        val path = uri.path.orEmpty().trimEnd('/')
+        return path.equals("/manifest.webm", ignoreCase = true) ||
+            Regex("""(?i)^/cdn/[^/]+/s\d{1,2}e\d{1,3}/master\.m3u8$""").matches(path)
     }
 
     private fun normalize(raw: String, base: String = mainUrl): String =
@@ -1717,12 +1721,12 @@ __MAIN_PAGES__
 
         if (externalPlayerFrames.isNotEmpty()) {
             candidates.addAll(externalPlayerFrames)
-            Log.d(name.uppercase().take(23), "external player iframe prioritized; skipped page-level media/script candidates count=${externalPlayerFrames.size}")
+            Log.d(name.uppercase().take(23), "external player iframe prioritized; continuing page media/script discovery count=${externalPlayerFrames.size}")
         } else {
             candidates.add(normalized)
         }
 
-        if (document != null && externalPlayerFrames.isEmpty()) {
+        if (document != null) {
             // The live page may return an error placeholder instead of an actual player.
             // Make this visible in Logcat so an origin-side playback failure is not
             // confused with an ExoPlayer/codec problem.
@@ -1795,10 +1799,12 @@ __MAIN_PAGES__
                 playerUrlsFromText(scriptBody, scriptUrl).forEach(candidates::add)
                 neonExtractMediaUrls(scriptBody).filterNot(::isYouTubePageUrl).forEach(candidates::add)
             }
+            // Keep the episode page as a final fallback, after its real player and script candidates.
+            if (externalPlayerFrames.isNotEmpty()) candidates.add(normalized)
         }
 
-        // Remove direct YouTube pages before recursively resolving provider candidates.
-        candidates.removeAll { isBrokenSiteManifest(it) || isYouTubePageUrl(it) }
+        // Remove direct YouTube pages and known non-playable site media before resolving candidates.
+        candidates.removeAll { isBrokenSiteMediaUrl(it) || isYouTubePageUrl(it) }
 
         val candidateSummary = candidates.joinToString(" | ") { raw -> runCatching { val uri = URI(raw); uri.host.orEmpty() + uri.path.orEmpty() }.getOrDefault("invalid-url") }
         Log.d(name.uppercase().take(23), "loadLinks candidates=${candidates.size}: ${candidateSummary.take(2600)}")
@@ -1806,7 +1812,7 @@ __MAIN_PAGES__
         val emitted = LinkedHashSet<String>()
         val forwardingCallback: (ExtractorLink) -> Unit = { link ->
             when {
-                isBrokenSiteManifest(link.url) -> Log.d(name.uppercase().take(23), "filtered dead manifest")
+                isBrokenSiteMediaUrl(link.url) -> Log.d(name.uppercase().take(23), "filtered dead manifest")
                 isYouTubeMediaLink(link) -> Log.d(name.uppercase().take(23), "filtered YouTube trailer source name=${link.name}")
                 emitted.add(link.url) -> callback(link)
             }
@@ -2223,7 +2229,9 @@ def run_self_test() -> None:
     assert "loadLinks candidates=" in generated
     assert "neonExtractPlayerCandidates(document, normalized)" in generated
     assert "neonExtractIframeUrls(page, normalized)" in generated
-    assert "external player iframe prioritized; skipped page-level media/script candidates" in generated
+    assert "external player iframe prioritized; continuing page media/script discovery" in generated
+    assert "private fun isBrokenSiteMediaUrl(raw: String): Boolean" in generated
+    assert "if (document != null) {" in generated
     assert "loadExtractor(candidate, normalized, subtitleCallback, forwardingCallback)" in generated
     assert "private fun matchesQuery(result: SearchResponse, query: String): Boolean" in generated
     assert "Never leak those unrelated home-page items" in generated
