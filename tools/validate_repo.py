@@ -19,12 +19,28 @@ required = [
     "tools/provider_health.py",
     "tools/NeonPlaybackSmokeTest.kt",
     "tools/format_playback_report.py",
+    "tools/auto_plugin_generator.py",
+    ".github/workflows/OtomatikEklentiOlustur.yml",
     ".github/workflows/Saglik.yml",
     ".github/workflows/Oynatma.yml",
 ]
 for item in required:
     if not (ROOT / item).exists():
         errors.append(f"Eksik dosya: {item}")
+
+generator = ROOT / "tools/auto_plugin_generator.py"
+if generator.exists():
+    generator_text = generator.read_text(encoding="utf-8", errors="replace")
+    for token in ("def analyse_site(", "def render_kotlin(", "neonResolveLinkCandidates", "--self-test"):
+        if token not in generator_text:
+            errors.append(f"Otomatik eklenti oluşturucu özelliği eksik: {token}")
+
+auto_workflow = ROOT / ".github/workflows/OtomatikEklentiOlustur.yml"
+if auto_workflow.exists():
+    workflow_text = auto_workflow.read_text(encoding="utf-8", errors="replace")
+    for token in ("workflow_dispatch:", "site_url:", "tools/auto_plugin_generator.py", "Derleyici.yml"):
+        if token not in workflow_text:
+            errors.append(f"Otomatik eklenti iş akışı ayarı eksik: {token}")
 
 core = ROOT / "NeonCore/src/main/kotlin/com/neoncs3/NeonCore.kt"
 if core.exists():
