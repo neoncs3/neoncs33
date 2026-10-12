@@ -762,14 +762,29 @@ class AutoDdizimagCom : NeonMainAPI() {
         // The site often adds player URLs lazily or stores them in player scripts.
         // Probe the episode page first, then resolve its iframe/media candidates.
         val candidates = LinkedHashSet<String>()
-        candidates.add(normalized)
 
         val document = neonCachedDocument(normalized, normalized)
             ?: runCatching {
                 app.get(normalized, headers = headers(normalized), timeout = 15_000L).document
             }.getOrNull()
+        // A third-party iframe is the authoritative player on current episode pages.
+        // Do not emit stale /cdn/*.m3u8 URLs scraped from page scripts before resolving it.
+        val externalPlayerFrames = document?.let { page ->
+            neonExtractIframeUrls(page, normalized)
+                .filter { frame ->
+                    !isSiteUrl(frame) && !isYouTubePageUrl(frame) && frame.startsWith("http", true)
+                }
+                .distinct()
+        }.orEmpty()
 
-        if (document != null) {
+        if (externalPlayerFrames.isNotEmpty()) {
+            candidates.addAll(externalPlayerFrames)
+            Log.d(name.uppercase().take(23), "external player iframe prioritized; skipped page-level media/script candidates count=${externalPlayerFrames.size}")
+        } else {
+            candidates.add(normalized)
+        }
+
+        if (document != null && externalPlayerFrames.isEmpty()) {
             // The live page may return an error placeholder instead of an actual player.
             // Make this visible in Logcat so an origin-side playback failure is not
             // confused with an ExoPlayer/codec problem.
