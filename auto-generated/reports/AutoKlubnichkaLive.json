@@ -1,0 +1,59 @@
+{
+  "host": "klubnichka.live",
+  "origin": "https://klubnichka.live",
+  "site_name": "Порно ТВ онлайн",
+  "http_status": 200,
+  "blocked": false,
+  "signals": {
+    "poster": true,
+    "imdb_rating": false,
+    "actors": false,
+    "genres": false,
+    "seasons": false,
+    "episodes": false,
+    "subtitles": false,
+    "player_embed_or_media": true,
+    "media_endpoint_reachable": false,
+    "schema_metadata": false,
+    "search_form": false,
+    "listing_cards": true,
+    "series_or_movie_schema": false
+  },
+  "counts": {
+    "pages": 14,
+    "images": 868,
+    "card_like_links": 868,
+    "season_links": 0,
+    "episode_links": 0,
+    "subtitle_hints": 0,
+    "schema_objects": 0,
+    "episodes_detected": 0,
+    "episode_seasons_detected": 0,
+    "episode_gaps": 0,
+    "media_urls_probed": 0,
+    "media_urls_reachable": 0
+  },
+  "categories": [],
+  "sample_titles": [
+    "Dorcel TV",
+    "Hustler HD",
+    "Private TV",
+    "Brazzers TV Europe",
+    "Babes TV",
+    "SuperOne HD"
+  ],
+  "quality": {
+    "score": 40,
+    "status": "NEEDS_REVIEW",
+    "issues": [
+      "Ne arama formu ne de güvenilir kategori bağlantısı bulundu."
+    ]
+  },
+  "schema_version": 1,
+  "observed_at": "2026-10-12 11:39 UTC",
+  "fingerprint": "88b2b1f8a58d2f20",
+  "previous_fingerprint": null,
+  "changes": [
+    "İlk tarama: sonraki çalıştırmalar için başlangıç profili kaydedildi."
+  ]
+}
