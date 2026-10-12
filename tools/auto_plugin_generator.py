@@ -398,16 +398,21 @@ def analyse_site(raw_url: str) -> dict:
     lower_html = all_html.lower()
     lower_text = all_text.lower()
     rating_found = any(
-        key in lower_html for key in ("aggregaterating", "ratingvalue", "imdb", "imdb-rating", "imdb_score")
-    )
+        key in lower_html for key in ("aggregaterating", "ratingvalue", "imdb-rating", "imdb_rating", "imdb_score", "imdbscore")
+    ) or bool(re.search(
+        r"(?i)(?:IMDb|IMDB|puan|rating)\\s*[:/\\-]?\\s*(?:10(?:[.,]0)?|[0-9](?:[.,][0-9])?)",
+        all_text,
+    ))
     poster_found = any(
         key in lower_html for key in ('property="og:image"', "name=\"twitter:image\"", "itemprop=\"image\"")
     ) or same_host_image_count > 0
     actor_found = any(key in lower_html or key in lower_text for key in ("actor", "cast", "oyuncu", "oyuncular"))
     genre_found = any(key in lower_html for key in ("genre", "/tur/", "/kategori/", "itemprop=\"genre\""))
-    season_found = season_label_count > 0 or any(x in lower_text for x in ("sezon", "season"))
-    episode_found = episode_label_count > 0 or any(x in lower_text for x in ("bölüm", "bolum", "episode"))
-    subtitle_found = subtitle_link_count > 0 or any(x in lower_html for x in ("subtitle", "altyazı", ".vtt", ".srt"))
+    season_found = season_label_count > 0 or any("tvseason" in value for value in type_values)
+    episode_found = episode_label_count > 0 or any("tvepisode" in value for value in type_values)
+    subtitle_found = subtitle_link_count > 0 or bool(
+        re.search(r"(?i)[^\\s\\"']+\\.(?:srt|vtt|ass|ttml)(?:\\?[^\\s\\"']*)?", all_html)
+    )
     player_found = bool(
         re.search(r"\.(?:m3u8|mpd|mp4|m4v)(?:[?\"'&\s]|$)", lower_html)
         or any(x in lower_html for x in ("<iframe", "jwplayer", "videojs", "data-player", "data-embed"))
@@ -863,10 +868,10 @@ __MAIN_PAGES__
             app.get(normalizedUrl, headers = headers(normalizedUrl), timeout = 15_000L).document
         }.getOrNull() ?: return null
         val title = neonPageTitle(document) ?: schemaValue(document, "name") ?: return null
-        val poster = schemaValue(document, "image", "thumbnailUrl")
-            ?.let { normalize(it, normalizedUrl) }
-            ?.takeIf { it.startsWith("http", true) }
-            ?: neonPoster(document, normalizedUrl)
+        val poster = neonPoster(document, normalizedUrl)
+            ?: schemaValue(document, "image", "thumbnailUrl")
+                ?.let { normalize(it, normalizedUrl) }
+                ?.takeIf { it.startsWith("http", true) }
         val plot = schemaValue(document, "description") ?: neonPlot(document)
         val year = Regex("""(?<!\d)(?:19|20)\d{2}(?!\d)""")
             .find(schemaValue(document, "datePublished", "dateCreated").orEmpty())
