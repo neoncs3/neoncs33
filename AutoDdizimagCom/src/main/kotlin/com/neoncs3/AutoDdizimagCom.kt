@@ -28,15 +28,11 @@ class AutoDdizimagCom : NeonMainAPI() {
 
     override val mainPage = mainPageOf(
         "https://ddizimag.com/" to "Ana Sayfa",
-        "https://ddizimag.com/locale/tr" to "🇹🇷 Türkçe",
-        "https://ddizimag.com/locale/en" to "🇬🇧 English",
-        "https://ddizimag.com/locale/de" to "🇩🇪 Deutsch",
-        "https://ddizimag.com/locale/fr" to "🇫🇷 Français",
-        "https://ddizimag.com/locale/it" to "🇮🇹 Italiano",
-        "https://ddizimag.com/locale/es" to "🇪🇸 Español",
-        "https://ddizimag.com/locale/ar" to "🇸🇦 العربية",
-        "https://ddizimag.com/locale/ru" to "🇷🇺 Русский",
-        "https://ddizimag.com/locale/zh" to "🇨🇳 中文"
+        "https://ddizimag.com/diziler" to "Diziler",
+        "https://ddizimag.com/filmler" to "Filmler",
+        "https://ddizimag.com/platform/amazon-prime" to "AmazonPrime",
+        "https://ddizimag.com/platform/netflix" to "Netflix"
+       
     )
 
     private fun headers(referer: String = mainUrl + "/"): Map<String, String> =
