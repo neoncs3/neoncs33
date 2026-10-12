@@ -63,6 +63,12 @@ class NeonPlaybackSmokeTest {
                 "https://diziboxizle.com/race-for-the-crown-1-sezon-1-bolum/",
             ),
         ),
+        Target(
+            "Dizimag",
+            listOf("House of the Dragon", "Eşref Rüya", "Daha 17"),
+            // A public episode page isolates Dizimag player extraction from catalogue/search parsing.
+            listOf("https://ddizimag.com/dizi/house-of-the-dragon/sezon-1/bolum-1"),
+        ),
         Target("DiziPal", listOf("Wednesday", "The Last of Us", "Stranger Things")),
         Target("Dizigecesi", listOf("Wednesday", "The Last of Us", "The Boys")),
         Target("Dramadizilerim", listOf("Squid Game", "Moving", "Hidden Love")),
