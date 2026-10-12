@@ -774,9 +774,13 @@ __MAIN_PAGES__
         }.toSet()
     }
 
-    private fun seasonNumber(value: String): Int? =
-        Regex("""(?i)(?:season|sezon|s)[\s._/-]*0?(\d{1,2})""")
+    private fun seasonNumber(value: String): Int? {
+        val before = Regex("""(?i)\b0?(\d{1,2})\s*\.?\s*(?:season|sezon)\b""")
             .find(value)?.groupValues?.getOrNull(1)?.toIntOrNull()
+        if (before != null) return before
+        return Regex("""(?i)(?:season|sezon|s)[\s._/-]*0?(\d{1,2})""")
+            .find(value)?.groupValues?.getOrNull(1)?.toIntOrNull()
+    }
 
     private fun episodeInfo(value: String, defaultSeason: Int?): Pair<Int, Int>? {
         val full = Regex(
