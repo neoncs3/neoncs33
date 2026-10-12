@@ -12,8 +12,8 @@
 | **Dizigecesi** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
 | **Dramadizilerim** | 🟡 BLOCKED | 1 | 0 ms | - | Abandoned By My Family I Married The White Wolf1 | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
 | **FilmModu** | 🟡 BLOCKED | 8 | 0 ms | Inception | Inception | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
-| **JetFilmizle** | 🟢 PASS | 1 | 3032 ms | Interstellar | Yıldızlararası | - |
-| **SetFilmIzle** | 🟢 PASS | 1 | 2886 ms | Inception | Başlangıç | - |
-| **SinemaCX** | 🟢 PASS | 2 | 3052 ms | Inception | Başlangıç | - |
-| **WebDramaTurkey** | 🟢 PASS | 2 | 2956 ms | Moving | Moving | - |
+| **JetFilmizle** | 🟢 PASS | 1 | 3175 ms | Interstellar | Yıldızlararası | - |
+| **SetFilmIzle** | 🟢 PASS | 1 | 3383 ms | Inception | Başlangıç | - |
+| **SinemaCX** | 🟢 PASS | 2 | 2856 ms | Inception | Başlangıç | - |
+| **WebDramaTurkey** | 🟢 PASS | 1 | 3070 ms | Moving | Moving | - |
 | **TvDiziler** | 🔴 FAIL | 0 | 0 ms | - | Aşk 101 | loadLinks=false |
