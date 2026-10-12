@@ -25,10 +25,6 @@ Derlenmiş eklentiler [builds dalında](https://github.com/neoncs3/neoncs33/tree
 | SinemaCX | [Kod](SinemaCX/) | [CS3](https://raw.githubusercontent.com/neoncs3/neoncs33/builds/SinemaCX.cs3) |
 | WebDramaTurkey | [Kod](WebDramaTurkey/) | [CS3](https://raw.githubusercontent.com/neoncs3/neoncs33/builds/WebDramaTurkey.cs3) |
 
-## Otomasyon ve raporlar
-
-Otomatik derleme, domain kontrolleri, eklenti sağlık raporları ve gerçek oynatma sonuçları ana sayfada gösterilmez; ayrı dosyada tutulur:
-
-**[NeonCS Otomasyon ve Durum Raporları](OTOMASYON.md)**
+Ayrıntılar: [Otomasyon ve durum raporları için ayrı dosyayı açın](OTOMASYON.md).
 
 Üçüncü taraf sağlayıcıların adresleri veya oynatma yöntemleri değişebilir; tüm videoların her zaman çalışacağı garanti edilemez.
