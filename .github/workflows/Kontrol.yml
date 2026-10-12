@@ -9,6 +9,14 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "11 */9 * * *"
+  push:
+    branches:
+      - master
+    paths:
+      - "KONTROL.py"
+      - "NeonCore/domain-candidates.json"
+      - "NeonCore/domains.json"
+      - ".github/workflows/Kontrol.yml"
 
 permissions:
   contents: write
