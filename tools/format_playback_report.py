@@ -22,7 +22,7 @@ def summarize_instrumentation_failure() -> str | None:
     except OSError:
         return None
 
-    raw = re.sub(r"\\x1b\\[[0-9;]*m", "", raw)
+    raw = re.sub(r"\x1b\[[0-9;]*m", "", raw)
     patterns = (
         re.compile(r"^e: file://.*$", re.IGNORECASE),
         re.compile(r"^> Task .* FAILED$", re.IGNORECASE),
