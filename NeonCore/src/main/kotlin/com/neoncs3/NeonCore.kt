@@ -17,6 +17,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.json.JSONObject
 import java.net.URI
+import android.util.Log
 import kotlinx.coroutines.delay
 
 /**
@@ -729,8 +730,14 @@ open class NeonMainAPI : MainAPI() {
         attempts: Int = 2,
     ): Pair<String, String>? {
         for ((requestUrl, requestReferer) in neonRuntimeCandidates(url, referer)) {
-            repeat(attempts.coerceIn(1, 3)) { attempt ->
-                val response = runCatching {
+            val maxAttempts = attempts.coerceIn(1, 3)
+            val uri = runCatching { URI(requestUrl) }.getOrNull()
+            // Never log query parameters: player URLs can contain short-lived signatures.
+            val safeTarget = uri?.let { "${it.host}${it.path.orEmpty()}" } ?: "invalid-url"
+            val refererHost = runCatching { URI(requestReferer).host }.getOrNull() ?: "unknown"
+
+            for (attempt in 0 until maxAttempts) {
+                val result = runCatching {
                     app.get(
                         requestUrl,
                         headers = neonHeaders + ("Referer" to requestReferer),
@@ -738,13 +745,33 @@ open class NeonMainAPI : MainAPI() {
                         timeout = neonRequestTimeoutMs.toLong(),
                         allowRedirects = true,
                     )
-                }.getOrNull()
+                }
+                val response = result.getOrNull()
 
                 if (response?.isSuccessful == true && response.text.isNotBlank()) {
                     return requestUrl to response.text
                 }
 
-                if (attempt + 1 < attempts) delay(250L)
+                if (response != null && !response.isSuccessful) {
+                    Log.w(
+                        "NeonResolver",
+                        "HTTP ${response.code} for $safeTarget (refererHost=$refererHost)"
+                    )
+                    // A 403/404 is a definitive refusal/missing resource for this request.
+                    // Retry only temporary client errors such as timeout or rate limiting.
+                    if (response.code in 400..499 && response.code !in setOf(408, 429)) {
+                        break
+                    }
+                } else if (response == null) {
+                    Log.w(
+                        "NeonResolver",
+                        "Request failed for $safeTarget (refererHost=$refererHost, error=${result.exceptionOrNull()?.javaClass?.simpleName ?: "unknown"})"
+                    )
+                } else if (response.text.isBlank()) {
+                    Log.w("NeonResolver", "Empty response for $safeTarget (HTTP ${response.code})")
+                }
+
+                if (attempt + 1 < maxAttempts) delay(250L)
             }
         }
         return null
