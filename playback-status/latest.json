@@ -38,12 +38,12 @@
     },
     {
       "provider": "Dramadizilerim",
-      "status": "PASS",
+      "status": "BLOCKED",
       "query": "Ana sayfa yedeği",
-      "item": "Damgalı Cadı, Prens'in Gelini",
+      "item": "His Forgotten Wife Is a Mafia Principessa",
       "links": 1,
-      "positionMs": 2920,
-      "error": null
+      "positionMs": 0,
+      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403"
     },
     {
       "provider": "FilmModu",
@@ -60,7 +60,7 @@
       "query": "Interstellar",
       "item": "Yıldızlararası",
       "links": 1,
-      "positionMs": 3055,
+      "positionMs": 3000,
       "error": null
     },
     {
@@ -69,7 +69,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 1,
-      "positionMs": 3222,
+      "positionMs": 3054,
       "error": null
     },
     {
@@ -78,7 +78,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 2,
-      "positionMs": 3247,
+      "positionMs": 2974,
       "error": null
     },
     {
@@ -87,7 +87,7 @@
       "query": "Moving",
       "item": "Moving",
       "links": 2,
-      "positionMs": 3340,
+      "positionMs": 3297,
       "error": null
     },
     {
@@ -100,7 +100,7 @@
       "error": "loadLinks=false. Aday denemeleri: Aşk 101: Aşk 101 -> bağlantı yok (loadLinks=false); Medcezir: Medcezir -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Behzat Ç.: Bir Ankara Polisiyesi -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Survivor 2021 -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: İçerde -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Squid Game HD -> bağlantı yok (loadLinks=false)"
     }
   ],
-  "pass": 5,
-  "blocked": 5,
+  "pass": 4,
+  "blocked": 6,
   "fail": 1
 }
