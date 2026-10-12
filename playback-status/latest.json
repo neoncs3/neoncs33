@@ -49,9 +49,9 @@
       "provider": "Dramadizilerim",
       "status": "PASS",
       "query": "Ana sayfa yedeği",
-      "item": "Damgalı Cadı, Prens'in Gelini",
+      "item": "Kız Kardeşim Yerine Bu Ejderha Kral'la Evlendim",
       "links": 1,
-      "positionMs": 2851,
+      "positionMs": 3189,
       "error": null
     },
     {
@@ -69,7 +69,7 @@
       "query": "Interstellar",
       "item": "Yıldızlararası",
       "links": 1,
-      "positionMs": 3225,
+      "positionMs": 2755,
       "error": null
     },
     {
@@ -78,7 +78,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 1,
-      "positionMs": 2960,
+      "positionMs": 2893,
       "error": null
     },
     {
@@ -87,7 +87,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 2,
-      "positionMs": 3386,
+      "positionMs": 2797,
       "error": null
     },
     {
@@ -96,7 +96,7 @@
       "query": "Moving",
       "item": "Moving",
       "links": 2,
-      "positionMs": 2967,
+      "positionMs": 2904,
       "error": null
     },
     {

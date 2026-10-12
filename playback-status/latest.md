@@ -11,10 +11,10 @@
 | **Dizimag** | 🔴 FAIL | 0 | 0 ms | Ana sayfa yedeği | The Walking Dead | loadLinks=false. Aday denemeleri: doğrudan: Dizimag -> bağlantı yok (loadLinks=false); House of the Dragon: House of the Dragon -> bağlantı yok (loadLinks=false); Eşref Rüya: Eşref Rüya -> bağlantı yok (loadLinks=false); Daha 17: Daha 17 -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Alıkara Dizi izle -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: The Walking Dead -> bağlantı yok (loadLinks=false) |
 | **DiziPal** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
 | **Dizigecesi** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
-| **Dramadizilerim** | 🟢 PASS | 1 | 2851 ms | Ana sayfa yedeği | Damgalı Cadı, Prens'in Gelini | - |
+| **Dramadizilerim** | 🟢 PASS | 1 | 3189 ms | Ana sayfa yedeği | Kız Kardeşim Yerine Bu Ejderha Kral'la Evlendim | - |
 | **FilmModu** | 🟡 BLOCKED | 8 | 0 ms | Inception | Inception | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
-| **JetFilmizle** | 🟢 PASS | 1 | 3225 ms | Interstellar | Yıldızlararası | - |
-| **SetFilmIzle** | 🟢 PASS | 1 | 2960 ms | Inception | Başlangıç | - |
-| **SinemaCX** | 🟢 PASS | 2 | 3386 ms | Inception | Başlangıç | - |
-| **WebDramaTurkey** | 🟢 PASS | 2 | 2967 ms | Moving | Moving | - |
+| **JetFilmizle** | 🟢 PASS | 1 | 2755 ms | Interstellar | Yıldızlararası | - |
+| **SetFilmIzle** | 🟢 PASS | 1 | 2893 ms | Inception | Başlangıç | - |
+| **SinemaCX** | 🟢 PASS | 2 | 2797 ms | Inception | Başlangıç | - |
+| **WebDramaTurkey** | 🟢 PASS | 2 | 2904 ms | Moving | Moving | - |
 | **TvDiziler** | 🔴 FAIL | 0 | 0 ms | Ana sayfa yedeği | Squid Game HD | loadLinks=false. Aday denemeleri: Aşk 101: Aşk 101 -> bağlantı yok (loadLinks=false); Medcezir: Medcezir -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Behzat Ç.: Bir Ankara Polisiyesi -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Survivor 2021 -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: İçerde -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Squid Game HD -> bağlantı yok (loadLinks=false) |
