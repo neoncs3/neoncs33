@@ -209,6 +209,52 @@ def page_title(soup: BeautifulSoup, objects: list[dict]) -> str:
     return clean_label(first_json_text(objects, "name") or (urlsplit(soup.base.get("href", "")).hostname if soup.base else ""), 90)
 
 
+def normalized_filter_text(value: str) -> str:
+    translations = str.maketrans({
+        "ı": "i", "İ": "i", "ş": "s", "Ş": "s", "ğ": "g",
+        "Ğ": "g", "ü": "u", "Ü": "u", "ö": "o", "Ö": "o",
+        "ç": "c", "Ç": "c",
+    })
+    return re.sub(r"[^a-z0-9]+", " ", (value or "").lower().translate(translations)).strip()
+
+
+UTILITY_LABELS = {
+    "yorum", "yorumlar", "comments", "comment",
+    "kesfet", "kesif", "explore", "discover",
+    "takvim", "takvimi", "calendar", "schedule",
+    "dizi takvimi", "film takvimi", "tv schedule",
+    "tartisma", "tartismalar", "discussion", "discussions",
+    "baslik", "basliklar", "topic", "topics", "forum",
+    "community", "topluluk", "gundem", "haberler", "duyurular",
+    "login", "register", "giris", "kayit", "hesabim", "profil",
+    "ayarlar", "iletisim", "hakkimizda", "yardim",
+    "privacy policy", "terms", "about us", "contact us",
+}
+
+
+UTILITY_PATHS = {
+    "yorum", "yorumlar", "comment", "comments",
+    "kesfet", "kesif", "explore", "discover",
+    "takvim", "takvimi", "calendar", "schedule",
+    "dizi takvimi", "film takvimi",
+    "tartisma", "tartismalar", "discussion", "discussions",
+    "baslik", "basliklar", "topic", "topics", "forum",
+    "community", "topluluk", "gundem", "duyurular",
+}
+
+
+def is_utility_link(label: str, url: str) -> bool:
+    normalized_label = normalized_filter_text(label)
+    if normalized_label in UTILITY_LABELS:
+        return True
+    segments = [
+        normalized_filter_text(part.replace("-", " ").replace("_", " "))
+        for part in urlsplit(url).path.split("/")
+        if part
+    ]
+    return any(segment in UTILITY_PATHS for segment in segments)
+
+
 def valid_link_target(url: str, origin: str) -> bool:
     if not same_site(url, origin):
         return False
@@ -226,7 +272,9 @@ def valid_link_target(url: str, origin: str) -> bool:
         "/wp-admin", "/wp-content", "/wp-json", "/feed", "/tag/", "/author/",
         "/oyuncu/", "/actor/", "/login", "/logout", "/register", "/account",
         "/privacy", "/terms", "/contact", "/iletisim", "/giris", "/kayit",
-        "/search/", "/page/", "/yorum", "/comment", "/sepet", "/cart",
+        "/search/", "/page/", "/yorum", "/comment", "/comments", "/kesfet",
+        "/discover", "/takvim", "/calendar", "/tartisma", "/discussion",
+        "/baslik", "/topics", "/forum", "/sepet", "/cart",
     )
     if any(part in path for part in blocked):
         return False
@@ -289,6 +337,8 @@ def analyse_site(raw_url: str) -> dict:
         label = clean_label(anchor.get("aria-label", "") or anchor.get("title", "") or anchor.get_text(" ", strip=True))
         if not label or not same_site(href, origin):
             continue
+        if is_utility_link(label, href):
+            continue
         if is_category_link(label, href) and urlsplit(href).path.strip("/"):
             if valid_link_target(href, origin) and href.rstrip("/") != home.rstrip("/"):
                 categories.append((href, label))
@@ -326,6 +376,8 @@ def analyse_site(raw_url: str) -> dict:
         category_seen.add(key)
         label = label or urlsplit(href).path.strip("/").split("/")[-1].replace("-", " ").title()
         if len(label) < 2 or label.lower() in {"ana sayfa", "home", "menu", "menü"}:
+            continue
+        if is_utility_link(label, href):
             continue
         normalized_categories.append((href, label))
     normalized_categories = normalized_categories[:9]
@@ -1095,6 +1147,12 @@ def run_self_test() -> None:
     assert sample.select_one("img[data-src]") is not None
     assert sample.select_one("track[src]") is not None
     assert is_category_link("Diziler", "https://example.org/diziler")
+    assert is_utility_link("Yorumlar", "https://example.org/yorumlar")
+    assert is_utility_link("Dizi Takvimi", "https://example.org/dizi-takvimi")
+    assert is_utility_link("Keşfet", "https://example.org/kesfet")
+    assert is_utility_link("Tartışmalar", "https://example.org/tartismalar")
+    assert is_utility_link("Başlıklar", "https://example.org/basliklar")
+    assert not is_utility_link("Wednesday", "https://example.org/wednesday")
     assert normalize_input("https://example.org/") == "https://example.org/"
     demo = {
         "origin": "https://example.org",
