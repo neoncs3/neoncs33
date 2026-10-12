@@ -1,6 +1,6 @@
 # Otomatik eklenti analiz raporu
 
-- Kontrol: 2026-10-12 08:30 UTC
+- Kontrol: 2026-10-12 08:40 UTC
 - Girilen URL: https://tvdiziler.tv/
 - Ana adres: https://tvdiziler.tv
 - Site adı: Dizi izle, Yerli ve Full HD Diziler, Dizi Seyret | TvDiziler.tv
