@@ -66,4 +66,19 @@ jobs:
           fi
 
           git commit -m "🩺 Provider sağlık raporunu güncelle"
-          git push origin master
+
+          PUSHED=false
+          for attempt in 1 2 3 4 5; do
+            git fetch origin master
+            git rebase origin/master
+            if git push origin HEAD:master; then
+              PUSHED=true
+              break
+            fi
+            echo "Push denemesi $attempt başarısız; master yeniden alınacak."
+          done
+
+          if [[ "$PUSHED" != "true" ]]; then
+            echo "::error::Sağlık raporu master dalına gönderilemedi."
+            exit 1
+          fi
