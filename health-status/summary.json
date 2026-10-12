@@ -5,12 +5,13 @@
       "status": "yellow",
       "domain": "https://asyafilmizle.com",
       "configured_domain": "https://asyafilmizle.com",
+      "live_domain": "https://asyafilmizle.com",
       "live": {
         "ok": false,
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://asyafilmizle.com",
-        "bytes": 5624,
+        "bytes": 5709,
         "title": "Just a moment...",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -33,6 +34,7 @@
       "status": "green",
       "domain": "https://diziboxizle.com",
       "configured_domain": "https://diziboxizle.com",
+      "live_domain": "https://diziboxizle.com",
       "live": {
         "ok": true,
         "anti_bot_blocked": false,
@@ -61,12 +63,13 @@
       "status": "yellow",
       "domain": "https://dizigecesi.com",
       "configured_domain": "https://dizigecesi.com",
+      "live_domain": "https://dizigecesi.com",
       "live": {
         "ok": false,
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://dizigecesi.com",
-        "bytes": 4917,
+        "bytes": 4916,
         "title": "Attention Required! | Cloudflare",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -87,14 +90,15 @@
     {
       "provider": "DiziPal",
       "status": "yellow",
-      "domain": "https://dizipal1588.com",
+      "domain": "https://dizipal1586.com",
       "configured_domain": "https://dizipal1586.com",
+      "live_domain": "https://dizipal1588.com",
       "live": {
         "ok": false,
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://dizipal1588.com",
-        "bytes": 4551,
+        "bytes": 4550,
         "title": "Attention Required! | Cloudflare",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -117,6 +121,7 @@
       "status": "green",
       "domain": "https://dramadizilerim.com",
       "configured_domain": "https://dramadizilerim.com",
+      "live_domain": "https://dramadizilerim.com",
       "live": {
         "ok": true,
         "anti_bot_blocked": false,
@@ -145,6 +150,7 @@
       "status": "green",
       "domain": "https://www.filmmodu.one",
       "configured_domain": "https://www.filmmodu.one",
+      "live_domain": "https://www.filmmodu.one",
       "live": {
         "ok": true,
         "anti_bot_blocked": false,
@@ -173,6 +179,7 @@
       "status": "green",
       "domain": "https://jetfilmizle.now",
       "configured_domain": "https://jetfilmizle.now",
+      "live_domain": "https://jetfilmizle.now",
       "live": {
         "ok": true,
         "anti_bot_blocked": false,
@@ -201,6 +208,7 @@
       "status": "green",
       "domain": "https://www.setfilmizle.ltd",
       "configured_domain": "https://www.setfilmizle.ltd",
+      "live_domain": "https://www.setfilmizle.ltd",
       "live": {
         "ok": true,
         "anti_bot_blocked": false,
@@ -229,6 +237,7 @@
       "status": "green",
       "domain": "https://sinemacc.com",
       "configured_domain": "https://sinemacc.com",
+      "live_domain": "https://sinemacc.com",
       "live": {
         "ok": true,
         "anti_bot_blocked": false,
@@ -257,6 +266,7 @@
       "status": "green",
       "domain": "https://webdramaturkey2.com",
       "configured_domain": "https://webdramaturkey2.com",
+      "live_domain": "https://webdramaturkey2.com",
       "live": {
         "ok": true,
         "anti_bot_blocked": false,

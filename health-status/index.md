@@ -2,19 +2,21 @@
 
 Bu rapor tools/provider_health.py tarafından otomatik güncellenir.
 
-| Eklenti | Durum | Domain | HTTP | Video | Altyazı | Metadata | Cache |
+| Eklenti | Durum | Kodda kayıtlı domain | HTTP yönlendirmesi | HTTP | Medya ipucu | Resolver kodu | Altyazı kodu | Metadata | Cache |
 |---|---|---|---|---|---|---|---|
-| **AsyaFilmIzle** | 🟡 | https://asyafilmizle.com | ❌ | ✅ | ✅ | ✅ | ✅ |
-| **DiziBoxizle** | 🟢 | https://diziboxizle.com | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Dizigecesi** | 🟡 | https://dizigecesi.com | ❌ | ✅ | ✅ | ✅ | ✅ |
-| **DiziPal** | 🟡 | https://dizipal1588.com | ❌ | ✅ | ✅ | ✅ | ✅ |
-| **Dramadizilerim** | 🟢 | https://dramadizilerim.com | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **FilmModu** | 🟢 | https://www.filmmodu.one | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **JetFilmizle** | 🟢 | https://jetfilmizle.now | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **SetFilmIzle** | 🟢 | https://www.setfilmizle.ltd | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **SinemaCX** | 🟢 | https://sinemacc.com | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **WebDramaTurkey** | 🟢 | https://webdramaturkey2.com | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **AsyaFilmIzle** | 🟡 | https://asyafilmizle.com | https://asyafilmizle.com | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **DiziBoxizle** | 🟢 | https://diziboxizle.com | https://diziboxizle.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **Dizigecesi** | 🟡 | https://dizigecesi.com | https://dizigecesi.com | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **DiziPal** | 🟡 | https://dizipal1586.com | https://dizipal1588.com | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **Dramadizilerim** | 🟢 | https://dramadizilerim.com | https://dramadizilerim.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **FilmModu** | 🟢 | https://www.filmmodu.one | https://www.filmmodu.one | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **JetFilmizle** | 🟢 | https://jetfilmizle.now | https://jetfilmizle.now | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **SetFilmIzle** | 🟢 | https://www.setfilmizle.ltd | https://www.setfilmizle.ltd | ✅ (200) | 1 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **SinemaCX** | 🟢 | https://sinemacc.com | https://sinemacc.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **WebDramaTurkey** | 🟢 | https://webdramaturkey2.com | https://webdramaturkey2.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 
-🟢 Sağlıklı · 🟡 Yapısal/anti-bot uyarı · 🔴 Domain erişilemiyor.
+🟢 HTTP erişimi + yapısal kaynak kontrolleri geçti · 🟡 Anti-bot veya yapısal uyarı · 🔴 HTTP erişimi başarısız.
 
-Video sütunu providerın gerçek link çözümleme hattını kontrol eder; CI, ExoPlayer ile kullanıcı oturumundaki son oynatmayı tamamen simüle edemez.
+Önemli: Resolver/altyazı/metadata sütunları kaynak kodunda beklenen işlevlerin bulunduğunu denetler; gerçek video bağlantısının çalıştığını kanıtlamaz. Gerçek link çözümleme ve ExoPlayer testi için playback-status/latest.md raporuna bakın.
+
+Kodda kayıtlı domain ile son HTTP yönlendirme adresi bilerek ayrı gösterilir; yönlendirme tek başına otomatik mainUrl değişikliği değildir.
