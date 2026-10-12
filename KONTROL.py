@@ -488,8 +488,11 @@ class MainUrlUpdater:
             konsol.log(f"[~] Kontrol Ediliyor : {eklenti_adi}")
 
             final_url = None
+            korumali_yanit_goruldu = False
+            kontrol_durumu = "unchanged"
 
-            # 1) Kayıtlı domain -> 2) aday domainler -> 3) kontrollü web keşfi.
+            # Yalnızca sağlayıcı içeriği doğrulanan domain otomatik uygulanır.
+            # Cloudflare/anti-bot yanıtı veya ona yönlenen sayfa domain değişikliği kanıtı değildir.
             for aday in self._domain_adaylari(eklenti_adi, mainurl):
                 try:
                     response = self.oturum.get(
@@ -498,14 +501,18 @@ class MainUrlUpdater:
                         timeout=20,
                     )
                     protected = self._anti_bot_korumasini_tespit_et(response)
-                    if not response.ok and not protected:
+                    if protected:
+                        korumali_yanit_goruldu = True
+                        konsol.log(
+                            f"[~] Anti-bot yanıtı; aday doğrulanamadı ve atlandı: {aday}"
+                        )
+                        continue
+                    if not response.ok:
                         raise RuntimeError(f"HTTP {response.status_code}")
-                    if not protected and not self._domain_icerigi_uygun(eklenti_adi, response):
+                    if not self._domain_icerigi_uygun(eklenti_adi, response):
                         raise RuntimeError("site içeriği doğrulanamadı")
                     final_url = response.url.rstrip("/")
-                    kontrol_durumu = "protected" if protected else (
-                        "changed" if aday.rstrip("/") != mainurl else "unchanged"
-                    )
+                    kontrol_durumu = "changed" if final_url != mainurl else "unchanged"
                     break
                 except Exception as hata:
                     konsol.log(
@@ -517,14 +524,25 @@ class MainUrlUpdater:
                 final_url = self._arama_ile_domain_ara(eklenti_adi, mainurl)
 
             if final_url is None:
-                konsol.log(f"[!] Kontrol Edilemedi : {mainurl}")
                 domains[eklenti_adi] = self._guvenli_domain(mainurl) or mainurl
-                self._domain_durumunu_guncelle(
-                    durumlar,
-                    eklenti_adi,
-                    mainurl,
-                    durum="unreachable",
-                )
+                if korumali_yanit_goruldu:
+                    konsol.log(
+                        f"[~] Anti-bot nedeniyle domain doğrulanamadı; mevcut adres korunuyor: {mainurl}"
+                    )
+                    self._domain_durumunu_guncelle(
+                        durumlar,
+                        eklenti_adi,
+                        mainurl,
+                        durum="protected",
+                    )
+                else:
+                    konsol.log(f"[!] Kontrol Edilemedi : {mainurl}")
+                    self._domain_durumunu_guncelle(
+                        durumlar,
+                        eklenti_adi,
+                        mainurl,
+                        durum="unreachable",
+                    )
                 continue
 
             final_url = self._guvenli_domain(final_url)
