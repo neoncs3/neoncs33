@@ -25,8 +25,8 @@ class AutoTvdizilerTv : NeonMainAPI() {
 
     override val mainPage = mainPageOf(
         "https://tvdiziler.tv/" to "Ana Sayfa",
-        "https://tvdiziler.tv/dizi-izle" to "Tv Dizileri",
-        "https://tvdiziler.tv/film-izle" to "Sinema Filmleri"
+        "https://tvdiziler.tv/dizi-izle" to "Tv Dizileri"
+        
     )
 
     private fun headers(referer: String = mainUrl + "/"): Map<String, String> =
