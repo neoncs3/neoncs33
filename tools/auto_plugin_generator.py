@@ -1874,10 +1874,10 @@ __ALTERNATE_EPISODE_HELPER__
     private fun alternateEpisodeUrl(raw: String): String? {
         val uri = runCatching { URI(raw) }.getOrNull() ?: return null
         if (siteHost(raw) != "dizimag.onl") return null
-        val match = Regex("""(?i)^/dizi/([^/]+)/sezon-(\\d+)/bolum-(\\d+)/?$""")
+        val match = Regex("""(?i)^/dizi/([^/]+)/sezon-(\d+)/bolum-(\d+)/?$""")
             .matchEntire(uri.path.orEmpty()) ?: return null
         val slug = match.groupValues[1].takeIf { it.matches(Regex("""[a-z0-9-]+""")) } ?: return null
-        return "https://dizimag.one/\u0024{slug}-\u0024{match.groupValues[2]}-sezon-\u0024{match.groupValues[3]}-bolum/"
+        return "https://dizimag.one/${slug}-${match.groupValues[2]}-sezon-${match.groupValues[3]}-bolum/"
     }"""
     replacements = {
         "__CLASS__": config["class_name"],
@@ -2261,7 +2261,7 @@ def run_self_test() -> None:
     assert "override suspend fun load(url: String)" in generated
     assert "override suspend fun search(query: String)" in generated
     assert "override suspend fun loadLinks(" in generated
-    assert "neonResolveLinkCandidates(" in generated
+    assert "for (candidate in resolverCandidates)" in generated
     assert "referer = normalized" in generated
     assert "private fun isYouTubeMediaLink(link: ExtractorLink): Boolean" in generated
     assert "private fun isLikelyPlayerUrl(url: String): Boolean" in generated
@@ -2279,7 +2279,7 @@ def run_self_test() -> None:
     dizimag_demo = {**demo, "origin": "https://dizimag.onl", "host": "dizimag.onl"}
     dizimag_generated = render_kotlin(dizimag_demo)
     assert "private fun alternateEpisodeUrl(raw: String): String?" in dizimag_generated
-    assert "https://dizimag.one/\u0024{slug}" in dizimag_generated
+    assert "https://dizimag.one/${slug}" in dizimag_generated
     assert "playable source emitted; remaining candidates skipped" in dizimag_generated
     assert "if (document != null) {" in generated
     assert "loadExtractor(candidate, normalized, subtitleCallback, forwardingCallback)" in generated
