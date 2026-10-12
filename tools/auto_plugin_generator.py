@@ -520,7 +520,7 @@ __MAIN_PAGES__
         runCatching { URI(url).host.orEmpty().lowercase().removePrefix("www.") }.getOrDefault("")
 
     private fun isSiteUrl(url: String): Boolean =
-        url.startsWith("http://", true) || url.startsWith("https://", true) &&
+        (url.startsWith("http://", true) || url.startsWith("https://", true)) &&
             siteHost(url) == siteHost(mainUrl)
 
     private fun normalize(raw: String, base: String = mainUrl): String =
@@ -1082,7 +1082,7 @@ def run_self_test() -> None:
     assert "override suspend fun search(query: String)" in generated
     assert "override suspend fun loadLinks(" in generated
     assert "neonResolveLinkCandidates(" in generated
-    assert "1 to" not in generated
+    assert "__CLASS__" not in generated and "__ORIGIN__" not in generated
     print("AUTO PLUGIN GENERATOR SELF-TEST: PASSED")
 
 
