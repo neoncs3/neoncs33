@@ -457,7 +457,7 @@ class NeonPlaybackSmokeTest {
             "Provider=" + target.name +
                 " aday=" + candidates.size +
                 " isimler=" +
-                candidates.joinToString(" | ") { it.name },
+                candidates.joinToString(" | ") { it.first.name },
         )
 
         var lastError = ""
