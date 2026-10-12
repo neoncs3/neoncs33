@@ -81,7 +81,7 @@ class AutoDdizimagCom : NeonMainAPI() {
     private fun isYouTubeMediaLink(link: ExtractorLink): Boolean {
         val host = runCatching { URI(link.url).host.orEmpty().lowercase().removePrefix("www.") }.getOrDefault("")
         return isYouTubePageUrl(link.url) || host == "googlevideo.com" ||
-            host.endsWith(".googlevideo.com") || link.name.contains("youtube", ignoreCase = true)
+            host.endsWith(".googlevideo.com")
     }
 
     // Player settings are sometimes stored in JSON/JavaScript instead of iframe or video tags.
