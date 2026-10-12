@@ -1825,6 +1825,7 @@ __ALTERNATE_EPISODE_HELPER__
             }
         }
         // Keep resolver work bounded: the first candidates are the actual player frame and
+        // Bounded replacement for neonResolveLinkCandidates(...) stops after the first usable source.
         // an optional mirror page. Exhaustive retries on every unrelated script URL look like
         // an endless loading spinner in the UI.
         val resolverCandidates = candidates.toList().take(14)
@@ -1869,7 +1870,7 @@ __ALTERNATE_EPISODE_HELPER__
     is_dizimag_onl = origin_host == "dizimag.onl"
     alternate_episode_helper = ""
     if is_dizimag_onl:
-        alternate_episode_helper = r"""    // The onl mirror currently points playback to a blocked external iframe.
+        alternate_episode_helper = r'''    // The onl mirror currently points playback to a blocked external iframe.
     // Try the matching episode page on the alternate Dizimag mirror as a fallback.
     private fun alternateEpisodeUrl(raw: String): String? {
         val uri = runCatching { URI(raw) }.getOrNull() ?: return null
@@ -1878,7 +1879,7 @@ __ALTERNATE_EPISODE_HELPER__
             .matchEntire(uri.path.orEmpty()) ?: return null
         val slug = match.groupValues[1].takeIf { it.matches(Regex("""[a-z0-9-]+""")) } ?: return null
         return "https://dizimag.one/${slug}-${match.groupValues[2]}-sezon-${match.groupValues[3]}-bolum/"
-    }"""
+    }'''
     replacements = {
         "__CLASS__": config["class_name"],
         "__ORIGIN__": kotlin_string(config["origin"]),
