@@ -1586,6 +1586,39 @@ def run_self_test() -> None:
     assert "forum    private fun" not in generated
     assert "discussion    private fun" not in generated
     assert "__CLASS__" not in generated and "__ORIGIN__" not in generated
+
+    report_fixture = {
+        "input_url": "https://example.org/",
+        "origin": "https://example.org",
+        "site_name": "Test Sinema",
+        "module_name": "AutoExampleOrg",
+        "http_status": 200,
+        "signals": {
+            "poster": True, "listing_cards": True, "series_or_movie_schema": True,
+            "search_form": True, "genres": False, "imdb_rating": False, "actors": False,
+            "seasons": True, "episodes": True, "subtitles": False,
+            "player_embed_or_media": True, "media_endpoint_reachable": True,
+            "schema_metadata": True,
+        },
+        "counts": {
+            "pages": 1, "images": 3, "card_like_links": 2, "season_links": 1,
+            "episode_links": 3, "subtitle_hints": 0, "schema_objects": 1,
+            "media_urls_probed": 1, "media_urls_reachable": 1,
+        },
+        "categories": [("https://example.org/diziler", "Diziler")],
+        "media_probes": [{
+            "url": "https://cdn.example.org/master.m3u8",
+            "status": 206,
+            "content_type": "application/vnd.apple.mpegurl",
+            "reachable": True,
+            "note": "HTTP erişilebilir (oynatma doğrulaması değildir)",
+        }],
+        "blocked": False,
+    }
+    report = render_report(report_fixture)
+    assert "HTML analiz kalite puanı" in report
+    assert "master.m3u8" in report and "206" in report
+    assert "token=secret" not in report
     print("AUTO PLUGIN GENERATOR SELF-TEST: PASSED")
 
 
