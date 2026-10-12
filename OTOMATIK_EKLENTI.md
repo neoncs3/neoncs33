@@ -11,7 +11,9 @@ Klasör adı, sağlayıcı sınıfı, ana sayfa/kategori bağlantıları, arama 
 
 ## Otomatik kontrol edilen alanlar
 
-Araç, erişilebilen ana sayfayı ve seçilen aynı alan adı sayfalarını inceler. Afişler, IMDb/puan işaretleri, türler, oyuncu/cast bilgileri, JSON-LD metadata, arama formu, sezon/bölüm bağlantıları, altyazı izleri ve video/iframe/HLS ipuçlarını arar. Sonuçları auto-generated/reports klasörüne raporlar.
+Araç, erişilebilen ana sayfayı ve seçilen aynı alan adı sayfalarını inceler. Afişler, IMDb/puan işaretleri, türler, oyuncu/cast bilgileri, JSON-LD metadata, arama formu, sezon/bölüm bağlantıları, altyazı izleri ve video/iframe/HLS ipuçlarını arar. Kullanıcı profilleri, avatarlar, yazar/üye bağlantıları, yorumlar, forumlar, tartışmalar, başlıklar ve takvim gibi katalog dışı içerikleri ayıklar; afişi olmayan kartları sonuç listesine eklemez. Sonuçları auto-generated/reports klasörüne raporlar.
+
+Her rapor, HTML taramasında görülen sinyallere dayalı 100 üzerinden bir **analiz kalite puanı** ve eksik görünen özellikler için öneriler içerir. Sayfa HTML'sinde açıkça bulunan en fazla üç doğrudan .m3u8/.mpd/.mp4 adresine sınırlı bir HTTP Range kontrolü yapılır. İmzalı bağlantıların sorgu/token bölümü rapora yazılmaz. Bu kontrol sadece URL'nin o anda medya yanıtı döndürüp döndürmediğini ölçer; oynatma başarısı olarak raporlanmaz.
 
 Üretilen CloudStream eklentisi sayfa ayrıntılarında genel metadata çıkarımı ve sezon/bölüm bağlantılarını toplama mantığı içerir. Video bağlantılarında NeonCore'un HTML, iframe ve doğrudan medya bağlantısı çözümlemesini kullanır; HTML'de açıkça erişilebilen altyazı izlerini de bildirir.
 
@@ -25,6 +27,7 @@ Otomatik oluşturucu önce kendi testini ve kaynak biçimi kontrolünü çalış
 - Her site farklı HTML ve JavaScript kullanabilir; genel algılama her özel oynatıcı API'sini kusursuz tanıyamaz. Rapor, derleme başarısını gerçek oynatma başarısından ayrı tutar.
 - Oturum açma duvarı, CAPTCHA, bot koruması, DRM veya başka erişim kontrolleri aşılmaz. Koruma/HTTP engeli algılanırsa raporda uyarı verilir.
 - URL'nin erişilebilir olması veya iframe bulunması, bir videonun kesin oynayacağını kanıtlamaz. Gerçek oynatma raporu ayrı kontrol edilir.
+- Derleme başarısız olursa yeni .cs3 paketleri yayımlanmaz; önceki yayımlanmış paketler derleme adımı başarısız olduğu için değiştirilmez.
 - URL kamuya açık HTTP/HTTPS adresi olmalıdır; yerel ağ ve özel IP adreslerine istek göndermek güvenlik nedeniyle engellenir.
 
 Başlatma bağlantısı: https://github.com/neoncs3/neoncs33/actions/workflows/OtomatikEklentiOlustur.yml
