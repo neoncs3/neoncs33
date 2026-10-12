@@ -12,9 +12,10 @@ permissions:
   contents: write
 
 concurrency:
-  # Keep only the newest emulator test; older queued runs may use stale plugin packages.
+  # A skipped workflow_run (for example, a cancelled build) must not cancel a real playback test.
+  # Queue playback runs so each successful build can be diagnosed reliably.
   group: neon-real-playback
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   playback:
