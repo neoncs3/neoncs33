@@ -437,21 +437,21 @@ def extract_episode_inventory(pages: list[dict]) -> dict:
     sources: dict[tuple[int, int], list[str]] = defaultdict(list)
 
     season_pattern = re.compile(
-        r"(?i)\\b(?:season|sezon|s)[\\s._/-]*0?(\\d{1,2})\\b"
+        r"(?i)\b(?:season|sezon|s)[\s._/-]*0?(\d{1,2})\b"
     )
     patterns = (
         re.compile(
-            r"(?i)\\bs(?:eason)?\\s*0?(\\d{1,2})[\\s._/-]*e(?:p(?:isode)?)?[\\s._/-]*0?(\\d{1,3})\\b"
+            r"(?i)\bs(?:eason)?\s*0?(\d{1,2})[\s._/-]*e(?:p(?:isode)?)?[\s._/-]*0?(\d{1,3})\b"
         ),
         re.compile(
-            r"(?i)\\b(?:season|sezon)[\\s._/-]*0?(\\d{1,2}).{0,35}?\\b(?:episode|episodes|ep|b[öo]l[üu]m)[\\s._/-]*0?(\\d{1,3})\\b"
+            r"(?i)\b(?:season|sezon)[\s._/-]*0?(\d{1,2}).{0,35}?\b(?:episode|episodes|ep|b[öo]l[üu]m)[\s._/-]*0?(\d{1,3})\b"
         ),
         re.compile(
-            r"(?i)\\b(\\d{1,2})\\s*\\.?\\s*(?:sezon|season).{0,25}?\\b(\\d{1,3})\\s*\\.?\\s*(?:b[öo]l[üu]m|episode|ep)\\b"
+            r"(?i)\b(\d{1,2})\s*\.?\s*(?:sezon|season).{0,25}?\b(\d{1,3})\s*\.?\s*(?:b[öo]l[üu]m|episode|ep)\b"
         ),
     )
     single_episode = re.compile(
-        r"(?i)\\b(?:episode|episodes|ep|b[öo]l[üu]m)[\\s._/#:-]*0?(\\d{1,3})\\b"
+        r"(?i)\b(?:episode|episodes|ep|b[öo]l[üu]m)[\s._/#:-]*0?(\d{1,3})\b"
     )
 
     for page in pages:
