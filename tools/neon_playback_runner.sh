@@ -144,7 +144,7 @@ rm -f "${REPORT}" "${GITHUB_WORKSPACE}/neon-playback-report.json"
 # report directly from playback-status/logcat.txt.
 adb exec-out run-as "${APP_ID}" cat files/neon-playback-report.json > "${REPORT}" 2>/dev/null || true
 if [ -s "${REPORT}" ]; then
-  if python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); raise SystemExit(0 if isinstance(d,dict) and isinstance(d.get("results"),list) else 1)' "${REPORT}"; then
+  if python3 -c 'import json,sys; from pathlib import Path; p=Path(sys.argv[1]); d=json.loads(p.read_text(encoding="utf-8")); sys.exit(0 if isinstance(d,dict) and isinstance(d.get("results"),list) else 1)' "${REPORT}" 2>/dev/null; then
     cp "${REPORT}" "${GITHUB_WORKSPACE}/neon-playback-report.json"
     cat "${REPORT}"
   else
