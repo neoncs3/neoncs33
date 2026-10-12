@@ -67,6 +67,16 @@ class AutoDdizimagCom : NeonMainAPI() {
             .containsMatchIn(hint)
     }
 
+    private fun isYouTubePageUrl(raw: String): Boolean {
+        val host = runCatching {
+            URI(raw).host.orEmpty().lowercase().removePrefix("www.")
+        }.getOrDefault("")
+        return host == "youtube.com" ||
+            host.endsWith(".youtube.com") ||
+            host == "youtu.be" ||
+            host.endsWith(".youtube-nocookie.com")
+    }
+
     // Player settings are sometimes stored in JSON/JavaScript instead of iframe or video tags.
     private fun playerUrlsFromText(raw: String, baseUrl: String): List<String> {
         val text = raw
@@ -92,7 +102,10 @@ class AutoDdizimagCom : NeonMainAPI() {
             val url = normalize(cleaned, baseUrl)
             url.takeIf { it.startsWith("http://", true) || it.startsWith("https://", true) }
                 ?.takeIf(::isLikelyPlayerUrl)
-        }.distinct()
+        }
+            // A trailer URL in page metadata is not the episode's playback source.
+            .filterNot(::isYouTubePageUrl)
+            .distinct()
     }
 
     private fun isEpisodeLike(value: String): Boolean =
@@ -773,7 +786,7 @@ class AutoDdizimagCom : NeonMainAPI() {
                 script.data().ifBlank { script.html() }
             }
             playerUrlsFromText(inlineScriptText, normalized).forEach(candidates::add)
-            neonExtractMediaUrls(inlineScriptText).forEach(candidates::add)
+            neonExtractMediaUrls(inlineScriptText).filterNot(::isYouTubePageUrl).forEach(candidates::add)
 
             // Some newer pages keep the actual player configuration in an external JS bundle.
             // Probe only a few relevant scripts so the link resolver remains bounded.
@@ -806,7 +819,7 @@ class AutoDdizimagCom : NeonMainAPI() {
                 }.getOrNull().orEmpty()
                 if (scriptBody.isBlank()) continue
                 playerUrlsFromText(scriptBody, scriptUrl).forEach(candidates::add)
-                neonExtractMediaUrls(scriptBody).forEach(candidates::add)
+                neonExtractMediaUrls(scriptBody).filterNot(::isYouTubePageUrl).forEach(candidates::add)
             }
         }
 
