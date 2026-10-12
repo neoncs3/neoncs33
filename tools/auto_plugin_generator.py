@@ -400,7 +400,7 @@ def analyse_site(raw_url: str) -> dict:
     rating_found = any(
         key in lower_html for key in ("aggregaterating", "ratingvalue", "imdb-rating", "imdb_rating", "imdb_score", "imdbscore")
     ) or bool(re.search(
-        r"(?i)(?:IMDb|IMDB|puan|rating)\\s*[:/\\-]?\\s*(?:10(?:[.,]0)?|[0-9](?:[.,][0-9])?)",
+        r"(?i)(?:IMDb|IMDB|puan|rating)\s*[:/\-]?\s*(?:10(?:[.,]0)?|[0-9](?:[.,][0-9])?)",
         all_text,
     ))
     poster_found = any(
@@ -411,7 +411,7 @@ def analyse_site(raw_url: str) -> dict:
     season_found = season_label_count > 0 or any("tvseason" in value for value in type_values)
     episode_found = episode_label_count > 0 or any("tvepisode" in value for value in type_values)
     subtitle_found = subtitle_link_count > 0 or bool(
-        re.search(r"(?i)[^\\s\\"']+\\.(?:srt|vtt|ass|ttml)(?:\\?[^\\s\\"']*)?", all_html)
+        re.search(r"""(?i)[^\s"']+\.(?:srt|vtt|ass|ttml)(?:\?[^\s"']*)?""", all_html)
     )
     player_found = bool(
         re.search(r"\.(?:m3u8|mpd|mp4|m4v)(?:[?\"'&\s]|$)", lower_html)
