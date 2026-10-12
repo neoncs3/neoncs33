@@ -100,7 +100,7 @@ class AutoDdizimagCom : NeonMainAPI() {
         namedValuePattern.findAll(text).forEach { values.add(it.groupValues[1]) }
 
         val relativePlayerPattern = Regex(
-            """(?i)["'](/[^"'<>\s]*(?:player|embed|iframe|watch|video|stream|play|manifest|media|playlist|source)[^"'<>\s]*)["']"""
+            """(?i)["'](/[^"'<>\s]*(?:[/_.?=&-](?:player|embed|iframe|watch|video|stream|play|manifest|media|playlist|source)(?:[/_.?=&-]|$))[^"'<>\s]*)["']"""
         )
         relativePlayerPattern.findAll(text).forEach { values.add(it.groupValues[1]) }
 
@@ -766,6 +766,14 @@ class AutoDdizimagCom : NeonMainAPI() {
             }.getOrNull()
 
         if (document != null) {
+            // The live page may return an error placeholder instead of an actual player.
+            // Make this visible in Logcat so an origin-side playback failure is not
+            // confused with an ExoPlayer/codec problem.
+            if (document.text().contains("site.error", ignoreCase = true) &&
+                document.selectFirst("video[src], iframe[src], iframe[data-src], source[src]") == null
+            ) {
+                Log.w(name.uppercase().take(23), "provider page has site.error and no active media element")
+            }
             candidates.addAll(neonExtractPlayerCandidates(document, normalized))
             val playerAttributes = listOf(
                 "src", "data-src", "data-lazy-src", "data-url", "data-vsrc",
@@ -813,7 +821,7 @@ class AutoDdizimagCom : NeonMainAPI() {
                         else -> 2
                     }
                 }
-                .take(3)
+                .take(5)
 
             for (scriptUrl in scriptUrls) {
                 val scriptBody = runCatching {
