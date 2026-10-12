@@ -21,10 +21,10 @@
     },
     {
         "iconUrl": "https://klubnichka.live/favicon.ico",
-        "fileHash": "sha256-d58f05eec75d5cc83b4de5f6239694c3b6d5d7d20772858ffc53dd8c9cc4b19d",
+        "fileHash": "sha256-849d5fae13ea2480f7811985716113c00578707b092a34281a3ce685560bd751",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 41997,
+        "fileSize": 43188,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -34,7 +34,7 @@
             "Movie",
             "TvSeries"
         ],
-        "version": 1,
+        "version": 2,
         "internalName": "AutoKlubnichkaLive",
         "description": "URL analizinden otomatik olu\u015fturuldu: klubnichka.live",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/AutoKlubnichkaLive.cs3",
