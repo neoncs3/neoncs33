@@ -22,6 +22,7 @@ class AutoTvdizilerTv : NeonMainAPI() {
 
     private val configuredSearchAction = ""
     private val configuredSearchField = "s"
+    private val neonSmokeTestQueries = listOf("Eşref Rüya", "Aşk 101", "Daha 17", "Uzak Şehir", "Medcezir")
 
     override val mainPage = mainPageOf(
         "https://tvdiziler.tv/" to "Ana Sayfa",
@@ -357,6 +358,24 @@ class AutoTvdizilerTv : NeonMainAPI() {
         return urls.distinct()
     }
 
+    private fun matchesQuery(result: SearchResponse, query: String): Boolean {
+        val wanted = normalizedFilterText(query)
+        if (wanted.length < 2) return false
+        val title = normalizedFilterText(result.name)
+        val path = runCatching {
+            normalizedFilterText(URI(result.url).path.orEmpty())
+        }.getOrDefault("")
+        if (title.contains(wanted) || path.contains(wanted)) return true
+
+        val genericWords = setOf(
+            "the", "and", "of", "with", "for", "bir", "ve", "ile",
+            "izle", "full", "hd", "film", "filmler", "dizi", "diziler",
+            "movie", "movies", "series", "watch"
+        )
+        val terms = wanted.split(" ").filter { it.length >= 2 && it !in genericWords }
+        return terms.size >= 2 && terms.all { term -> title.contains(term) || path.contains(term) }
+    }
+
     override suspend fun search(query: String): List<SearchResponse> {
         val cleanQuery = query.trim()
         if (cleanQuery.length < 2) return emptyList()
@@ -365,8 +384,11 @@ class AutoTvdizilerTv : NeonMainAPI() {
             val response = runCatching {
                 app.get(searchUrl, headers = headers(searchUrl), timeout = 12_000L)
             }.getOrNull() ?: continue
-            val results = resultsFrom(response.document, searchUrl)
-            if (results.isNotEmpty()) return results
+            // Some sites ignore ?s= / ?q= and return the home page for every query.
+            // Never leak those unrelated home-page items into search results.
+            val matches = resultsFrom(response.document, searchUrl)
+                .filter { matchesQuery(it, cleanQuery) }
+            if (matches.isNotEmpty()) return matches
         }
         return emptyList()
     }

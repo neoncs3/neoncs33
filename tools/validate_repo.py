@@ -52,6 +52,8 @@ if playback_test.exists():
         errors.append("Oynatma smoke testindeki SearchResponse/sorgu ikilisi güvenli okunmuyor.")
     if "generatedSampleQueries(provider)" not in playback_text or "neonSmokeTestQueries" not in playback_text:
         errors.append("Otomatik eklentiler için siteden bulunan gerçek başlıklar oynatma testine aktarılmıyor.")
+    if "matchesQuery(result: SearchResponse, query: String)" not in generator_text:
+        errors.append("Otomatik eklentinin arama sonuçları sorguyla eşleştirilmiyor.")
 
 generator = ROOT / "tools/auto_plugin_generator.py"
 if generator.exists():
@@ -62,6 +64,7 @@ if generator.exists():
         "HTML analiz kalite puanı", "--self-test",
         "def is_flag_or_icon_asset(", "private fun isFlagOrIconAsset(value: String): Boolean",
         "extract_catalogue_samples(", "neonSmokeTestQueries", "build_site_snapshot(", "quality_assessment(",
+        "private fun matchesQuery(result: SearchResponse, query: String): Boolean",
     ):
         if token not in generator_text:
             errors.append(f"Otomatik eklenti oluşturucu özelliği eksik: {token}")

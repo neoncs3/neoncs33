@@ -1324,6 +1324,24 @@ __MAIN_PAGES__
         return urls.distinct()
     }
 
+    private fun matchesQuery(result: SearchResponse, query: String): Boolean {
+        val wanted = normalizedFilterText(query)
+        if (wanted.length < 2) return false
+        val title = normalizedFilterText(result.name)
+        val path = runCatching {
+            normalizedFilterText(URI(result.url).path.orEmpty())
+        }.getOrDefault("")
+        if (title.contains(wanted) || path.contains(wanted)) return true
+
+        val genericWords = setOf(
+            "the", "and", "of", "with", "for", "bir", "ve", "ile",
+            "izle", "full", "hd", "film", "filmler", "dizi", "diziler",
+            "movie", "movies", "series", "watch"
+        )
+        val terms = wanted.split(" ").filter { it.length >= 2 && it !in genericWords }
+        return terms.size >= 2 && terms.all { term -> title.contains(term) || path.contains(term) }
+    }
+
     override suspend fun search(query: String): List<SearchResponse> {
         val cleanQuery = query.trim()
         if (cleanQuery.length < 2) return emptyList()
@@ -1332,8 +1350,11 @@ __MAIN_PAGES__
             val response = runCatching {
                 app.get(searchUrl, headers = headers(searchUrl), timeout = 12_000L)
             }.getOrNull() ?: continue
-            val results = resultsFrom(response.document, searchUrl)
-            if (results.isNotEmpty()) return results
+            // Some sites ignore ?s= / ?q= and return the home page for every query.
+            // Never leak those unrelated home-page items into search results.
+            val matches = resultsFrom(response.document, searchUrl)
+                .filter { matchesQuery(it, cleanQuery) }
+            if (matches.isNotEmpty()) return matches
         }
         return emptyList()
     }
@@ -1951,6 +1972,12 @@ def run_self_test() -> None:
     ).select_one("a")
     assert flag_anchor is not None
     assert is_non_catalog_anchor(flag_anchor, "https://example.org/en", "English")
+    catalogue_fixture = [{
+        "url": "https://example.org/",
+        "html": '<article><a href="/film/ornek-film"><img src="/posters/ornek-film.webp" alt="Örnek Film"></a></article>'
+                '<article><a href="/en"><img class="flag-icon flag-icon-us" src="/assets/flags/us.svg" alt="English"></a></article>',
+    }]
+    assert extract_catalogue_samples(catalogue_fixture, "https://example.org", []) == ["Örnek Film"]
     media_sample = extract_media_candidates([{
         "url": "https://example.org/watch/",
         "html": '<video src="/stream/master.m3u8?token=hidden"></video>'
@@ -1987,6 +2014,8 @@ def run_self_test() -> None:
     assert "override suspend fun search(query: String)" in generated
     assert "override suspend fun loadLinks(" in generated
     assert "neonResolveLinkCandidates(" in generated
+    assert "private fun matchesQuery(result: SearchResponse, query: String): Boolean" in generated
+    assert "Never leak those unrelated home-page items" in generated
     assert "posterFor(anchor, baseUrl) ?: return null" in generated
     assert "isNavigationItem(title, href)" in generated
     assert "private fun isNavigationChrome(anchor: Element): Boolean" in generated
