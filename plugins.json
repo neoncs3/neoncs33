@@ -21,10 +21,10 @@
     },
     {
         "iconUrl": "https://klubnichka.live/favicon.ico",
-        "fileHash": "sha256-19e2f7a65652c7014c8a284df9fb2e92a7b2332b6492fca203c6c0ba9d4599f4",
+        "fileHash": "sha256-480cc2a6840237e06285785ff6328f3c083e661245281e9f626557023ba878e3",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 60823,
+        "fileSize": 41941,
         "status": 1,
         "language": "tr",
         "authors": [
