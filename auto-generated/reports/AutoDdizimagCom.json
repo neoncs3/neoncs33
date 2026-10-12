@@ -1,0 +1,96 @@
+{
+  "host": "ddizimag.com",
+  "origin": "https://ddizimag.com",
+  "site_name": "Dizimag",
+  "http_status": 200,
+  "blocked": false,
+  "signals": {
+    "poster": true,
+    "imdb_rating": false,
+    "actors": true,
+    "genres": true,
+    "seasons": true,
+    "episodes": true,
+    "subtitles": false,
+    "player_embed_or_media": false,
+    "media_endpoint_reachable": false,
+    "schema_metadata": true,
+    "search_form": true,
+    "listing_cards": true,
+    "series_or_movie_schema": false
+  },
+  "counts": {
+    "pages": 14,
+    "images": 838,
+    "card_like_links": 1090,
+    "season_links": 17,
+    "episode_links": 19,
+    "subtitle_hints": 0,
+    "schema_objects": 538,
+    "episodes_detected": 13,
+    "episode_seasons_detected": 3,
+    "episode_gaps": 1,
+    "media_urls_probed": 0,
+    "media_urls_reachable": 0
+  },
+  "categories": [
+    {
+      "label": "🇹🇷 Türkçe",
+      "url": "https://ddizimag.com/locale/tr"
+    },
+    {
+      "label": "🇬🇧 English",
+      "url": "https://ddizimag.com/locale/en"
+    },
+    {
+      "label": "🇩🇪 Deutsch",
+      "url": "https://ddizimag.com/locale/de"
+    },
+    {
+      "label": "🇫🇷 Français",
+      "url": "https://ddizimag.com/locale/fr"
+    },
+    {
+      "label": "🇮🇹 Italiano",
+      "url": "https://ddizimag.com/locale/it"
+    },
+    {
+      "label": "🇪🇸 Español",
+      "url": "https://ddizimag.com/locale/es"
+    },
+    {
+      "label": "🇸🇦 العربية",
+      "url": "https://ddizimag.com/locale/ar"
+    },
+    {
+      "label": "🇷🇺 Русский",
+      "url": "https://ddizimag.com/locale/ru"
+    },
+    {
+      "label": "🇨🇳 中文",
+      "url": "https://ddizimag.com/locale/zh"
+    }
+  ],
+  "sample_titles": [
+    "Animeler",
+    "Amazon Prime",
+    "A Apple TV+",
+    "ATV",
+    "BluTV",
+    "Crunchyroll"
+  ],
+  "quality": {
+    "score": 69,
+    "status": "BUILD_CANDIDATE",
+    "issues": [
+      "Oynatıcı veya doğrudan medya sinyali bulunamadı."
+    ]
+  },
+  "schema_version": 1,
+  "observed_at": "2026-10-12 13:26 UTC",
+  "fingerprint": "a41c2d5c57b0fd7d",
+  "previous_fingerprint": null,
+  "changes": [
+    "İlk tarama: sonraki çalıştırmalar için başlangıç profili kaydedildi."
+  ]
+}
