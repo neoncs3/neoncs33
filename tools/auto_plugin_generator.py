@@ -731,13 +731,36 @@ __MAIN_PAGES__
             }
 
             val hint = normalizedFilterText(current.id() + " " + current.className())
-            if (listOf(
-                    "site header", "site nav", "navbar", "main nav", "primary nav",
-                    "main menu", "primary menu", "top menu", "menu item", "sidebar",
-                    "breadcrumb", "comments nav", "site footer", "footer menu",
-                    "profile", "user profile", "user card", "member card", "avatar",
-                    "author box", "author link", "discussion", "thread card",
-                    "forum    private fun isNavigationItem(title: String, url: String): Boolean {
+            val nonCatalogMarkers = listOf(
+                "site header", "site nav", "navbar", "main nav", "primary nav",
+                "main menu", "primary menu", "top menu", "menu item", "sidebar",
+                "breadcrumb", "comments nav", "site footer", "footer menu",
+                "profile", "user profile", "user card", "member card", "avatar",
+                "author box", "author link", "discussion", "thread card",
+                "forum topic", "topic card", "comment list", "reply list",
+                "user meta", "member meta", "profile meta", "user info",
+                "member info", "profile info", "user summary", "member summary"
+            )
+            if (nonCatalogMarkers.any { hint.contains(it) }) return true
+
+            val image = current.selectFirst("img")
+            if (image != null) {
+                val imageHint = normalizedFilterText(
+                    image.attr("class") + " " + image.id() + " " +
+                        image.attr("alt") + " " + image.attr("title") + " " +
+                        image.attr("src") + " " + image.attr("data-src")
+                )
+                if (listOf(
+                        "avatar", "user photo", "profile photo", "profile picture",
+                        "member photo", "author photo", "account photo"
+                    ).any { imageHint.contains(it) }) return true
+            }
+            node = current.parent()
+        }
+        return false
+    }
+
+    private fun isNavigationItem(title: String, url: String): Boolean {
         val label = normalizedFilterText(title)
         if (label in navigationOnlyLabels ||
             utilityLabelPrefixes.any { label == it || label.startsWith("$it ") }) {
@@ -751,10 +774,17 @@ __MAIN_PAGES__
             normalizedFilterText(it.replace('-', ' ').replace('_', ' '))
         }
         if (segments.any { it in navigationOnlyPaths }) return true
+
         val query = uri.rawQuery.orEmpty()
         if (Regex(
-                """(?i)(?:^|&)(?:user|userid|user_id|profile|profile_id|member|member_id|author|author_id|thread|thread_id|topic|topic_id|discussion|comment|reply|post_id)="""
+                "(?i)(?:^|&)(?:user|userid|user_id|profile|profile_id|member|member_id|author|author_id|thread|thread_id|topic|topic_id|discussion|comment|reply|post_id)="
             ).containsMatchIn(query)) return true
+
+        if (Regex("""(?i)^.{1,40}\s+\d{1,2}\s*(?:level|lvl)\b.*$""")
+                .matches(title.trim())) return true
+        if (Regex("""(?i)(?:\+\s*\d[\d,.]*\s*(?:puan|points?)|(?:puan|points?)\s*\+?\s*\d[\d,.]*)""")
+                .containsMatchIn(title)) return true
+
         if (segments.size == 1 && segments.first() in setOf(
                 "dizi", "diziler", "film", "filmler", "movies", "series",
                 "home", "ana sayfa", "kesfet", "takvim", "yorumlar"
@@ -772,7 +802,8 @@ __MAIN_PAGES__
         val file = path.substringAfterLast('/')
         if (listOf(
                 "/avatar/", "/avatars/", "/user/", "/users/", "/profile/",
-                "/profiles/", "/member/", "/members/", "/author/", "/authors/"
+                "/profiles/", "/member/", "/members/", "/author/", "/authors/",
+                "/account/", "/accounts/", "/community/", "/forum/", "/forums/"
             ).any { path.contains(it) }) return false
         val placeholderMarkers = listOf(
             "placeholder", "no-image", "no_image", "noimage", "no-poster",
@@ -1287,6 +1318,22 @@ def status(value: bool) -> str:
 def render_report(config: dict) -> str:
     sig = config["signals"]
     counts = config["counts"]
+    quality_weights = {
+        "poster": 15, "listing_cards": 20, "series_or_movie_schema": 10,
+        "search_form": 10, "genres": 8, "imdb_rating": 6, "actors": 6,
+        "seasons": 6, "episodes": 6, "subtitles": 5, "player_embed_or_media": 8,
+    }
+    quality_score = sum(weight for key, weight in quality_weights.items() if sig.get(key))
+    missing = [
+        label for key, label in (
+            ("poster", "Afiş seçicisi siteye özel ayar isteyebilir"),
+            ("listing_cards", "İçerik kartları HTML'de tespit edilemedi"),
+            ("search_form", "Arama formu otomatik bulunamadı"),
+            ("player_embed_or_media", "Oynatıcı işareti bulunamadı"),
+            ("seasons", "Sezon bağlantıları görülmedi"),
+            ("episodes", "Bölüm bağlantıları görülmedi"),
+        ) if not sig.get(key)
+    ]
     checked = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     rows = [
         ("Site erişimi", f"HTTP {config['http_status']}"),
@@ -1321,6 +1368,11 @@ def render_report(config: dict) -> str:
 - Oluşturulan modül: {config['module_name']}
 - İncelenen sayfa sayısı: {counts['pages']}
 - HTTP sonucu: {config['http_status']}
+- **HTML analiz kalite puanı: {quality_score}/100** (yalnızca taramada gözlenen işaretler; oynatma garantisi değildir)
+
+## Otomatik düzeltme önerileri
+
+{chr(10).join("- " + item for item in missing) if missing else "- Tarama sırasında belirgin eksik özellik işareti bulunmadı."}
 
 ## Bulunan özellikler
 
@@ -1400,10 +1452,14 @@ def run_self_test() -> None:
     assert "neonResolveLinkCandidates(" in generated
     assert "posterFor(anchor, baseUrl) ?: return null" in generated
     assert "isNavigationItem(title, href)" in generated
+    assert "private fun isNavigationChrome(anchor: Element): Boolean" in generated
+    assert "private fun isNavigationItem(title: String, url: String): Boolean" in generated
     assert "navigationOnlyPaths" in generated
     assert "isValidPosterUrl(poster)" in generated
     assert "isNavigationChrome(it)" in generated
     assert "profile photo" in generated
+    assert "forum    private fun" not in generated
+    assert "discussion    private fun" not in generated
     assert "__CLASS__" not in generated and "__ORIGIN__" not in generated
     print("AUTO PLUGIN GENERATOR SELF-TEST: PASSED")
 
