@@ -1685,6 +1685,9 @@ __MAIN_PAGES__
             neonExtractMediaUrls(scriptText).forEach(candidates::add)
         }
 
+        // Remove the known dead endpoint before any resolver or extractor can try to play it.
+        candidates.removeAll { isBrokenSiteManifest(it) }
+
         val emitted = LinkedHashSet<String>()
         val forwardingCallback: (ExtractorLink) -> Unit = { link ->
             // Do not expose the site's non-existent root manifest as a media link.
