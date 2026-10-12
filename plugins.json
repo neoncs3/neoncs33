@@ -21,10 +21,10 @@
     },
     {
         "iconUrl": "https://ddizimag.com/favicon.ico",
-        "fileHash": "sha256-810c1052bfe1fd516a8c19fb78ac7e11c3634ee9b369f83f6f80f757e5f9c7f1",
+        "fileHash": "sha256-1ca7b9a370e41873acc1a11a820afa006c379e45574ed6fe5f91e26745029167",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 67318,
+        "fileSize": 67726,
         "status": 1,
         "language": "tr",
         "authors": [
