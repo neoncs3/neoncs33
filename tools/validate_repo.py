@@ -50,6 +50,8 @@ if playback_test.exists():
     playback_text = playback_test.read_text(encoding="utf-8", errors="replace")
     if 'candidates.joinToString(" | ") { it.first.name }' not in playback_text:
         errors.append("Oynatma smoke testindeki SearchResponse/sorgu ikilisi güvenli okunmuyor.")
+    if "generatedSampleQueries(provider)" not in playback_text or "neonSmokeTestQueries" not in playback_text:
+        errors.append("Otomatik eklentiler için siteden bulunan gerçek başlıklar oynatma testine aktarılmıyor.")
 
 generator = ROOT / "tools/auto_plugin_generator.py"
 if generator.exists():
@@ -59,6 +61,7 @@ if generator.exists():
         "extract_media_candidates(", "probe_media_urls(", "media_endpoint_reachable",
         "HTML analiz kalite puanı", "--self-test",
         "def is_flag_or_icon_asset(", "private fun isFlagOrIconAsset(value: String): Boolean",
+        "extract_catalogue_samples(", "neonSmokeTestQueries", "build_site_snapshot(", "quality_assessment(",
     ):
         if token not in generator_text:
             errors.append(f"Otomatik eklenti oluşturucu özelliği eksik: {token}")

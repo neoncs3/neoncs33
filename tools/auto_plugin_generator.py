@@ -574,6 +574,109 @@ def valid_link_target(url: str, origin: str) -> bool:
     return len(path.strip("/")) > 1
 
 
+def extract_catalogue_samples(
+    pages: list[dict],
+    origin: str,
+    categories: list[tuple[str, str]],
+    limit: int = 6,
+) -> list[str]:
+    """Find actual poster-backed catalogue titles to drive the emulator test."""
+    category_keys = {
+        (urlsplit(url).hostname or "").lower().removeprefix("www.")
+        + urlsplit(url).path.rstrip("/")
+        for url, _ in categories
+    }
+    placeholder_markers = (
+        "placeholder", "no-poster", "noposter", "no-image", "noimage",
+        "blank", "transparent", "avatar", "favicon", "spinner", "loading",
+        "pixel", "missing", "not-found", "logo", "flag-icon", "country-flag",
+    )
+    found: list[str] = []
+    seen: set[str] = set()
+    episode_markers = re.compile(
+        r"(?i)(?:\bs\d{1,2}e\d{1,3}\b|\b\d{1,2}\s*[x×]\s*\d{1,3}\b|"
+        r"\b(?:b[öo]l[üu]m|episode|episodes|ep)\s*[-:#.]?\s*\d{1,3}\b)"
+    )
+
+    def usable_poster(image: Tag, base_url: str) -> bool:
+        for attribute in (
+            "data-poster", "data-original", "data-lazy-src", "data-src",
+            "data-image", "src",
+        ):
+            raw = str(image.get(attribute, "") or "").strip()
+            if not raw or raw.startswith("data:"):
+                continue
+            if is_flag_or_icon_asset(
+                " ".join((raw, str(image.get("class", "")), str(image.get("alt", "")),
+                          str(image.get("title", ""))))
+            ):
+                continue
+            candidate = urljoin(base_url, raw)
+            parsed = urlsplit(candidate)
+            if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+                continue
+            filename = parsed.path.rsplit("/", 1)[-1].lower()
+            if any(marker in filename for marker in placeholder_markers):
+                continue
+            return True
+        return False
+
+    for page in pages:
+        soup = BeautifulSoup(str(page.get("html", "")), "html.parser")
+        for anchor in soup.select("a[href]"):
+            href = urljoin(str(page.get("url", origin)), str(anchor.get("href", "")))
+            if not valid_link_target(href, origin):
+                continue
+            href_parts = urlsplit(href)
+            category_key = (href_parts.hostname or "").lower().removeprefix("www.") + href_parts.path.rstrip("/")
+            if category_key in category_keys:
+                continue
+
+            heading = anchor.select_one("h1, h2, h3, h4, .title, .name, .movie-title, .film-title, .dizi-title")
+            image = anchor.select_one("img")
+            label_candidates = [
+                anchor.get("title", ""),
+                anchor.get("aria-label", ""),
+                heading.get_text(" ", strip=True) if heading else "",
+                anchor.get_text(" ", strip=True),
+                image.get("alt", "") if image else "",
+            ]
+            label = next(
+                (clean_label(value, 90) for value in label_candidates
+                 if clean_label(value, 90) and len(clean_label(value, 90)) >= 2),
+                "",
+            )
+            if not label or is_non_catalog_anchor(anchor, href, label):
+                continue
+            if normalized_filter_text(label) in {"film", "filmler", "dizi", "diziler", "izle", "ana sayfa", "home"}:
+                continue
+            if episode_markers.search(label + " " + href):
+                continue
+
+            if image is None:
+                node = anchor
+                for _ in range(4):
+                    parent = node.parent
+                    if not isinstance(parent, Tag):
+                        break
+                    candidate_image = parent.select_one("img")
+                    if candidate_image is not None:
+                        image = candidate_image
+                        break
+                    node = parent
+            if image is None or not usable_poster(image, str(page.get("url", origin))):
+                continue
+
+            key = normalized_filter_text(label)
+            if key in seen:
+                continue
+            seen.add(key)
+            found.append(label)
+            if len(found) >= limit:
+                return found
+    return found
+
+
 def find_search_form(soup: BeautifulSoup, base_url: str) -> dict:
     key_names = {"s", "q", "search", "query", "term", "keyword", "keywords", "ara"}
     for form in soup.select("form"):
@@ -672,6 +775,8 @@ def analyse_site(raw_url: str) -> dict:
             continue
         normalized_categories.append((href, label))
     normalized_categories = normalized_categories[:9]
+
+    sample_titles = extract_catalogue_samples(pages, origin, normalized_categories)
 
     search_info = find_search_form(root_soup, root_page["url"])
     if not search_info["action"]:
@@ -782,6 +887,7 @@ def analyse_site(raw_url: str) -> dict:
         "module_name": module_name,
         "pages_checked": pages,
         "categories": normalized_categories,
+        "sample_titles": sample_titles,
         "search": search_info,
         "signals": {
             "poster": poster_found,
@@ -863,6 +969,8 @@ class __CLASS__ : NeonMainAPI() {
 
     private val configuredSearchAction = __SEARCH_ACTION__
     private val configuredSearchField = __SEARCH_FIELD__
+    // Scraped from actual poster-backed catalogue cards; consumed by the real-playback smoke test.
+    private val neonSmokeTestQueries = listOf(__SMOKE_QUERIES__)
 
     override val mainPage = mainPageOf(
 __MAIN_PAGES__
@@ -1511,6 +1619,7 @@ __MAIN_PAGES__
         "__SITE_NAME__": kotlin_string(config["site_name"]),
         "__SEARCH_ACTION__": kotlin_string(action),
         "__SEARCH_FIELD__": kotlin_string(field),
+        "__SMOKE_QUERIES__": ", ".join(kotlin_string(item) for item in config.get("sample_titles", [])),
         "__MAIN_PAGES__": page_entries,
     }
     for placeholder, value in replacements.items():
@@ -1561,16 +1670,131 @@ def status(value: bool) -> str:
     return "Gözlendi" if value else "Sayfada tespit edilemedi"
 
 
-def render_report(config: dict) -> str:
+QUALITY_WEIGHTS = {
+    "poster": 15,
+    "listing_cards": 20,
+    "series_or_movie_schema": 10,
+    "search_form": 10,
+    "genres": 8,
+    "imdb_rating": 6,
+    "actors": 6,
+    "seasons": 5,
+    "episodes": 5,
+    "subtitles": 5,
+    "player_embed_or_media": 5,
+    "media_endpoint_reachable": 5,
+}
+
+
+def quality_assessment(config: dict) -> dict:
+    signals = config["signals"]
+    score = sum(weight for key, weight in QUALITY_WEIGHTS.items() if signals.get(key))
+    issues: list[str] = []
+    code = int(config.get("http_status") or 0)
+
+    if config.get("blocked"):
+        issues.append("Bot koruması veya erişim engeli sinyali var.")
+    if code < 200 or code >= 400:
+        issues.append(f"Ana sayfa HTTP {code}; normal bir katalog yanıtı doğrulanamadı.")
+    if not signals.get("listing_cards"):
+        issues.append("Kart/katalog bağlantısı gözlenmedi.")
+    if not signals.get("poster"):
+        issues.append("Afiş görüntüsü sinyali gözlenmedi.")
+    if not (signals.get("search_form") or config.get("categories")):
+        issues.append("Ne arama formu ne de güvenilir kategori bağlantısı bulundu.")
+    if not signals.get("player_embed_or_media"):
+        issues.append("Oynatıcı veya doğrudan medya sinyali bulunamadı.")
+
+    if config.get("blocked") or code < 200 or code >= 400:
+        readiness = "BLOCKED_OR_UNREACHABLE"
+    elif (
+        signals.get("listing_cards")
+        and signals.get("poster")
+        and (signals.get("search_form") or config.get("categories"))
+    ):
+        readiness = "BUILD_CANDIDATE"
+    else:
+        readiness = "NEEDS_REVIEW"
+
+    return {"score": score, "status": readiness, "issues": issues}
+
+
+def build_site_snapshot(config: dict, previous: dict | None = None) -> dict:
+    """Persist only stable, redacted signals; never store source HTML or signed query strings."""
+    stable = {
+        "host": config["host"],
+        "origin": safe_report_url(config["origin"]),
+        "site_name": config["site_name"],
+        "http_status": config["http_status"],
+        "blocked": bool(config.get("blocked")),
+        "signals": config["signals"],
+        "counts": config["counts"],
+        "categories": [
+            {"label": label, "url": safe_report_url(url)}
+            for url, label in config["categories"]
+        ],
+        "sample_titles": config.get("sample_titles", []),
+        "quality": quality_assessment(config),
+    }
+    canonical = json.dumps(stable, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    fingerprint = __import__("hashlib").sha256(canonical.encode("utf-8")).hexdigest()[:16]
+    changes: list[str] = []
+
+    previous_fingerprint = previous.get("fingerprint") if isinstance(previous, dict) else None
+    if not previous_fingerprint:
+        changes.append("İlk tarama: sonraki çalıştırmalar için başlangıç profili kaydedildi.")
+    elif previous_fingerprint == fingerprint:
+        changes.append("Önceki taramaya göre gözlenen yapı değişmedi.")
+    else:
+        old_signals = previous.get("signals", {}) if isinstance(previous.get("signals"), dict) else {}
+        for key, value in stable["signals"].items():
+            if key in old_signals and old_signals[key] != value:
+                changes.append(f"Sinyal değişti: {key} ({old_signals[key]} → {value}).")
+
+        old_counts = previous.get("counts", {}) if isinstance(previous.get("counts"), dict) else {}
+        for key in ("card_like_links", "media_urls_reachable", "episodes_detected", "season_links", "subtitle_hints"):
+            if key in old_counts and old_counts[key] != stable["counts"].get(key):
+                changes.append(
+                    f"Sayaç değişti: {key} ({old_counts[key]} → {stable['counts'].get(key)})."
+                )
+
+        old_categories = {
+            item.get("url"): item.get("label", "")
+            for item in previous.get("categories", [])
+            if isinstance(item, dict) and item.get("url")
+        }
+        new_categories = {item["url"]: item["label"] for item in stable["categories"]}
+        for url in sorted(set(new_categories) - set(old_categories)):
+            changes.append(f"Yeni kategori bağlantısı: {new_categories[url]} ({url}).")
+        for url in sorted(set(old_categories) - set(new_categories)):
+            changes.append(f"Kaldırılan kategori bağlantısı: {old_categories[url]} ({url}).")
+
+        old_titles = set(previous.get("sample_titles", []))
+        new_titles = set(stable["sample_titles"])
+        added_titles = sorted(new_titles - old_titles)
+        removed_titles = sorted(old_titles - new_titles)
+        if added_titles:
+            changes.append("Yeni örnek içerikler: " + ", ".join(added_titles[:6]) + ".")
+        if removed_titles:
+            changes.append("Artık görülmeyen örnek içerikler: " + ", ".join(removed_titles[:6]) + ".")
+        if not changes:
+            changes.append("Özet parmak izi değişti; alanların ayrıntılı farkı belirlenemedi.")
+
+    return {
+        **stable,
+        "schema_version": 1,
+        "observed_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        "fingerprint": fingerprint,
+        "previous_fingerprint": previous_fingerprint,
+        "changes": changes,
+    }
+
+
+def render_report(config: dict, snapshot: dict | None = None) -> str:
     sig = config["signals"]
     counts = config["counts"]
-    quality_weights = {
-        "poster": 15, "listing_cards": 20, "series_or_movie_schema": 10,
-        "search_form": 10, "genres": 8, "imdb_rating": 6, "actors": 6,
-        "seasons": 5, "episodes": 5, "subtitles": 5,
-        "player_embed_or_media": 5, "media_endpoint_reachable": 5,
-    }
-    quality_score = sum(weight for key, weight in quality_weights.items() if sig.get(key))
+    assessment = quality_assessment(config)
+    quality_score = assessment["score"]
     missing = [
         label for key, label in (
             ("poster", "Afiş seçicisi siteye özel ayar isteyebilir"),
@@ -1597,10 +1821,11 @@ def render_report(config: dict) -> str:
         ("JSON-LD yapılandırılmış veri", status(sig["schema_metadata"])),
         ("Arama formu", status(sig["search_form"])),
         ("Kart / liste bağlantısı", status(sig["listing_cards"])),
+        ("Gerçek içerik örneği", ", ".join(config.get("sample_titles", [])) or "Tespit edilemedi"),
     ]
     table = "\n".join(f"| {label} | {value} |" for label, value in rows)
     categories = "\n".join(
-        f"- {label}: {url}" for url, label in config["categories"]
+        f"- {label}: {safe_report_url(url)}" for url, label in config["categories"]
     ) or "- Ana sayfada güvenilir kategori bağlantısı bulunamadı."
     note = (
         "UYARI: Site bot koruması, CAPTCHA veya erişim engeli göstermiş olabilir. "
@@ -1611,13 +1836,22 @@ def render_report(config: dict) -> str:
     return f"""# Otomatik eklenti analiz raporu
 
 - Kontrol: {checked}
-- Girilen URL: {config['input_url']}
-- Ana adres: {config['origin']}
+- Girilen URL: {safe_report_url(config['input_url'])}
+- Ana adres: {safe_report_url(config['origin'])}
 - Site adı: {config['site_name']}
 - Oluşturulan modül: {config['module_name']}
 - İncelenen sayfa sayısı: {counts['pages']}
 - HTTP sonucu: {config['http_status']}
 - **HTML analiz kalite puanı: {quality_score}/100** (yalnızca taramada gözlenen işaretler; oynatma garantisi değildir)
+- **Derleme öncesi kalite kapısı: {assessment["status"]}**
+- Kalite uyarıları: {("; ".join(assessment["issues"]) if assessment["issues"] else "Temel katalog koşulları gözlendi.")}
+- Site parmak izi: {(snapshot or {}).get("fingerprint", "—")}
+
+## Site yapısı değişiklik takibi
+
+{chr(10).join("- " + item for item in (snapshot or {}).get("changes", ["Değişiklik kaydı bulunamadı."]))}
+
+> Bu karşılaştırma yalnızca gözlenebilir HTML işaretlerini, sayaçları, örnek başlıkları ve kategori bağlantılarını izler. Site değişimini fark edebilir; değişikliğin nedenini veya oynatmayı tek başına kanıtlamaz.
 
 ## Otomatik düzeltme önerileri
 
@@ -1738,6 +1972,8 @@ def run_self_test() -> None:
         "origin": "https://example.org",
         "site_name": "Test Sinema",
         "class_name": "AutoExampleOrg",
+        "host": "example.org",
+        "sample_titles": ["Flag Day", "Örnek Film"],
         "categories": [("https://example.org/diziler", "Diziler")],
         "search": {"action": "https://example.org/", "field": "s", "method": "get"},
     }
@@ -1758,6 +1994,7 @@ def run_self_test() -> None:
     assert "navigationOnlyPaths" in generated
     assert "isValidPosterUrl(poster)" in generated
     assert "private fun isFlagOrIconAsset(value: String): Boolean" in generated
+    assert "private val neonSmokeTestQueries = listOf(\"Flag Day\", \"Örnek Film\")" in generated
     assert "if (isFlagOrIconAsset(" in generated
     assert "isNavigationChrome(it)" in generated
     assert "profile photo" in generated
@@ -1799,8 +2036,22 @@ def run_self_test() -> None:
         }],
         "blocked": False,
     }
-    report = render_report(report_fixture)
+    report_fixture["sample_titles"] = ["Örnek Film", "İkinci Film"]
+    snapshot_first = build_site_snapshot(report_fixture)
+    snapshot_same = build_site_snapshot(report_fixture, snapshot_first)
+    changed_fixture = dict(report_fixture)
+    changed_fixture["signals"] = dict(report_fixture["signals"])
+    changed_fixture["signals"]["player_embed_or_media"] = False
+    snapshot_changed = build_site_snapshot(changed_fixture, snapshot_first)
+    assert snapshot_first["fingerprint"] == snapshot_same["fingerprint"]
+    assert any("Sinyal değişti: player_embed_or_media" in item for item in snapshot_changed["changes"])
+    assert snapshot_first["sample_titles"] == ["Örnek Film", "İkinci Film"]
+    report = render_report(report_fixture, snapshot_changed)
     assert "HTML analiz kalite puanı" in report
+    assert "Derleme öncesi kalite kapısı" in report
+    assert "Site yapısı değişiklik takibi" in report
+    assert "Sinyal değişti: player_embed_or_media" in report
+    assert "token=secret" not in report
     assert "master.m3u8" in report and "206" in report
     assert "Sezon 1" in report and "3, 4" in report
     assert "token=secret" not in report
@@ -1826,6 +2077,7 @@ def main() -> int:
         plugin_path = source_dir / (config["class_name"] + "Plugin.kt")
         gradle_path = module_dir / "build.gradle.kts"
         report_path = REPORT_DIR / (config["module_name"] + ".md")
+        snapshot_path = REPORT_DIR / (config["module_name"] + ".json")
 
         if module_dir.exists() and not (source_path.exists() and "AUTO-GENERATED by tools/auto_plugin_generator.py" in source_path.read_text(encoding="utf-8", errors="replace")):
             raise RuntimeError(
@@ -1842,7 +2094,20 @@ def main() -> int:
         source_path.write_text(render_kotlin(config), encoding="utf-8")
         plugin_path.write_text(render_plugin(config), encoding="utf-8")
         gradle_path.write_text(render_gradle(config), encoding="utf-8")
-        report_path.write_text(render_report(config), encoding="utf-8")
+        previous_snapshot = None
+        if snapshot_path.exists():
+            try:
+                previous_value = json.loads(snapshot_path.read_text(encoding="utf-8"))
+                previous_snapshot = previous_value if isinstance(previous_value, dict) else None
+            except (OSError, json.JSONDecodeError):
+                previous_snapshot = None
+        snapshot = build_site_snapshot(config, previous_snapshot)
+        report_path.write_text(render_report(config, snapshot), encoding="utf-8")
+        snapshot_path.write_text(
+            json.dumps(snapshot, ensure_ascii=False, indent=2) + "
+",
+            encoding="utf-8",
+        )
 
         print("AUTO PLUGIN GENERATION: PASSED")
         print(f"Site: {config['origin']}")
@@ -1852,6 +2117,14 @@ def main() -> int:
         print(f"Manifest: {gradle_path.relative_to(ROOT)}")
         print(f"Rapor: {report_path.relative_to(ROOT)}")
         print(f"İncelenen sayfa: {config['counts']['pages']}")
+        print(f"Test için bulunan gerçek katalog örneği: {len(config.get('sample_titles', []))}")
+        assessment = quality_assessment(config)
+        print(f"Kalite kapısı: {assessment['status']} ({assessment['score']}/100)")
+        for issue in assessment["issues"]:
+            print(f"  WARNING: {issue}")
+        print(f"Site fingerprint: {snapshot['fingerprint']}")
+        for change in snapshot["changes"]:
+            print(f"  SITE CHANGE: {change}")
         print("Özellik sinyalleri:")
         for key, value in config["signals"].items():
             print(f"  {'FOUND' if value else 'NOT OBSERVED'}: {key}")

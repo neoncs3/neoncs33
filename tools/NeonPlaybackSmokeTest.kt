@@ -70,6 +70,21 @@ class NeonPlaybackSmokeTest {
         Target("WebDramaTurkey", listOf("Squid Game", "Moving", "Alchemy of Souls")),
     )
 
+    private fun generatedSampleQueries(provider: MainAPI): List<String> {
+        if (!provider.javaClass.simpleName.startsWith("Auto")) return emptyList()
+        val raw = runCatching {
+            provider.javaClass.getDeclaredField("neonSmokeTestQueries").also {
+                it.isAccessible = true
+            }.get(provider)
+        }.getOrNull() as? List<*> ?: return emptyList()
+
+        return raw.filterIsInstance<String>()
+            .map { it.trim() }
+            .filter { it.length >= 2 }
+            .distinct()
+            .take(6)
+    }
+
     private fun allTargets(): List<Target> {
         val knownNames = targets.map { it.name }.toSet()
         val generatedProviders = APIHolder.allProviders
@@ -79,14 +94,17 @@ class NeonPlaybackSmokeTest {
             .map { provider ->
                 Target(
                     name = provider.name,
-                    queries = listOf(
-                        "Inception",
-                        "Wednesday",
-                        "The Last of Us",
-                        "Squid Game",
-                        "Film",
-                        "Dizi",
-                    ),
+                    // Query this provider's actual poster-backed catalogue before generic fallbacks.
+                    queries = (
+                        generatedSampleQueries(provider) + listOf(
+                            "Inception",
+                            "Wednesday",
+                            "The Last of Us",
+                            "Squid Game",
+                            "Film",
+                            "Dizi",
+                        )
+                    ).distinct().take(6),
                     pluginInternalName = provider.javaClass.simpleName,
                 )
             }
