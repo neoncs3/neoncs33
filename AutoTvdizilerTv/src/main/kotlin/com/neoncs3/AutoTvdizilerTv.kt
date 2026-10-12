@@ -25,15 +25,8 @@ class AutoTvdizilerTv : NeonMainAPI() {
 
     override val mainPage = mainPageOf(
         "https://tvdiziler.tv/" to "Ana Sayfa",
-        "https://tvdiziler.tv/kesfet" to "Keşfet",
-        "https://tvdiziler.tv/takvim" to "Dizi Takvimi",
         "https://tvdiziler.tv/dizi-izle" to "Tv Dizileri",
-        "https://tvdiziler.tv/film-izle" to "Sinema Filmleri",
-        "https://tvdiziler.tv/tartismalar" to "Tartışmalar",
-        "https://tvdiziler.tv/oyuncular" to "Oyuncular",
-        "https://tvdiziler.tv/profile/hkncan" to "hkncan 19 Level (+42221 puan)",
-        "https://tvdiziler.tv/profile/veyseliko" to "veyseliko 17 Level (+15581 puan)",
-        "https://tvdiziler.tv/profile/ibis" to "ibis 16 Level (+13761 puan)"
+        "https://tvdiziler.tv/film-izle" to "Sinema Filmleri"
     )
 
     private fun headers(referer: String = mainUrl + "/"): Map<String, String> =
@@ -68,15 +61,18 @@ class AutoTvdizilerTv : NeonMainAPI() {
             .trim()
 
     private val navigationOnlyLabels = setOf(
-        "yorum", "yorumlar", "comment", "comments",
+        "yorum", "yorumlar", "comment", "comments", "replies",
         "kesfet", "kesif", "explore", "discover",
         "takvim", "takvimi", "calendar", "schedule",
         "dizi takvimi", "film takvimi", "tv schedule",
-        "tartisma", "tartismalar", "discussion", "discussions",
-        "baslik", "basliklar", "topic", "topics", "forum",
+        "tartisma", "tartismalar", "discussion", "discussions", "discuss",
+        "baslik", "basliklar", "topic", "topics", "forum", "forums",
+        "thread", "threads", "konu", "konular", "sohbet", "sohbetler",
         "community", "topluluk", "gundem", "duyurular",
-        "login", "register", "giris", "kayit", "hesabim", "profil",
-        "ayarlar", "iletisim", "hakkimizda", "yardim",
+        "login", "register", "giris", "kayit", "hesabim", "profil", "profilim",
+        "profile", "profiles", "user", "users", "member", "members",
+        "author", "authors", "account", "accounts", "uye", "uyeler",
+        "kullanici", "kullanicilar", "ayarlar", "iletisim", "hakkimizda", "yardim",
         "privacy policy", "terms", "about us", "contact us",
         "ana sayfa", "home", "menu", "menü",
         "dizi", "diziler", "film", "filmler", "movies", "series",
@@ -85,23 +81,30 @@ class AutoTvdizilerTv : NeonMainAPI() {
     )
 
     private val utilityLabelPrefixes = setOf(
-        "yorum", "yorumlar", "comment", "comments",
-        "kesfet", "kesif", "explore", "discover",
-        "takvim", "takvimi", "calendar", "schedule",
-        "dizi takvimi", "film takvimi", "tv schedule",
-        "tartisma", "tartismalar", "discussion", "discussions",
-        "baslik", "basliklar", "topic", "topics", "forum",
-        "community", "topluluk", "gundem", "duyurular"
+        "yorum", "yorumlar", "comment", "comments", "reply", "replies",
+        "kesfet", "kesif", "explore", "discover", "takvim", "takvimi",
+        "calendar", "schedule", "dizi takvimi", "film takvimi", "tv schedule",
+        "tartisma", "tartismalar", "discussion", "discussions", "discuss",
+        "baslik", "basliklar", "topic", "topics", "forum", "forums",
+        "thread", "threads", "konu", "konular", "sohbet", "sohbetler",
+        "community", "topluluk", "gundem", "duyurular",
+        "profil", "profile", "user profile", "member profile",
+        "kullanici profili", "uye profili", "my profile"
     )
 
     private val navigationOnlyPaths = setOf(
-        "yorum", "yorumlar", "comment", "comments",
-        "kesfet", "kesif", "explore", "discover",
-        "takvim", "takvimi", "calendar", "schedule",
-        "dizi takvimi", "film takvimi",
-        "tartisma", "tartismalar", "discussion", "discussions",
-        "baslik", "basliklar", "topic", "topics", "forum",
-        "community", "topluluk", "gundem", "duyurular"
+        "yorum", "yorumlar", "comment", "comments", "replies",
+        "kesfet", "kesif", "explore", "discover", "takvim", "takvimi",
+        "calendar", "schedule", "dizi takvimi", "film takvimi",
+        "tartisma", "tartismalar", "discussion", "discussions", "discuss",
+        "baslik", "basliklar", "topic", "topics", "forum", "forums",
+        "thread", "threads", "konu", "konular", "sohbet", "sohbetler",
+        "community", "topluluk", "gundem", "duyurular",
+        "profile", "profiles", "profil", "profiller", "profilim",
+        "user", "users", "member", "members", "author", "authors",
+        "account", "accounts", "u", "uye", "uyeler", "kullanici",
+        "kullanicilar", "avatar", "avatars", "activity", "notifications",
+        "messages", "inbox", "groups", "group", "settings", "dashboard"
     )
 
     private fun isNavigationChrome(anchor: Element): Boolean {
@@ -114,34 +117,31 @@ class AutoTvdizilerTv : NeonMainAPI() {
                 return true
             }
 
-            val hint = (current.id() + " " + current.className()).lowercase()
-                .replace('_', '-')
+            val hint = normalizedFilterText(current.id() + " " + current.className())
             if (listOf(
-                    "site-header", "site-nav", "navbar", "main-nav", "primary-nav",
-                    "main-menu", "primary-menu", "top-menu", "menu-item", "sidebar",
-                    "breadcrumb", "comments-nav", "site-footer", "footer-menu"
-                ).any { hint.contains(it) }) {
-                return true
-            }
-            node = current.parent()
-        }
-        return false
-    }
-
-    private fun isNavigationItem(title: String, url: String): Boolean {
+                    "site header", "site nav", "navbar", "main nav", "primary nav",
+                    "main menu", "primary menu", "top menu", "menu item", "sidebar",
+                    "breadcrumb", "comments nav", "site footer", "footer menu",
+                    "profile", "user profile", "user card", "member card", "avatar",
+                    "author box", "author link", "discussion", "thread card",
+                    "forum    private fun isNavigationItem(title: String, url: String): Boolean {
         val label = normalizedFilterText(title)
         if (label in navigationOnlyLabels ||
             utilityLabelPrefixes.any { label == it || label.startsWith("$it ") }) {
             return true
         }
 
-        val segments = runCatching { URI(url).path.orEmpty() }
-            .getOrDefault("")
-            .split("/")
-            .filter { it.isNotBlank() }
-            .map { normalizedFilterText(it.replace('-', ' ').replace('_', ' ')) }
-
+        val uri = runCatching { URI(url) }.getOrNull() ?: return true
+        val rawSegments = uri.path.orEmpty().split("/").filter { it.isNotBlank() }
+        if (rawSegments.any { it.startsWith("@") }) return true
+        val segments = rawSegments.map {
+            normalizedFilterText(it.replace('-', ' ').replace('_', ' '))
+        }
         if (segments.any { it in navigationOnlyPaths }) return true
+        val query = uri.rawQuery.orEmpty()
+        if (Regex(
+                """(?i)(?:^|&)(?:user|userid|user_id|profile|profile_id|member|member_id|author|author_id|thread|thread_id|topic|topic_id|discussion|comment|reply|post_id)="""
+            ).containsMatchIn(query)) return true
         if (segments.size == 1 && segments.first() in setOf(
                 "dizi", "diziler", "film", "filmler", "movies", "series",
                 "home", "ana sayfa", "kesfet", "takvim", "yorumlar"
@@ -157,10 +157,15 @@ class AutoTvdizilerTv : NeonMainAPI() {
         val uri = runCatching { URI(url) }.getOrNull() ?: return false
         val path = uri.path.orEmpty().lowercase()
         val file = path.substringAfterLast('/')
+        if (listOf(
+                "/avatar/", "/avatars/", "/user/", "/users/", "/profile/",
+                "/profiles/", "/member/", "/members/", "/author/", "/authors/"
+            ).any { path.contains(it) }) return false
         val placeholderMarkers = listOf(
             "placeholder", "no-image", "no_image", "noimage", "no-poster",
             "noposter", "blank.gif", "transparent", "avatar", "favicon",
-            "spinner", "loading", "pixel", "missing", "not-found"
+            "spinner", "loading", "pixel", "missing", "not-found",
+            "user-photo", "profile-photo", "member-photo", "author-photo"
         )
         if (placeholderMarkers.any { file.contains(it) }) return false
         if (Regex("""(?i)^logo(?:[-_].*)?\.(?:png|jpe?g|webp|gif|svg|ico)$""")
@@ -180,7 +185,9 @@ class AutoTvdizilerTv : NeonMainAPI() {
                 "/login", "/register", "/giris", "/kayit", "/iletisim", "/contact",
                 "/privacy", "/terms", "/feed", "/yorum", "/comment", "/kesfet",
                 "/discover", "/takvim", "/calendar", "/tartisma", "/discussion",
-                "/baslik", "/topics", "/forum"
+                "/baslik", "/topics", "/forum", "/profile", "/profil", "/user",
+                "/member", "/author", "/account", "/uye", "/kullanici", "/threads",
+                "/thread", "/konu", "/konular", "/community", "/sohbet", "/replies"
             ).any { path.contains(it) }) return false
         if (path.endsWith(".jpg") || path.endsWith(".jpeg") || path.endsWith(".png") ||
             path.endsWith(".webp") || path.endsWith(".gif") || path.endsWith(".css") ||
@@ -201,6 +208,14 @@ class AutoTvdizilerTv : NeonMainAPI() {
 
     private fun imageUrl(image: Element?, baseUrl: String): String? {
         if (image == null) return null
+        val imageHint = normalizedFilterText(
+            image.attr("class") + " " + image.id() + " " +
+                image.attr("alt") + " " + image.attr("title")
+        )
+        if (listOf(
+                "avatar", "user photo", "profile photo", "profile picture",
+                "member photo", "author photo", "account photo", "user profile"
+            ).any { imageHint.contains(it) }) return null
         return sequenceOf(
             image.attr("data-src"),
             image.attr("data-lazy-src"),
