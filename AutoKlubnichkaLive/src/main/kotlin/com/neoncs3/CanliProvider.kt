@@ -1,4 +1,4 @@
-package com.example.canli
+package com.neoncs3
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
