@@ -232,11 +232,14 @@ class NeonPlaybackSmokeTest {
             Thread.sleep(500L)
             refreshFirstFrameState()
 
+            // Prefer ExoPlayer's actual playing signal over a wrapper status that
+            // may lag behind. Do not resend Play just because position is still 0:
+            // repeatedly sending Play can restart playback and prevent progress.
             val isPlayingNow = runCatching {
                 player.getIsPlaying()
-            }.getOrDefault(false)
+            }.getOrDefault(false) || exoPlaying.get()
 
-            if (!isPlayingNow || bestPosition < MIN_PLAYBACK_MS) {
+            if (!isPlayingNow) {
                 InstrumentationRegistry.getInstrumentation().runOnMainSync {
                     runCatching {
                         player.handleEvent(
@@ -249,9 +252,16 @@ class NeonPlaybackSmokeTest {
 
             refreshFirstFrameState()
 
-            val current = runCatching {
-                player.getPosition() ?: 0L
-            }.getOrDefault(0L).coerceAtLeast(0L)
+            var current = 0L
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                val wrapperPosition = runCatching {
+                    player.getPosition() ?: 0L
+                }.getOrDefault(0L)
+                val exoPosition = runCatching {
+                    exo?.currentPosition ?: 0L
+                }.getOrDefault(0L)
+                current = maxOf(wrapperPosition, exoPosition).coerceAtLeast(0L)
+            }
 
             if (current > lastPosition) {
                 advancedSamples++
@@ -286,9 +296,16 @@ class NeonPlaybackSmokeTest {
             }
         }
 
-        val duration = runCatching {
-            player.getDuration() ?: 0L
-        }.getOrDefault(0L).coerceAtLeast(0L)
+        var duration = 0L
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val wrapperDuration = runCatching {
+                player.getDuration() ?: 0L
+            }.getOrDefault(0L)
+            val exoDuration = runCatching {
+                exo?.duration ?: 0L
+            }.getOrDefault(0L)
+            duration = maxOf(wrapperDuration, exoDuration, 0L)
+        }
 
         val error = playerError.get()
         refreshFirstFrameState()
@@ -327,45 +344,42 @@ class NeonPlaybackSmokeTest {
     private suspend fun providerCandidates(
         api: MainAPI,
         target: Target,
-    ): List<SearchResponse> {
-        val searchCandidates = mutableListOf<SearchResponse>()
+    ): List<Pair<SearchResponse, String?>> {
+        val searchCandidates = mutableListOf<Pair<SearchResponse, String?>>()
 
         // Direct control URLs test the provider resolver independently from search.
         for (url in target.directUrls) {
-            searchCandidates.add(
-                if (url.contains("/film/", ignoreCase = true)) {
-                    api.newMovieSearchResponse(
-                        name = target.name,
-                        url = url,
-                        type = TvType.Movie,
-                    )
-                } else {
-                    api.newTvSeriesSearchResponse(
-                        name = target.name,
-                        url = url,
-                        type = TvType.TvSeries,
-                    )
-                }
-            )
+            val item = if (url.contains("/film/", ignoreCase = true)) {
+                api.newMovieSearchResponse(
+                    name = target.name,
+                    url = url,
+                    type = TvType.Movie,
+                )
+            } else {
+                api.newTvSeriesSearchResponse(
+                    name = target.name,
+                    url = url,
+                    type = TvType.TvSeries,
+                )
+            }
+            searchCandidates.add(item to null)
         }
 
-        // Playback smoke testinde hedef içerik, ana sayfadaki rastgele güncel
-        // içerikten daha değerlidir. Önce bilinen arama sorgularını dene; aksi
-        // halde test, örneğin DiziBoxizle'da ana sayfadaki dört rastgele içeriğe
-        // takılıp hedef diziyi hiç denemeden FAIL verebiliyordu.
+        // Keep the exact search query with each result so a failed provider run
+        // shows which search term led to the last tested candidate.
         for (query in target.queries) {
-            runCatching {
+            val found = runCatching {
                 api.search(query, 1)?.items.orEmpty().take(3)
-            }.getOrNull()?.let(searchCandidates::addAll)
+            }.getOrDefault(emptyList())
+            searchCandidates.addAll(found.map { it to query })
         }
 
-        val mainPageCandidates = mutableListOf<SearchResponse>()
+        val mainPageCandidates = mutableListOf<Pair<SearchResponse, String?>>()
 
-        // Arama motoru geçici olarak boşsa ana sayfadan gerçek içeriklerle
-        // ikinci bir aday havuzu oluştur.
+        // If search is temporarily empty, use a small fallback pool from the home page.
         if (api.hasMainPage) {
             api.mainPage.take(2).forEach { page ->
-                runCatching {
+                val items = runCatching {
                     api.getMainPage(
                         1,
                         MainPageRequest(
@@ -377,13 +391,14 @@ class NeonPlaybackSmokeTest {
                 }.getOrNull()?.items
                     ?.flatMap { it.list }
                     ?.take(6)
-                    ?.let(mainPageCandidates::addAll)
+                    .orEmpty()
+                mainPageCandidates.addAll(items.map { it to null })
             }
         }
 
         return (searchCandidates + mainPageCandidates)
-            .filter { it.url.isNotBlank() }
-            .distinctBy { it.url }
+            .filter { (item, _) -> item.url.isNotBlank() }
+            .distinctBy { it.first.url }
             .take(MAX_CANDIDATES_PER_PROVIDER)
     }
 
@@ -436,16 +451,30 @@ class NeonPlaybackSmokeTest {
         )
 
         var lastError = ""
+        var lastQuery: String? = null
+        var lastItem: String? = null
+        var lastLinkCount = 0
+        var lastPositionMs = 0L
 
-        for (result in candidates) {
+        for ((result, query) in candidates) {
+            lastQuery = query
+            lastItem = result.name
+
             val data = runCatching {
                 loadData(api, result)
             }.getOrElse {
                 lastError = err(it)
                 null
-            } ?: continue
+            }
+            if (data.isNullOrBlank()) {
+                if (lastError.isBlank()) {
+                    lastError = "İçerik veri adresi alınamadı: " + result.url
+                }
+                continue
+            }
 
             val (links, linkError) = resolve(api, data)
+            lastLinkCount = maxOf(lastLinkCount, links.size)
 
             if (links.isEmpty()) {
                 lastError = linkError ?: "Gerçek video bağlantısı bulunamadı"
@@ -454,7 +483,9 @@ class NeonPlaybackSmokeTest {
                     return Result(
                         provider = target.name,
                         status = "BLOCKED",
+                        query = query,
                         item = result.name,
+                        links = links.size,
                         error = lastError,
                     )
                 }
@@ -499,12 +530,14 @@ class NeonPlaybackSmokeTest {
                     return Result(
                         provider = target.name,
                         status = "PASS",
+                        query = query,
                         item = result.name,
                         links = links.size,
                         positionMs = position,
                     )
                 }
 
+                lastPositionMs = maxOf(lastPositionMs, position)
                 lastError = playerError
                     ?: "ExoPlayer position ilerlemedi: " + position + "ms"
 
@@ -512,6 +545,7 @@ class NeonPlaybackSmokeTest {
                     return Result(
                         provider = target.name,
                         status = "BLOCKED",
+                        query = query,
                         item = result.name,
                         links = links.size,
                         positionMs = position,
@@ -524,6 +558,10 @@ class NeonPlaybackSmokeTest {
         return Result(
             provider = target.name,
             status = if (antiBot(lastError)) "BLOCKED" else "FAIL",
+            query = lastQuery,
+            item = lastItem,
+            links = lastLinkCount,
+            positionMs = lastPositionMs,
             error = lastError.ifBlank {
                 "Test adaylarında çalışan gerçek playback bulunamadı"
             },
