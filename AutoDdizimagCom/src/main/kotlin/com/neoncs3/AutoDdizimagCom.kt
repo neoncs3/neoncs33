@@ -1,5 +1,6 @@
 package com.neoncs3
 
+import android.util.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -57,6 +58,42 @@ class AutoDdizimagCom : NeonMainAPI() {
 
     private fun normalize(raw: String, base: String = mainUrl): String =
         neonNormalizeUrl(raw, base)
+
+    private fun isLikelyPlayerUrl(url: String): Boolean {
+        if (neonIsMediaUrl(url)) return true
+        val uri = runCatching { URI(url) }.getOrNull() ?: return false
+        val hint = (uri.path.orEmpty() + "?" + uri.rawQuery.orEmpty()).lowercase()
+        return Regex("""(?i)(?:player|embed|iframe|video|stream|play|watch|manifest|media|playlist|source)(?:[/_.?=&-]|$)""")
+            .containsMatchIn(hint)
+    }
+
+    // Player settings are sometimes stored in JSON/JavaScript instead of iframe or video tags.
+    private fun playerUrlsFromText(raw: String, baseUrl: String): List<String> {
+        val text = raw
+            .replace("\\/", "/")
+            .replace("\\u0026", "&")
+            .replace("&#x2F;", "/")
+            .replace("&amp;", "&")
+        val values = LinkedHashSet<String>()
+        neonExtractMediaUrls(text).forEach(values::add)
+
+        val namedValuePattern = Regex(
+            """(?is)["']?(?:src|file|file_url|source|source_url|url|embed|embed_url|iframe|iframe_url|video_url|video_src|videoUrl|play_url|player_url|playerUrl|hls|hls_url|playlist|stream|stream_url|media_url|manifest)["']?\s*[:=]\s*["']([^"'<>\s]+)["']"""
+        )
+        namedValuePattern.findAll(text).forEach { values.add(it.groupValues[1]) }
+
+        val relativePlayerPattern = Regex(
+            """(?i)["'](/[^"'<>\s]*(?:player|embed|iframe|watch|video|stream|play|manifest|media|playlist|source)[^"'<>\s]*)["']"""
+        )
+        relativePlayerPattern.findAll(text).forEach { values.add(it.groupValues[1]) }
+
+        return values.mapNotNull { rawValue ->
+            val cleaned = rawValue.trim().trimEnd('"', '\'', ')', ']', '}', ',', ';')
+            val url = normalize(cleaned, baseUrl)
+            url.takeIf { it.startsWith("http://", true) || it.startsWith("https://", true) }
+                ?.takeIf(::isLikelyPlayerUrl)
+        }.distinct()
+    }
 
     private fun isEpisodeLike(value: String): Boolean =
         Regex("""(?i)(?:b[öo]l[üu]m|episodes?|ep[\s._-]*\d|s\d{1,2}e\d{1,3}|\d{1,2}\s*[x×]\s*\d{1,3})""")
@@ -695,6 +732,8 @@ class AutoDdizimagCom : NeonMainAPI() {
     ): Boolean {
         val normalized = normalize(data)
         if (normalized.isBlank()) return false
+        val pagePath = runCatching { URI(normalized).path.orEmpty() }.getOrDefault("/")
+        Log.d("DIZIMAG", "loadLinks start path=$pagePath")
 
         // The site often adds player URLs lazily or stores them in player scripts.
         // Probe the episode page first, then resolve its iframe/media candidates.
@@ -730,17 +769,45 @@ class AutoDdizimagCom : NeonMainAPI() {
                 }
             }
 
-            val scriptText = document.select("script").joinToString("\n") { script ->
+            val inlineScriptText = document.select("script:not([src])").joinToString("\n") { script ->
                 script.data().ifBlank { script.html() }
-            }.replace("\\/", "/").replace("\\u0026", "&")
-            val playerValuePattern = Regex(
-                """(?is)(?:src|file|source|url|embed|iframe|video_url|videoUrl|play_url|player_url|hls|playlist|stream)\s*[:=]\s*["']([^"'<>\\s]+)["']"""
-            )
-            playerValuePattern.findAll(scriptText).forEach { match ->
-                val candidate = normalize(match.groupValues[1], normalized)
-                if (candidate.startsWith("http", true)) candidates.add(candidate)
             }
-            neonExtractMediaUrls(scriptText).forEach(candidates::add)
+            playerUrlsFromText(inlineScriptText, normalized).forEach(candidates::add)
+            neonExtractMediaUrls(inlineScriptText).forEach(candidates::add)
+
+            // Some newer pages keep the actual player configuration in an external JS bundle.
+            // Probe only a few relevant scripts so the link resolver remains bounded.
+            val scriptUrls = document.select("script[src]")
+                .map { normalize(it.attr("src"), normalized) }
+                .filter { it.startsWith("http", true) }
+                .filter { it.substringBefore('?').substringBefore('#').endsWith(".js", true) }
+                .filter {
+                    isSiteUrl(it) ||
+                        Regex("""(?i)(player|video|stream|embed|media|watch)""").containsMatchIn(it)
+                }
+                .distinct()
+                .sortedBy {
+                    when {
+                        Regex("""(?i)(player|video|stream|embed|media|watch|episode)""").containsMatchIn(it) -> 0
+                        Regex("""(?i)(app|main|bundle|index|chunk)""").containsMatchIn(it) -> 1
+                        else -> 2
+                    }
+                }
+                .take(3)
+
+            for (scriptUrl in scriptUrls) {
+                val scriptBody = runCatching {
+                    app.get(
+                        scriptUrl,
+                        headers = headers(normalized),
+                        timeout = 4_000L,
+                        allowRedirects = true,
+                    ).takeIf { it.isSuccessful }?.text
+                }.getOrNull().orEmpty()
+                if (scriptBody.isBlank()) continue
+                playerUrlsFromText(scriptBody, scriptUrl).forEach(candidates::add)
+                neonExtractMediaUrls(scriptBody).forEach(candidates::add)
+            }
         }
 
         // Remove the known dead endpoint before any resolver or extractor can try to play it.
@@ -768,6 +835,7 @@ class AutoDdizimagCom : NeonMainAPI() {
         }
 
         // A resolver may report a candidate even if the callback deliberately filtered it.
+        Log.d("DIZIMAG", "loadLinks finished candidates=${candidates.size}; emitted=${emitted.size}")
         return emitted.isNotEmpty()
     }
 }
