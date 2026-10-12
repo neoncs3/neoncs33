@@ -1183,10 +1183,14 @@ __MAIN_PAGES__
                 "/member", "/author", "/account", "/uye", "/kullanici", "/threads",
                 "/thread", "/konu", "/konular", "/community", "/sohbet", "/replies"
             ).any { path.contains(it) }) return false
-        if (path.endsWith(".jpg") || path.endsWith(".jpeg") || path.endsWith(".png") ||
-            path.endsWith(".webp") || path.endsWith(".gif") || path.endsWith(".css") ||
-            path.endsWith(".js") || path.endsWith(".m3u8") || path.endsWith(".mpd") ||
-            path.endsWith(".mp4") || path.endsWith(".srt") || path.endsWith(".vtt")) return false
+        if (listOf(
+                ".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".ico",
+                ".css", ".js", ".m3u8", ".mpd", ".mp4", ".webm", ".m4v",
+                ".mov", ".flv", ".avi", ".mkv", ".mpeg", ".mpg", ".3gp",
+                ".ts", ".m4s", ".mp3", ".m4a", ".aac", ".ogg", ".wav",
+                ".srt", ".vtt", ".ass", ".ssa", ".sub", ".idx", ".woff",
+                ".woff2", ".ttf", ".eot", ".webmanifest"
+            ).any { path.endsWith(it) }) return false
         return path.trim('/').isNotBlank()
     }
 
