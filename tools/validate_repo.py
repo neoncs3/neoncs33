@@ -44,6 +44,13 @@ if playback_runner.exists() and shutil.which("bash"):
         details = (check.stderr or check.stdout or "Bash syntax check failed").strip()
         errors.append(f"tools/neon_playback_runner.sh sözdizimi hatası: {details}")
 
+# Guard the instrumentation-test tuple access that broke the last emulator run.
+playback_test = ROOT / "tools/NeonPlaybackSmokeTest.kt"
+if playback_test.exists():
+    playback_text = playback_test.read_text(encoding="utf-8", errors="replace")
+    if 'candidates.joinToString(" | ") { it.first.name }' not in playback_text:
+        errors.append("Oynatma smoke testindeki SearchResponse/sorgu ikilisi güvenli okunmuyor.")
+
 generator = ROOT / "tools/auto_plugin_generator.py"
 if generator.exists():
     generator_text = generator.read_text(encoding="utf-8", errors="replace")
