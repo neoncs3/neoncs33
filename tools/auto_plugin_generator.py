@@ -989,7 +989,7 @@ __MAIN_PAGES__
 
     private fun isSiteUrl(url: String): Boolean =
         (url.startsWith("http://", true) || url.startsWith("https://", true)) &&
-            siteHost(url) == siteHost(mainUrl)
+            (siteHost(url) == siteHost(mainUrl) || __SITE_ALIAS_CONDITION__)
 
     // ddizimag.com exposes this root-level URL in page scripts, but it is not a playable video.
     // Ignore known non-playable media endpoints exposed by this site.
@@ -1004,6 +1004,8 @@ __MAIN_PAGES__
 
     private fun normalize(raw: String, base: String = mainUrl): String =
         neonNormalizeUrl(raw, base)
+
+__ALTERNATE_EPISODE_HELPER__
 
     private fun isLikelyPlayerUrl(url: String): Boolean {
         if (neonIsMediaUrl(url)) return true
@@ -1718,12 +1720,17 @@ __MAIN_PAGES__
                 }
                 .distinct()
         }.orEmpty()
+        val alternateMirrorCandidate = __ALTERNATE_MIRROR_CALL__
 
         if (externalPlayerFrames.isNotEmpty()) {
             candidates.addAll(externalPlayerFrames)
             Log.d(name.uppercase().take(23), "external player iframe prioritized; continuing page media/script discovery count=${externalPlayerFrames.size}")
         } else {
             candidates.add(normalized)
+        }
+        if (!alternateMirrorCandidate.isNullOrBlank() && alternateMirrorCandidate != normalized) {
+            candidates.add(alternateMirrorCandidate)
+            Log.d(name.uppercase().take(23), "alternate episode mirror candidate added")
         }
 
         if (document != null) {
@@ -1817,29 +1824,61 @@ __MAIN_PAGES__
                 emitted.add(link.url) -> callback(link)
             }
         }
-        val resolverFound = neonResolveLinkCandidates(
-            candidates = candidates,
-            sourceName = name,
-            subtitleCallback = subtitleCallback,
-            callback = forwardingCallback,
-            maxDepth = 4,
-            referer = normalized,
-        )
+        // Keep resolver work bounded: the first candidates are the actual player frame and
+        // an optional mirror page. Exhaustive retries on every unrelated script URL look like
+        // an endless loading spinner in the UI.
+        val resolverCandidates = candidates.toList().take(14)
+        Log.d(name.uppercase().take(23), "loadLinks resolving candidates=${resolverCandidates.size}/${candidates.size}")
 
-        // Some embedded players require the site's regular CloudStream extractor.
-        for (candidate in candidates.toList()) {
-            if (isSiteUrl(candidate) || neonIsMediaUrl(candidate)) continue
-            runCatching {
-                loadExtractor(candidate, normalized, subtitleCallback, forwardingCallback)
+        var resolverFound = false
+        for (candidate in resolverCandidates) {
+            val candidateReferer = if (candidate == alternateMirrorCandidate) candidate else normalized
+            val candidateFound = neonResolveLinks(
+                data = candidate,
+                sourceName = name,
+                subtitleCallback = subtitleCallback,
+                callback = forwardingCallback,
+                maxDepth = 3,
+                referer = candidateReferer,
+            )
+            resolverFound = resolverFound || candidateFound
+            if (emitted.isNotEmpty()) {
+                Log.d(name.uppercase().take(23), "playable source emitted; remaining candidates skipped")
+                break
+            }
+        }
+
+        // Try CloudStream's native extractors only if the generic resolver found no media.
+        if (emitted.isEmpty()) {
+            for (candidate in resolverCandidates.take(8)) {
+                if (isSiteUrl(candidate) || neonIsMediaUrl(candidate)) continue
+                runCatching {
+                    loadExtractor(candidate, normalized, subtitleCallback, forwardingCallback)
+                }
+                if (emitted.isNotEmpty()) break
             }
         }
 
         // A resolver may report a candidate even if the callback deliberately filtered it.
-        Log.d(name.uppercase().take(23), "loadLinks finished candidates=${candidates.size}; resolverFound=$resolverFound; emitted=${emitted.size}")
+        Log.d(name.uppercase().take(23), "loadLinks finished candidates=${candidates.size}; attempted=${resolverCandidates.size}; resolverFound=$resolverFound; emitted=${emitted.size}")
         return emitted.isNotEmpty()
     }
 }
 '''
+    origin_host = (urlsplit(config["origin"]).hostname or "").lower().removeprefix("www.")
+    is_dizimag_onl = origin_host == "dizimag.onl"
+    alternate_episode_helper = ""
+    if is_dizimag_onl:
+        alternate_episode_helper = r"""    // The onl mirror currently points playback to a blocked external iframe.
+    // Try the matching episode page on the alternate Dizimag mirror as a fallback.
+    private fun alternateEpisodeUrl(raw: String): String? {
+        val uri = runCatching { URI(raw) }.getOrNull() ?: return null
+        if (siteHost(raw) != "dizimag.onl") return null
+        val match = Regex("""(?i)^/dizi/([^/]+)/sezon-(\\d+)/bolum-(\\d+)/?$""")
+            .matchEntire(uri.path.orEmpty()) ?: return null
+        val slug = match.groupValues[1].takeIf { it.matches(Regex("""[a-z0-9-]+""")) } ?: return null
+        return "https://dizimag.one/\u0024{slug}-\u0024{match.groupValues[2]}-sezon-\u0024{match.groupValues[3]}-bolum/"
+    }"""
     replacements = {
         "__CLASS__": config["class_name"],
         "__ORIGIN__": kotlin_string(config["origin"]),
@@ -1848,6 +1887,9 @@ __MAIN_PAGES__
         "__SEARCH_FIELD__": kotlin_string(field),
         "__SMOKE_QUERIES__": ", ".join(kotlin_string(item) for item in config.get("sample_titles", [])),
         "__MAIN_PAGES__": page_entries,
+        "__SITE_ALIAS_CONDITION__": 'siteHost(url) == "dizimag.one"' if is_dizimag_onl else "false",
+        "__ALTERNATE_EPISODE_HELPER__": alternate_episode_helper,
+        "__ALTERNATE_MIRROR_CALL__": "alternateEpisodeUrl(normalized)" if is_dizimag_onl else "null",
     }
     for placeholder, value in replacements.items():
         template = template.replace(placeholder, value)
@@ -2233,6 +2275,12 @@ def run_self_test() -> None:
     assert "neonExtractIframeUrls(page, normalized)" in generated
     assert "external player iframe prioritized; continuing page media/script discovery" in generated
     assert "private fun isBrokenSiteMediaUrl(raw: String): Boolean" in generated
+    assert "alternateEpisodeUrl(normalized)" not in generated
+    dizimag_demo = {**demo, "origin": "https://dizimag.onl", "host": "dizimag.onl"}
+    dizimag_generated = render_kotlin(dizimag_demo)
+    assert "private fun alternateEpisodeUrl(raw: String): String?" in dizimag_generated
+    assert "https://dizimag.one/\u0024{slug}" in dizimag_generated
+    assert "playable source emitted; remaining candidates skipped" in dizimag_generated
     assert "if (document != null) {" in generated
     assert "loadExtractor(candidate, normalized, subtitleCallback, forwardingCallback)" in generated
     assert "private fun matchesQuery(result: SearchResponse, query: String): Boolean" in generated
