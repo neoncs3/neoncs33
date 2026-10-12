@@ -83,21 +83,22 @@ class CanliProvider : MainAPI() {
     // ------------------------------------------------------------------
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url, headers = headers(mainUrl)).document
+        val slug = url.trimEnd('/').substringAfterLast("/")
 
-        val title = doc.selectFirst("meta[property=og:title]")?.attr("content")
+        // Sayfada og:title yok; <h1 class="channel-title"> "X смотреть онлайн" biçiminde
+        val title = doc.selectFirst(".channel-title")?.text()
+            ?.replace(Regex("""\s*смотреть онлайн.*$""", RegexOption.IGNORE_CASE), "")
+            ?.trim()
             ?.takeIf { it.isNotBlank() }
-            ?: doc.selectFirst("h1")?.text()?.takeIf { it.isNotBlank() }
-            ?: doc.title().takeIf { it.isNotBlank() }
-            ?: url.substringAfterLast("/").replace('-', ' ')
+            ?: doc.selectFirst(".channel-player iframe[title]")?.attr("title")?.takeIf { it.isNotBlank() }
+            ?: slug.replace('-', ' ')
 
-        val poster = fixUrlNull(
-            doc.selectFirst("meta[property=og:image]")?.attr("content")
-                ?: doc.selectFirst("img[src*=/images/]")?.attr("src")
-        )
+        // Posterler /images/<slug>.png düzeninde (logo.png ile karışmasın diye slug'dan üretiyoruz)
+        val poster = "$mainUrl/images/$slug.png"
 
-        return newMovieLoadResponse(title.trim(), url, TvType.NSFW, url) {
+        return newMovieLoadResponse(title, url, TvType.NSFW, url) {
             this.posterUrl = poster
-            this.plot = doc.selectFirst("meta[property=og:description]")?.attr("content")
+            this.plot = doc.selectFirst("meta[name=description]")?.attr("content")
         }
     }
 
