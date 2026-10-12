@@ -1726,7 +1726,6 @@ __MAIN_PAGES__
         } else {
             candidates.add(normalized)
         }
-        }
 
         if (document != null) {
             // The live page may return an error placeholder instead of an actual player.
