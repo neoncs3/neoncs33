@@ -38,12 +38,12 @@
     },
     {
       "provider": "Dramadizilerim",
-      "status": "BLOCKED",
+      "status": "PASS",
       "query": "Ana sayfa yedeği",
-      "item": "His Forgotten Wife Is a Mafia Principessa",
+      "item": "Damgalı Cadı, Prens'in Gelini",
       "links": 1,
-      "positionMs": 0,
-      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403"
+      "positionMs": 2965,
+      "error": null
     },
     {
       "provider": "FilmModu",
@@ -60,7 +60,7 @@
       "query": "Interstellar",
       "item": "Yıldızlararası",
       "links": 1,
-      "positionMs": 2914,
+      "positionMs": 2955,
       "error": null
     },
     {
@@ -69,7 +69,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 1,
-      "positionMs": 3300,
+      "positionMs": 2969,
       "error": null
     },
     {
@@ -78,7 +78,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 2,
-      "positionMs": 3007,
+      "positionMs": 3225,
       "error": null
     },
     {
@@ -87,8 +87,17 @@
       "query": "Moving",
       "item": "Moving",
       "links": 2,
-      "positionMs": 3078,
+      "positionMs": 2870,
       "error": null
+    },
+    {
+      "provider": "Dizimag",
+      "status": "BLOCKED",
+      "query": "Crunchyroll",
+      "item": "Crunchyroll Anime Nights - Mob Psycho 100 Film izle",
+      "links": 1,
+      "positionMs": 0,
+      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 404"
     },
     {
       "provider": "TvDiziler",
@@ -100,7 +109,7 @@
       "error": "loadLinks=false. Aday denemeleri: Aşk 101: Aşk 101 -> bağlantı yok (loadLinks=false); Medcezir: Medcezir -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Behzat Ç.: Bir Ankara Polisiyesi -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Survivor 2021 -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: İçerde -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Squid Game HD -> bağlantı yok (loadLinks=false)"
     }
   ],
-  "pass": 4,
+  "pass": 5,
   "blocked": 6,
   "fail": 1
 }
