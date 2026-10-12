@@ -93,40 +93,56 @@ modules = [
 
 for module in modules:
     source_root = module / "src/main/kotlin"
-    texts = []
-    if source_root.exists():
-        for path in source_root.rglob("*.kt"):
-            text = path.read_text(encoding="utf-8", errors="replace")
-            if re.search(r"class\s+\w+\s*:\s*NeonMainAPI\s*\(\s*\)", text):
-                texts.append(text)
+    kotlin_paths = list(source_root.rglob("*.kt")) if source_root.exists() else []
+    kotlin_texts = [
+        path.read_text(encoding="utf-8", errors="replace")
+        for path in kotlin_paths
+    ]
+    all_kotlin = "\n".join(kotlin_texts)
 
-    if not texts:
-        errors.append(f"{module.name}: NeonMainAPI provider bulunamadı.")
+    # Keep support for older, valid CloudStream modules that still extend MainAPI.
+    # New Neon-integrated providers must satisfy the additional NeonCore pipeline checks.
+    neon_texts = [
+        text for text in kotlin_texts
+        if re.search(r"class\s+\w+\s*:\s*NeonMainAPI\s*\(\s*\)", text)
+    ]
+    legacy_texts = [
+        text for text in kotlin_texts
+        if re.search(r"class\s+\w+\s*:\s*MainAPI\s*\(\s*\)", text)
+    ]
+
+    if neon_texts:
+        provider_texts = neon_texts
+        neon_integrated = True
+    elif legacy_texts:
+        provider_texts = legacy_texts
+        neon_integrated = False
+    else:
+        errors.append(f"{module.name}: NeonMainAPI veya klasik MainAPI provider bulunamadı.")
         continue
 
-    all_kotlin = "\n".join(
-        path.read_text(encoding="utf-8", errors="replace")
-        for path in source_root.rglob("*.kt")
-    ) if source_root.exists() else ""
     if "@CloudstreamPlugin" not in all_kotlin or "registerMainAPI(" not in all_kotlin:
         errors.append(f"{module.name}: CloudStream @CloudstreamPlugin kayıt sınıfı veya registerMainAPI eksik.")
 
-    source = "\n".join(texts)
+    source = "\n".join(provider_texts)
     checks = {
         "load": r"override\s+suspend\s+fun\s+load\s*\(",
         "search": r"override\s+suspend\s+fun\s+search\s*\(",
         "loadLinks": r"override\s+suspend\s+fun\s+loadLinks\s*\(",
-        "metadata": r"neonEnrichResponse\s*\(",
-        "video": r"neonResolve(?:LinkCandidates|Links)\s*\(",
     }
+    if neon_integrated:
+        checks.update({
+            "metadata": r"neonEnrichResponse\s*\(",
+            "video": r"neonResolve(?:LinkCandidates|Links)\s*\(",
+        })
 
     for label, pattern in checks.items():
         if not re.search(pattern, source):
             errors.append(f"{module.name}: {label} pipeline eksik.")
 
     low = source.lower()
-    start = low.find("loadlinks(")
-    if start >= 0 and "tmdb" in low[start:start + 16000]:
+    start_links = low.find("loadlinks(")
+    if start_links >= 0 and "tmdb" in low[start_links:start_links + 16000]:
         errors.append(f"{module.name}: loadLinks içinde TMDB kullanımı bulundu.")
 
 try:
