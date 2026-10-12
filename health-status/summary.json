@@ -30,6 +30,19 @@
       "source": "AsyaFilmIzle/src/main/kotlin/com/neoncs3/AsyaFilmIzle.kt"
     },
     {
+      "provider": "AutoKlubnichkaLive",
+      "status": "yellow",
+      "domain": "",
+      "configured_domain": "",
+      "live_domain": "",
+      "live": {
+        "ok": false,
+        "anti_bot_blocked": false,
+        "error": "NeonMainAPI provider source bulunamadı"
+      },
+      "pipelines": {}
+    },
+    {
       "provider": "AutoTvdizilerTv",
       "status": "green",
       "domain": "https://tvdiziler.tv",
@@ -40,7 +53,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://tvdiziler.tv",
-        "bytes": 82394,
+        "bytes": 82452,
         "title": "Dizi izle, Yerli ve Full HD Diziler, Dizi Seyret | TvDiziler.tv",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -69,7 +82,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://diziboxizle.com",
-        "bytes": 262963,
+        "bytes": 262941,
         "title": "Dizibox İzle - Güncel Yabancı Dizi izle, HD Diziler izle",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -98,7 +111,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://dizigecesi.com",
-        "bytes": 4918,
+        "bytes": 4917,
         "title": "Attention Required! | Cloudflare",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -127,7 +140,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://dizipal1588.com",
-        "bytes": 4552,
+        "bytes": 4551,
         "title": "Attention Required! | Cloudflare",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -156,7 +169,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://dramadizilerim.com",
-        "bytes": 192910,
+        "bytes": 192922,
         "title": "Drama Dizilerim - Çin Drama &amp; Kore Drama İzle (Full HD)",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -214,7 +227,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://jetfilmizle.now",
-        "bytes": 291565,
+        "bytes": 295655,
         "title": "JetFilmizle - Film İzle, Türkçe Dublaj, Altyazılı ve Yerli Filmler",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -321,6 +334,6 @@
     }
   ],
   "green": 8,
-  "yellow": 3,
+  "yellow": 4,
   "red": 0
 }

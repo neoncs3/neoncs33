@@ -5,6 +5,7 @@ Bu rapor tools/provider_health.py tarafından otomatik güncellenir.
 | Eklenti | Durum | Kodda kayıtlı domain | HTTP yönlendirmesi | HTTP | Medya ipucu | Resolver kodu | Altyazı kodu | Metadata | Cache |
 |---|---|---|---|---|---|---|---|
 | **AsyaFilmIzle** | 🟡 | https://asyafilmizle.com | https://asyafilmizle.com | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **AutoKlubnichkaLive** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **AutoTvdizilerTv** | 🟢 | https://tvdiziler.tv | https://tvdiziler.tv | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **DiziBoxizle** | 🟢 | https://diziboxizle.com | https://diziboxizle.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **Dizigecesi** | 🟡 | https://dizigecesi.com | https://dizigecesi.com | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
