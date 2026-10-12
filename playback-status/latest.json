@@ -20,12 +20,12 @@
     },
     {
       "provider": "Dizimag",
-      "status": "FAIL",
-      "query": "Ana sayfa yedeği",
-      "item": "Harry Potter",
-      "links": 1,
-      "positionMs": 0,
-      "error": "loadLinks=false. Aday denemeleri: doğrudan: Dizimag -> bağlantı yok (loadLinks=false); Below: Below -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Mayday -> oynatma başarısız (ExoPlaybackException: Source error <- OpenException: iq: Exception in CronetUrlRequest: net::ERR_INVALID_URL, ErrorCode=11, InternalErrorCode=-300, Retryable=false <- iq: Exception); Ana sayfa yedeği: Şantaj -> oynatma başarısız (ExoPlaybackException: Source error <- OpenException: iq: Exception in CronetUrlRequest: net::ERR_INVALID_URL, ErrorCode=11, InternalErrorCode=-300, Retryable=false <- iq: Exception); Ana sayfa yedeği: Koşucu -> oynatma başarısız (ExoPlaybackException: Source error <- OpenException: iq: Exception in CronetUrlRequest: net:"
+      "status": "PASS",
+      "query": null,
+      "item": "Dizimag",
+      "links": 3,
+      "positionMs": 3171,
+      "error": null
     },
     {
       "provider": "DiziPal",
@@ -51,7 +51,7 @@
       "query": "Ana sayfa yedeği",
       "item": "Replace the Mafia Heiress? Not A Chance!",
       "links": 1,
-      "positionMs": 3116,
+      "positionMs": 3028,
       "error": null
     },
     {
@@ -69,7 +69,7 @@
       "query": "Interstellar",
       "item": "Yıldızlararası",
       "links": 1,
-      "positionMs": 2848,
+      "positionMs": 2951,
       "error": null
     },
     {
@@ -78,7 +78,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 1,
-      "positionMs": 3179,
+      "positionMs": 3178,
       "error": null
     },
     {
@@ -87,7 +87,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 2,
-      "positionMs": 3099,
+      "positionMs": 2959,
       "error": null
     },
     {
@@ -96,7 +96,7 @@
       "query": "Moving",
       "item": "Moving",
       "links": 2,
-      "positionMs": 3167,
+      "positionMs": 3239,
       "error": null
     },
     {
@@ -109,7 +109,7 @@
       "error": "loadLinks=false. Aday denemeleri: Aşk 101: Aşk 101 -> bağlantı yok (loadLinks=false); Medcezir: Medcezir -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Behzat Ç.: Bir Ankara Polisiyesi -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Survivor 2021 -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: İçerde -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Squid Game HD -> bağlantı yok (loadLinks=false)"
     }
   ],
-  "pass": 5,
+  "pass": 6,
   "blocked": 5,
-  "fail": 2
+  "fail": 1
 }
