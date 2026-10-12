@@ -11,12 +11,12 @@
     },
     {
       "provider": "DiziBoxizle",
-      "status": "FAIL",
+      "status": "BLOCKED",
       "query": null,
-      "item": null,
-      "links": 0,
+      "item": "DiziBoxizle",
+      "links": 41,
       "positionMs": 0,
-      "error": "ExoPlayer sürdürülebilir playback doğrulanamadı: position=0ms duration=0ms samples=0 firstFrame=true exoPlaying=true"
+      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403"
     },
     {
       "provider": "DiziPal",
@@ -43,7 +43,7 @@
       "item": null,
       "links": 0,
       "positionMs": 0,
-      "error": "ExoPlayer sürdürülebilir playback doğrulanamadı: position=0ms duration=0ms samples=0 firstFrame=true exoPlaying=true"
+      "error": "Gerçek video bağlantısı bulunamadı"
     },
     {
       "provider": "FilmModu",
@@ -92,6 +92,6 @@
     }
   ],
   "pass": 0,
-  "blocked": 4,
-  "fail": 6
+  "blocked": 5,
+  "fail": 5
 }

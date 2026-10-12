@@ -1,16 +1,16 @@
 # 🎬 NeonCS Gerçek Oynatma Durumu
 
-**PASS:** 0  **BLOCKED:** 4  **FAIL:** 6
+**PASS:** 0  **BLOCKED:** 5  **FAIL:** 5
 
 
 
 | Provider | Durum | Link | Position | Sorgu | İçerik | Hata |
 |---|---|---:|---:|---|---|---|
 | **AsyaFilmIzle** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
-| **DiziBoxizle** | 🔴 FAIL | 0 | 0 ms | - | - | ExoPlayer sürdürülebilir playback doğrulanamadı: position=0ms duration=0ms samples=0 firstFrame=true exoPlaying=true |
+| **DiziBoxizle** | 🟡 BLOCKED | 41 | 0 ms | - | DiziBoxizle | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
 | **DiziPal** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
 | **Dizigecesi** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
-| **Dramadizilerim** | 🔴 FAIL | 0 | 0 ms | - | - | ExoPlayer sürdürülebilir playback doğrulanamadı: position=0ms duration=0ms samples=0 firstFrame=true exoPlaying=true |
+| **Dramadizilerim** | 🔴 FAIL | 0 | 0 ms | - | - | Gerçek video bağlantısı bulunamadı |
 | **FilmModu** | 🟡 BLOCKED | 8 | 0 ms | - | Inception | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
 | **JetFilmizle** | 🔴 FAIL | 0 | 0 ms | - | - | ExoPlayer sürdürülebilir playback doğrulanamadı: position=0ms duration=0ms samples=0 firstFrame=true exoPlaying=true |
 | **SetFilmIzle** | 🔴 FAIL | 0 | 0 ms | - | - | ExoPlayer sürdürülebilir playback doğrulanamadı: position=0ms duration=0ms samples=0 firstFrame=true exoPlaying=true |
