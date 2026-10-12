@@ -1596,12 +1596,12 @@ def render_report(config: dict) -> str:
 ## Taranan sezon ve bölüm numaraları
 
 {chr(10).join(
-    "- Sezon {item['season']}: bulunan bölüm numaraları " + ", ".join(str(n) for n in item["episodes_found"])
+    f"- Sezon {item['season']}: bulunan bölüm numaraları " + ", ".join(str(n) for n in item["episodes_found"])
     for item in config["episode_inventory"]["inventory"]
 ) if config["episode_inventory"]["inventory"] else "- Taranan bağlantılarda açık bir bölüm numarası eşleşmesi bulunamadı."}
 
 {chr(10).join(
-    "- **Sezon {item['season']}**: taranan bağlantılarda {item['observed_min']}–{item['observed_max']} aralığında olası eksikler: " + ", ".join(str(n) for n in item["missing"])
+    f"- **Sezon {item['season']}**: taranan bağlantılarda {item['observed_min']}–{item['observed_max']} aralığında olası eksikler: " + ", ".join(str(n) for n in item["missing"])
     for item in config["episode_inventory"]["potential_gaps"]
 ) if config["episode_inventory"]["potential_gaps"] else "- Tespit edilebilir aralıklarda olası bölüm boşluğu bulunmadı."}
 
