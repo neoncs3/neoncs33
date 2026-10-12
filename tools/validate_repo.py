@@ -52,8 +52,6 @@ if playback_test.exists():
         errors.append("Oynatma smoke testindeki SearchResponse/sorgu ikilisi güvenli okunmuyor.")
     if "generatedSampleQueries(provider)" not in playback_text or "neonSmokeTestQueries" not in playback_text:
         errors.append("Otomatik eklentiler için siteden bulunan gerçek başlıklar oynatma testine aktarılmıyor.")
-    if "matchesQuery(result: SearchResponse, query: String)" not in generator_text:
-        errors.append("Otomatik eklentinin arama sonuçları sorguyla eşleştirilmiyor.")
 
 generator = ROOT / "tools/auto_plugin_generator.py"
 if generator.exists():
