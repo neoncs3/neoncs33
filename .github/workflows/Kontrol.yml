@@ -1,5 +1,4 @@
 # NeonCS otomatik domain kontrolü
-
 name: Domain Değişiklik Kontrolü
 
 concurrency:
@@ -11,14 +10,14 @@ on:
   schedule:
     - cron: "11 */9 * * *"
 
+permissions:
+  contents: write
+  actions: write
+
 jobs:
   DomainKontrol:
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
-      pull-requests: write
-
+    timeout-minutes: 15
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       REPO_OWNER: ${{ github.repository_owner }}
@@ -28,6 +27,7 @@ jobs:
       - name: Depo Kontrolü
         uses: actions/checkout@v4
         with:
+          ref: master
           fetch-depth: 0
 
       - name: Python 3.11.8 Yükle
@@ -43,19 +43,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -U setuptools wheel Kekik cloudscraper pycryptodome
 
-      - name: Açık domain PR kontrolü
-        id: acik_pr
-        run: |
-          COUNT=$(gh pr list --repo "$REPO_OWNER/$REPO_NAME"             --head "domain-degisikligi"             --base "master"             --state open             --json number             --jq 'length')
-          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
-
-      - name: Domainleri Kontrol Et
-        if: steps.acik_pr.outputs.count == '0'
+      - name: Doğrulanmış domainleri tara
         run: python KONTROL.py
 
       - name: Değişiklik Kontrolü
-        if: steps.acik_pr.outputs.count == '0'
         id: degisiklik_kontrol
+        shell: bash
         run: |
           if [[ -n "$(git status --porcelain)" ]]; then
             echo "degisiklik=true" >> "$GITHUB_OUTPUT"
@@ -63,35 +56,52 @@ jobs:
             echo "degisiklik=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Domain Branch ve PR
-        if: steps.acik_pr.outputs.count == '0' && steps.degisiklik_kontrol.outputs.degisiklik == 'true'
+      - name: Doğrulanmış değişiklikleri otomatik kaydet
+        if: steps.degisiklik_kontrol.outputs.degisiklik == 'true'
+        shell: bash
         run: |
-          BRANCH="domain-degisikligi"
+          set -euo pipefail
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git checkout -B "$BRANCH"
           git add -A
-          git commit             --author="neoncs3 <neoncs3@users.noreply.github.com>"             -m "♻️ Domain Değişikliği"             -m "🔄 mainUrl ve NeonCore domain manifesti otomatik güncellendi."
 
-          git push origin "$BRANCH" --force
-
-          OPEN_PR=$(gh pr list --repo "$REPO_OWNER/$REPO_NAME"             --head "$BRANCH"             --base "master"             --state open             --json number             --jq 'length')
-
-          if [[ "$OPEN_PR" == "0" ]]; then
-            echo ">>> Otomatik domain PR oluşturuluyor..."
-            if gh pr create               --repo "$REPO_OWNER/$REPO_NAME"               --head "$BRANCH"               --base "master"               --title "♻️ Domain Değişikliği"               --body "🔄 Otomatik domain değişikliği algılandı. mainUrl değerleri ve NeonCore manifesti güncellendi."; then
-              echo "[+] Domain PR başarıyla oluşturuldu."
-            else
-              echo "::warning::GitHub Actions token'ı PR oluşturmaya izin vermiyor. Domain branch'i başarıyla push edildi; PR manuel olarak oluşturulabilir."
-              echo "::notice::Branch: $BRANCH -> master"
-              # Domain kontrolünün sırf PR oluşturma politikası nedeniyle
-              # kırmızı görünmesini engelle.
-              exit 0
-            fi
+          if git diff --cached --quiet; then
+            echo "Kaydedilecek değişiklik yok."
+            exit 0
           fi
 
-      - name: Açık PR nedeniyle atlandı
-        if: steps.acik_pr.outputs.count != '0'
-        run: echo "Açık domain-degisikligi PR'si bulundu; yeni bir domain PR'si oluşturulmadı."
+          BUILD_REQUIRED=false
+          if git diff --cached --name-only | grep -Eq '(^|/)(build\.gradle\.kts|src/main/kotlin/.*\.kt)$|^NeonCore/domains\.json$'; then
+            BUILD_REQUIRED=true
+          fi
+
+          git diff --cached --stat
+          git commit -m "♻️ Doğrulanmış domain ve durum raporlarını güncelle"
+
+          PUSHED=false
+          for attempt in 1 2 3 4 5; do
+            git fetch origin master
+            git rebase origin/master
+            if git push origin HEAD:master; then
+              PUSHED=true
+              break
+            fi
+            echo "Push denemesi $attempt başarısız; master yeniden alınacak."
+          done
+
+          if [[ "$PUSHED" != "true" ]]; then
+            echo "::error::Değişiklikler master dalına gönderilemedi."
+            exit 1
+          fi
+
+          if [[ "$BUILD_REQUIRED" == "true" ]]; then
+            echo "Kaynak/domain manifesti değişti; derleme otomatik başlatılıyor."
+            gh workflow run Derleyici.yml --repo "$REPO_OWNER/$REPO_NAME" --ref master
+          else
+            echo "Yalnızca durum/aday verileri değişti; Kotlin derlemesi gerekmiyor."
+          fi
+
+      - name: Değişiklik yok
+        if: steps.degisiklik_kontrol.outputs.degisiklik != 'true'
+        run: echo "Doğrulanmış domain değişikliği yok; mevcut mainUrl değerleri korunuyor."
