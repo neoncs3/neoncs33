@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -18,6 +20,7 @@ required = [
     "NeonCore/src/main/kotlin/com/neoncs3/NeonCore.kt",
     "tools/provider_health.py",
     "tools/NeonPlaybackSmokeTest.kt",
+    "tools/neon_playback_runner.sh",
     "tools/format_playback_report.py",
     "tools/auto_plugin_generator.py",
     ".github/workflows/OtomatikEklentiOlustur.yml",
@@ -28,10 +31,27 @@ for item in required:
     if not (ROOT / item).exists():
         errors.append(f"Eksik dosya: {item}")
 
+# Reject shell syntax errors before emulator playback CI is ever launched.
+playback_runner = ROOT / "tools/neon_playback_runner.sh"
+if playback_runner.exists() and shutil.which("bash"):
+    check = subprocess.run(
+        ["bash", "-n", str(playback_runner)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if check.returncode != 0:
+        details = (check.stderr or check.stdout or "Bash syntax check failed").strip()
+        errors.append(f"tools/neon_playback_runner.sh sözdizimi hatası: {details}")
+
 generator = ROOT / "tools/auto_plugin_generator.py"
 if generator.exists():
     generator_text = generator.read_text(encoding="utf-8", errors="replace")
-    for token in ("def analyse_site(", "def render_kotlin(", "neonResolveLinkCandidates", "--self-test"):
+    for token in (
+        "def analyse_site(", "def render_kotlin(", "neonResolveLinkCandidates",
+        "extract_media_candidates(", "probe_media_urls(", "media_endpoint_reachable",
+        "HTML analiz kalite puanı", "--self-test",
+    ):
         if token not in generator_text:
             errors.append(f"Otomatik eklenti oluşturucu özelliği eksik: {token}")
 
