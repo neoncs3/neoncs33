@@ -74,6 +74,7 @@ class AutoDdizimagCom : NeonMainAPI() {
         return host == "youtube.com" ||
             host.endsWith(".youtube.com") ||
             host == "youtu.be" ||
+            host == "youtube-nocookie.com" ||
             host.endsWith(".youtube-nocookie.com")
     }
 
@@ -823,8 +824,8 @@ class AutoDdizimagCom : NeonMainAPI() {
             }
         }
 
-        // Remove the known dead endpoint before any resolver or extractor can try to play it.
-        candidates.removeAll { isBrokenSiteManifest(it) }
+        // Remove dead endpoints and YouTube page URLs before any resolver or extractor can turn a trailer into a media link.
+        candidates.removeAll { isBrokenSiteManifest(it) || isYouTubePageUrl(it) }
 
         val emitted = LinkedHashSet<String>()
         val forwardingCallback: (ExtractorLink) -> Unit = { link ->
