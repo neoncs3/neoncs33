@@ -1,7 +1,9 @@
 package com.neoncs3
 
 import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.network.WebViewResolver
 import com.lagradost.cloudstream3.utils.*
+import android.util.Base64
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
@@ -110,8 +112,17 @@ class CanliProvider : MainAPI() {
     private val m3u8Rel =
         Regex("""(?i)(?<!:)//[^\s"'<>\\]+?\.m3u8(?:\?[^\s"'<>\\]+)?""")
 
+    private val atobRegex = Regex("""atob\(\s*["']([A-Za-z0-9+/=]{16,})["']\s*\)""")
+
     private fun extractM3u8(raw: String): List<String> {
-        val text = raw.replace("\\/", "/").replace("&amp;", "&")
+        var text = raw.replace("\\/", "/").replace("&amp;", "&")
+        // atob("...") ile gömülmüş içerikleri de çöz ve aynı metne ekle
+        atobRegex.findAll(text).forEach {
+            runCatching {
+                text += "\n" + String(Base64.decode(it.groupValues[1], Base64.DEFAULT))
+                    .replace("\\/", "/")
+            }
+        }
         val found = LinkedHashSet<String>()
         m3u8Abs.findAll(text).forEach { found.add(it.value) }
         m3u8Rel.findAll(text).forEach { found.add("https:" + it.value) }
@@ -150,7 +161,11 @@ class CanliProvider : MainAPI() {
                     ) {
                         this.referer = referer
                         this.quality = Qualities.Unknown.value
-                        this.headers = mapOf("User-Agent" to ua, "Referer" to referer)
+                        this.headers = mapOf(
+                            "User-Agent" to ua,
+                            "Referer" to referer,
+                            "Origin" to mainUrl
+                        )
                     }
                 )
                 emitted++
@@ -185,6 +200,27 @@ class CanliProvider : MainAPI() {
             // 4) Son çare: hazır çıkarıcılar
             runCatching {
                 loadExtractor(iframeUrl, data, subtitleCallback, callback)
+            }
+        }
+        if (emitted > 0) return true
+
+        // 5) Yedek: iframe'i WebView'da çalıştırıp ağdan .m3u8 isteğini yakala
+        for (iframeUrl in channelResp.document.iframeUrls(data)) {
+            val sniffed = runCatching {
+                app.get(
+                    iframeUrl,
+                    referer = data,
+                    headers = headers(data),
+                    interceptor = WebViewResolver(
+                        interceptUrl = Regex("""(?i)\.m3u8"""),
+                        timeout = 20_000L
+                    )
+                ).url
+            }.getOrNull()
+
+            if (sniffed != null && sniffed.contains(".m3u8", ignoreCase = true)) {
+                emit(listOf(sniffed), iframeUrl)
+                if (emitted > 0) return true
             }
         }
         return emitted > 0
