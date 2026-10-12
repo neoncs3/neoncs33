@@ -49,9 +49,9 @@
       "provider": "Dramadizilerim",
       "status": "PASS",
       "query": "Ana sayfa yedeği",
-      "item": "Kız Kardeşim Yerine Bu Ejderha Kral'la Evlendim",
+      "item": "Elit Asker(Dublajlı)",
       "links": 1,
-      "positionMs": 3087,
+      "positionMs": 2980,
       "error": null
     },
     {
@@ -69,7 +69,7 @@
       "query": "Interstellar",
       "item": "Yıldızlararası",
       "links": 1,
-      "positionMs": 3205,
+      "positionMs": 3000,
       "error": null
     },
     {
@@ -78,7 +78,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 1,
-      "positionMs": 3222,
+      "positionMs": 3347,
       "error": null
     },
     {
@@ -87,7 +87,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 2,
-      "positionMs": 3096,
+      "positionMs": 3258,
       "error": null
     },
     {
@@ -96,7 +96,7 @@
       "query": "Moving",
       "item": "Moving",
       "links": 2,
-      "positionMs": 3339,
+      "positionMs": 3272,
       "error": null
     },
     {
