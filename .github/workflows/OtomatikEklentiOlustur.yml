@@ -76,13 +76,13 @@ jobs:
         shell: bash
         run: |
           set -e
-          OLD_IDS=$(gh run list --workflow Derleyici.yml --branch master --event workflow_dispatch --limit 50 --json databaseId --jq '[.[].databaseId] | join(",")')
+          OLD_IDS=$(gh run list --workflow Derleyici.yml --branch master --event workflow_dispatch --limit 50 --json databaseId --jq '[.[].databaseId]')
           gh workflow run Derleyici.yml --ref master
 
           RUN_ID=""
           for attempt in $(seq 1 60); do
             gh run list --workflow Derleyici.yml --branch master --event workflow_dispatch --limit 30 --json databaseId,headSha > "$RUNNER_TEMP/derleyici-runs.json"
-            RUN_ID=$(jq -r --arg sha "$COMMIT_SHA" --arg old "$OLD_IDS" '[.[] | select(.headSha == $sha) | select(((("," + $old + ",") | contains("," + (.databaseId|tostring) + ",")) | not))][0].databaseId // empty' "$RUNNER_TEMP/derleyici-runs.json")
+            RUN_ID=$(jq -r --arg sha "$COMMIT_SHA" --argjson old "$OLD_IDS" '[.[] | select(.headSha == $sha) | select(.databaseId as $id | ($old | index($id)) == null)][0].databaseId // empty' "$RUNNER_TEMP/derleyici-runs.json")
             if [ -n "$RUN_ID" ]; then
               break
             fi
