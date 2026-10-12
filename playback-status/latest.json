@@ -42,7 +42,7 @@
       "query": "Ana sayfa yedeği",
       "item": "Damgalı Cadı, Prens'in Gelini",
       "links": 1,
-      "positionMs": 3117,
+      "positionMs": 3404,
       "error": null
     },
     {
@@ -60,7 +60,7 @@
       "query": "Interstellar",
       "item": "Yıldızlararası",
       "links": 1,
-      "positionMs": 2983,
+      "positionMs": 3365,
       "error": null
     },
     {
@@ -69,7 +69,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 1,
-      "positionMs": 2922,
+      "positionMs": 3070,
       "error": null
     },
     {
@@ -78,7 +78,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 2,
-      "positionMs": 3408,
+      "positionMs": 3059,
       "error": null
     },
     {
@@ -87,17 +87,17 @@
       "query": "Moving",
       "item": "Moving",
       "links": 2,
-      "positionMs": 3124,
+      "positionMs": 3155,
       "error": null
     },
     {
       "provider": "Dizimag",
-      "status": "BLOCKED",
-      "query": "Crunchyroll",
-      "item": "Crunchyroll Anime Nights - Mob Psycho 100 Film izle",
-      "links": 1,
+      "status": "FAIL",
+      "query": "Ana sayfa yedeği",
+      "item": "Survivor",
+      "links": 0,
       "positionMs": 0,
-      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 404"
+      "error": "loadLinks=false. Aday denemeleri: Crunchyroll: Crunchyroll Anime Nights - Mob Psycho 100 Film izle -> bağlantı yok (loadLinks=false); Crunchyroll: Crunchyroll Anime Nights - Mob Psycho 100 -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Alıkara Dizi izle -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: The Walking Dead -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: The Scandal -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Survivor -> bağlantı yok (loadLinks=false)"
     },
     {
       "provider": "TvDiziler",
@@ -110,6 +110,6 @@
     }
   ],
   "pass": 5,
-  "blocked": 6,
-  "fail": 1
+  "blocked": 5,
+  "fail": 2
 }
