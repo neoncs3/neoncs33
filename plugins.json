@@ -20,6 +20,27 @@
         "name": "AsyaFilmIzle"
     },
     {
+        "iconUrl": "https://klubnichka.live/favicon.ico",
+        "fileHash": "sha256-19e2f7a65652c7014c8a284df9fb2e92a7b2332b6492fca203c6c0ba9d4599f4",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
+        "fileSize": 60823,
+        "status": 1,
+        "language": "tr",
+        "authors": [
+            "neoncs3"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 1,
+        "internalName": "AutoKlubnichkaLive",
+        "description": "URL analizinden otomatik olu\u015fturuldu: klubnichka.live",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/AutoKlubnichkaLive.cs3",
+        "name": "AutoKlubnichkaLive"
+    },
+    {
         "iconUrl": "https://tvdiziler.tv/favicon.ico",
         "fileHash": "sha256-8c4de0269892a7379bf6472e441316e5baa06a325a1314e76dd24132397006f6",
         "apiVersion": 1,
