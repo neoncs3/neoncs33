@@ -56,6 +56,118 @@ class AutoTvdizilerTv : NeonMainAPI() {
         Regex("""(?i)(?:b[öo]l[üu]m|episodes?|ep[\s._-]*\d|s\d{1,2}e\d{1,3}|\d{1,2}\s*[x×]\s*\d{1,3})""")
             .containsMatchIn(value)
 
+    private fun normalizedFilterText(value: String): String =
+        value.lowercase()
+            .replace("ı", "i")
+            .replace("ş", "s")
+            .replace("ğ", "g")
+            .replace("ü", "u")
+            .replace("ö", "o")
+            .replace("ç", "c")
+            .replace(Regex("""[^a-z0-9]+"""), " ")
+            .trim()
+
+    private val navigationOnlyLabels = setOf(
+        "yorum", "yorumlar", "comment", "comments",
+        "kesfet", "kesif", "explore", "discover",
+        "takvim", "takvimi", "calendar", "schedule",
+        "dizi takvimi", "film takvimi", "tv schedule",
+        "tartisma", "tartismalar", "discussion", "discussions",
+        "baslik", "basliklar", "topic", "topics", "forum",
+        "community", "topluluk", "gundem", "duyurular",
+        "login", "register", "giris", "kayit", "hesabim", "profil",
+        "ayarlar", "iletisim", "hakkimizda", "yardim",
+        "privacy policy", "terms", "about us", "contact us",
+        "ana sayfa", "home", "menu", "menü",
+        "dizi", "diziler", "film", "filmler", "movies", "series",
+        "izle", "tum diziler", "tum filmler", "tum bolumler",
+        "en son bolumler", "son bolumler", "populer", "populer filmler"
+    )
+
+    private val utilityLabelPrefixes = setOf(
+        "yorum", "yorumlar", "comment", "comments",
+        "kesfet", "kesif", "explore", "discover",
+        "takvim", "takvimi", "calendar", "schedule",
+        "dizi takvimi", "film takvimi", "tv schedule",
+        "tartisma", "tartismalar", "discussion", "discussions",
+        "baslik", "basliklar", "topic", "topics", "forum",
+        "community", "topluluk", "gundem", "duyurular"
+    )
+
+    private val navigationOnlyPaths = setOf(
+        "yorum", "yorumlar", "comment", "comments",
+        "kesfet", "kesif", "explore", "discover",
+        "takvim", "takvimi", "calendar", "schedule",
+        "dizi takvimi", "film takvimi",
+        "tartisma", "tartismalar", "discussion", "discussions",
+        "baslik", "basliklar", "topic", "topics", "forum",
+        "community", "topluluk", "gundem", "duyurular"
+    )
+
+    private fun isNavigationChrome(anchor: Element): Boolean {
+        var node: Element? = anchor
+        repeat(7) {
+            val current = node ?: return false
+            val tag = current.tagName().lowercase()
+            if (tag == "nav" || tag == "footer" ||
+                current.attr("role").equals("navigation", ignoreCase = true)) {
+                return true
+            }
+
+            val hint = (current.id() + " " + current.className()).lowercase()
+                .replace('_', '-')
+            if (listOf(
+                    "site-header", "site-nav", "navbar", "main-nav", "primary-nav",
+                    "main-menu", "primary-menu", "top-menu", "menu-item", "sidebar",
+                    "breadcrumb", "comments-nav", "site-footer", "footer-menu"
+                ).any { hint.contains(it) }) {
+                return true
+            }
+            node = current.parent()
+        }
+        return false
+    }
+
+    private fun isNavigationItem(title: String, url: String): Boolean {
+        val label = normalizedFilterText(title)
+        if (label in navigationOnlyLabels ||
+            utilityLabelPrefixes.any { label == it || label.startsWith("$it ") }) {
+            return true
+        }
+
+        val segments = runCatching { URI(url).path.orEmpty() }
+            .getOrDefault("")
+            .split("/")
+            .filter { it.isNotBlank() }
+            .map { normalizedFilterText(it.replace('-', ' ').replace('_', ' ')) }
+
+        if (segments.any { it in navigationOnlyPaths }) return true
+        if (segments.size == 1 && segments.first() in setOf(
+                "dizi", "diziler", "film", "filmler", "movies", "series",
+                "home", "ana sayfa", "kesfet", "takvim", "yorumlar"
+            )) return true
+
+        return false
+    }
+
+    private fun isValidPosterUrl(url: String): Boolean {
+        if (!url.startsWith("https://", true) && !url.startsWith("http://", true)) {
+            return false
+        }
+        val uri = runCatching { URI(url) }.getOrNull() ?: return false
+        val path = uri.path.orEmpty().lowercase()
+        val file = path.substringAfterLast('/')
+        val placeholderMarkers = listOf(
+            "placeholder", "no-image", "no_image", "noimage", "no-poster",
+            "noposter", "blank.gif", "transparent", "avatar", "favicon",
+            "spinner", "loading", "pixel", "missing", "not-found"
+        )
+        if (placeholderMarkers.any { file.contains(it) }) return false
+        if (Regex("""(?i)^logo(?:[-_].*)?\.(?:png|jpe?g|webp|gif|svg|ico)$""")
+                .matches(file)) return false
+        return file.isNotBlank()
+    }
+
     private fun isDetailUrl(raw: String, base: String = mainUrl): Boolean {
         val url = normalize(raw, base)
         if (!url.startsWith("http", true) || siteHost(url) != siteHost(mainUrl)) return false
@@ -66,7 +178,9 @@ class AutoTvdizilerTv : NeonMainAPI() {
                 "/wp-admin", "/wp-content", "/wp-json", "/tag/", "/category/", "/genre/",
                 "/kategori/", "/tur/", "/oyuncu/", "/actor/", "/search/", "/page/",
                 "/login", "/register", "/giris", "/kayit", "/iletisim", "/contact",
-                "/privacy", "/terms", "/feed", "/yorum"
+                "/privacy", "/terms", "/feed", "/yorum", "/comment", "/kesfet",
+                "/discover", "/takvim", "/calendar", "/tartisma", "/discussion",
+                "/baslik", "/topics", "/forum"
             ).any { path.contains(it) }) return false
         if (path.endsWith(".jpg") || path.endsWith(".jpeg") || path.endsWith(".png") ||
             path.endsWith(".webp") || path.endsWith(".gif") || path.endsWith(".css") ||
@@ -87,15 +201,17 @@ class AutoTvdizilerTv : NeonMainAPI() {
 
     private fun imageUrl(image: Element?, baseUrl: String): String? {
         if (image == null) return null
-        val raw = sequenceOf(
+        return sequenceOf(
             image.attr("data-src"),
             image.attr("data-lazy-src"),
             image.attr("data-original"),
             image.attr("data-poster"),
             image.attr("data-image"),
             image.attr("src")
-        ).firstOrNull { it.isNotBlank() && !it.startsWith("data:", true) } ?: return null
-        return normalize(raw, baseUrl).takeIf { it.startsWith("http", true) }
+        )
+            .filter { it.isNotBlank() && !it.startsWith("data:", true) }
+            .map { normalize(it, baseUrl) }
+            .firstOrNull { isValidPosterUrl(it) }
     }
 
     private fun posterFor(anchor: Element, baseUrl: String): String? {
@@ -108,7 +224,9 @@ class AutoTvdizilerTv : NeonMainAPI() {
             "article a[href], .movie-card a[href], .film-card a[href], .dizi-card a[href], " +
                 ".post a[href], .item a[href], .card a[href], .movie a[href], .film a[href], " +
                 ".dizi a[href], .poster a[href], .videos a[href], a[href]"
-        ).distinctBy { normalize(it.attr("href"), mainUrl) }
+        )
+            .filterNot { isNavigationChrome(it) }
+            .distinctBy { normalize(it.attr("href"), mainUrl) }
     }
 
     private fun responseFromAnchor(anchor: Element, baseUrl: String): SearchResponse? {
@@ -127,8 +245,10 @@ class AutoTvdizilerTv : NeonMainAPI() {
             .firstOrNull { it.length in 2..160 } ?: return null
         if (title.equals(name, true) || title.equals("Ana Sayfa", true)) return null
         if (isEpisodeLike(title + " " + href)) return null
+        if (isNavigationItem(title, href) || isNavigationChrome(anchor)) return null
 
-        val poster = posterFor(anchor, baseUrl)
+        val poster = posterFor(anchor, baseUrl) ?: return null
+        if (!isValidPosterUrl(poster)) return null
         val scoreValue = neonExtractRating(container.text())
         val series = Regex("""(?i)(dizi|series|season|sezon|tv-show|tvseries)""")
             .containsMatchIn(title + " " + href)
