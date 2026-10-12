@@ -58,7 +58,7 @@ class AutoDdizimagCom : NeonMainAPI() {
         // Older links shared under ddizimag.com should be redirected to the active
         // Dizimag domain while preserving the original path and query.
         return normalized.replace(
-            Regex("""(?i)^https?://(?:www\\.)?ddizimag\\.com(?=[:/?#]|$)"""),
+            Regex("""(?i)^https?://(?:www\.)?ddizimag\.com(?=[:/?#]|$)"""),
             "https://dizimag.onl"
         )
     }
