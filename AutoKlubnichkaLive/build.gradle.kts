@@ -1,10 +1,10 @@
-version = 2
+version = 3
 
 cloudstream {
-    description = "URL analizinden otomatik oluşturuldu: klubnichka.live"
+    description = "18+ canlı yayın sağlayıcısı (klubnichka.live)"
     authors = listOf("neoncs3")
     status = 1
-    tvTypes = listOf("Movie", "TvSeries")
+    tvTypes = listOf("NSFW")
     language = "tr"
     iconUrl = "https://klubnichka.live/favicon.ico"
 }
