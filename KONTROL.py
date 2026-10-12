@@ -339,7 +339,7 @@ class MainUrlUpdater:
         index_lines = [
             "# 🌐 NeonCS Domain Durumları",
             "",
-            "Bu alan KONTROL.py tarafından otomatik güncellenir.",
+            "Bu tablo KONTROL.py tarafından otomatik güncellenir. Domain değişikliği ancak sağlayıcı içeriği doğrulandığında uygulanır; anti-bot/Cloudflare sayfaları yeni domain kanıtı kabul edilmez.",
             "",
             "| Eklenti | Durum | Güncel Domain | Önceki Domain | Tarih |",
             "|---|---|---|---|---|",
