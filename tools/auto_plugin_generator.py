@@ -232,11 +232,11 @@ def is_flag_or_icon_asset(value: str) -> bool:
         return True
     file_pattern = re.compile(
         r"(?i)^(?:flags?|flag[-_]icon|icon[-_]flag|country[-_]?flag|"
-        r"flag[-_]sprite|language[-_]?flag)(?:[-_][a-z]{2})?\\."
+        r"flag[-_]sprite|language[-_]?flag)(?:[-_][a-z]{2})?\."
         r"(?:svg|png|jpe?g|webp|gif|ico)$"
     )
     filenames = re.findall(
-        r"(?i)(?:^|/)([^/\\s?#]+)\\.(?:svg|png|jpe?g|webp|gif|ico)(?=$|[?#\\s])",
+        r"(?i)(?:^|/)([^/\s?#]+)\.(?:svg|png|jpe?g|webp|gif|ico)(?=$|[?#\s])",
         raw,
     )
     return any(file_pattern.fullmatch(filename) for filename in filenames)
@@ -1029,7 +1029,7 @@ __MAIN_PAGES__
         val file = value.substringBefore('?').substringBefore('#')
             .substringAfterLast('/').lowercase()
         return Regex(
-            """(?i)^(?:flags?|flag[-_]icon|icon[-_]flag|country[-_]?flag|flag[-_]sprite|language[-_]?flag)(?:[-_][a-z]{2})?\\.(?:svg|png|jpe?g|webp|gif|ico)$"""
+            """(?i)^(?:flags?|flag[-_]icon|icon[-_]flag|country[-_]?flag|flag[-_]sprite|language[-_]?flag)(?:[-_][a-z]{2})?\.(?:svg|png|jpe?g|webp|gif|ico)$"""
         ).matches(file)
     }
 
