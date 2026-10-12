@@ -21,10 +21,10 @@
     },
     {
         "iconUrl": "https://tvdiziler.tv/favicon.ico",
-        "fileHash": "sha256-b6e71d9f0486c49145dae506d3e428a87b664051dc300fb09d15e64326e18f4d",
+        "fileHash": "sha256-b98f18928d6c13c0c18ae14023e0a062820d344877bad06524ad11cc4e9c8603",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 59349,
+        "fileSize": 59270,
         "status": 1,
         "language": "tr",
         "authors": [
