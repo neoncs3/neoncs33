@@ -63,7 +63,7 @@ class AutoDdizimagCom : NeonMainAPI() {
         if (neonIsMediaUrl(url)) return true
         val uri = runCatching { URI(url) }.getOrNull() ?: return false
         val hint = (uri.path.orEmpty() + "?" + uri.rawQuery.orEmpty()).lowercase()
-        return Regex("""(?i)(?:player|embed|iframe|video|stream|play|watch|manifest|media|playlist|source)(?:[/_.?=&-]|$)""")
+        return Regex("""(?i)(?:^|[/_.?=&-])(?:player|embed|iframe|video|stream|play|watch|manifest|media|playlist|source)(?:[/_.?=&-]|$)""")
             .containsMatchIn(hint)
     }
 
@@ -782,10 +782,12 @@ class AutoDdizimagCom : NeonMainAPI() {
                 "data-stream", "data-video", "data-play"
             )
             document.select(
-                "iframe, video, source, [data-src], [data-lazy-src], [data-url], " +
-                    "[data-vsrc], [data-video-src], [data-player], [data-embed], " +
+                "iframe, video, source, [data-vsrc], [data-video-src], [data-player], [data-embed], " +
                     "[data-embed-url], [data-iframe], [data-file], [data-source], " +
-                    "[data-hls], [data-stream], [data-video], [data-play]"
+                    "[data-hls], [data-stream], [data-video], [data-play], " +
+                    "iframe[data-url], video[data-url], source[data-url], " +
+                    "iframe[data-src], video[data-src], source[data-src], " +
+                    "iframe[data-lazy-src], video[data-lazy-src], source[data-lazy-src]"
             ).forEach { node ->
                 playerAttributes.forEach { attribute ->
                     val raw = node.attr(attribute).trim()

@@ -202,8 +202,9 @@ open class NeonMainAPI : MainAPI() {
         neonExtractIframeUrls(document, baseUrl).forEach { result.add(it) }
 
         document.select(
-            "video[src], video source[src], [data-video], [data-file], [data-source], " +
-                "[data-video-url], [data-stream], [data-hls], [data-url]"
+            "video[src], video source[src], iframe[data-url], video[data-url], source[data-url], " +
+                "[data-video], [data-file], [data-source], [data-video-url], [data-stream], [data-hls], " +
+                "[data-player][data-url], [data-embed][data-url], [data-iframe][data-url]"
         ).forEach { node ->
             sequenceOf(
                 node.attr("src"),
