@@ -19,6 +19,15 @@
       "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403"
     },
     {
+      "provider": "Dizimag",
+      "status": "FAIL",
+      "query": "Ana sayfa yedeği",
+      "item": "The Walking Dead",
+      "links": 0,
+      "positionMs": 0,
+      "error": "loadLinks=false. Aday denemeleri: doğrudan: Dizimag -> bağlantı yok (loadLinks=false); House of the Dragon: House of the Dragon -> bağlantı yok (loadLinks=false); Eşref Rüya: Eşref Rüya -> bağlantı yok (loadLinks=false); Daha 17: Daha 17 -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Alıkara Dizi izle -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: The Walking Dead -> bağlantı yok (loadLinks=false)"
+    },
+    {
       "provider": "DiziPal",
       "status": "BLOCKED",
       "query": null,
@@ -42,7 +51,7 @@
       "query": "Ana sayfa yedeği",
       "item": "Damgalı Cadı, Prens'in Gelini",
       "links": 1,
-      "positionMs": 3311,
+      "positionMs": 2851,
       "error": null
     },
     {
@@ -60,7 +69,7 @@
       "query": "Interstellar",
       "item": "Yıldızlararası",
       "links": 1,
-      "positionMs": 3247,
+      "positionMs": 3225,
       "error": null
     },
     {
@@ -69,7 +78,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 1,
-      "positionMs": 3170,
+      "positionMs": 2960,
       "error": null
     },
     {
@@ -78,7 +87,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 2,
-      "positionMs": 2933,
+      "positionMs": 3386,
       "error": null
     },
     {
@@ -87,17 +96,8 @@
       "query": "Moving",
       "item": "Moving",
       "links": 2,
-      "positionMs": 2977,
+      "positionMs": 2967,
       "error": null
-    },
-    {
-      "provider": "Dizimag",
-      "status": "FAIL",
-      "query": "Ana sayfa yedeği",
-      "item": "Survivor",
-      "links": 0,
-      "positionMs": 0,
-      "error": "loadLinks=false. Aday denemeleri: Crunchyroll: Crunchyroll Anime Nights - Mob Psycho 100 Film izle -> bağlantı yok (loadLinks=false); Crunchyroll: Crunchyroll Anime Nights - Mob Psycho 100 -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Alıkara Dizi izle -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: The Walking Dead -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: The Scandal -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Survivor -> bağlantı yok (loadLinks=false)"
     },
     {
       "provider": "TvDiziler",
