@@ -20,12 +20,12 @@
     },
     {
       "provider": "Dizimag",
-      "status": "FAIL",
-      "query": "Ana sayfa yedeği",
-      "item": "The Walking Dead",
-      "links": 0,
+      "status": "BLOCKED",
+      "query": null,
+      "item": "Dizimag",
+      "links": 10,
       "positionMs": 0,
-      "error": "loadLinks=false. Aday denemeleri: doğrudan: Dizimag -> bağlantı yok (loadLinks=false); House of the Dragon: House of the Dragon -> bağlantı yok (loadLinks=false); Eşref Rüya: Eşref Rüya -> bağlantı yok (loadLinks=false); Daha 17: Daha 17 -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Alıkara Dizi izle -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: The Walking Dead -> bağlantı yok (loadLinks=false)"
+      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 404"
     },
     {
       "provider": "DiziPal",
@@ -49,9 +49,9 @@
       "provider": "Dramadizilerim",
       "status": "PASS",
       "query": "Ana sayfa yedeği",
-      "item": "Elit Asker(Dublajlı)",
+      "item": "İKİ KEZ KAYBEDİLEN AŞK(Dublajlı)",
       "links": 1,
-      "positionMs": 2980,
+      "positionMs": 3011,
       "error": null
     },
     {
@@ -69,7 +69,7 @@
       "query": "Interstellar",
       "item": "Yıldızlararası",
       "links": 1,
-      "positionMs": 3000,
+      "positionMs": 3219,
       "error": null
     },
     {
@@ -78,7 +78,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 1,
-      "positionMs": 3347,
+      "positionMs": 2939,
       "error": null
     },
     {
@@ -87,7 +87,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 2,
-      "positionMs": 3258,
+      "positionMs": 3126,
       "error": null
     },
     {
@@ -96,7 +96,7 @@
       "query": "Moving",
       "item": "Moving",
       "links": 2,
-      "positionMs": 3272,
+      "positionMs": 3421,
       "error": null
     },
     {
@@ -110,6 +110,6 @@
     }
   ],
   "pass": 5,
-  "blocked": 5,
-  "fail": 2
+  "blocked": 6,
+  "fail": 1
 }
