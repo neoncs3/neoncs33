@@ -328,6 +328,29 @@ open class NeonMainAPI : MainAPI() {
         return true
     }
 
+    private fun neonExtractPlayerUrlsFromText(raw: String?, baseUrl: String): List<String> {
+        val text = raw.orEmpty()
+            .replace("\\/", "/")
+            .replace("\\u0026", "&")
+            .replace("&amp;", "&")
+        if (text.isBlank()) return emptyList()
+
+        val pattern = Regex(
+            """(?is)["']?(?:src|file|file_url|source|source_url|url|embed|embed_url|iframe|iframe_url|video_url|video_src|videourl|play_url|player_url|playerurl|hls|hls_url|playlist|stream|stream_url|media_url|manifest)["']?\s*[:=]\s*["']([^"'<>\s]+)["']"""
+        )
+        return pattern.findAll(text)
+            .mapNotNull { match ->
+                val value = neonNormalizeUrl(match.groupValues[1], baseUrl)
+                    .trimEnd('"', '\'', ')', ']', '}', ',', ';')
+                val uri = runCatching { URI(value) }.getOrNull() ?: return@mapNotNull null
+                if (uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank()) {
+                    null
+                } else value
+            }
+            .distinct()
+            .take(80)
+    }
+
     protected suspend fun neonResolveLinks(
         data: String,
         sourceName: String = name,
@@ -383,9 +406,64 @@ open class NeonMainAPI : MainAPI() {
                 neonEmitSubtitle(url, label, normalized, subtitleCallback)
             }
 
+            // Embedded players frequently keep the stream URL in data-* attributes or
+            // JavaScript configuration rather than a literal .m3u8 URL in the HTML.
+            val playerCandidates = LinkedHashSet<String>()
+            neonExtractPlayerCandidates(document, documentBase).forEach { candidate ->
+                if (candidate != normalized && !neonIsMediaUrl(candidate)) {
+                    playerCandidates.add(candidate)
+                }
+            }
+            document.select("script:not([src])").forEach { script ->
+                val scriptText = script.data().ifBlank { script.html() }
+                neonExtractMediaUrls(scriptText).forEach { playerCandidates.add(it) }
+                neonExtractPlayerUrlsFromText(scriptText, documentBase).forEach { playerCandidates.add(it) }
+            }
+
+            // Probe a small, relevant subset of external player bundles; never crawl every
+            // site script. This handles embeds whose source is assembled client-side.
+            val playerScripts = document.select("script[src]")
+                .map { neonNormalizeUrl(it.attr("src"), documentBase) }
+                .filter { scriptUrl ->
+                    val hint = scriptUrl.lowercase()
+                    hint.endsWith(".js") || ".js?" in hint
+                }
+                .filter { scriptUrl ->
+                    Regex("""(?i)(player|video|stream|embed|media|watch|episode|source|app|bundle|main|chunk)""")
+                        .containsMatchIn(scriptUrl)
+                }
+                .distinct()
+                .take(3)
+
+            for (scriptUrl in playerScripts) {
+                val scriptBody = runCatching {
+                    app.get(
+                        scriptUrl,
+                        headers = neonHeaders + ("Referer" to normalized),
+                        referer = normalized,
+                        timeout = 4_000L,
+                        allowRedirects = true,
+                    ).takeIf { it.isSuccessful }?.text
+                }.getOrNull().orEmpty()
+                if (scriptBody.isBlank()) continue
+                neonExtractMediaUrls(scriptBody).forEach { playerCandidates.add(it) }
+                neonExtractPlayerUrlsFromText(scriptBody, scriptUrl).forEach { playerCandidates.add(it) }
+            }
+
             if (depth < maxDepth) {
-                neonExtractIframeUrls(document, normalized).forEach { iframe ->
-                    visit(iframe, normalized, depth + 1)
+                playerCandidates.forEach { candidate ->
+                    val candidateUrl = neonNormalizeUrl(candidate, documentBase)
+                    if (candidateUrl.isNotBlank() && candidateUrl != normalized) {
+                        if (neonIsMediaUrl(candidateUrl)) {
+                            if (mediaSeen.add(candidateUrl) &&
+                                neonEmitMedia(candidateUrl, sourceName, normalized, callback)
+                            ) {
+                                found = true
+                            }
+                        } else {
+                            visit(candidateUrl, normalized, depth + 1)
+                        }
+                    }
                 }
             }
         }
