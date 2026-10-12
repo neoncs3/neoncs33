@@ -1107,6 +1107,9 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
             // Some player wrappers keep the real source or redirect logic in an
             // external JavaScript file instead of inline HTML. Fetch a small bounded
             // set of scripts from the provider page and inspect them as well.
+            // API yanıtlarından ve sayfa/script içeriğinden toplanan medya adayları.
+            // API POST yanıtı işlenirken de kullanıldığı için ilk kullanımdan önce tanımlanmalı.
+            val sourceUrls = LinkedHashSet<String>()
             val externalScriptText = StringBuilder()
 
             // The embed's API calls commonly need the numeric embed id as a POST/GET
@@ -1267,7 +1270,7 @@ pageGenres(document).takeIf { it.isNotEmpty() }?.let { tags = it }
                     if (!resolved.isNullOrBlank()) enqueue(resolved)
                 }
 
-            val sourceUrls = LinkedHashSet<String>()
+
 
             // Parse direct media URLs already present in the API response body.
             extractApiMediaCandidates(providerBody, pageUrl)
