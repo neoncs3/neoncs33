@@ -2007,6 +2007,7 @@ def run_self_test() -> None:
         "origin": "https://example.org",
         "site_name": "Test Sinema",
         "module_name": "AutoExampleOrg",
+        "host": "example.org",
         "http_status": 200,
         "signals": {
             "poster": True, "listing_cards": True, "series_or_movie_schema": True,
@@ -2104,8 +2105,7 @@ def main() -> int:
         snapshot = build_site_snapshot(config, previous_snapshot)
         report_path.write_text(render_report(config, snapshot), encoding="utf-8")
         snapshot_path.write_text(
-            json.dumps(snapshot, ensure_ascii=False, indent=2) + "
-",
+            json.dumps(snapshot, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
 
