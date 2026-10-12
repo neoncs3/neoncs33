@@ -42,7 +42,7 @@
       "query": "Ana sayfa yedeği",
       "item": "Damgalı Cadı, Prens'in Gelini",
       "links": 1,
-      "positionMs": 3404,
+      "positionMs": 2966,
       "error": null
     },
     {
@@ -60,7 +60,7 @@
       "query": "Interstellar",
       "item": "Yıldızlararası",
       "links": 1,
-      "positionMs": 3365,
+      "positionMs": 3394,
       "error": null
     },
     {
@@ -69,7 +69,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 1,
-      "positionMs": 3070,
+      "positionMs": 2920,
       "error": null
     },
     {
@@ -78,7 +78,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 2,
-      "positionMs": 3059,
+      "positionMs": 3116,
       "error": null
     },
     {
@@ -87,7 +87,7 @@
       "query": "Moving",
       "item": "Moving",
       "links": 2,
-      "positionMs": 3155,
+      "positionMs": 3280,
       "error": null
     },
     {
