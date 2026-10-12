@@ -29,6 +29,7 @@ USER_AGENT = (
 )
 MAX_BODY_BYTES = 2 * 1024 * 1024
 MAX_PAGES = 14
+MAX_MEDIA_PROBES = 3
 TIMEOUT = (5, 9)
 SESSION = requests.Session()
 SESSION.headers.update({
@@ -328,6 +329,107 @@ def is_non_catalog_anchor(anchor: Tag, href: str, label: str) -> bool:
     )
     return any(marker in hint_text for marker in profile_discussion_hints)
 
+def extract_media_candidates(pages: list[dict]) -> list[str]:
+    """Collect a few direct, public media URLs from observed page HTML."""
+    candidates: list[str] = []
+    seen: set[str] = set()
+    media_extensions = {".m3u8", ".mpd", ".mp4", ".m4v"}
+
+    for page in pages:
+        html = str(page.get("html", "")).replace("\\/", "/").replace("&amp;", "&")
+        soup = BeautifulSoup(html, "html.parser")
+        raw_urls: list[str] = []
+        for element in soup.select(
+            "video[src], source[src], video[data-src], source[data-src], "
+            "a[href], [data-file], [data-video], [data-stream]"
+        ):
+            for attribute in ("src", "data-src", "href", "data-file", "data-video", "data-stream"):
+                value = str(element.get(attribute, "") or "").strip()
+                if value:
+                    raw_urls.append(value)
+
+        raw_urls.extend(re.findall(
+            r"""(?:(?:https?:)?//|/)[^\s"'<>]+?\.(?:m3u8|mpd|mp4|m4v)(?:\?[^\s"'<>]*)?""",
+            html,
+            flags=re.IGNORECASE,
+        ))
+
+        for raw in raw_urls:
+            candidate = urljoin(str(page.get("url", "")), raw.strip().rstrip("),;"))
+            parts = urlsplit(candidate)
+            if parts.scheme.lower() not in {"http", "https"} or not parts.hostname:
+                continue
+            if not any((parts.path or "").lower().endswith(ext) for ext in media_extensions):
+                continue
+            if candidate not in seen:
+                seen.add(candidate)
+                candidates.append(candidate)
+            if len(candidates) >= MAX_MEDIA_PROBES:
+                return candidates
+    return candidates
+
+
+def safe_report_url(raw_url: str) -> str:
+    """Remove query strings and fragments before writing URLs to a public report."""
+    parts = urlsplit(raw_url)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))[:240]
+
+
+def probe_media_urls(pages: list[dict]) -> list[dict]:
+    """Make at most a few bounded Range requests; never bypass access controls."""
+    results: list[dict] = []
+    for raw_url in extract_media_candidates(pages):
+        reported_url = safe_report_url(raw_url)
+        current = raw_url
+        status_code: int | None = None
+        content_type = ""
+        reachable = False
+        note = "HTTP yanıtı alınamadı"
+        try:
+            for _ in range(4):
+                current = validate_url(current)
+                response = SESSION.get(
+                    current,
+                    headers={"Range": "bytes=0-1023"},
+                    timeout=(3, 5),
+                    allow_redirects=False,
+                    stream=True,
+                )
+                try:
+                    status_code = response.status_code
+                    if status_code in {301, 302, 303, 307, 308}:
+                        location = response.headers.get("Location")
+                        if not location:
+                            note = "Yönlendirme başlığı eksik"
+                            break
+                        current = urljoin(current, location)
+                        continue
+                    content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+                    reachable = status_code in {200, 206} and content_type not in {
+                        "text/html", "application/xhtml+xml"
+                    }
+                    note = (
+                        "HTTP erişilebilir (oynatma doğrulaması değildir)"
+                        if reachable else f"HTTP {status_code}; doğrudan medya yanıtı doğrulanamadı"
+                    )
+                    break
+                finally:
+                    response.close()
+            else:
+                note = "Çok fazla yönlendirme"
+        except (requests.RequestException, ValueError, RuntimeError, OSError):
+            note = "Erişim engeli, güvenlik filtresi veya zaman aşımı"
+
+        results.append({
+            "url": reported_url,
+            "status": status_code,
+            "content_type": content_type or "bilinmiyor",
+            "reachable": reachable,
+            "note": note,
+        })
+    return results
+
+
 def valid_link_target(url: str, origin: str) -> bool:
     if not same_site(url, origin):
         return False
@@ -544,6 +646,7 @@ def analyse_site(raw_url: str) -> dict:
         re.search(r"\.(?:m3u8|mpd|mp4|m4v)(?:[?\"'&\s]|$)", lower_html)
         or any(x in lower_html for x in ("<iframe", "jwplayer", "videojs", "data-player", "data-embed"))
     )
+    media_probes = probe_media_urls(pages)
     blocked = any(
         p["status"] in {401, 403, 429} or
         any(marker in p["html"].lower() for marker in (
@@ -574,6 +677,7 @@ def analyse_site(raw_url: str) -> dict:
             "episodes": episode_found,
             "subtitles": subtitle_found,
             "player_embed_or_media": player_found,
+            "media_endpoint_reachable": any(item["reachable"] for item in media_probes),
             "schema_metadata": bool(all_objects),
             "search_form": bool(search_info["action"]),
             "listing_cards": card_link_count > 0,
@@ -587,7 +691,10 @@ def analyse_site(raw_url: str) -> dict:
             "episode_links": episode_label_count,
             "subtitle_hints": subtitle_link_count,
             "schema_objects": len(all_objects),
+            "media_urls_probed": len(media_probes),
+            "media_urls_reachable": sum(1 for item in media_probes if item["reachable"]),
         },
+        "media_probes": media_probes,
         "blocked": blocked,
         "page_titles": page_titles,
     }
@@ -1321,7 +1428,8 @@ def render_report(config: dict) -> str:
     quality_weights = {
         "poster": 15, "listing_cards": 20, "series_or_movie_schema": 10,
         "search_form": 10, "genres": 8, "imdb_rating": 6, "actors": 6,
-        "seasons": 6, "episodes": 6, "subtitles": 5, "player_embed_or_media": 8,
+        "seasons": 5, "episodes": 5, "subtitles": 5,
+        "player_embed_or_media": 5, "media_endpoint_reachable": 5,
     }
     quality_score = sum(weight for key, weight in quality_weights.items() if sig.get(key))
     missing = [
@@ -1345,6 +1453,7 @@ def render_report(config: dict) -> str:
         ("Bölüm bağlantıları", status(sig["episodes"])),
         ("Altyazı bağlantısı veya track", status(sig["subtitles"])),
         ("Video / iframe oynatıcı sinyali", status(sig["player_embed_or_media"])),
+        ("Doğrudan medya URL'si HTTP kontrolü", status(sig["media_endpoint_reachable"])),
         ("JSON-LD yapılandırılmış veri", status(sig["schema_metadata"])),
         ("Arama formu", status(sig["search_form"])),
         ("Kart / liste bağlantısı", status(sig["listing_cards"])),
@@ -1388,6 +1497,14 @@ def render_report(config: dict) -> str:
 - Bölüm ipucu: {counts['episode_links']}
 - Altyazı ipucu: {counts['subtitle_hints']}
 - JSON-LD nesnesi: {counts['schema_objects']}
+- Kontrol edilen doğrudan medya URL'si: {counts['media_urls_probed']}
+- HTTP yanıtı alınan medya URL'si: {counts['media_urls_reachable']}
+
+## Doğrudan medya URL kontrolü
+
+| URL (imza/sorgu bilgisi gizlenmiştir) | HTTP | İçerik türü | Sonuç |
+|---|---:|---|---|
+{chr(10).join(f"| {item['url']} | {item['status'] if item['status'] is not None else '—'} | {item['content_type']} | {item['note']} |" for item in config['media_probes']) if config['media_probes'] else "| Doğrudan .m3u8/.mpd/.mp4 adresi bulunamadı | — | — | Oynatıcı/iframe ayrıca olabilir; test edilemedi |"}
 
 ## Keşfedilen ana sayfa/kategori bağlantıları
 
@@ -1432,6 +1549,14 @@ def run_self_test() -> None:
     assert profile_anchor is not None
     assert is_non_catalog_anchor(profile_anchor, "https://example.org/hkncan", "hkncan")
     assert not is_utility_link("Wednesday", "https://example.org/wednesday")
+    media_sample = extract_media_candidates([{
+        "url": "https://example.org/watch/",
+        "html": '<video src="/stream/master.m3u8?token=hidden"></video>'
+                '<a href="https://cdn.example.org/movie.mp4?sig=secret">Video</a>',
+    }])
+    assert media_sample
+    assert all(urlsplit(item).path.lower().endswith((".m3u8", ".mpd", ".mp4", ".m4v")) for item in media_sample)
+    assert safe_report_url("https://cdn.example.org/master.m3u8?token=secret") == "https://cdn.example.org/master.m3u8"
     assert normalize_input("https://example.org/") == "https://example.org/"
     demo = {
         "origin": "https://example.org",
