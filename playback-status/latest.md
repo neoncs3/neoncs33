@@ -1,6 +1,6 @@
 # 🎬 NeonCS Gerçek Oynatma Durumu
 
-**PASS:** 5  **BLOCKED:** 6  **FAIL:** 1
+**PASS:** 5  **BLOCKED:** 5  **FAIL:** 2
 
 
 
@@ -8,13 +8,13 @@
 |---|---|---:|---:|---|---|---|
 | **AsyaFilmIzle** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
 | **DiziBoxizle** | 🟡 BLOCKED | 42 | 0 ms | - | DiziBoxizle | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
-| **Dizimag** | 🟡 BLOCKED | 10 | 0 ms | - | Dizimag | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 404 |
+| **Dizimag** | 🔴 FAIL | 0 | 0 ms | Ana sayfa yedeği | Harry Potter | loadLinks=false. Aday denemeleri: doğrudan: Dizimag -> bağlantı yok (loadLinks=false); Below: Below -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Mayday -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Şantaj -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Koşucu -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Harry Potter -> bağlantı yok (loadLinks=false) |
 | **DiziPal** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
 | **Dizigecesi** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
-| **Dramadizilerim** | 🟢 PASS | 1 | 3011 ms | Ana sayfa yedeği | İKİ KEZ KAYBEDİLEN AŞK(Dublajlı) | - |
+| **Dramadizilerim** | 🟢 PASS | 1 | 2894 ms | Ana sayfa yedeği | İKİ KEZ KAYBEDİLEN AŞK(Dublajlı) | - |
 | **FilmModu** | 🟡 BLOCKED | 8 | 0 ms | Inception | Inception | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
-| **JetFilmizle** | 🟢 PASS | 1 | 3219 ms | Interstellar | Yıldızlararası | - |
-| **SetFilmIzle** | 🟢 PASS | 1 | 2939 ms | Inception | Başlangıç | - |
-| **SinemaCX** | 🟢 PASS | 2 | 3126 ms | Inception | Başlangıç | - |
-| **WebDramaTurkey** | 🟢 PASS | 2 | 3421 ms | Moving | Moving | - |
+| **JetFilmizle** | 🟢 PASS | 1 | 3114 ms | Interstellar | Yıldızlararası | - |
+| **SetFilmIzle** | 🟢 PASS | 1 | 2843 ms | Inception | Başlangıç | - |
+| **SinemaCX** | 🟢 PASS | 2 | 3268 ms | Inception | Başlangıç | - |
+| **WebDramaTurkey** | 🟢 PASS | 2 | 3180 ms | Moving | Moving | - |
 | **TvDiziler** | 🔴 FAIL | 0 | 0 ms | Ana sayfa yedeği | Squid Game HD | loadLinks=false. Aday denemeleri: Aşk 101: Aşk 101 -> bağlantı yok (loadLinks=false); Medcezir: Medcezir -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Behzat Ç.: Bir Ankara Polisiyesi -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Survivor 2021 -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: İçerde -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Squid Game HD -> bağlantı yok (loadLinks=false) |

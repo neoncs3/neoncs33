@@ -20,12 +20,12 @@
     },
     {
       "provider": "Dizimag",
-      "status": "BLOCKED",
-      "query": null,
-      "item": "Dizimag",
-      "links": 10,
+      "status": "FAIL",
+      "query": "Ana sayfa yedeği",
+      "item": "Harry Potter",
+      "links": 0,
       "positionMs": 0,
-      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 404"
+      "error": "loadLinks=false. Aday denemeleri: doğrudan: Dizimag -> bağlantı yok (loadLinks=false); Below: Below -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Mayday -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Şantaj -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Koşucu -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Harry Potter -> bağlantı yok (loadLinks=false)"
     },
     {
       "provider": "DiziPal",
@@ -51,7 +51,7 @@
       "query": "Ana sayfa yedeği",
       "item": "İKİ KEZ KAYBEDİLEN AŞK(Dublajlı)",
       "links": 1,
-      "positionMs": 3011,
+      "positionMs": 2894,
       "error": null
     },
     {
@@ -69,7 +69,7 @@
       "query": "Interstellar",
       "item": "Yıldızlararası",
       "links": 1,
-      "positionMs": 3219,
+      "positionMs": 3114,
       "error": null
     },
     {
@@ -78,7 +78,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 1,
-      "positionMs": 2939,
+      "positionMs": 2843,
       "error": null
     },
     {
@@ -87,7 +87,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 2,
-      "positionMs": 3126,
+      "positionMs": 3268,
       "error": null
     },
     {
@@ -96,7 +96,7 @@
       "query": "Moving",
       "item": "Moving",
       "links": 2,
-      "positionMs": 3421,
+      "positionMs": 3180,
       "error": null
     },
     {
@@ -110,6 +110,6 @@
     }
   ],
   "pass": 5,
-  "blocked": 6,
-  "fail": 1
+  "blocked": 5,
+  "fail": 2
 }
