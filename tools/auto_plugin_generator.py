@@ -220,6 +220,28 @@ def normalized_filter_text(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", (value or "").lower().translate(translations)).strip()
 
 
+def is_flag_or_icon_asset(value: str) -> bool:
+    """Reject common country/language flag assets so they are not mistaken for posters."""
+    raw = str(value or "")
+    normalized = normalized_filter_text(raw)
+    if any(marker in normalized for marker in (
+        "flag icon", "country flag", "language flag", "flag sprite",
+    )):
+        return True
+    if re.search(r"(?i)(?:^|/)(?:flags?|flag-icons|country-flags?)/", raw):
+        return True
+    file_pattern = re.compile(
+        r"(?i)^(?:flags?|flag[-_]icon|icon[-_]flag|country[-_]?flag|"
+        r"flag[-_]sprite|language[-_]?flag)(?:[-_][a-z]{2})?\\."
+        r"(?:svg|png|jpe?g|webp|gif|ico)$"
+    )
+    filenames = re.findall(
+        r"(?i)(?:^|/)([^/\\s?#]+)\\.(?:svg|png|jpe?g|webp|gif|ico)(?=$|[?#\\s])",
+        raw,
+    )
+    return any(file_pattern.fullmatch(filename) for filename in filenames)
+
+
 UTILITY_LABELS = {
     "yorum", "yorumlar", "comments", "comment", "replies",
     "kesfet", "kesif", "explore", "discover",
@@ -320,6 +342,14 @@ def is_non_catalog_anchor(anchor: Tag, href: str, label: str) -> bool:
             str(image.get("class", "")), str(image.get("src", "")),
             str(image.get("data-src", "")), str(image.get("data-lazy-src", "")),
         ])
+    if image and is_flag_or_icon_asset(" ".join(
+            str(image.get(attribute, "") or "") for attribute in (
+                "class", "id", "alt", "title", "src", "data-src", "data-lazy-src",
+                "data-original", "data-poster",
+            )
+        )):
+        return True
+
     hint_text = normalized_filter_text(" ".join(hints))
     profile_discussion_hints = (
         "profile", "user profile", "user card", "member card", "user name",
@@ -989,7 +1019,22 @@ __MAIN_PAGES__
         return false
     }
 
+    private fun isFlagOrIconAsset(value: String): Boolean {
+        val hint = normalizedFilterText(value)
+        if (listOf(
+                "flag icon", "country flag", "language flag", "flag sprite"
+            ).any { hint.contains(it) }) return true
+        if (Regex("""(?i)(?:^|/)(?:flags?|flag-icons|country-flags?)/""")
+                .containsMatchIn(value)) return true
+        val file = value.substringBefore('?').substringBefore('#')
+            .substringAfterLast('/').lowercase()
+        return Regex(
+            """(?i)^(?:flags?|flag[-_]icon|icon[-_]flag|country[-_]?flag|flag[-_]sprite|language[-_]?flag)(?:[-_][a-z]{2})?\\.(?:svg|png|jpe?g|webp|gif|ico)$"""
+        ).matches(file)
+    }
+
     private fun isValidPosterUrl(url: String): Boolean {
+        if (isFlagOrIconAsset(url)) return false
         if (!url.startsWith("https://", true) && !url.startsWith("http://", true)) {
             return false
         }
@@ -1052,6 +1097,11 @@ __MAIN_PAGES__
             image.attr("class") + " " + image.id() + " " +
                 image.attr("alt") + " " + image.attr("title")
         )
+        if (isFlagOrIconAsset(
+                imageHint + " " + image.attr("src") + " " + image.attr("data-src") + " " +
+                    image.attr("data-lazy-src") + " " + image.attr("data-original") + " " +
+                    image.attr("data-poster")
+            )) return null
         if (listOf(
                 "avatar", "user photo", "profile photo", "profile picture",
                 "member photo", "author photo", "account photo", "user profile"
@@ -1656,6 +1706,17 @@ def run_self_test() -> None:
     assert profile_anchor is not None
     assert is_non_catalog_anchor(profile_anchor, "https://example.org/hkncan", "hkncan")
     assert not is_utility_link("Wednesday", "https://example.org/wednesday")
+    assert is_flag_or_icon_asset("https://example.org/assets/flags/tr.svg")
+    assert is_flag_or_icon_asset("flag-icon flag-icon-tr")
+    assert is_flag_or_icon_asset("https://example.org/icons/country-flag-us.png")
+    assert not is_flag_or_icon_asset("https://example.org/posters/flag-day-poster.webp")
+    flag_anchor = BeautifulSoup(
+        '<a href="/en"><img class="flag-icon flag-icon-us" '
+        'src="/assets/flags/us.svg" alt="English"></a>',
+        "html.parser",
+    ).select_one("a")
+    assert flag_anchor is not None
+    assert is_non_catalog_anchor(flag_anchor, "https://example.org/en", "English")
     media_sample = extract_media_candidates([{
         "url": "https://example.org/watch/",
         "html": '<video src="/stream/master.m3u8?token=hidden"></video>'
@@ -1696,6 +1757,8 @@ def run_self_test() -> None:
     assert "private fun isNavigationItem(title: String, url: String): Boolean" in generated
     assert "navigationOnlyPaths" in generated
     assert "isValidPosterUrl(poster)" in generated
+    assert "private fun isFlagOrIconAsset(value: String): Boolean" in generated
+    assert "isFlagOrIconAsset(imageHint + " in generated
     assert "isNavigationChrome(it)" in generated
     assert "profile photo" in generated
     assert "forum    private fun" not in generated

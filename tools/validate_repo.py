@@ -58,6 +58,7 @@ if generator.exists():
         "def analyse_site(", "def render_kotlin(", "neonResolveLinkCandidates",
         "extract_media_candidates(", "probe_media_urls(", "media_endpoint_reachable",
         "HTML analiz kalite puanı", "--self-test",
+        "def is_flag_or_icon_asset(", "private fun isFlagOrIconAsset(value: String): Boolean",
     ):
         if token not in generator_text:
             errors.append(f"Otomatik eklenti oluşturucu özelliği eksik: {token}")
