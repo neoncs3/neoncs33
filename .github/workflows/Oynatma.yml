@@ -12,8 +12,9 @@ permissions:
   contents: write
 
 concurrency:
+  # Keep only the newest emulator test; older queued runs may use stale plugin packages.
   group: neon-real-playback
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   playback:
