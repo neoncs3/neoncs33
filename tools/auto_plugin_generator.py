@@ -990,6 +990,13 @@ __MAIN_PAGES__
         (url.startsWith("http://", true) || url.startsWith("https://", true)) &&
             siteHost(url) == siteHost(mainUrl)
 
+    // ddizimag.com exposes this root-level URL in page scripts, but it is not a playable video.
+    private fun isBrokenSiteManifest(raw: String): Boolean {
+        val uri = runCatching { URI(raw) }.getOrNull() ?: return false
+        return siteHost(raw) == siteHost(mainUrl) &&
+            uri.path.orEmpty().trimEnd('/').equals("/manifest.webm", ignoreCase = true)
+    }
+
     private fun normalize(raw: String, base: String = mainUrl): String =
         neonNormalizeUrl(raw, base)
 
@@ -1680,9 +1687,10 @@ __MAIN_PAGES__
 
         val emitted = LinkedHashSet<String>()
         val forwardingCallback: (ExtractorLink) -> Unit = { link ->
-            if (emitted.add(link.url)) callback(link)
+            // Do not expose the site's non-existent root manifest as a media link.
+            if (!isBrokenSiteManifest(link.url) && emitted.add(link.url)) callback(link)
         }
-        var found = neonResolveLinkCandidates(
+        neonResolveLinkCandidates(
             candidates = candidates,
             sourceName = name,
             subtitleCallback = subtitleCallback,
@@ -1693,14 +1701,13 @@ __MAIN_PAGES__
         // Some embedded players require the site's regular CloudStream extractor.
         for (candidate in candidates.toList()) {
             if (isSiteUrl(candidate) || neonIsMediaUrl(candidate)) continue
-            val before = emitted.size
             runCatching {
                 loadExtractor(candidate, normalized, subtitleCallback, forwardingCallback)
             }
-            if (emitted.size > before) found = true
         }
 
-        return found || emitted.isNotEmpty()
+        // A resolver may report a candidate even if the callback deliberately filtered it.
+        return emitted.isNotEmpty()
     }
 }
 '''
