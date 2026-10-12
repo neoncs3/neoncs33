@@ -37,7 +37,7 @@ Derlenmiş eklentiler ve liste manifesti [builds dalında](https://github.com/ne
 |---|---|---|
 | [CloudStream Derleyici](.github/workflows/Derleyici.yml) | Kotlin eklentilerini derler, `.cs3` dosyalarını ve `plugins.json` manifestini doğrular, paketleri `builds` dalına gönderir. | Kaynak değişikliğinde, her gün ve elle |
 | [Kalite Kontrolü](.github/workflows/Kalite.yml) | Depo yapısını, sağlayıcı arayüzlerini ve Python sözdizimini denetler. | İlgili dosya değişikliğinde ve elle |
-| [Domain Değişiklik Kontrolü](.github/workflows/Kontrol.yml) | Sağlayıcı domainlerini periyodik kontrol eder; doğrulanabilen değişiklikleri ayrı bir dala ve PR'ye hazırlar. | Yaklaşık her 9 saatte bir ve elle |
+| [Domain Değişiklik Kontrolü](.github/workflows/Kontrol.yml) | Sağlayıcı domainlerini doğrular; anti-bot yanıtlarını değişiklik kanıtı saymaz. Doğrulanmış kaynak değişikliklerini otomatik kaydeder ve yeniden derleme başlatır. | Yaklaşık her 9 saatte bir, ilgili ayar değişince ve elle |
 | [Provider Sağlık Kontrolü](.github/workflows/Saglik.yml) | Site erişimini ve sağlayıcı hattının yapısal kontrollerini raporlar. | Her 6 saatte bir, kaynak değişikliğinde ve elle |
 | [Gerçek Oynatma Testi](.github/workflows/Oynatma.yml) | CloudStream ve ExoPlayer üzerinde otomatik Android emülatörüyle gerçek bağlantı çözümleme/oynatma testi çalıştırır. | Başarılı derlemeden sonra ve elle |
 
