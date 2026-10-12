@@ -7,6 +7,10 @@ concurrency:
 on:
   workflow_dispatch:
 
+  # Her gün otomatik doğrulama: kaynak değişikliği olmasa da paketler taze tutulur.
+  schedule:
+    - cron: "17 3 * * *"
+
   push:
     branches:
       - master
