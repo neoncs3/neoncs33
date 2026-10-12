@@ -40,9 +40,9 @@
       "provider": "Dramadizilerim",
       "status": "PASS",
       "query": "Ana sayfa yedeği",
-      "item": "OLİMPOS'UN PİŞMANLIĞI(Dublajlı)",
+      "item": "Damgalı Cadı, Prens'in Gelini",
       "links": 1,
-      "positionMs": 3007,
+      "positionMs": 2920,
       "error": null
     },
     {
@@ -60,7 +60,7 @@
       "query": "Interstellar",
       "item": "Yıldızlararası",
       "links": 1,
-      "positionMs": 3065,
+      "positionMs": 3055,
       "error": null
     },
     {
@@ -69,7 +69,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 1,
-      "positionMs": 2949,
+      "positionMs": 3222,
       "error": null
     },
     {
@@ -78,7 +78,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 2,
-      "positionMs": 3249,
+      "positionMs": 3247,
       "error": null
     },
     {
@@ -87,7 +87,7 @@
       "query": "Moving",
       "item": "Moving",
       "links": 2,
-      "positionMs": 3212,
+      "positionMs": 3340,
       "error": null
     },
     {

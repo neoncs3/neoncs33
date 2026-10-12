@@ -10,10 +10,10 @@
 | **DiziBoxizle** | 🟡 BLOCKED | 42 | 0 ms | - | DiziBoxizle | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
 | **DiziPal** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
 | **Dizigecesi** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
-| **Dramadizilerim** | 🟢 PASS | 1 | 3007 ms | Ana sayfa yedeği | OLİMPOS'UN PİŞMANLIĞI(Dublajlı) | - |
+| **Dramadizilerim** | 🟢 PASS | 1 | 2920 ms | Ana sayfa yedeği | Damgalı Cadı, Prens'in Gelini | - |
 | **FilmModu** | 🟡 BLOCKED | 8 | 0 ms | Inception | Inception | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
-| **JetFilmizle** | 🟢 PASS | 1 | 3065 ms | Interstellar | Yıldızlararası | - |
-| **SetFilmIzle** | 🟢 PASS | 1 | 2949 ms | Inception | Başlangıç | - |
-| **SinemaCX** | 🟢 PASS | 2 | 3249 ms | Inception | Başlangıç | - |
-| **WebDramaTurkey** | 🟢 PASS | 2 | 3212 ms | Moving | Moving | - |
+| **JetFilmizle** | 🟢 PASS | 1 | 3055 ms | Interstellar | Yıldızlararası | - |
+| **SetFilmIzle** | 🟢 PASS | 1 | 3222 ms | Inception | Başlangıç | - |
+| **SinemaCX** | 🟢 PASS | 2 | 3247 ms | Inception | Başlangıç | - |
+| **WebDramaTurkey** | 🟢 PASS | 2 | 3340 ms | Moving | Moving | - |
 | **TvDiziler** | 🔴 FAIL | 0 | 0 ms | Ana sayfa yedeği | Squid Game HD | loadLinks=false. Aday denemeleri: Aşk 101: Aşk 101 -> bağlantı yok (loadLinks=false); Medcezir: Medcezir -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Behzat Ç.: Bir Ankara Polisiyesi -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Survivor 2021 -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: İçerde -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Squid Game HD -> bağlantı yok (loadLinks=false) |
