@@ -615,6 +615,16 @@ __MAIN_PAGES__
         "en son bolumler", "son bolumler", "populer", "populer filmler"
     )
 
+    private val utilityLabelPrefixes = setOf(
+        "yorum", "yorumlar", "comment", "comments",
+        "kesfet", "kesif", "explore", "discover",
+        "takvim", "takvimi", "calendar", "schedule",
+        "dizi takvimi", "film takvimi", "tv schedule",
+        "tartisma", "tartismalar", "discussion", "discussions",
+        "baslik", "basliklar", "topic", "topics", "forum",
+        "community", "topluluk", "gundem", "duyurular"
+    )
+
     private val navigationOnlyPaths = setOf(
         "yorum", "yorumlar", "comment", "comments",
         "kesfet", "kesif", "explore", "discover",
@@ -652,7 +662,7 @@ __MAIN_PAGES__
     private fun isNavigationItem(title: String, url: String): Boolean {
         val label = normalizedFilterText(title)
         if (label in navigationOnlyLabels ||
-            navigationOnlyLabels.any { label.startsWith("$it ") }) {
+            utilityLabelPrefixes.any { label == it || label.startsWith("$it ") }) {
             return true
         }
 
@@ -1281,6 +1291,10 @@ def run_self_test() -> None:
     assert "override suspend fun search(query: String)" in generated
     assert "override suspend fun loadLinks(" in generated
     assert "neonResolveLinkCandidates(" in generated
+    assert "posterFor(anchor, baseUrl) ?: return null" in generated
+    assert "isNavigationItem(title, href)" in generated
+    assert "isValidPosterUrl(poster)" in generated
+    assert "isNavigationChrome(it)" in generated
     assert "__CLASS__" not in generated and "__ORIGIN__" not in generated
     print("AUTO PLUGIN GENERATOR SELF-TEST: PASSED")
 
