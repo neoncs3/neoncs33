@@ -31,6 +31,15 @@ class CanliProvider : MainAPI() {
         "Accept-Language" to "tr-TR,tr;q=0.9,en;q=0.8"
     )
 
+    // Sunucu cevabı Referer + Sec-Fetch-Dest'e göre değiştiriyor (Vary başlığı),
+    // bu yüzden iframe isteklerini tarayıcıdaki iframe gibi gönderiyoruz.
+    private fun iframeHeaders(referer: String, site: String = "same-origin") =
+        headers(referer) + mapOf(
+            "Sec-Fetch-Dest" to "iframe",
+            "Sec-Fetch-Mode" to "navigate",
+            "Sec-Fetch-Site" to site
+        )
+
     // ------------------------------------------------------------------
     // Kart -> SearchResponse
     // ------------------------------------------------------------------
@@ -155,7 +164,7 @@ class CanliProvider : MainAPI() {
                 callback(
                     newExtractorLink(
                         source = name,
-                        name = if (i == 0) name else "$name Yedek $i",
+                        name = "$name - ${u.substringAfter("://").substringBefore("/")}",
                         url = u,
                         type = ExtractorLinkType.M3U8
                     ) {
@@ -181,7 +190,7 @@ class CanliProvider : MainAPI() {
         // 2) Kanal sayfasındaki iframe'ler
         for (iframeUrl in channelResp.document.iframeUrls(data)) {
             val iframeResp = runCatching {
-                app.get(iframeUrl, headers = headers(data))
+                app.get(iframeUrl, headers = iframeHeaders(data))
             }.getOrNull() ?: continue
 
             emit(extractM3u8(iframeResp.text), iframeUrl)
@@ -190,7 +199,7 @@ class CanliProvider : MainAPI() {
             // 3) İç içe iframe / player sayfası
             for (playerUrl in iframeResp.document.iframeUrls(iframeUrl)) {
                 val playerResp = runCatching {
-                    app.get(playerUrl, headers = headers(iframeUrl))
+                    app.get(playerUrl, headers = iframeHeaders(iframeUrl))
                 }.getOrNull() ?: continue
 
                 emit(extractM3u8(playerResp.text), playerUrl)
@@ -204,24 +213,22 @@ class CanliProvider : MainAPI() {
         }
         if (emitted > 0) return true
 
-        // 5) Yedek: iframe'i WebView'da çalıştırıp ağdan .m3u8 isteğini yakala
-        for (iframeUrl in channelResp.document.iframeUrls(data)) {
-            val sniffed = runCatching {
-                app.get(
-                    iframeUrl,
-                    referer = data,
-                    headers = headers(data),
-                    interceptor = WebViewResolver(
-                        interceptUrl = Regex("""(?i)\.m3u8"""),
-                        timeout = 20_000L
-                    )
-                ).url
-            }.getOrNull()
+        // 5) Yedek: kanal sayfasının kendisini WebView'da aç; iframe doğal şekilde
+        //    yüklenir (doğru Referer/Sec-Fetch başlıklarıyla) ve .m3u8 isteği yakalanır.
+        val sniffed = runCatching {
+            app.get(
+                data,
+                referer = mainUrl,
+                headers = headers(mainUrl),
+                interceptor = WebViewResolver(
+                    interceptUrl = Regex("""(?i)\.m3u8"""),
+                    timeout = 25_000L
+                )
+            ).url
+        }.getOrNull()
 
-            if (sniffed != null && sniffed.contains(".m3u8", ignoreCase = true)) {
-                emit(listOf(sniffed), iframeUrl)
-                if (emitted > 0) return true
-            }
+        if (sniffed != null && sniffed.contains(".m3u8", ignoreCase = true)) {
+            emit(listOf(sniffed), data)
         }
         return emitted > 0
     }
