@@ -23,9 +23,9 @@
       "status": "FAIL",
       "query": "Ana sayfa yedeği",
       "item": "Harry Potter",
-      "links": 0,
+      "links": 1,
       "positionMs": 0,
-      "error": "loadLinks=false. Aday denemeleri: doğrudan: Dizimag -> bağlantı yok (loadLinks=false); Below: Below -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Mayday -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Şantaj -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Koşucu -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Harry Potter -> bağlantı yok (loadLinks=false)"
+      "error": "loadLinks=false. Aday denemeleri: doğrudan: Dizimag -> bağlantı yok (loadLinks=false); Below: Below -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Mayday -> oynatma başarısız (ExoPlaybackException: Source error <- OpenException: iq: Exception in CronetUrlRequest: net::ERR_INVALID_URL, ErrorCode=11, InternalErrorCode=-300, Retryable=false <- iq: Exception); Ana sayfa yedeği: Şantaj -> oynatma başarısız (ExoPlaybackException: Source error <- OpenException: iq: Exception in CronetUrlRequest: net::ERR_INVALID_URL, ErrorCode=11, InternalErrorCode=-300, Retryable=false <- iq: Exception); Ana sayfa yedeği: Koşucu -> oynatma başarısız (ExoPlaybackException: Source error <- OpenException: iq: Exception in CronetUrlRequest: net:"
     },
     {
       "provider": "DiziPal",
@@ -49,9 +49,9 @@
       "provider": "Dramadizilerim",
       "status": "PASS",
       "query": "Ana sayfa yedeği",
-      "item": "İKİ KEZ KAYBEDİLEN AŞK(Dublajlı)",
+      "item": "Replace the Mafia Heiress? Not A Chance!",
       "links": 1,
-      "positionMs": 3333,
+      "positionMs": 3116,
       "error": null
     },
     {
@@ -69,7 +69,7 @@
       "query": "Interstellar",
       "item": "Yıldızlararası",
       "links": 1,
-      "positionMs": 3235,
+      "positionMs": 2848,
       "error": null
     },
     {
@@ -78,7 +78,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 1,
-      "positionMs": 2887,
+      "positionMs": 3179,
       "error": null
     },
     {
@@ -87,7 +87,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 2,
-      "positionMs": 2847,
+      "positionMs": 3099,
       "error": null
     },
     {
@@ -96,7 +96,7 @@
       "query": "Moving",
       "item": "Moving",
       "links": 2,
-      "positionMs": 3234,
+      "positionMs": 3167,
       "error": null
     },
     {
