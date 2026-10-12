@@ -919,7 +919,7 @@ __MAIN_PAGES__
         val response: LoadResponse = if (series) {
             newTvSeriesLoadResponse(cleanSeriesTitle(title), normalizedUrl, TvType.TvSeries, episodeResponses) {
                 posterUrl = poster
-                plot = plot
+                this.plot = plot
                 this.year = year
                 this.tags = tags
                 rating?.let { score = Score.from10(it) }
@@ -928,7 +928,7 @@ __MAIN_PAGES__
         } else {
             newMovieLoadResponse(title, normalizedUrl, TvType.Movie, normalizedUrl) {
                 posterUrl = poster
-                plot = plot
+                this.plot = plot
                 this.year = year
                 this.tags = tags
                 rating?.let { score = Score.from10(it) }
