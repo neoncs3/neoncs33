@@ -349,6 +349,7 @@ open class NeonMainAPI : MainAPI() {
             }
             .distinct()
             .take(80)
+            .toList()
     }
 
     protected suspend fun neonResolveLinks(
