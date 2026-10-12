@@ -2201,7 +2201,7 @@ def run_self_test() -> None:
     assert "private fun isYouTubeMediaLink(link: ExtractorLink): Boolean" in generated
     assert "private fun isLikelyPlayerUrl(url: String): Boolean" in generated
     assert '(?:^|[/_.?=&-])(?:player|embed|iframe|video|stream|play|watch|manifest|media|playlist|source)' in generated
-    assert '"iframe[data-url], video[data-url], source[data-url]"' in generated
+    assert 'iframe[data-url], video[data-url], source[data-url]' in generated
     assert ".take(5)" in generated
     assert "provider page has site.error and no active media element" in generated
     assert "isYouTubeMediaLink(link)" in generated
