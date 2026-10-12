@@ -13,6 +13,7 @@ import re
 import socket
 import sys
 from datetime import datetime, timezone
+from collections import defaultdict
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urljoin, urlsplit, urlunsplit
@@ -430,6 +431,89 @@ def probe_media_urls(pages: list[dict]) -> list[dict]:
     return results
 
 
+def extract_episode_inventory(pages: list[dict]) -> dict:
+    """Report episode numbers visible in the bounded scan; do not assume unseen pages are missing."""
+    by_season: dict[int, set[int]] = defaultdict(set)
+    sources: dict[tuple[int, int], list[str]] = defaultdict(list)
+
+    season_pattern = re.compile(
+        r"(?i)\\b(?:season|sezon|s)[\\s._/-]*0?(\\d{1,2})\\b"
+    )
+    patterns = (
+        re.compile(
+            r"(?i)\\bs(?:eason)?\\s*0?(\\d{1,2})[\\s._/-]*e(?:p(?:isode)?)?[\\s._/-]*0?(\\d{1,3})\\b"
+        ),
+        re.compile(
+            r"(?i)\\b(?:season|sezon)[\\s._/-]*0?(\\d{1,2}).{0,35}?\\b(?:episode|episodes|ep|b[öo]l[üu]m)[\\s._/-]*0?(\\d{1,3})\\b"
+        ),
+        re.compile(
+            r"(?i)\\b(\\d{1,2})\\s*\\.?\\s*(?:sezon|season).{0,25}?\\b(\\d{1,3})\\s*\\.?\\s*(?:b[öo]l[üu]m|episode|ep)\\b"
+        ),
+    )
+    single_episode = re.compile(
+        r"(?i)\\b(?:episode|episodes|ep|b[öo]l[üu]m)[\\s._/#:-]*0?(\\d{1,3})\\b"
+    )
+
+    for page in pages:
+        soup = BeautifulSoup(str(page.get("html", "")), "html.parser")
+        for anchor in soup.select("a[href]"):
+            label = clean_label(
+                anchor.get("aria-label", "") or
+                anchor.get("title", "") or
+                anchor.get_text(" ", strip=True)
+            )
+            href = urljoin(str(page.get("url", "")), str(anchor.get("href", "")))
+            combined = f"{label} {href}"
+            match = next((p.search(combined) for p in patterns if p.search(combined)), None)
+            if match:
+                try:
+                    season_no = int(match.group(1))
+                    episode_no = int(match.group(2))
+                except (ValueError, IndexError):
+                    continue
+            else:
+                episode_match = single_episode.search(combined)
+                if not episode_match:
+                    continue
+                episode_no = int(episode_match.group(1))
+                season_match = season_pattern.search(combined)
+                season_no = int(season_match.group(1)) if season_match else 1
+
+            if not (1 <= season_no <= 99 and 1 <= episode_no <= 999):
+                continue
+            by_season[season_no].add(episode_no)
+            sources[(season_no, episode_no)].append(href)
+
+    inventory = []
+    potential_gaps = []
+    for season_no, episodes in sorted(by_season.items()):
+        ordered = sorted(episodes)
+        missing = [
+            number for number in range(ordered[0], ordered[-1] + 1)
+            if number not in episodes
+        ]
+        inventory.append({
+            "season": season_no,
+            "episodes_found": ordered,
+            "episode_count": len(ordered),
+        })
+        # Avoid alarming on sparse pages or huge gaps from arbitrary URL numbering.
+        if len(ordered) >= 3 and missing and len(missing) <= 30:
+            potential_gaps.append({
+                "season": season_no,
+                "missing": missing,
+                "observed_min": ordered[0],
+                "observed_max": ordered[-1],
+            })
+
+    return {
+        "seasons_detected": len(by_season),
+        "episodes_detected": sum(len(values) for values in by_season.values()),
+        "inventory": inventory,
+        "potential_gaps": potential_gaps,
+    }
+
+
 def valid_link_target(url: str, origin: str) -> bool:
     if not same_site(url, origin):
         return False
@@ -647,6 +731,7 @@ def analyse_site(raw_url: str) -> dict:
         or any(x in lower_html for x in ("<iframe", "jwplayer", "videojs", "data-player", "data-embed"))
     )
     media_probes = probe_media_urls(pages)
+    episode_inventory = extract_episode_inventory(pages)
     blocked = any(
         p["status"] in {401, 403, 429} or
         any(marker in p["html"].lower() for marker in (
@@ -691,10 +776,14 @@ def analyse_site(raw_url: str) -> dict:
             "episode_links": episode_label_count,
             "subtitle_hints": subtitle_link_count,
             "schema_objects": len(all_objects),
+            "episodes_detected": episode_inventory["episodes_detected"],
+            "episode_seasons_detected": episode_inventory["seasons_detected"],
+            "episode_gaps": len(episode_inventory["potential_gaps"]),
             "media_urls_probed": len(media_probes),
             "media_urls_reachable": sum(1 for item in media_probes if item["reachable"]),
         },
         "media_probes": media_probes,
+        "episode_inventory": episode_inventory,
         "blocked": blocked,
         "page_titles": page_titles,
     }
@@ -1451,6 +1540,7 @@ def render_report(config: dict) -> str:
         ("Tür / kategori sinyali", status(sig["genres"])),
         ("Sezon bağlantıları", status(sig["seasons"])),
         ("Bölüm bağlantıları", status(sig["episodes"])),
+        ("Taranan bağlantılarda bölüm numarası", str(counts["episodes_detected"])),
         ("Altyazı bağlantısı veya track", status(sig["subtitles"])),
         ("Video / iframe oynatıcı sinyali", status(sig["player_embed_or_media"])),
         ("Doğrudan medya URL'si HTTP kontrolü", status(sig["media_endpoint_reachable"])),
@@ -1495,10 +1585,27 @@ def render_report(config: dict) -> str:
 - Kart benzeri bağlantı: {counts['card_like_links']}
 - Sezon ipucu: {counts['season_links']}
 - Bölüm ipucu: {counts['episode_links']}
+- Numara olarak eşleşen bölüm: {counts['episodes_detected']}
+- Sezon eşleşmesi: {counts['episode_seasons_detected']}
+- Olası bölüm boşluğu bulunan sezon: {counts['episode_gaps']}
 - Altyazı ipucu: {counts['subtitle_hints']}
 - JSON-LD nesnesi: {counts['schema_objects']}
 - Kontrol edilen doğrudan medya URL'si: {counts['media_urls_probed']}
 - HTTP yanıtı alınan medya URL'si: {counts['media_urls_reachable']}
+
+## Taranan sezon ve bölüm numaraları
+
+{chr(10).join(
+    "- Sezon {item['season']}: bulunan bölüm numaraları " + ", ".join(str(n) for n in item["episodes_found"])
+    for item in config["episode_inventory"]["inventory"]
+) if config["episode_inventory"]["inventory"] else "- Taranan bağlantılarda açık bir bölüm numarası eşleşmesi bulunamadı."}
+
+{chr(10).join(
+    "- **Sezon {item['season']}**: taranan bağlantılarda {item['observed_min']}–{item['observed_max']} aralığında olası eksikler: " + ", ".join(str(n) for n in item["missing"])
+    for item in config["episode_inventory"]["potential_gaps"]
+) if config["episode_inventory"]["potential_gaps"] else "- Tespit edilebilir aralıklarda olası bölüm boşluğu bulunmadı."}
+
+> Bu yalnızca taranan HTML bağlantılarını özetler; site sayfalama yapıyorsa veya bağlantıları JavaScript ile yüklüyorsa “eksik” numaralar gerçekte mevcut olabilir.
 
 ## Doğrudan medya URL kontrolü
 
@@ -1557,6 +1664,14 @@ def run_self_test() -> None:
     assert media_sample
     assert all(urlsplit(item).path.lower().endswith((".m3u8", ".mpd", ".mp4", ".m4v")) for item in media_sample)
     assert safe_report_url("https://cdn.example.org/master.m3u8?token=secret") == "https://cdn.example.org/master.m3u8"
+    episodes_fixture = extract_episode_inventory([{
+        "url": "https://example.org/series/",
+        "html": '<a href="/s01e01">S01E01</a>'
+                '<a href="/s01e02">S01E02</a>'
+                '<a href="/s01e05">S01E05</a>',
+    }])
+    assert episodes_fixture["episodes_detected"] == 3
+    assert episodes_fixture["potential_gaps"][0]["missing"] == [3, 4]
     assert normalize_input("https://example.org/") == "https://example.org/"
     demo = {
         "origin": "https://example.org",
@@ -1603,7 +1718,13 @@ def run_self_test() -> None:
         "counts": {
             "pages": 1, "images": 3, "card_like_links": 2, "season_links": 1,
             "episode_links": 3, "subtitle_hints": 0, "schema_objects": 1,
+            "episodes_detected": 3, "episode_seasons_detected": 1, "episode_gaps": 1,
             "media_urls_probed": 1, "media_urls_reachable": 1,
+        },
+        "episode_inventory": {
+            "seasons_detected": 1, "episodes_detected": 3,
+            "inventory": [{"season": 1, "episodes_found": [1, 2, 5], "episode_count": 3}],
+            "potential_gaps": [{"season": 1, "missing": [3, 4], "observed_min": 1, "observed_max": 5}],
         },
         "categories": [("https://example.org/diziler", "Diziler")],
         "media_probes": [{
@@ -1618,6 +1739,7 @@ def run_self_test() -> None:
     report = render_report(report_fixture)
     assert "HTML analiz kalite puanı" in report
     assert "master.m3u8" in report and "206" in report
+    assert "Sezon 1" in report and "3, 4" in report
     assert "token=secret" not in report
     print("AUTO PLUGIN GENERATOR SELF-TEST: PASSED")
 
