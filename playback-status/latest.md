@@ -10,11 +10,11 @@
 | **DiziBoxizle** | 🟡 BLOCKED | 42 | 0 ms | - | DiziBoxizle | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
 | **DiziPal** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
 | **Dizigecesi** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin HTTP 403 |
-| **Dramadizilerim** | 🟢 PASS | 1 | 2931 ms | Ana sayfa yedeği | Damgalı Cadı, Prens'in Gelini | - |
+| **Dramadizilerim** | 🟢 PASS | 1 | 3117 ms | Ana sayfa yedeği | Damgalı Cadı, Prens'in Gelini | - |
 | **FilmModu** | 🟡 BLOCKED | 8 | 0 ms | Inception | Inception | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
-| **JetFilmizle** | 🟢 PASS | 1 | 2802 ms | Interstellar | Yıldızlararası | - |
-| **SetFilmIzle** | 🟢 PASS | 1 | 3152 ms | Inception | Başlangıç | - |
-| **SinemaCX** | 🟢 PASS | 2 | 3272 ms | Inception | Başlangıç | - |
-| **WebDramaTurkey** | 🟢 PASS | 2 | 3174 ms | Moving | Moving | - |
+| **JetFilmizle** | 🟢 PASS | 1 | 2983 ms | Interstellar | Yıldızlararası | - |
+| **SetFilmIzle** | 🟢 PASS | 1 | 2922 ms | Inception | Başlangıç | - |
+| **SinemaCX** | 🟢 PASS | 2 | 3408 ms | Inception | Başlangıç | - |
+| **WebDramaTurkey** | 🟢 PASS | 2 | 3124 ms | Moving | Moving | - |
 | **Dizimag** | 🟡 BLOCKED | 1 | 0 ms | Crunchyroll | Crunchyroll Anime Nights - Mob Psycho 100 Film izle | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 404 |
 | **TvDiziler** | 🔴 FAIL | 0 | 0 ms | Ana sayfa yedeği | Squid Game HD | loadLinks=false. Aday denemeleri: Aşk 101: Aşk 101 -> bağlantı yok (loadLinks=false); Medcezir: Medcezir -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Behzat Ç.: Bir Ankara Polisiyesi -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Survivor 2021 -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: İçerde -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Squid Game HD -> bağlantı yok (loadLinks=false) |
