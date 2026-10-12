@@ -20,6 +20,27 @@
         "name": "AsyaFilmIzle"
     },
     {
+        "iconUrl": "https://tvdiziler.tv/favicon.ico",
+        "fileHash": "sha256-34f1fed449108bb5bbbca05b71e2695e06a381de53e73dc6b36642b5095c812e",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
+        "fileSize": 53758,
+        "status": 1,
+        "language": "tr",
+        "authors": [
+            "neoncs3"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 1,
+        "internalName": "AutoTvdizilerTv",
+        "description": "URL analizinden otomatik olu\u015fturuldu: tvdiziler.tv",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/AutoTvdizilerTv.cs3",
+        "name": "AutoTvdizilerTv"
+    },
+    {
         "iconUrl": "https://diziboxizle.com/favicon.ico",
         "fileHash": "sha256-ca7c22f8c7375d2c2466771b005891ee8789ee4318ea6eee4f4ce680d866e76b",
         "apiVersion": 1,
