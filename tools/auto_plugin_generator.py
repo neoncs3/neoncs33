@@ -1624,13 +1624,78 @@ __MAIN_PAGES__
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
         val normalized = normalize(data)
-        return neonResolveLinkCandidates(
-            candidates = listOf(normalized),
+        if (normalized.isBlank()) return false
+
+        // The site often adds player URLs lazily or stores them in player scripts.
+        // Probe the episode page first, then resolve its iframe/media candidates.
+        val candidates = LinkedHashSet<String>()
+        candidates.add(normalized)
+
+        val document = neonCachedDocument(normalized, normalized)
+            ?: runCatching {
+                app.get(normalized, headers = headers(normalized), timeout = 15_000L).document
+            }.getOrNull()
+
+        if (document != null) {
+            candidates.addAll(neonExtractPlayerCandidates(document, normalized))
+            val playerAttributes = listOf(
+                "src", "data-src", "data-lazy-src", "data-url", "data-vsrc",
+                "data-video-src", "data-player", "data-embed", "data-embed-url",
+                "data-iframe", "data-file", "data-source", "data-hls",
+                "data-stream", "data-video", "data-play"
+            )
+            document.select(
+                "iframe, video, source, [data-src], [data-lazy-src], [data-url], " +
+                    "[data-vsrc], [data-video-src], [data-player], [data-embed], " +
+                    "[data-embed-url], [data-iframe], [data-file], [data-source], " +
+                    "[data-hls], [data-stream], [data-video], [data-play]"
+            ).forEach { node ->
+                playerAttributes.forEach { attribute ->
+                    val raw = node.attr(attribute).trim()
+                    if (raw.isBlank() || raw.startsWith("javascript:", true) ||
+                        raw.startsWith("data:", true) || raw == "#"
+                    ) return@forEach
+                    val candidate = normalize(raw, normalized)
+                    if (candidate.startsWith("http", true)) candidates.add(candidate)
+                }
+            }
+
+            val scriptText = document.select("script").joinToString("\n") { script ->
+                script.data().ifBlank { script.html() }
+            }.replace("\\/", "/").replace("\\u0026", "&")
+            val playerValuePattern = Regex(
+                """(?is)(?:src|file|source|url|embed|iframe|video_url|videoUrl|play_url|player_url|hls|playlist|stream)\s*[:=]\s*["']([^"'<>\\s]+)["']"""
+            )
+            playerValuePattern.findAll(scriptText).forEach { match ->
+                val candidate = normalize(match.groupValues[1], normalized)
+                if (candidate.startsWith("http", true)) candidates.add(candidate)
+            }
+            neonExtractMediaUrls(scriptText).forEach(candidates::add)
+        }
+
+        val emitted = LinkedHashSet<String>()
+        val forwardingCallback: (ExtractorLink) -> Unit = { link ->
+            if (emitted.add(link.url)) callback(link)
+        }
+        var found = neonResolveLinkCandidates(
+            candidates = candidates,
             sourceName = name,
             subtitleCallback = subtitleCallback,
-            callback = callback,
-            maxDepth = 3
+            callback = forwardingCallback,
+            maxDepth = 4,
         )
+
+        // Some embedded players require the site's regular CloudStream extractor.
+        for (candidate in candidates.toList()) {
+            if (isSiteUrl(candidate) || neonIsMediaUrl(candidate)) continue
+            val before = emitted.size
+            runCatching {
+                loadExtractor(candidate, normalized, subtitleCallback, forwardingCallback)
+            }
+            if (emitted.size > before) found = true
+        }
+
+        return found || emitted.isNotEmpty()
     }
 }
 '''
@@ -2014,6 +2079,8 @@ def run_self_test() -> None:
     assert "override suspend fun search(query: String)" in generated
     assert "override suspend fun loadLinks(" in generated
     assert "neonResolveLinkCandidates(" in generated
+    assert "neonExtractPlayerCandidates(document, normalized)" in generated
+    assert "loadExtractor(candidate, normalized, subtitleCallback, forwardingCallback)" in generated
     assert "private fun matchesQuery(result: SearchResponse, query: String): Boolean" in generated
     assert "Never leak those unrelated home-page items" in generated
     assert "posterFor(anchor, baseUrl) ?: return null" in generated
