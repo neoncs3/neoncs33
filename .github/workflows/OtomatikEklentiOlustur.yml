@@ -59,6 +59,7 @@ jobs:
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -rf tools/__pycache__
           git add -A
           if git diff --cached --quiet; then
             echo "Yeni dosya farkı yok; mevcut kaynakla derleme kontrolü yapılacak."
