@@ -44,7 +44,7 @@ class AutoDdizimagCom : NeonMainAPI() {
 
     private fun isSiteUrl(url: String): Boolean =
         (url.startsWith("http://", true) || url.startsWith("https://", true)) &&
-            siteHost(url) == siteHost(mainUrl)
+            (siteHost(url) == siteHost(mainUrl) || siteHost(url) == "dizimag.one")
 
     // dizimag.onl exposes this root-level URL in page scripts, but it is not a playable video.
     // Ignore known non-playable media endpoints exposed by this site.
@@ -65,6 +65,17 @@ class AutoDdizimagCom : NeonMainAPI() {
             Regex("""(?i)^https?://(?:www\.)?ddizimag\.com(?=[:/?#]|$)"""),
             "https://dizimag.onl"
         )
+    }
+
+    // The primary mirror's current player iframe is blocked; derive the same episode
+    // on the alternate mirror and try it only as a fallback.
+    private fun alternateEpisodeUrl(raw: String): String? {
+        val uri = runCatching { URI(raw) }.getOrNull() ?: return null
+        if (siteHost(raw) != "dizimag.onl") return null
+        val match = Regex("""(?i)^/dizi/([^/]+)/sezon-(\d+)/bolum-(\d+)/?$""")
+            .matchEntire(uri.path.orEmpty()) ?: return null
+        val slug = match.groupValues[1].takeIf { it.matches(Regex("""[a-z0-9-]+""")) } ?: return null
+        return "https://dizimag.one/${slug}-${match.groupValues[2]}-sezon-${match.groupValues[3]}-bolum/"
     }
 
     private fun isLikelyPlayerUrl(url: String): Boolean {
@@ -780,12 +791,17 @@ class AutoDdizimagCom : NeonMainAPI() {
                 }
                 .distinct()
         }.orEmpty()
+        val alternateMirrorCandidate = alternateEpisodeUrl(normalized)
 
         if (externalPlayerFrames.isNotEmpty()) {
             candidates.addAll(externalPlayerFrames)
             Log.d(name.uppercase().take(23), "external player iframe prioritized; continuing page media/script discovery count=${externalPlayerFrames.size}")
         } else {
             candidates.add(normalized)
+        }
+        if (!alternateMirrorCandidate.isNullOrBlank() && alternateMirrorCandidate != normalized) {
+            candidates.add(alternateMirrorCandidate)
+            Log.d(name.uppercase().take(23), "alternate episode mirror candidate added")
         }
 
         if (document != null) {
@@ -879,25 +895,42 @@ class AutoDdizimagCom : NeonMainAPI() {
                 emitted.add(link.url) -> callback(link)
             }
         }
-        val resolverFound = neonResolveLinkCandidates(
-            candidates = candidates,
-            sourceName = name,
-            subtitleCallback = subtitleCallback,
-            callback = forwardingCallback,
-            maxDepth = 4,
-            referer = normalized,
-        )
+        // Keep resolution bounded and stop as soon as a usable media source is found.
+        // Otherwise recursive probes against dead embeds can leave the player spinning.
+        val resolverCandidates = candidates.toList().take(14)
+        Log.d(name.uppercase().take(23), "loadLinks resolving candidates=${resolverCandidates.size}/${candidates.size}")
 
-        // Some embedded players require the site's regular CloudStream extractor.
-        for (candidate in candidates.toList()) {
-            if (isSiteUrl(candidate) || neonIsMediaUrl(candidate)) continue
-            runCatching {
-                loadExtractor(candidate, normalized, subtitleCallback, forwardingCallback)
+        var resolverFound = false
+        for (candidate in resolverCandidates) {
+            val candidateReferer = if (candidate == alternateMirrorCandidate) candidate else normalized
+            val candidateFound = neonResolveLinks(
+                data = candidate,
+                sourceName = name,
+                subtitleCallback = subtitleCallback,
+                callback = forwardingCallback,
+                maxDepth = 3,
+                referer = candidateReferer,
+            )
+            resolverFound = resolverFound || candidateFound
+            if (emitted.isNotEmpty()) {
+                Log.d(name.uppercase().take(23), "playable source emitted; remaining candidates skipped")
+                break
+            }
+        }
+
+        // Try native extractors only when the generic resolver could not emit media.
+        if (emitted.isEmpty()) {
+            for (candidate in resolverCandidates.take(8)) {
+                if (isSiteUrl(candidate) || neonIsMediaUrl(candidate)) continue
+                runCatching {
+                    loadExtractor(candidate, normalized, subtitleCallback, forwardingCallback)
+                }
+                if (emitted.isNotEmpty()) break
             }
         }
 
         // A resolver may report a candidate even if the callback deliberately filtered it.
-        Log.d(name.uppercase().take(23), "loadLinks finished candidates=${candidates.size}; resolverFound=$resolverFound; emitted=${emitted.size}")
+        Log.d(name.uppercase().take(23), "loadLinks finished candidates=${candidates.size}; attempted=${resolverCandidates.size}; resolverFound=$resolverFound; emitted=${emitted.size}")
         return emitted.isNotEmpty()
     }
 }
