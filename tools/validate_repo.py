@@ -69,6 +69,13 @@ for module in modules:
         errors.append(f"{module.name}: NeonMainAPI provider bulunamadı.")
         continue
 
+    all_kotlin = "\n".join(
+        path.read_text(encoding="utf-8", errors="replace")
+        for path in source_root.rglob("*.kt")
+    ) if source_root.exists() else ""
+    if "@CloudstreamPlugin" not in all_kotlin or "registerMainAPI(" not in all_kotlin:
+        errors.append(f"{module.name}: CloudStream @CloudstreamPlugin kayıt sınıfı veya registerMainAPI eksik.")
+
     source = "\n".join(texts)
     checks = {
         "load": r"override\s+suspend\s+fun\s+load\s*\(",
