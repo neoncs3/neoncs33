@@ -6,6 +6,7 @@ on:
       - CloudStream Derleyici
       - NeonCS Gerçek Oynatma Testi
       - NeonCS Sağlık Kontrolü
+      - NeonCS Kalite Kontrolü
       - Domain Değişiklik Kontrolü
       - Otomatik Eklenti Oluşturucu
     types:
