@@ -4,6 +4,7 @@ import android.util.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.extractors.helper.JwPlayerHelper
 import com.lagradost.cloudstream3.utils.*
 import org.json.JSONArray
 import org.json.JSONObject
@@ -917,13 +918,61 @@ class AutoDdizimagCom : NeonMainAPI() {
                 }
             }
         }
+        // Dizimag's current external player uses JWPlayer. Parse its actual source
+        // configuration before the generic recursive resolver starts probing unrelated
+        // page scripts and navigation endpoints.
+        if (emitted.isEmpty() && externalPlayerFrames.isNotEmpty()) {
+            for (frame in externalPlayerFrames.take(3)) {
+                val frameDocument = runCatching {
+                    app.get(
+                        frame,
+                        headers = headers(normalized),
+                        referer = normalized,
+                        timeout = 8_000L,
+                        allowRedirects = true,
+                    ).takeIf { it.isSuccessful }?.document
+                }.getOrNull() ?: continue
+                val frameUri = runCatching { URI(frame) }.getOrNull() ?: continue
+                val frameOrigin = buildString {
+                    append(frameUri.scheme ?: "https")
+                    append("://")
+                    append(frameUri.host.orEmpty())
+                    if (frameUri.port > 0) append(":").append(frameUri.port)
+                }
+                val playerScripts = frameDocument.select("script")
+                    .map { script -> script.data().ifBlank { script.html() } }
+                    .filter { script ->
+                        script.contains("jwplayer", ignoreCase = true) ||
+                            JwPlayerHelper.canParseJwScript(script)
+                    }
+                    .distinct()
+                for (script in playerScripts) {
+                    runCatching {
+                        JwPlayerHelper.extractStreamLinks(
+                            script = script,
+                            sourceName = "$name • ${frameUri.host}",
+                            mainUrl = frameOrigin,
+                            callback = forwardingCallback,
+                            subtitleCallback = subtitleCallback,
+                            headers = headers(frame),
+                        )
+                    }.onFailure {
+                        Log.w(name.uppercase().take(23), "JWPlayer source parse failed: ${it.javaClass.simpleName}")
+                    }
+                    if (emitted.isNotEmpty()) break
+                }
+                if (emitted.isNotEmpty()) break
+            }
+            Log.d(name.uppercase().take(23), "JWPlayer direct parse emitted=${emitted.size}")
+        }
+
         // Keep resolution bounded and stop as soon as a usable media source is found.
         // Otherwise recursive probes against dead embeds can leave the player spinning.
         val resolverCandidates = candidates.toList().take(14)
         Log.d(name.uppercase().take(23), "loadLinks resolving candidates=${resolverCandidates.size}/${candidates.size}")
 
-        var resolverFound = false
-        for (candidate in resolverCandidates) {
+        var resolverFound = emitted.isNotEmpty()
+        if (emitted.isEmpty()) for (candidate in resolverCandidates) {
             val candidateReferer = normalized
             val candidateFound = neonResolveLinks(
                 data = candidate,
