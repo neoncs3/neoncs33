@@ -760,10 +760,10 @@ class NeonPlaybackSmokeTest {
             results.any { it.status == "PASS" },
         )
 
+        val notPlayed = results.filter { it.status != "PASS" }
         assertTrue(
-            "Gerçek playback FAIL bulundu: " +
-                results.filter { it.status == "FAIL" },
-            results.none { it.status == "FAIL" },
+            "Gerçek video oynatımı doğrulanamadı (FAIL veya BLOCKED): " + notPlayed,
+            notPlayed.isEmpty(),
         )
     }
 }
