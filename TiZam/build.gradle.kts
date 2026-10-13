@@ -4,7 +4,7 @@ version = 1
 cloudstream {
     description = "Tizam"
     language = "ru"
-    authors = listOf("KULLANICI_ADIN")
+    authors = listOf("neoncs3")
 
     /**
      * Status int:
