@@ -78,30 +78,47 @@ class AutoTvdizilerTv : NeonMainAPI() {
         val safeTarget = runCatching {
             URI(url).let { it.host.orEmpty() + it.path.orEmpty() }
         }.getOrDefault("unknown")
-        val response = runCatching {
-            app.get(
-                url,
-                headers = mapOf(
-                    "User-Agent" to userAgent,
-                    "Accept" to "application/vnd.apple.mpegurl,application/x-mpegURL,*/*",
-                    "Referer" to referer,
-                ),
-                referer = referer,
-                timeout = 8_000L,
-                allowRedirects = true,
-            )
-        }.getOrNull()
-        if (response == null || !response.isSuccessful) {
-            Log.w(name.uppercase().take(23), "HLS candidate check failed HTTP ${response?.code ?: 0} target=$safeTarget")
-            return false
+
+        // A few player backends return a temporary placeholder before publishing the
+        // actual playlist. Retry briefly, but never emit the placeholder as a video.
+        var lastCode = 0
+        var lastContentLength = 0
+        var lastLookedLikeHtml = false
+        var lastContentType = "unknown"
+        for (attempt in 1..3) {
+            val response = runCatching {
+                app.get(
+                    url,
+                    headers = mapOf(
+                        "User-Agent" to userAgent,
+                        "Accept" to "application/vnd.apple.mpegurl,application/x-mpegURL,*/*",
+                        "Referer" to referer,
+                    ),
+                    referer = referer,
+                    timeout = 8_000L,
+                    allowRedirects = true,
+                )
+            }.getOrNull()
+
+            lastCode = response?.code ?: 0
+            if (response != null && response.isSuccessful) {
+                val body = response.text.trimStart('\uFEFF', ' ', '\t', '\r', '\n')
+                lastContentLength = body.length
+                lastContentType = response.headers["Content-Type"] ?: response.headers["content-type"] ?: "unknown"
+                lastLookedLikeHtml = body.contains("<html", ignoreCase = true) ||
+                    body.contains("<!doctype html", ignoreCase = true)
+                if (body.startsWith("#EXTM3U")) return true
+            }
+
+            if (attempt < 3) kotlinx.coroutines.delay(900L)
         }
 
-        val body = response.text.trimStart('\uFEFF', ' ', '\t', '\r', '\n')
-        val valid = body.startsWith("#EXTM3U")
-        if (!valid) {
-            Log.w(name.uppercase().take(23), "Rejected non-HLS response from declared HLS candidate target=$safeTarget")
-        }
-        return valid
+        Log.w(
+            name.uppercase().take(23),
+            "HLS candidate rejected after retries code=$lastCode contentType=$lastContentType " +
+                "chars=$lastContentLength html=$lastLookedLikeHtml target=$safeTarget",
+        )
+        return false
     }
 
     private fun isSignedYouTubeMediaUrl(raw: String): Boolean {
