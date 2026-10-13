@@ -74,51 +74,60 @@ class AutoTvdizilerTv : NeonMainAPI() {
     // Some player servers label a plain HTML/error response as HLS (for example master.txt).
     // Validate extension-less/text HLS candidates before handing them to ExoPlayer, then keep
     // trying other player alternatives instead of stopping at the first unusable URL.
-    private suspend fun isValidHlsPlaylist(url: String, referer: String, userAgent: String): Boolean {
+    private suspend fun findValidHlsReferer(
+        url: String,
+        referers: List<String>,
+        userAgent: String,
+    ): String? {
         val safeTarget = runCatching {
             URI(url).let { it.host.orEmpty() + it.path.orEmpty() }
         }.getOrDefault("unknown")
 
-        // A few player backends return a temporary placeholder before publishing the
-        // actual playlist. Retry briefly, but never emit the placeholder as a video.
+        // The provider occasionally rejects the embedded-player referer while accepting
+        // the episode page/root referer. Try only these known parent pages; never emit
+        // an extension-less source unless the returned body really is an HLS playlist.
         var lastCode = 0
         var lastContentLength = 0
         var lastLookedLikeHtml = false
         var lastContentType = "unknown"
-        for (attempt in 1..3) {
-            val response = runCatching {
-                app.get(
-                    url,
-                    headers = mapOf(
-                        "User-Agent" to userAgent,
-                        "Accept" to "application/vnd.apple.mpegurl,application/x-mpegURL,*/*",
-                        "Referer" to referer,
-                    ),
-                    referer = referer,
-                    timeout = 8_000L,
-                    allowRedirects = true,
-                )
-            }.getOrNull()
+        val orderedReferers = referers.filter { it.isNotBlank() }.distinct().take(3)
 
-            lastCode = response?.code ?: 0
-            if (response != null && response.isSuccessful) {
-                val body = response.text.trimStart('\uFEFF', ' ', '\t', '\r', '\n')
-                lastContentLength = body.length
-                lastContentType = response.headers["Content-Type"] ?: response.headers["content-type"] ?: "unknown"
-                lastLookedLikeHtml = body.contains("<html", ignoreCase = true) ||
-                    body.contains("<!doctype html", ignoreCase = true)
-                if (body.startsWith("#EXTM3U")) return true
+        for (referer in orderedReferers) {
+            for (attempt in 1..2) {
+                val response = runCatching {
+                    app.get(
+                        url,
+                        headers = mapOf(
+                            "User-Agent" to userAgent,
+                            "Accept" to "application/vnd.apple.mpegurl,application/x-mpegURL,*/*",
+                            "Referer" to referer,
+                        ),
+                        referer = referer,
+                        timeout = 6_000L,
+                        allowRedirects = true,
+                    )
+                }.getOrNull()
+
+                lastCode = response?.code ?: 0
+                if (response != null && response.isSuccessful) {
+                    val body = response.text.trimStart('\uFEFF', ' ', '\t', '\r', '\n')
+                    lastContentLength = body.length
+                    lastContentType = response.headers["Content-Type"] ?: response.headers["content-type"] ?: "unknown"
+                    lastLookedLikeHtml = body.contains("<html", ignoreCase = true) ||
+                        body.contains("<!doctype html", ignoreCase = true)
+                    if (body.startsWith("#EXTM3U")) return referer
+                }
+
+                if (attempt < 2) kotlinx.coroutines.delay(450L)
             }
-
-            if (attempt < 3) kotlinx.coroutines.delay(900L)
         }
 
         Log.w(
             name.uppercase().take(23),
-            "HLS candidate rejected after retries code=$lastCode contentType=$lastContentType " +
+            "HLS candidate rejected after referer variants code=$lastCode contentType=$lastContentType " +
                 "chars=$lastContentLength html=$lastLookedLikeHtml target=$safeTarget",
         )
-        return false
+        return null
     }
 
     private fun isSignedYouTubeMediaUrl(raw: String): Boolean {
@@ -1051,15 +1060,14 @@ class AutoTvdizilerTv : NeonMainAPI() {
                         source.url.contains(".mp4", true) -> ExtractorLinkType.VIDEO
                     else -> neonMediaType(source.url)
                 }
-                val mediaReferer = preferredRefererForMedia(source.url, frame)
+                var mediaReferer = preferredRefererForMedia(source.url, frame)
                 val path = runCatching { URI(source.url).path.orEmpty() }.getOrDefault("")
-                if (
-                    linkType == ExtractorLinkType.M3U8 &&
-                    !path.endsWith(".m3u8", ignoreCase = true) &&
-                    !isValidHlsPlaylist(source.url, mediaReferer, playerUserAgent)
-                ) {
-                    // Don't stop at a mislabeled page/placeholder; another selected player may work.
-                    continue
+                if (linkType == ExtractorLinkType.M3U8 && !path.endsWith(".m3u8", ignoreCase = true)) {
+                    mediaReferer = findValidHlsReferer(
+                        source.url,
+                        listOf(frame, normalized, "$mainUrl/"),
+                        playerUserAgent,
+                    ) ?: continue
                 }
                 if (emitted.add(source.url)) {
                     callback(
