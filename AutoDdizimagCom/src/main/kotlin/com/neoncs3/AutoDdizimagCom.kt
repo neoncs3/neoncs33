@@ -937,45 +937,24 @@ class AutoDdizimagCom : NeonMainAPI() {
         // page scripts and navigation endpoints.
         if (emitted.isEmpty() && externalPlayerFrames.isNotEmpty()) {
             for (frame in externalPlayerFrames.take(3)) {
-                // Some external players accept the episode page as referrer while others
-                // require the provider root. Try only ordinary, site-owned navigation
-                // referrers; do not invent a media URL when the embed is unavailable.
-                val frameReferers = listOf(normalized, "$mainUrl/", mainUrl).distinct()
-                var frameResponse: com.lagradost.cloudstream3.utils.Response? = null
-                var successfulReferer: String? = null
-                var lastFrameCode = 0
-                for (frameReferer in frameReferers) {
-                    val response = runCatching {
-                        app.get(
-                            frame,
-                            headers = frameRequestHeaders(frameReferer),
-                            referer = frameReferer,
-                            timeout = 8_000L,
-                            allowRedirects = true,
-                        )
-                    }.getOrNull()
-                    lastFrameCode = response?.code ?: 0
-                    if (response != null && response.isSuccessful) {
-                        frameResponse = response
-                        successfulReferer = frameReferer
-                        break
-                    }
-                    Log.w(
-                        name.uppercase().take(23),
-                        "external embed attempt HTTP $lastFrameCode refererHost=" +
-                            (runCatching { URI(frameReferer).host.orEmpty() }.getOrDefault("unknown")),
+                val frameResponse = runCatching {
+                    app.get(
+                        frame,
+                        headers = frameRequestHeaders(normalized),
+                        referer = normalized,
+                        timeout = 8_000L,
+                        allowRedirects = true,
                     )
-                }
-                val activeFrameResponse = frameResponse
-                if (activeFrameResponse == null) {
+                }.getOrNull()
+                if (frameResponse == null || !frameResponse.isSuccessful) {
                     val frameHost = runCatching { URI(frame).host.orEmpty() }.getOrDefault("unknown")
                     Log.w(
                         name.uppercase().take(23),
-                        "external embed unavailable after referer variants HTTP $lastFrameCode host=$frameHost; no media exposed",
+                        "external embed unavailable HTTP ${frameResponse?.code ?: 0} host=$frameHost; no media exposed",
                     )
                     continue
                 }
-                val frameDocument = activeFrameResponse.document
+                val frameDocument = frameResponse.document
                 // Inspect the cross-origin frame already fetched using iframe-like headers.
                 // Some players expose the playable URL in inline config or a small JS bundle.
                 candidates.addAll(playerUrlsFromText(frameDocument.html(), frame))
@@ -990,8 +969,8 @@ class AutoDdizimagCom : NeonMainAPI() {
                     val scriptBody = runCatching {
                         app.get(
                             scriptUrl,
-                            headers = frameRequestHeaders(successfulReferer ?: frame),
-                            referer = successfulReferer ?: frame,
+                            headers = frameRequestHeaders(frame),
+                            referer = frame,
                             timeout = 5_000L,
                             allowRedirects = true,
                         ).takeIf { it.isSuccessful }?.text
