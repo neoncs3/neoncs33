@@ -769,19 +769,31 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
         // an iframe tag. Prioritize data-hhs before generic iframe/script candidates.
         val activePlayerUrls = document?.select(
             "li.series-alter-active button[data-hhs], li.series-alter-active [data-hhs], " +
-                ".series-alter-active [data-hhs]"
-        )?.mapNotNull { node ->
-            val raw = node.attr("data-hhs").trim()
-            if (raw.isBlank() || raw.startsWith("javascript:", true) || raw.startsWith("data:", true)) {
-                return@mapNotNull null
-            }
-            normalize(raw, normalized).takeIf {
-                it.startsWith("http://", true) || it.startsWith("https://", true)
+                ".series-alter-active [data-hhs], li.series-alter-active button[data-hs], " +
+                "li.series-alter-active [data-hs], .series-alter-active [data-hs]"
+        )?.flatMap { node ->
+            listOf("data-hhs", "data-hs").flatMap { attribute ->
+                val raw = node.attr(attribute).trim()
+                if (raw.isBlank() || raw.startsWith("javascript:", true) || raw.startsWith("data:", true)) {
+                    emptyList()
+                } else {
+                    raw.split(',').mapNotNull { part ->
+                        val value = part.trim()
+                        if (value.isBlank() || value.startsWith("javascript:", true) ||
+                            value.startsWith("data:", true) || value == "#"
+                        ) null else normalize(value, normalized).takeIf {
+                            it.startsWith("http://", true) || it.startsWith("https://", true)
+                        }
+                    }
+                }
             }
         }?.distinct().orEmpty()
         if (activePlayerUrls.isNotEmpty()) {
             candidates.addAll(activePlayerUrls)
-            Log.d(name.uppercase().take(23), "active data-hhs player prioritized count=${activePlayerUrls.size}")
+            Log.d(
+                name.uppercase().take(23),
+                "active data-hhs/data-hs player prioritized count=${activePlayerUrls.size}"
+            )
         }
 
         // Film/episode pages expose the available hosts as source buttons (for example
@@ -790,7 +802,7 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
         // Collect only controls that look player-related to avoid treating site navigation
         // and unrelated buttons as media sources.
         val sourceControlNodes = document?.select(
-            "button, a[href], [role=button], [onclick], [data-hhs], [data-vsrc], " +
+            "button, a[href], [role=button], [onclick], [data-hhs], [data-hs], [data-vsrc], " +
                 "[data-video-src], [data-player], [data-embed], [data-embed-url], " +
                 "[data-iframe], [data-source], [data-server]"
         )?.filter { node ->
@@ -821,7 +833,7 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
         val sourceControlUrls = sourceControlNodes.flatMap { node ->
             val found = LinkedHashSet<String>()
             val rawAttributes = listOf(
-                "href", "src", "data-hhs", "data-src", "data-lazy-src", "data-url",
+                "href", "src", "data-hhs", "data-hs", "data-src", "data-lazy-src", "data-url",
                 "data-vsrc", "data-video-src", "data-player", "data-player-url",
                 "data-embed", "data-embed-url", "data-iframe", "data-iframe-url",
                 "data-file", "data-source", "data-source-url", "data-server",
@@ -834,15 +846,23 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
                     raw.startsWith("data:", true) || raw == "#"
                 ) return@forEach
 
-                playerUrlsFromText(raw, normalized).forEach(found::add)
-                val looksLikeUrl = raw.startsWith("http://", true) ||
-                    raw.startsWith("https://", true) || raw.startsWith("//") || raw.startsWith("/")
-                if (looksLikeUrl) {
-                    val candidate = normalize(raw, normalized)
-                    if ((candidate.startsWith("http://", true) || candidate.startsWith("https://", true)) &&
-                        (!isSiteUrl(candidate) || isLikelyPlayerUrl(candidate))
-                    ) {
-                        found.add(candidate)
+                // data-hhs/data-hs can contain multiple player paths separated by commas.
+                val attributeValues = if (attribute == "data-hhs" || attribute == "data-hs") raw.split(',') else listOf(raw)
+                attributeValues.forEach { rawValue ->
+                    val value = rawValue.trim()
+                    if (value.isBlank() || value.startsWith("javascript:", true) ||
+                        value.startsWith("data:", true) || value == "#"
+                    ) return@forEach
+
+                    playerUrlsFromText(value, normalized).forEach(found::add)
+                    val looksLikeUrl = value.startsWith("http://", true) ||
+                        value.startsWith("https://", true) || value.startsWith("//") || value.startsWith("/")
+                    if (looksLikeUrl) {
+                        val candidate = normalize(value, normalized)
+                        val isPlyEndpoint = Regex("""(?i)/vid/ply/""").containsMatchIn(candidate)
+                        if ((candidate.startsWith("http://", true) || candidate.startsWith("https://", true)) &&
+                            (!isSiteUrl(candidate) || isLikelyPlayerUrl(candidate) || isPlyEndpoint)
+                        ) found.add(candidate)
                     }
                 }
             }
@@ -906,14 +926,14 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
             }
             candidates.addAll(neonExtractPlayerCandidates(document, normalized))
             val playerAttributes = listOf(
-                "src", "data-src", "data-lazy-src", "data-url", "data-vsrc", "data-hhs",
+                "src", "data-src", "data-lazy-src", "data-url", "data-vsrc", "data-hhs", "data-hs",
                 "data-video-src", "data-player", "data-player-url", "data-embed", "data-embed-url",
                 "data-iframe", "data-iframe-url", "data-file", "data-source", "data-source-url",
                 "data-server", "data-server-url", "data-hls", "data-hls-url",
                 "data-stream", "data-video", "data-play"
             )
             document.select(
-                "iframe, video, source, [data-hhs], [data-vsrc], [data-video-src], [data-player], " +
+                "iframe, video, source, [data-hhs], [data-hs], [data-vsrc], [data-video-src], [data-player], " +
                     "[data-player-url], [data-embed], [data-embed-url], [data-iframe], [data-iframe-url], " +
                     "[data-file], [data-source], [data-source-url], [data-server], [data-server-url], " +
                     "[data-hls], [data-hls-url], [data-stream], [data-video], [data-play], " +
@@ -926,8 +946,19 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
                     if (raw.isBlank() || raw.startsWith("javascript:", true) ||
                         raw.startsWith("data:", true) || raw == "#"
                     ) return@forEach
-                    val candidate = normalize(raw, normalized)
-                    if (candidate.startsWith("http", true)) candidates.add(candidate)
+                    val values = if (attribute == "data-hhs" || attribute == "data-hs") raw.split(',') else listOf(raw)
+                    values.forEach { part ->
+                        val value = part.trim()
+                        if (value.isBlank() || value.startsWith("javascript:", true) ||
+                            value.startsWith("data:", true) || value == "#"
+                        ) return@forEach
+                        val looksLikeUrl = value.startsWith("http://", true) ||
+                            value.startsWith("https://", true) || value.startsWith("//") || value.startsWith("/")
+                        if (looksLikeUrl) {
+                            val candidate = normalize(value, normalized)
+                            if (candidate.startsWith("http", true)) candidates.add(candidate)
+                        }
+                    }
                 }
             }
 
@@ -970,6 +1001,49 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
                 playerUrlsFromText(scriptBody, scriptUrl).forEach(candidates::add)
                 neonExtractMediaUrls(scriptBody).filterNot(::isYouTubePageUrl).forEach(candidates::add)
             }
+
+            // Some hosts place media URLs in a first-party /vid/ply/ wrapper. Parse that
+            // wrapper explicitly because generic iframe extractors do not always follow it.
+            val plyPages = candidates.filter { candidate ->
+                isSiteUrl(candidate) &&
+                    Regex("""(?i)/vid/ply/""").containsMatchIn(
+                        runCatching { URI(candidate).path.orEmpty() }.getOrDefault("")
+                    )
+            }.distinct().take(10)
+            for (plyPageUrl in plyPages) {
+                val plyBody = runCatching {
+                    app.get(
+                        plyPageUrl,
+                        headers = headers(normalized),
+                        timeout = 8_000L,
+                        allowRedirects = true,
+                    ).takeIf { it.isSuccessful }?.text
+                }.getOrNull().orEmpty()
+                if (plyBody.isBlank()) {
+                    Log.d(name.uppercase().take(23), "player wrapper fetch failed")
+                    continue
+                }
+
+                val wrapperCandidates = LinkedHashSet<String>()
+                playerUrlsFromText(plyBody, plyPageUrl).forEach(wrapperCandidates::add)
+                neonExtractMediaUrls(plyBody).filterNot(::isYouTubePageUrl).forEach(wrapperCandidates::add)
+                val normalizedPlyBody = plyBody.replace("\\/", "/").replace("\\u0026", "&").replace("&amp;", "&")
+                Regex("""(?is)["']?file["']?\s*[:=]\s*["']([^"']+)["']""")
+                    .findAll(normalizedPlyBody)
+                    .forEach { match ->
+                        val resolved = normalize(match.groupValues[1], plyPageUrl)
+                        if (resolved.startsWith("http", true) &&
+                            (neonIsMediaUrl(resolved) || isLikelyPlayerUrl(resolved))
+                        ) wrapperCandidates.add(resolved)
+                    }
+
+                wrapperCandidates.filterNot(::isYouTubePageUrl).forEach(candidates::add)
+                Log.d(
+                    name.uppercase().take(23),
+                    "player wrapper resolved; candidates=\${wrapperCandidates.size}"
+                )
+            }
+
             // Keep the episode page as a final fallback, after its real player and script candidates.
             if (externalPlayerFrames.isNotEmpty()) candidates.add(normalized)
         }
