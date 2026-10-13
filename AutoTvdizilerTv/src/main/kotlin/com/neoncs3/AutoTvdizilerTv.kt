@@ -921,6 +921,22 @@ class AutoTvdizilerTv : NeonMainAPI() {
                     append(script.data().ifBlank { script.html() })
                 }
             }
+            // Prefer a native YouTube extractor over a signed googlevideo URL scraped
+            // from the page. Such URLs are IP/session-bound and commonly return HTTP 403.
+            val youtubeFrames = neonExtractIframeUrls(frameDocument, frame)
+                .filter(::neonIsYouTubePlaybackPage)
+                .distinct()
+                .take(4)
+            for (youtubeFrame in youtubeFrames) {
+                runCatching {
+                    loadExtractor(youtubeFrame, frame, subtitleCallback, forwardingCallback)
+                }.onFailure {
+                    Log.w(name.uppercase().take(23), "YouTube frame extraction failed: ${it.javaClass.simpleName}")
+                }
+                if (emitted.isNotEmpty()) break
+            }
+            if (emitted.isNotEmpty()) break
+
             val frameSources = (
                 playerElementSources(frameDocument, frame) + playerSources(playerText, frame)
             ).distinctBy { it.url }
