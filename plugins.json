@@ -41,6 +41,27 @@
         "name": "AutoDdizimagCom"
     },
     {
+        "iconUrl": "https://www.hdfilmdiziizle.com/favicon.ico",
+        "fileHash": "sha256-3a13d7ad892bc85328ab93ff2e115ced0c77b6847b114d7102e48be29af1b58c",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
+        "fileSize": 76674,
+        "status": 1,
+        "language": "tr",
+        "authors": [
+            "neoncs3"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 1,
+        "internalName": "AutoHdfilmdiziizleCom",
+        "description": "URL analizinden otomatik olu\u015fturuldu: hdfilmdiziizle.com",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/AutoHdfilmdiziizleCom.cs3",
+        "name": "AutoHdfilmdiziizleCom"
+    },
+    {
         "iconUrl": "https://klubnichka.live/favicon.ico",
         "fileHash": "sha256-9a0d56de8af2c3cdaba62578e1c751cf12a085141832205d978383f3bbd807a9",
         "apiVersion": 1,
@@ -62,10 +83,10 @@
     },
     {
         "iconUrl": "https://tvdiziler.tv/favicon.ico",
-        "fileHash": "sha256-c3692794a431a8ad695a1c8c500d35b84707bd09c005294fb6e58856935296cd",
+        "fileHash": "sha256-2715ae4fe82ce39b99c46099eae1735dd1a2f7a02ebc2eed5084561b8a52873a",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 79583,
+        "fileSize": 81431,
         "status": 1,
         "language": "tr",
         "authors": [
