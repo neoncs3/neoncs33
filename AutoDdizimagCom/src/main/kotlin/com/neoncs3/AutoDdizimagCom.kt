@@ -880,11 +880,40 @@ class AutoDdizimagCom : NeonMainAPI() {
 
         val emitted = LinkedHashSet<String>()
         val forwardingCallback: (ExtractorLink) -> Unit = { link ->
+            // Some player scripts return a relative media URL. Resolve it against the
+            // extractor's own referer before deciding it is malformed.
+            val linkReferer = link.referer.takeIf(::isValidHttpUrl) ?: normalized
+            val cleanedUrl = link.url.trim().replace("\\/", "/").replace("&amp;", "&")
+            val resolvedUrl = if (
+                cleanedUrl.startsWith("http://", true) ||
+                cleanedUrl.startsWith("https://", true)
+            ) cleanedUrl else normalize(cleanedUrl, linkReferer)
+            val mediaHost = runCatching { URI(resolvedUrl).host.orEmpty().lowercase().removePrefix("www.") }
+                .getOrDefault("")
+            val youtubeMedia = isYouTubePageUrl(resolvedUrl) ||
+                mediaHost == "googlevideo.com" || mediaHost.endsWith(".googlevideo.com")
             when {
-                !isValidHttpUrl(link.url) -> Log.w(name.uppercase().take(23), "filtered malformed media URL")
-                isBrokenSiteMediaUrl(link.url) -> Log.d(name.uppercase().take(23), "filtered dead manifest")
-                isYouTubeMediaLink(link) -> Log.d(name.uppercase().take(23), "filtered YouTube trailer source name=${link.name}")
-                emitted.add(link.url) -> callback(link)
+                !isValidHttpUrl(resolvedUrl) -> {
+                    val safeTarget = runCatching {
+                        URI(link.url).let { ${it.scheme.orEmpty()}://${it.host.orEmpty()}${it.path.orEmpty()} }
+                    }.getOrElse { link.url.substringBefore('?').substringBefore('#').take(180) }
+                    Log.w(name.uppercase().take(23), "filtered malformed media URL target=${safeTarget.take(180)}")
+                }
+                isBrokenSiteMediaUrl(resolvedUrl) -> Log.d(name.uppercase().take(23), "filtered dead manifest")
+                youtubeMedia -> Log.d(name.uppercase().take(23), "filtered YouTube trailer source name=${link.name}")
+                else -> {
+                    val outputLink = if (resolvedUrl == link.url) link else newExtractorLink(
+                        source = name,
+                        name = link.name,
+                        url = resolvedUrl,
+                        type = link.type,
+                    ) {
+                        referer = linkReferer
+                        quality = link.quality
+                        headers = link.headers + ("Referer" to linkReferer)
+                    }
+                    if (emitted.add(outputLink.url)) callback(outputLink)
+                }
             }
         }
         // Keep resolution bounded and stop as soon as a usable media source is found.

@@ -52,8 +52,16 @@ class AutoTvdizilerTv : NeonMainAPI() {
         return (scheme == "http" || scheme == "https") && !uri.host.isNullOrBlank()
     }
 
-    private fun normalize(raw: String, base: String = mainUrl): String =
-        neonNormalizeUrl(raw, base)
+    private fun normalize(raw: String, base: String = mainUrl): String {
+        val normalized = neonNormalizeUrl(raw, base)
+        // Some catalog cards still expose legacy /dizi/<episode-slug> links.
+        // Current episode pages use /<episode-slug>; rewrite only episode-shaped
+        // URLs so real series pages such as /dizi/<show>-son-bolum-izle remain intact.
+        return normalized.replace(
+            Regex("""(?i)^(https?://(?:www\.)?tvdiziler\.tv)/dizi/(?=[^/?#]*\d+-bolum-izle(?:[-/?#]|$))"""),
+            "$1/"
+        )
+    }
 
     private fun isEpisodeLike(value: String): Boolean =
         Regex("""(?i)(?:b[öo]l[üu]m|episodes?|ep[\s._-]*\d|s\d{1,2}e\d{1,3}|\d{1,2}\s*[x×]\s*\d{1,3})""")
@@ -587,7 +595,9 @@ class AutoTvdizilerTv : NeonMainAPI() {
     override suspend fun load(url: String): LoadResponse? {
         val normalizedUrl = normalize(url)
         val document = runCatching {
-            app.get(normalizedUrl, headers = headers(normalizedUrl), timeout = 15_000L).document
+            app.get(normalizedUrl, headers = headers(normalizedUrl), timeout = 15_000L)
+                .takeIf { it.isSuccessful }
+                ?.document
         }.getOrNull() ?: return null
         val title = neonPageTitle(document) ?: schemaValue(document, "name") ?: return null
         val poster = neonPoster(document, normalizedUrl)
@@ -675,7 +685,9 @@ class AutoTvdizilerTv : NeonMainAPI() {
 
         val document = neonCachedDocument(normalized, normalized)
             ?: runCatching {
-                app.get(normalized, headers = headers(normalized), timeout = 15_000L).document
+                app.get(normalized, headers = headers(normalized), timeout = 15_000L)
+                    .takeIf { it.isSuccessful }
+                    ?.document
             }.getOrNull()
 
         // TvDiziler stores the current part's player URL in data-hhs rather than
