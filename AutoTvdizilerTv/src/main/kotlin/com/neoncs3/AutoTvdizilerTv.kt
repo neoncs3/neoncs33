@@ -104,6 +104,23 @@ class AutoTvdizilerTv : NeonMainAPI() {
         }.distinctBy { it.url }.take(8).toList()
     }
 
+    private fun isYouTubePlaybackFrame(url: String): Boolean {
+        val uri = runCatching { URI(url) }.getOrNull() ?: return false
+        val host = uri.host.orEmpty().lowercase().removePrefix("www.")
+        val path = uri.path.orEmpty().lowercase()
+        val isYoutubeHost = host == "youtube.com" ||
+            host == "m.youtube.com" ||
+            host == "youtu.be" ||
+            host == "youtube-nocookie.com" ||
+            host.endsWith(".youtube-nocookie.com")
+        return isYoutubeHost && (
+            path.startsWith("/embed/") ||
+            path == "/watch" ||
+            path.startsWith("/shorts/") ||
+            path.startsWith("/live/")
+        )
+    }
+
     private fun siteHost(url: String): String =
         runCatching { URI(url).host.orEmpty().lowercase().removePrefix("www.") }.getOrDefault("")
 
@@ -924,7 +941,7 @@ class AutoTvdizilerTv : NeonMainAPI() {
             // Prefer a native YouTube extractor over a signed googlevideo URL scraped
             // from the page. Such URLs are IP/session-bound and commonly return HTTP 403.
             val youtubeFrames = neonExtractIframeUrls(frameDocument, frame)
-                .filter(::neonIsYouTubePlaybackPage)
+                .filter(::isYouTubePlaybackFrame)
                 .distinct()
                 .take(4)
             for (youtubeFrame in youtubeFrames) {
