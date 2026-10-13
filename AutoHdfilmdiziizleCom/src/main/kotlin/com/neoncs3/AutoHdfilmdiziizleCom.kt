@@ -25,7 +25,7 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
     private val configuredSearchAction = ""
     private val configuredSearchField = "s"
     // Scraped from actual poster-backed catalogue cards; consumed by the real-playback smoke test.
-    private val neonSmokeTestQueries = emptyList<String>()
+    private val neonSmokeTestQueries = listOf<String>()
 
     override val mainPage = mainPageOf(
         "https://www.hdfilmdiziizle.com/" to "Ana Sayfa"

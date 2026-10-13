@@ -1,6 +1,6 @@
 # Otomatik eklenti analiz raporu
 
-- Kontrol: 2026-10-13 10:49 UTC
+- Kontrol: 2026-10-13 11:12 UTC
 - Girilen URL: https://www.hdfilmdiziizle.com/
 - Ana adres: https://www.hdfilmdiziizle.com
 - Site adı: Just a moment...
@@ -14,7 +14,7 @@
 
 ## Site yapısı değişiklik takibi
 
-- İlk tarama: sonraki çalıştırmalar için başlangıç profili kaydedildi.
+- Önceki taramaya göre gözlenen yapı değişmedi.
 
 > Bu karşılaştırma yalnızca gözlenebilir HTML işaretlerini, sayaçları, örnek başlıkları ve kategori bağlantılarını izler. Site değişimini fark edebilir; değişikliğin nedenini veya oynatmayı tek başına kanıtlamaz.
 
