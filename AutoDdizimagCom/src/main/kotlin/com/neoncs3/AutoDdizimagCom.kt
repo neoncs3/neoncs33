@@ -41,23 +41,14 @@ class AutoDdizimagCom : NeonMainAPI() {
         )
 
     private fun frameRequestHeaders(parentPage: String): Map<String, String> {
-        val origin = runCatching {
-            URI(parentPage).let { uri ->
-                buildString {
-                    append(uri.scheme ?: "https")
-                    append("://")
-                    append(uri.host.orEmpty())
-                    if (uri.port > 0) append(":").append(uri.port)
-                }
-            }
-        }.getOrNull()
-
-        val browserHeaders = headers(parentPage) + mapOf(
+        // Match a real cross-origin iframe navigation: browsers send the parent as
+        // Referer plus Sec-Fetch metadata, but normally do not attach an Origin header
+        // to a top-level GET navigation. Some hosts reject that synthetic Origin.
+        return headers(parentPage) + mapOf(
             "Sec-Fetch-Dest" to "iframe",
             "Sec-Fetch-Mode" to "navigate",
             "Sec-Fetch-Site" to "cross-site",
         )
-        return if (origin.isNullOrBlank()) browserHeaders else browserHeaders + ("Origin" to origin)
     }
 
     private fun siteHost(url: String): String =
