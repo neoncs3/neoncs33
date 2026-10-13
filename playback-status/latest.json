@@ -11,12 +11,12 @@
     },
     {
       "provider": "TvDiziler • Aşk 101",
-      "status": "PASS",
+      "status": "FAIL",
       "query": null,
       "item": "TvDiziler • Aşk 101",
       "links": 1,
-      "positionMs": 3293,
-      "error": null
+      "positionMs": 0,
+      "error": "ExoPlaybackException: Source error <- ParserException: Input does not start with the #EXTM3U header. {contentIsMalformed=true, dataType=4}. Aday denemeleri: doğrudan: TvDiziler • Aşk 101 -> oynatma başarısız (ExoPlaybackException: Source error <- ParserException: Input does not start with the #EXTM3U header. {contentIsMalformed=true, dataType=4})"
     },
     {
       "provider": "TvDiziler • Medcezir",
@@ -28,7 +28,7 @@
       "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403"
     }
   ],
-  "pass": 1,
+  "pass": 0,
   "blocked": 1,
-  "fail": 1
+  "fail": 2
 }
