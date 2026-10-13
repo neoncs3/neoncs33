@@ -895,7 +895,7 @@ class AutoDdizimagCom : NeonMainAPI() {
             when {
                 !isValidHttpUrl(resolvedUrl) -> {
                     val safeTarget = runCatching {
-                        URI(link.url).let { ${it.scheme.orEmpty()}://${it.host.orEmpty()}${it.path.orEmpty()} }
+                        URI(link.url).let { uri -> uri.scheme.orEmpty() + "://" + uri.host.orEmpty() + uri.path.orEmpty() }
                     }.getOrElse { link.url.substringBefore('?').substringBefore('#').take(180) }
                     Log.w(name.uppercase().take(23), "filtered malformed media URL target=${safeTarget.take(180)}")
                 }
