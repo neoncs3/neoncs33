@@ -57,7 +57,7 @@ jobs:
           target = Path(sys.argv[2])
           text = source.read_text(encoding="utf-8", errors="replace")
 
-          # URL'lerin sorgu/fragment bölümleri oturum belirteci içerebileceği için çıkarılır.
+          # URL sorguları ve fragment'leri imzalı bağlantı belirteci içerebilir.
           url_pattern = re.compile(r"""https?://[^\s<>'"`]+""")
           def clean_url(match):
               raw = match.group(0)
@@ -103,31 +103,26 @@ jobs:
             --jq 'add | .[] | select((has("pull_request") | not) and .title == env.TITLE) | .number' | sed -n '1p')"
 
           BODY_FILE="$RUNNER_TEMP/issue-body.md"
-          cat > "$BODY_FILE" <<EOF
-          ## Otomatik hata kaydı
-
-          Bir GitHub Actions iş akışı başarısız oldu. Bu kayıt, hatayı bu sohbet içinde inceleyip kaynak kodla ilişkilendirebilmek için oluşturuldu.
-
-          - **İş akışı:** $WORKFLOW_NAME
-          - **Sonuç:** $CONCLUSION
-          - **Dal:** `$HEAD_BRANCH`
-          - **Commit:** `$HEAD_SHA`
-          - **Çalıştırma kimliği:** `$RUN_ID`
-          - **Tam Actions kaydı:** $RUN_URL
-
-          ### Başarısız adımlardan günlük özeti
-
-          Aşağıdaki günlükler hassas olabilecek URL sorguları ve yaygın belirteçler temizlenerek kısaltılmıştır. Tam günlük için Actions bağlantısını açın.
-
-          ```text
-          EOF
-          cat "$RUNNER_TEMP/failed-logs.txt" >> "$BODY_FILE"
-          printf '\n```\n' >> "$BODY_FILE"
-          cat >> "$BODY_FILE" <<'EOF'
-
+          {
+            printf '## Otomatik hata kaydı\n\n'
+            printf 'Bir GitHub Actions iş akışı başarısız oldu. Bu kayıt, hatayı bu sohbet içinde inceleyip kaynak kodla ilişkilendirebilmek için oluşturuldu.\n\n'
+            printf -- '- **İş akışı:** %s\n' "$WORKFLOW_NAME"
+            printf -- '- **Sonuç:** %s\n' "$CONCLUSION"
+            printf -- '- **Dal:** %s\n' "$HEAD_BRANCH"
+            printf -- '- **Commit:** %s\n' "$HEAD_SHA"
+            printf -- '- **Çalıştırma kimliği:** %s\n' "$RUN_ID"
+            printf -- '- **Tam Actions kaydı:** %s\n\n' "$RUN_URL"
+            printf '### Başarısız adımlardan günlük özeti\n\n'
+            printf 'Günlükler kısaltılmış ve hassas olabilecek URL sorguları temizlenmiştir. Tam günlük için Actions bağlantısını açın.\n\n'
+            printf '\`\`\`text\n'
+            cat "$RUNNER_TEMP/failed-logs.txt"
+            printf '\n\`\`\`\n\n'
+            cat <<'EOF'
           ### Sonraki adım
-          Bu Issue bağlantısını ChatGPT sohbetine gönder. Hata kaydı, kaynak dosyaları ve ilgili Actions günlükleri üzerinden incelenmelidir. Düzeltme yapıldıktan sonra derleme ve uygun testler yeniden çalıştırılmalıdır.
+
+          Bu Issue bağlantısını ChatGPT sohbetine gönder. Hata, kaynak dosyaları ve ilgili Actions günlükleri üzerinden incelenebilir; düzeltme yapıldıktan sonra derleme ve uygun testler yeniden çalıştırılmalıdır.
           EOF
+          } > "$BODY_FILE"
 
           if [ -n "$EXISTING_ISSUE" ]; then
             echo "Mevcut hata Issue'su bulundu: #$EXISTING_ISSUE"
