@@ -842,7 +842,22 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
                     found.add(candidate)
                 }
             }
-            playerUrlsFromText(node.outerHtml(), normalized).forEach(found::add)
+            val controlMarkup = node.outerHtml()
+                .replace("\\/", "/")
+                .replace("\\u0026", "&")
+                .replace("&amp;", "&")
+            playerUrlsFromText(controlMarkup, normalized).forEach(found::add)
+            // onclick handlers sometimes contain a direct embed URL without a named
+            // src/url property, which the structured parser above intentionally ignores.
+            Regex("""(?i)https?://[^"'<>\\s]+""").findAll(controlMarkup).forEach { match ->
+                val rawUrl = match.value.trimEnd(')', ']', '}', ',', ';')
+                val candidate = normalize(rawUrl, normalized)
+                if ((candidate.startsWith("http://", true) || candidate.startsWith("https://", true)) &&
+                    (!isSiteUrl(candidate) || isLikelyPlayerUrl(candidate))
+                ) {
+                    found.add(candidate)
+                }
+            }
             found.filterNot(::isYouTubePageUrl)
         }.distinct()
 
