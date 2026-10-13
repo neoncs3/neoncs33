@@ -49,9 +49,9 @@
       "provider": "Dramadizilerim",
       "status": "PASS",
       "query": "Ana sayfa yedeği",
-      "item": "ZOMBİ KAMPI",
+      "item": "Hokey Yıldızını Boşayıp Ezeli Rakibini Seçtim",
       "links": 1,
-      "positionMs": 2770,
+      "positionMs": 3195,
       "error": null
     },
     {
@@ -69,7 +69,7 @@
       "query": "Interstellar",
       "item": "Yıldızlararası",
       "links": 1,
-      "positionMs": 2863,
+      "positionMs": 3019,
       "error": null
     },
     {
@@ -78,7 +78,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 1,
-      "positionMs": 2951,
+      "positionMs": 2970,
       "error": null
     },
     {
@@ -87,7 +87,7 @@
       "query": "Inception",
       "item": "Başlangıç",
       "links": 2,
-      "positionMs": 3013,
+      "positionMs": 3279,
       "error": null
     },
     {
@@ -96,7 +96,7 @@
       "query": "Moving",
       "item": "Moving",
       "links": 2,
-      "positionMs": 3302,
+      "positionMs": 3189,
       "error": null
     },
     {
@@ -105,7 +105,7 @@
       "query": "Ana sayfa yedeği",
       "item": "Behzat Ç.: Bir Ankara Polisiyesi",
       "links": 1,
-      "positionMs": 3138,
+      "positionMs": 3044,
       "error": null
     }
   ],
