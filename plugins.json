@@ -83,10 +83,10 @@
     },
     {
         "iconUrl": "https://tvdiziler.tv/favicon.ico",
-        "fileHash": "sha256-cb535de52a5dda02d71e42f8725665e75353a2f2642afcbe96fe99603e30e28f",
+        "fileHash": "sha256-9e6d0724755c6adbb082fff3919cdf3e009b66ddbc18d9af6b05ffd5669ff966",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 82694,
+        "fileSize": 85354,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -268,14 +268,14 @@
         "name": "SinemaCX"
     },
     {
-        "fileHash": "sha256-bbf91d83979026cb865a68b2a27feb86c1d45aa78b0b5c7619f5ada3f5197996",
+        "fileHash": "sha256-530df89fff9cc3c43df87a8b502f1a76eba0a26f8f115984d6e7c45f54f4a2b6",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 40690,
+        "fileSize": 40636,
         "status": 1,
         "language": "ru",
         "authors": [
-            "KULLANICI_ADIN"
+            "neoncs3"
         ],
         "tvTypes": [
             "NSFW"
