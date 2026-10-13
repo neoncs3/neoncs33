@@ -784,6 +784,81 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
             Log.d(name.uppercase().take(23), "active data-hhs player prioritized count=${activePlayerUrls.size}")
         }
 
+        // Film/episode pages expose the available hosts as source buttons (for example
+        // Vidrame, TR-EN or PHD). Some layouts keep the player URL in an onclick handler,
+        // a non-standard data-* attribute, or a source-selection link rather than an iframe.
+        // Collect only controls that look player-related to avoid treating site navigation
+        // and unrelated buttons as media sources.
+        val sourceControlNodes = document?.select(
+            "button, a[href], [role=button], [onclick], [data-hhs], [data-vsrc], " +
+                "[data-video-src], [data-player], [data-embed], [data-embed-url], " +
+                "[data-iframe], [data-source], [data-server]"
+        )?.filter { node ->
+            val labelHint = normalizedFilterText(
+                node.text() + " " + node.id() + " " + node.className() + " " +
+                    node.attr("title") + " " + node.attr("aria-label") + " " +
+                    node.attr("href") + " " + node.attr("onclick")
+            )
+            val sourceLabel = Regex(
+                """(?i)\\b(?:kaynak|source|server|player|video|vidrame|vidmoly|oplay|phd|alternatif|tr\\s*[-/]?\\s*en|trplay|canavar|roket)\\b"""
+            ).containsMatchIn(labelHint)
+            var parent: Element? = node
+            var inPlayerContainer = false
+            repeat(5) {
+                val current = parent ?: return@repeat
+                val parentHint = normalizedFilterText(
+                    current.id() + " " + current.className() + " " + current.attr("id")
+                )
+                if (Regex("""(?i)player|source|server|video|stream|embed|watch|kaynak""")
+                        .containsMatchIn(parentHint)) {
+                    inPlayerContainer = true
+                }
+                parent = current.parent()
+            }
+            sourceLabel || inPlayerContainer
+        }.orEmpty()
+
+        val sourceControlUrls = sourceControlNodes.flatMap { node ->
+            val found = LinkedHashSet<String>()
+            val rawAttributes = listOf(
+                "href", "src", "data-hhs", "data-src", "data-lazy-src", "data-url",
+                "data-vsrc", "data-video-src", "data-player", "data-player-url",
+                "data-embed", "data-embed-url", "data-iframe", "data-iframe-url",
+                "data-file", "data-source", "data-source-url", "data-server",
+                "data-server-url", "data-hls", "data-hls-url", "data-stream",
+                "data-video", "data-play", "onclick"
+            )
+            rawAttributes.forEach { attribute ->
+                val raw = node.attr(attribute).trim()
+                if (raw.isBlank() || raw.startsWith("javascript:", true) ||
+                    raw.startsWith("data:", true) || raw == "#"
+                ) return@forEach
+
+                playerUrlsFromText(raw, normalized).forEach(found::add)
+                val candidate = normalize(raw, normalized)
+                if ((candidate.startsWith("http://", true) || candidate.startsWith("https://", true)) &&
+                    ( !isSiteUrl(candidate) || isLikelyPlayerUrl(candidate) )
+                ) {
+                    found.add(candidate)
+                }
+            }
+            playerUrlsFromText(node.outerHtml(), normalized).forEach(found::add)
+            found.filterNot(::isYouTubePageUrl)
+        }.distinct()
+
+        if (sourceControlUrls.isNotEmpty()) {
+            candidates.addAll(sourceControlUrls)
+            Log.d(
+                name.uppercase().take(23),
+                "source controls discovered nodes=${sourceControlNodes.size}; playerUrls=${sourceControlUrls.size}"
+            )
+        } else if (sourceControlNodes.isNotEmpty()) {
+            Log.d(
+                name.uppercase().take(23),
+                "source controls detected nodes=${sourceControlNodes.size}; no direct URL in markup, checking scripts"
+            )
+        }
+
         // A third-party iframe is the authoritative player on current episode pages.
         // Do not emit stale /cdn/*.m3u8 URLs scraped from page scripts before resolving it.
         val externalPlayerFrames = document?.let { page ->
@@ -813,14 +888,16 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
             candidates.addAll(neonExtractPlayerCandidates(document, normalized))
             val playerAttributes = listOf(
                 "src", "data-src", "data-lazy-src", "data-url", "data-vsrc", "data-hhs",
-                "data-video-src", "data-player", "data-embed", "data-embed-url",
-                "data-iframe", "data-file", "data-source", "data-hls",
+                "data-video-src", "data-player", "data-player-url", "data-embed", "data-embed-url",
+                "data-iframe", "data-iframe-url", "data-file", "data-source", "data-source-url",
+                "data-server", "data-server-url", "data-hls", "data-hls-url",
                 "data-stream", "data-video", "data-play"
             )
             document.select(
-                "iframe, video, source, [data-hhs], [data-vsrc], [data-video-src], [data-player], [data-embed], " +
-                    "[data-embed-url], [data-iframe], [data-file], [data-source], " +
-                    "[data-hls], [data-stream], [data-video], [data-play], " +
+                "iframe, video, source, [data-hhs], [data-vsrc], [data-video-src], [data-player], " +
+                    "[data-player-url], [data-embed], [data-embed-url], [data-iframe], [data-iframe-url], " +
+                    "[data-file], [data-source], [data-source-url], [data-server], [data-server-url], " +
+                    "[data-hls], [data-hls-url], [data-stream], [data-video], [data-play], " +
                     "iframe[data-url], video[data-url], source[data-url], " +
                     "iframe[data-src], video[data-src], source[data-src], " +
                     "iframe[data-lazy-src], video[data-lazy-src], source[data-lazy-src]"
@@ -859,7 +936,7 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
                         else -> 2
                     }
                 }
-                .take(5)
+                .take(8)
 
             for (scriptUrl in scriptUrls) {
                 val scriptBody = runCatching {
