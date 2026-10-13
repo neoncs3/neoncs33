@@ -703,7 +703,24 @@ class NeonPlaybackSmokeTest {
                 localPlugins.joinToString(","),
         )
 
-        val activeTargets = allTargets()
+        val allAvailableTargets = allTargets()
+        val requestedProviders = InstrumentationRegistry.getArguments()
+            .getString("providers")
+            .orEmpty()
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .toSet()
+        val activeTargets = if (requestedProviders.isEmpty()) {
+            allAvailableTargets
+        } else {
+            allAvailableTargets.filter { (it.apiName ?: it.name) in requestedProviders }
+        }
+        if (activeTargets.isEmpty()) {
+            throw AssertionError("İstenen provider testi bulunamadı: " + requestedProviders.joinToString(","))
+        }
+        println("NEON_PLAYBACK_FILTER providers=" +
+            (requestedProviders.ifEmpty { setOf("ALL") }).joinToString(","))
         val autoTargets = activeTargets.filter { it.pluginInternalName != null }
         println(
             "NEON_AUTO_PROVIDERS count=" + autoTargets.size +
