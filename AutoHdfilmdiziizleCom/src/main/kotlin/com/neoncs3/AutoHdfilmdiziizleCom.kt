@@ -1062,6 +1062,148 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
                 emitted.add(link.url) -> callback(link)
             }
         }
+
+        // The site's source buttons use data-hhs/data-hs. A /vid/kapat/ URL wraps
+        // an external host, while a /vid/ply/ URL can contain a JWPlayer file URL.
+        // Resolve these button types directly before sending candidates to generic extractors.
+        val explicitSourceNodes = document?.select(
+            ".series-watch-alternatives button[data-hhs], button[data-hhs], button[data-hs], [data-hhs], [data-hs]"
+        )?.filter { node ->
+            normalizedFilterText(node.text()) != "fragman" &&
+                !normalizedFilterText(node.text()).startsWith("fragman ")
+        }?.distinct().orEmpty()
+
+        var explicitSourceCount = 0
+        for (sourceNode in explicitSourceNodes) {
+            val sourceLabel = sourceNode.text().trim()
+                .ifBlank { sourceNode.attr("title").trim().ifBlank { name } }
+            val rawRoutes = listOf("data-hhs", "data-hs").flatMap { attribute ->
+                sourceNode.attr(attribute)
+                    .replace("\\/", "/")
+                    .replace("&amp;", "&")
+                    .split(',')
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() && !it.startsWith("javascript:", true) && !it.startsWith("data:", true) }
+            }
+
+            for (route in rawRoutes) {
+                if (emitted.isNotEmpty()) break
+                explicitSourceCount++
+
+                if (Regex("""(?i)/vid/kapat/""").containsMatchIn(route)) {
+                    val encodedTarget = Regex("""(?i)[?&]git=([^&"'<>]+)""")
+                        .find(route)?.groupValues?.get(1)
+                    val target = encodedTarget?.let { value ->
+                        runCatching {
+                            java.net.URLDecoder.decode(value.replace("+", "%2B"), "UTF-8")
+                        }.getOrDefault(value)
+                    }.orEmpty().ifBlank {
+                        route.substringAfter("git=", "").substringBefore("&")
+                    }
+                    val externalUrl = target.takeIf {
+                        it.startsWith("http://", true) || it.startsWith("https://", true)
+                    }
+                    if (externalUrl != null) {
+                        candidates.add(externalUrl)
+                        Log.d(name.uppercase().take(23), "data-hhs redirect host=${runCatching { URI(externalUrl).host.orEmpty() }.getOrDefault("")}")
+                        runCatching {
+                            loadExtractor(externalUrl, normalized, subtitleCallback, forwardingCallback)
+                        }.onFailure {
+                            Log.d(name.uppercase().take(23), "redirect extractor failed: ${it.javaClass.simpleName}")
+                        }
+                    } else {
+                        Log.d(name.uppercase().take(23), "data-hhs redirect has no external target")
+                    }
+                    continue
+                }
+
+                val playerUrl = normalize(route, normalized)
+                if (!playerUrl.startsWith("http", true)) continue
+
+                val mediaPath = runCatching { URI(playerUrl).path.orEmpty() }.getOrDefault("")
+                val appearsDirectMedia = neonIsMediaUrl(playerUrl) ||
+                    Regex("""(?i)\.(?:m3u8|mp4|mpd|webm)(?:$|/)""").containsMatchIn(mediaPath)
+                if (appearsDirectMedia) {
+                    val mediaType = if (mediaPath.endsWith(".m3u8", true) || mediaPath.endsWith(".mpd", true)) {
+                        ExtractorLinkType.M3U8
+                    } else {
+                        ExtractorLinkType.VIDEO
+                    }
+                    forwardingCallback(newExtractorLink(
+                        source = name,
+                        name = sourceLabel,
+                        url = playerUrl,
+                        type = mediaType,
+                    ) {
+                        referer = normalized
+                        quality = Qualities.Unknown.value
+                    })
+                    continue
+                }
+
+                if (isSiteUrl(playerUrl) &&
+                    Regex("""(?i)/vid/ply/""").containsMatchIn(mediaPath)
+                ) {
+                    val wrapperHtml = runCatching {
+                        app.get(
+                            playerUrl,
+                            headers = headers(normalized),
+                            timeout = 8_000L,
+                            allowRedirects = true,
+                        ).takeIf { it.isSuccessful }?.text
+                    }.getOrNull().orEmpty()
+                    val normalizedHtml = wrapperHtml
+                        .replace("\\/", "/")
+                        .replace("\\u0026", "&")
+                        .replace("&amp;", "&")
+                    val mediaUrls = Regex("""(?is)["']?file["']?\s*[:=]\s*["']([^"']+)["']""")
+                        .findAll(normalizedHtml)
+                        .mapNotNull { match ->
+                            normalize(match.groupValues[1], playerUrl).takeIf { candidate ->
+                                candidate.startsWith("http", true) &&
+                                    (neonIsMediaUrl(candidate) ||
+                                        Regex("""(?i)\.(?:m3u8|mp4|mpd|webm)(?:$|\?)""")
+                                            .containsMatchIn(candidate))
+                            }
+                        }
+                        .distinct()
+                        .toList()
+
+                    for (mediaUrl in mediaUrls) {
+                        val mediaUrlPath = runCatching { URI(mediaUrl).path.orEmpty() }.getOrDefault("")
+                        val mediaType = if (mediaUrlPath.endsWith(".m3u8", true) || mediaUrlPath.endsWith(".mpd", true)) {
+                            ExtractorLinkType.M3U8
+                        } else {
+                            ExtractorLinkType.VIDEO
+                        }
+                        forwardingCallback(newExtractorLink(
+                            source = name,
+                            name = sourceLabel,
+                            url = mediaUrl,
+                            type = mediaType,
+                        ) {
+                            referer = playerUrl
+                            quality = Qualities.Unknown.value
+                        })
+                    }
+                    if (mediaUrls.isNotEmpty()) {
+                        Log.d(name.uppercase().take(23), "data-hhs wrapper source=$sourceLabel; media=${mediaUrls.size}")
+                    }
+                } else {
+                    candidates.add(playerUrl)
+                    runCatching {
+                        loadExtractor(playerUrl, normalized, subtitleCallback, forwardingCallback)
+                    }.onFailure {
+                        Log.d(name.uppercase().take(23), "source extractor failed: ${it.javaClass.simpleName}")
+                    }
+                }
+            }
+        }
+        Log.d(
+            name.uppercase().take(23),
+            "explicit source buttons=${explicitSourceNodes.size}; routes=$explicitSourceCount; emitted=${emitted.size}"
+        )
+
         // Keep resolver work bounded and stop after the first usable source instead of
         // scanning every low-confidence URL collected from scripts.
         // This also avoids repeating all candidates after neonResolveLinkCandidates returns false.
