@@ -12,8 +12,8 @@ permissions:
   contents: write
 
 concurrency:
-  # Give each run its own group so a stuck emulator cannot block fresh diagnostics.
-  group: neon-real-playback-${{ github.run_id }}
+  # This workflow writes playback reports to master. Serialize runs to avoid concurrent report pushes.
+  group: neon-real-playback-master
   cancel-in-progress: false
 
 jobs:
