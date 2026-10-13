@@ -59,6 +59,35 @@
       "source": "AutoDdizimagCom/src/main/kotlin/com/neoncs3/AutoDdizimagCom.kt"
     },
     {
+      "provider": "AutoHdfilmdiziizleCom",
+      "status": "yellow",
+      "domain": "https://www.hdfilmdiziizle.com",
+      "configured_domain": "https://www.hdfilmdiziizle.com",
+      "live_domain": "https://www.hdfilmdiziizle.com",
+      "live": {
+        "ok": false,
+        "anti_bot_blocked": true,
+        "status_code": 403,
+        "final_url": "https://www.hdfilmdiziizle.com",
+        "bytes": 5662,
+        "title": "Just a moment...",
+        "media_hints": 0,
+        "iframe_hints": 0,
+        "error": null
+      },
+      "pipelines": {
+        "load": true,
+        "search": true,
+        "loadLinks": true,
+        "metadata": true,
+        "video": true,
+        "subtitles": true,
+        "cache": true,
+        "tmdb_playback_forbidden": true
+      },
+      "source": "AutoHdfilmdiziizleCom/src/main/kotlin/com/neoncs3/AutoHdfilmdiziizleCom.kt"
+    },
+    {
       "provider": "AutoKlubnichkaLive",
       "status": "yellow",
       "domain": "",
@@ -82,7 +111,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://tvdiziler.tv",
-        "bytes": 82402,
+        "bytes": 82379,
         "title": "Dizi izle, Yerli ve Full HD Diziler, Dizi Seyret | TvDiziler.tv",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -140,7 +169,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://dizigecesi.com",
-        "bytes": 4915,
+        "bytes": 4914,
         "title": "Attention Required! | Cloudflare",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -169,7 +198,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://dizipal1588.com",
-        "bytes": 4549,
+        "bytes": 4548,
         "title": "Attention Required! | Cloudflare",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -198,7 +227,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://dramadizilerim.com",
-        "bytes": 193043,
+        "bytes": 193091,
         "title": "Drama Dizilerim - Çin Drama &amp; Kore Drama İzle (Full HD)",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -363,6 +392,6 @@
     }
   ],
   "green": 9,
-  "yellow": 4,
+  "yellow": 5,
   "red": 0
 }
