@@ -17,6 +17,7 @@ Bu rapor tools/provider_health.py tarafından otomatik güncellenir.
 | **JetFilmizle** | 🟢 | https://jetfilmizle.now | https://jetfilmizle.now | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **SetFilmIzle** | 🟢 | https://www.setfilmizle.ltd | https://www.setfilmizle.ltd | ✅ (200) | 1 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **SinemaCX** | 🟢 | https://sinemacc.com | https://sinemacc.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **TiZam** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **WebDramaTurkey** | 🟢 | https://webdramaturkey2.com | https://webdramaturkey2.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 
 🟢 HTTP erişimi + yapısal kaynak kontrolleri geçti · 🟡 Anti-bot veya yapısal uyarı · 🔴 HTTP erişimi başarısız.
