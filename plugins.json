@@ -21,10 +21,10 @@
     },
     {
         "iconUrl": "https://dizimag.onl/favicon.ico",
-        "fileHash": "sha256-fe393ea6059048cb4259b1d79c9d53cb4160b24f015465ffccb04b78a8a530ad",
+        "fileHash": "sha256-8acfd3aa937d4f2d5c1cb400a9d4f4c9b0290ffe0ef716dea202b72d06061e55",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 74224,
+        "fileSize": 74556,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -62,10 +62,10 @@
     },
     {
         "iconUrl": "https://tvdiziler.tv/favicon.ico",
-        "fileHash": "sha256-1352b7c5a5a8fc39fc3ad5e6cad4914a57937e9367ea36472b4e8356663be9e9",
+        "fileHash": "sha256-9e0b1cb423c2f8bb62a6aa2cf879b2d55afc87f027f1d21dad4540bf1df4824f",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 68110,
+        "fileSize": 71079,
         "status": 1,
         "language": "tr",
         "authors": [
