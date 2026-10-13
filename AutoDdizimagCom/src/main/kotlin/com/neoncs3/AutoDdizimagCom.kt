@@ -46,6 +46,13 @@ class AutoDdizimagCom : NeonMainAPI() {
         (url.startsWith("http://", true) || url.startsWith("https://", true)) &&
             siteHost(url) == siteHost(mainUrl)
 
+    // Never pass malformed or hostless URLs to CloudStream's player.
+    private fun isValidHttpUrl(raw: String): Boolean {
+        val uri = runCatching { URI(raw.trim()) }.getOrNull() ?: return false
+        val scheme = uri.scheme?.lowercase() ?: return false
+        return (scheme == "http" || scheme == "https") && !uri.host.isNullOrBlank()
+    }
+
     // dizimag.onl exposes this root-level URL in page scripts, but it is not a playable video.
     // Ignore known non-playable media endpoints exposed by this site.
     // The root manifest and episode-shaped CDN playlists return errors instead of media.
@@ -115,7 +122,7 @@ class AutoDdizimagCom : NeonMainAPI() {
         return values.mapNotNull { rawValue ->
             val cleaned = rawValue.trim().trimEnd('"', '\'', ')', ']', '}', ',', ';')
             val url = normalize(cleaned, baseUrl)
-            url.takeIf { it.startsWith("http://", true) || it.startsWith("https://", true) }
+            url.takeIf(::isValidHttpUrl)
                 ?.takeIf(::isLikelyPlayerUrl)
         }
             // A trailer URL in page metadata is not the episode's playback source.
@@ -866,7 +873,7 @@ class AutoDdizimagCom : NeonMainAPI() {
         }
 
         // Remove direct YouTube pages and known non-playable site media before resolving candidates.
-        candidates.removeAll { isBrokenSiteMediaUrl(it) || isYouTubePageUrl(it) }
+        candidates.removeAll { isBrokenSiteMediaUrl(it) || isYouTubePageUrl(it) || !isValidHttpUrl(it) }
 
         val candidateSummary = candidates.joinToString(" | ") { raw -> runCatching { val uri = URI(raw); uri.host.orEmpty() + uri.path.orEmpty() }.getOrDefault("invalid-url") }
         Log.d(name.uppercase().take(23), "loadLinks candidates=${candidates.size}: ${candidateSummary.take(2600)}")
@@ -874,6 +881,7 @@ class AutoDdizimagCom : NeonMainAPI() {
         val emitted = LinkedHashSet<String>()
         val forwardingCallback: (ExtractorLink) -> Unit = { link ->
             when {
+                !isValidHttpUrl(link.url) -> Log.w(name.uppercase().take(23), "filtered malformed media URL")
                 isBrokenSiteMediaUrl(link.url) -> Log.d(name.uppercase().take(23), "filtered dead manifest")
                 isYouTubeMediaLink(link) -> Log.d(name.uppercase().take(23), "filtered YouTube trailer source name=${link.name}")
                 emitted.add(link.url) -> callback(link)

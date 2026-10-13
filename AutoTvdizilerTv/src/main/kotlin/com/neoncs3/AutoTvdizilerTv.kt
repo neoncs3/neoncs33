@@ -44,6 +44,13 @@ class AutoTvdizilerTv : NeonMainAPI() {
         (url.startsWith("http://", true) || url.startsWith("https://", true)) &&
             siteHost(url) == siteHost(mainUrl)
 
+    // Never pass malformed or hostless URLs to CloudStream's player.
+    private fun isValidHttpUrl(raw: String): Boolean {
+        val uri = runCatching { URI(raw.trim()) }.getOrNull() ?: return false
+        val scheme = uri.scheme?.lowercase() ?: return false
+        return (scheme == "http" || scheme == "https") && !uri.host.isNullOrBlank()
+    }
+
     private fun normalize(raw: String, base: String = mainUrl): String =
         neonNormalizeUrl(raw, base)
 
@@ -721,16 +728,78 @@ class AutoTvdizilerTv : NeonMainAPI() {
                 if (candidate.startsWith("http", true)) candidates.add(candidate)
             }
             neonExtractMediaUrls(scriptText).forEach(candidates::add)
+
+            // Some episodes assemble the active player URL in an external JavaScript bundle.
+            // Fetch only a small, relevant subset and keep the episode page as the referer.
+            val scriptUrls = document.select("script[src]")
+                .map { normalize(it.attr("src"), normalized) }
+                .filter(::isValidHttpUrl)
+                .filter { it.substringBefore('?').substringBefore('#').endsWith(".js", true) }
+                .filter {
+                    isSiteUrl(it) ||
+                        Regex("""(?i)(player|video|stream|embed|media|watch|episode|source)""")
+                            .containsMatchIn(it)
+                }
+                .distinct()
+                .sortedBy {
+                    when {
+                        Regex("""(?i)(player|video|stream|embed|media|watch|episode|source)""")
+                            .containsMatchIn(it) -> 0
+                        Regex("""(?i)(app|main|bundle|index|chunk)""").containsMatchIn(it) -> 1
+                        else -> 2
+                    }
+                }
+                .take(6)
+
+            for (scriptUrl in scriptUrls) {
+                val scriptBody = runCatching {
+                    app.get(
+                        scriptUrl,
+                        headers = headers(normalized),
+                        referer = normalized,
+                        timeout = 4_000L,
+                        allowRedirects = true,
+                    ).takeIf { it.isSuccessful }?.text
+                }.getOrNull().orEmpty()
+                if (scriptBody.isBlank()) continue
+
+                val decodedScript = scriptBody
+                    .replace("\\/", "/")
+                    .replace("\\u0026", "&")
+                    .replace("&amp;", "&")
+                val playerValuePattern = Regex(
+                    """(?is)["']?(?:src|file|file_url|source|source_url|url|embed|embed_url|iframe|iframe_url|video_url|video_src|videoUrl|play_url|player_url|playerUrl|hls|hls_url|playlist|stream|stream_url|media_url|manifest|data-hhs)["']?\s*[:=]\s*["']([^"'< >\s]+)["']"""
+                )
+                playerValuePattern.findAll(decodedScript).forEach { match ->
+                    normalize(match.groupValues[1], scriptUrl)
+                        .takeIf(::isValidHttpUrl)
+                        ?.let(candidates::add)
+                }
+                neonExtractMediaUrls(decodedScript)
+                    .filter(::isValidHttpUrl)
+                    .forEach(candidates::add)
+            }
         }
 
         // Try the episode page itself only after any explicit player endpoint.
         candidates.add(normalized)
+        candidates.removeAll { !isValidHttpUrl(it) }
+        val candidateSummary = candidates.joinToString(" | ") {
+            runCatching { URI(it).let { u -> u.host.orEmpty() + u.path.orEmpty() } }
+                .getOrDefault("invalid-url")
+        }
+        Log.d(name.uppercase().take(23), "loadLinks candidates=${candidates.size}: ${candidateSummary.take(1800)}")
+        val resolverCandidates = candidates.toList().take(24)
         val emitted = LinkedHashSet<String>()
         val forwardingCallback: (ExtractorLink) -> Unit = { link ->
-            if (emitted.add(link.url)) callback(link)
+            if (!isValidHttpUrl(link.url)) {
+                Log.w(name.uppercase().take(23), "filtered malformed media URL")
+            } else if (emitted.add(link.url)) {
+                callback(link)
+            }
         }
         var found = neonResolveLinkCandidates(
-            candidates = candidates,
+            candidates = resolverCandidates,
             sourceName = name,
             subtitleCallback = subtitleCallback,
             callback = forwardingCallback,
@@ -738,7 +807,7 @@ class AutoTvdizilerTv : NeonMainAPI() {
         )
 
         // Some embedded players require the site's regular CloudStream extractor.
-        for (candidate in candidates.toList()) {
+        for (candidate in resolverCandidates.take(12)) {
             if (isSiteUrl(candidate) || neonIsMediaUrl(candidate)) continue
             val before = emitted.size
             runCatching {
@@ -747,6 +816,7 @@ class AutoTvdizilerTv : NeonMainAPI() {
             if (emitted.size > before) found = true
         }
 
+        Log.d(name.uppercase().take(23), "loadLinks finished candidates=${candidates.size}; attempted=${resolverCandidates.size}; emitted=${emitted.size}")
         return found || emitted.isNotEmpty()
     }
 }
