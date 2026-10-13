@@ -966,7 +966,7 @@ class AutoDdizimagCom : NeonMainAPI() {
                     val scriptBody = runCatching {
                         app.get(
                             scriptUrl,
-                            headers = frameRequestHeaders(normalized),
+                            headers = frameRequestHeaders(frame),
                             referer = frame,
                             timeout = 5_000L,
                             allowRedirects = true,

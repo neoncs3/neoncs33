@@ -39,6 +39,7 @@ class NeonPlaybackSmokeTest {
         val directUrls: List<String> = emptyList(),
         val pluginInternalName: String? = null,
         val directOnly: Boolean = false,
+        val apiName: String? = null,
     )
     data class Result(
         val provider: String,
@@ -69,16 +70,24 @@ class NeonPlaybackSmokeTest {
             listOf("Below", "House of the Dragon", "Eşref Rüya"),
             // A public episode page isolates Dizimag player extraction from catalogue/search parsing.
             listOf("https://dizimag.onl/dizi/below/sezon-1/bolum-1"),
+            pluginInternalName = "AutoDdizimagCom",
             directOnly = true,
         ),
         Target(
-            "TvDiziler",
-            listOf("Aşk 101", "Medcezir"),
-            listOf(
-                "https://tvdiziler.tv/ask-101-1-bolum-izle",
-                "https://tvdiziler.tv/medcezir-1-bolum-izle",
-            ),
+            "TvDiziler • Aşk 101",
+            listOf("Aşk 101"),
+            listOf("https://tvdiziler.tv/ask-101-1-bolum-izle"),
+            pluginInternalName = "AutoTvdizilerTv",
             directOnly = true,
+            apiName = "TvDiziler",
+        ),
+        Target(
+            "TvDiziler • Medcezir",
+            listOf("Medcezir"),
+            listOf("https://tvdiziler.tv/medcezir-1-bolum-izle"),
+            pluginInternalName = "AutoTvdizilerTv",
+            directOnly = true,
+            apiName = "TvDiziler",
         ),
         Target("DiziPal", listOf("Wednesday", "The Last of Us", "Stranger Things")),
         Target("Dizigecesi", listOf("Wednesday", "The Last of Us", "The Boys")),
@@ -106,7 +115,7 @@ class NeonPlaybackSmokeTest {
     }
 
     private fun allTargets(): List<Target> {
-        val knownNames = targets.map { it.name }.toSet()
+        val knownNames = targets.map { it.apiName ?: it.name }.toSet()
         val generatedProviders = APIHolder.allProviders
             .filter { it.javaClass.simpleName.startsWith("Auto") }
             .filterNot { it.name in knownNames }
@@ -476,14 +485,15 @@ class NeonPlaybackSmokeTest {
         context: Context,
         target: Target,
     ): Result {
+        val requestedApiName = target.apiName ?: target.name
         val api = APIHolder.apis.firstOrNull {
-            it.name.equals(target.name, true)
+            it.name.equals(requestedApiName, true)
         } ?: APIHolder.allProviders.firstOrNull {
-            it.name.equals(target.name, true)
+            it.name.equals(requestedApiName, true)
         } ?: return Result(
             target.name,
             "FAIL",
-            error = "Provider bulunamadı",
+            error = "Provider bulunamadı: $requestedApiName",
         )
 
         val candidates = providerCandidates(api, target)
