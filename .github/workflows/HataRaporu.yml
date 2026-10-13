@@ -114,9 +114,9 @@ jobs:
             printf -- '- **Tam Actions kaydı:** %s\n\n' "$RUN_URL"
             printf '### Başarısız adımlardan günlük özeti\n\n'
             printf 'Günlükler kısaltılmış ve hassas olabilecek URL sorguları temizlenmiştir. Tam günlük için Actions bağlantısını açın.\n\n'
-            printf '\`\`\`text\n'
+            printf '%s\n' '```text'
             cat "$RUNNER_TEMP/failed-logs.txt"
-            printf '\n\`\`\`\n\n'
+            printf '\n%s\n\n' '```'
             cat <<'EOF'
           ### Sonraki adım
 
