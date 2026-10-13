@@ -38,6 +38,7 @@ class NeonPlaybackSmokeTest {
         val queries: List<String>,
         val directUrls: List<String> = emptyList(),
         val pluginInternalName: String? = null,
+        val directOnly: Boolean = false,
     )
     data class Result(
         val provider: String,
@@ -68,6 +69,16 @@ class NeonPlaybackSmokeTest {
             listOf("Below", "House of the Dragon", "Eşref Rüya"),
             // A public episode page isolates Dizimag player extraction from catalogue/search parsing.
             listOf("https://dizimag.onl/dizi/below/sezon-1/bolum-1"),
+            directOnly = true,
+        ),
+        Target(
+            "TvDiziler",
+            listOf("Aşk 101", "Medcezir"),
+            listOf(
+                "https://tvdiziler.tv/ask-101-1-bolum-izle",
+                "https://tvdiziler.tv/medcezir-1-bolum-izle",
+            ),
+            directOnly = true,
         ),
         Target("DiziPal", listOf("Wednesday", "The Last of Us", "Stranger Things")),
         Target("Dizigecesi", listOf("Wednesday", "The Last of Us", "The Boys")),
@@ -424,17 +435,19 @@ class NeonPlaybackSmokeTest {
 
         // Keep the exact search query with each result so a failed provider run
         // shows which search term led to the last tested candidate.
-        for (query in target.queries) {
-            val found = runCatching {
-                api.search(query, 1)?.items.orEmpty().take(3)
-            }.getOrDefault(emptyList())
-            searchCandidates.addAll(found.map { it to query })
+        if (!target.directOnly) {
+            for (query in target.queries) {
+                val found = runCatching {
+                    api.search(query, 1)?.items.orEmpty().take(3)
+                }.getOrDefault(emptyList())
+                searchCandidates.addAll(found.map { it to query })
+            }
         }
 
         val mainPageCandidates = mutableListOf<Pair<SearchResponse, String?>>()
 
         // If search is temporarily empty, use a small fallback pool from the home page.
-        if (api.hasMainPage) {
+        if (!target.directOnly && api.hasMainPage) {
             api.mainPage.take(2).forEach { page ->
                 val items = runCatching {
                     api.getMainPage(

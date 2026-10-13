@@ -12,6 +12,7 @@ import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.newSubtitleFile
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -156,6 +157,19 @@ open class NeonMainAPI : MainAPI() {
             value.endsWith(".m3u8") -> ExtractorLinkType.M3U8
             value.endsWith(".mpd") -> ExtractorLinkType.DASH
             else -> ExtractorLinkType.VIDEO
+        }
+    }
+
+    private fun neonIsYouTubePlaybackPage(url: String): Boolean {
+        val uri = runCatching { URI(url) }.getOrNull() ?: return false
+        val host = uri.host.orEmpty().lowercase().removePrefix("www.")
+        val path = uri.path.orEmpty().lowercase()
+        return when (host) {
+            "youtu.be" -> true
+            "youtube.com", "m.youtube.com", "youtube-nocookie.com" ->
+                path == "/watch" || path == "/live" ||
+                    path.startsWith("/embed/") || path.startsWith("/shorts/")
+            else -> false
         }
     }
 
@@ -377,6 +391,19 @@ open class NeonMainAPI : MainAPI() {
                 if (neonEmitMedia(normalized, sourceName, referer, callback)) {
                     found = true
                 }
+                return
+            }
+
+            // YouTube iframe pages must go through CloudStream's native extractor.
+            // Crawling YouTube's player JavaScript as generic HTML produced many false
+            // media candidates (including expired googlevideo URLs) and no playable link.
+            if (neonIsYouTubePlaybackPage(normalized)) {
+                val resolved = runCatching {
+                    loadExtractor(normalized, referer, subtitleCallback, callback)
+                }.onFailure {
+                    Log.w("NeonResolver", "YouTube extractor failed: ${it.javaClass.simpleName}")
+                }.getOrDefault(false)
+                if (resolved) found = true
                 return
             }
 

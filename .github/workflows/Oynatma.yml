@@ -12,9 +12,8 @@ permissions:
   contents: write
 
 concurrency:
-  # A skipped workflow_run (for example, a cancelled build) must not cancel a real playback test.
-  # Queue playback runs so each successful build can be diagnosed reliably.
-  group: neon-real-playback
+  # Give each run its own group so a stuck emulator cannot block fresh diagnostics.
+  group: neon-real-playback-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:

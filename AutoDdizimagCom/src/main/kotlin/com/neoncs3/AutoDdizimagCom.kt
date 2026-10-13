@@ -40,6 +40,26 @@ class AutoDdizimagCom : NeonMainAPI() {
             "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
         )
 
+    private fun frameRequestHeaders(parentPage: String): Map<String, String> {
+        val origin = runCatching {
+            URI(parentPage).let { uri ->
+                buildString {
+                    append(uri.scheme ?: "https")
+                    append("://")
+                    append(uri.host.orEmpty())
+                    if (uri.port > 0) append(":").append(uri.port)
+                }
+            }
+        }.getOrNull()
+
+        val browserHeaders = headers(parentPage) + mapOf(
+            "Sec-Fetch-Dest" to "iframe",
+            "Sec-Fetch-Mode" to "navigate",
+            "Sec-Fetch-Site" to "cross-site",
+        )
+        return if (origin.isNullOrBlank()) browserHeaders else browserHeaders + ("Origin" to origin)
+    }
+
     private fun siteHost(url: String): String =
         runCatching { URI(url).host.orEmpty().lowercase().removePrefix("www.") }.getOrDefault("")
 
@@ -926,12 +946,38 @@ class AutoDdizimagCom : NeonMainAPI() {
                 val frameDocument = runCatching {
                     app.get(
                         frame,
-                        headers = headers(normalized),
+                        headers = frameRequestHeaders(normalized),
                         referer = normalized,
                         timeout = 8_000L,
                         allowRedirects = true,
                     ).takeIf { it.isSuccessful }?.document
                 }.getOrNull() ?: continue
+                // Inspect the cross-origin frame already fetched using iframe-like headers.
+                // Some players expose the playable URL in inline config or a small JS bundle.
+                candidates.addAll(playerUrlsFromText(frameDocument.html(), frame))
+                candidates.addAll(neonExtractMediaUrls(frameDocument.html()).map { normalize(it, frame) })
+
+                val playerScriptUrls = frameDocument.select("script[src]")
+                    .map { normalize(it.attr("src"), frame) }
+                    .filter { isValidHttpUrl(it) && it.substringBefore('?').substringBefore('#').endsWith(".js", true) }
+                    .distinct()
+                    .take(4)
+                for (scriptUrl in playerScriptUrls) {
+                    val scriptBody = runCatching {
+                        app.get(
+                            scriptUrl,
+                            headers = frameRequestHeaders(normalized),
+                            referer = frame,
+                            timeout = 5_000L,
+                            allowRedirects = true,
+                        ).takeIf { it.isSuccessful }?.text
+                    }.getOrNull().orEmpty()
+                    if (scriptBody.isNotBlank()) {
+                        candidates.addAll(playerUrlsFromText(scriptBody, scriptUrl))
+                        candidates.addAll(neonExtractMediaUrls(scriptBody).map { normalize(it, scriptUrl) })
+                    }
+                }
+
                 val frameUri = runCatching { URI(frame) }.getOrNull() ?: continue
                 val frameOrigin = buildString {
                     append(frameUri.scheme ?: "https")

@@ -53,7 +53,15 @@ class AutoTvdizilerTv : NeonMainAPI() {
     }
 
     private fun normalize(raw: String, base: String = mainUrl): String {
-        val normalized = neonNormalizeUrl(raw, base)
+        val cleaned = neonCleanText(raw).orEmpty()
+        // Some player scripts omit the scheme. Treat www.host/path as an absolute URL,
+        // not as a child path of /vid/ply/; the latter creates redirect loops.
+        val absoluteLike = if (Regex("""(?i)^www\.[a-z0-9.-]+(?::\d+)?(?:/|[?#]|$)""").containsMatchIn(cleaned)) {
+            "https://$cleaned"
+        } else {
+            cleaned
+        }
+        val normalized = neonNormalizeUrl(absoluteLike, base)
         // Some catalog cards still expose legacy /dizi/<episode-slug> links.
         // Current episode pages use /<episode-slug>; rewrite only episode-shaped
         // URLs so real series pages such as /dizi/<show>-son-bolum-izle remain intact.
@@ -817,6 +825,7 @@ class AutoTvdizilerTv : NeonMainAPI() {
             subtitleCallback = subtitleCallback,
             callback = forwardingCallback,
             maxDepth = 4,
+            referer = normalized,
         )
 
         // Some embedded players require the site's regular CloudStream extractor.
