@@ -664,23 +664,38 @@ class AutoTvdizilerTv : NeonMainAPI() {
         // The site often adds player URLs lazily or stores them in player scripts.
         // Probe the episode page first, then resolve its iframe/media candidates.
         val candidates = LinkedHashSet<String>()
-        candidates.add(normalized)
 
         val document = neonCachedDocument(normalized, normalized)
             ?: runCatching {
                 app.get(normalized, headers = headers(normalized), timeout = 15_000L).document
             }.getOrNull()
 
+        // TvDiziler stores the current part's player URL in data-hhs rather than
+        // exposing it as an iframe on the episode page itself.
+        val activePlayerUrls = document?.select(
+            "li.series-alter-active button[data-hhs], li.series-alter-active [data-hhs], " +
+                ".series-alter-active [data-hhs]"
+        )?.mapNotNull { node ->
+            val raw = node.attr("data-hhs").trim()
+            if (raw.isBlank() || raw.startsWith("javascript:", true) || raw.startsWith("data:", true)) {
+                return@mapNotNull null
+            }
+            normalize(raw, normalized).takeIf {
+                it.startsWith("http://", true) || it.startsWith("https://", true)
+            }
+        }?.distinct().orEmpty()
+        candidates.addAll(activePlayerUrls)
+
         if (document != null) {
             candidates.addAll(neonExtractPlayerCandidates(document, normalized))
             val playerAttributes = listOf(
-                "src", "data-src", "data-lazy-src", "data-url", "data-vsrc",
+                "src", "data-src", "data-lazy-src", "data-url", "data-vsrc", "data-hhs",
                 "data-video-src", "data-player", "data-embed", "data-embed-url",
                 "data-iframe", "data-file", "data-source", "data-hls",
                 "data-stream", "data-video", "data-play"
             )
             document.select(
-                "iframe, video, source, [data-src], [data-lazy-src], [data-url], " +
+                "iframe, video, source, [data-src], [data-lazy-src], [data-url], [data-hhs], " +
                     "[data-vsrc], [data-video-src], [data-player], [data-embed], " +
                     "[data-embed-url], [data-iframe], [data-file], [data-source], " +
                     "[data-hls], [data-stream], [data-video], [data-play]"
@@ -708,6 +723,8 @@ class AutoTvdizilerTv : NeonMainAPI() {
             neonExtractMediaUrls(scriptText).forEach(candidates::add)
         }
 
+        // Try the episode page itself only after any explicit player endpoint.
+        candidates.add(normalized)
         val emitted = LinkedHashSet<String>()
         val forwardingCallback: (ExtractorLink) -> Unit = { link ->
             if (emitted.add(link.url)) callback(link)

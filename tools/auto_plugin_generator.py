@@ -1710,6 +1710,26 @@ __MAIN_PAGES__
             ?: runCatching {
                 app.get(normalized, headers = headers(normalized), timeout = 15_000L).document
             }.getOrNull()
+
+        // Some sites keep the current player URL on the active part button instead of
+        // an iframe tag. Prioritize data-hhs before generic iframe/script candidates.
+        val activePlayerUrls = document?.select(
+            "li.series-alter-active button[data-hhs], li.series-alter-active [data-hhs], " +
+                ".series-alter-active [data-hhs]"
+        )?.mapNotNull { node ->
+            val raw = node.attr("data-hhs").trim()
+            if (raw.isBlank() || raw.startsWith("javascript:", true) || raw.startsWith("data:", true)) {
+                return@mapNotNull null
+            }
+            normalize(raw, normalized).takeIf {
+                it.startsWith("http://", true) || it.startsWith("https://", true)
+            }
+        }?.distinct().orEmpty()
+        if (activePlayerUrls.isNotEmpty()) {
+            candidates.addAll(activePlayerUrls)
+            Log.d(name.uppercase().take(23), "active data-hhs player prioritized count=${activePlayerUrls.size}")
+        }
+
         // A third-party iframe is the authoritative player on current episode pages.
         // Do not emit stale /cdn/*.m3u8 URLs scraped from page scripts before resolving it.
         val externalPlayerFrames = document?.let { page ->
@@ -1738,13 +1758,13 @@ __MAIN_PAGES__
             }
             candidates.addAll(neonExtractPlayerCandidates(document, normalized))
             val playerAttributes = listOf(
-                "src", "data-src", "data-lazy-src", "data-url", "data-vsrc",
+                "src", "data-src", "data-lazy-src", "data-url", "data-vsrc", "data-hhs",
                 "data-video-src", "data-player", "data-embed", "data-embed-url",
                 "data-iframe", "data-file", "data-source", "data-hls",
                 "data-stream", "data-video", "data-play"
             )
             document.select(
-                "iframe, video, source, [data-vsrc], [data-video-src], [data-player], [data-embed], " +
+                "iframe, video, source, [data-hhs], [data-vsrc], [data-video-src], [data-player], [data-embed], " +
                     "[data-embed-url], [data-iframe], [data-file], [data-source], " +
                     "[data-hls], [data-stream], [data-video], [data-play], " +
                     "iframe[data-url], video[data-url], source[data-url], " +
@@ -2251,6 +2271,8 @@ def run_self_test() -> None:
     assert "neonExtractPlayerCandidates(document, normalized)" in generated
     assert "neonExtractIframeUrls(page, normalized)" in generated
     assert "external player iframe prioritized; continuing page media/script discovery" in generated
+    assert "active data-hhs player prioritized" in generated
+    assert "button[data-hhs]" in generated
     assert "private fun isBrokenSiteMediaUrl(raw: String): Boolean" in generated
     assert "alternateEpisodeUrl" not in generated
     dizimag_demo = {**demo, "origin": "https://dizimag.onl", "host": "dizimag.onl"}
