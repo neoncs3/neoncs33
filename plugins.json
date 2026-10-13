@@ -1,10 +1,10 @@
 [
     {
         "iconUrl": "https://asyafilmizle.com//favicon.ico",
-        "fileHash": "sha256-82bff41da0c72979790b81a0f712d4d21a97898f7f15cdacb841c858b77bbcf9",
+        "fileHash": "sha256-3f092b745ba4e650fb24b9ef937049993e05eaf0fefc8fd691855568523bef49",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 81062,
+        "fileSize": 81370,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -21,10 +21,10 @@
     },
     {
         "iconUrl": "https://dizimag.onl/favicon.ico",
-        "fileHash": "sha256-86552f082347cc8763c4a01df38571a7f80604b6cec77caa2dd0f94b60006ab8",
+        "fileHash": "sha256-546bb0f66f40000107f1b87f5e238d89ee9d8b5408cfed58bae74e2b5449fe6d",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 81022,
+        "fileSize": 81299,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -34,7 +34,7 @@
             "Movie",
             "TvSeries"
         ],
-        "version": 4,
+        "version": 5,
         "internalName": "AutoDdizimagCom",
         "description": "URL analizinden otomatik olu\u015fturuldu: dizimag.onl",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/AutoDdizimagCom.cs3",
@@ -42,10 +42,10 @@
     },
     {
         "iconUrl": "https://klubnichka.live/favicon.ico",
-        "fileHash": "sha256-ffead9e71c36bfc4153ab27da67a978b3903b70b6d8eeedf4f744036f6b9e329",
+        "fileHash": "sha256-42027fe4a31bb0a5ce4d712b521035a2cdff5d8e7b3a897c238e35371f01ad30",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 48893,
+        "fileSize": 49214,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -62,10 +62,10 @@
     },
     {
         "iconUrl": "https://tvdiziler.tv/favicon.ico",
-        "fileHash": "sha256-8c528664b8e457b3487975c58c7c51c9b8b5cdff27171b80bf9ad9746d609963",
+        "fileHash": "sha256-b520e92c5552ee90c6253c7cbd7d9c140eee9789d4aac8a8a9e32ef4a531b989",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 72063,
+        "fileSize": 72440,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -75,7 +75,7 @@
             "Movie",
             "TvSeries"
         ],
-        "version": 4,
+        "version": 5,
         "internalName": "AutoTvdizilerTv",
         "description": "URL analizinden otomatik olu\u015fturuldu: tvdiziler.tv",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/AutoTvdizilerTv.cs3",
@@ -83,10 +83,10 @@
     },
     {
         "iconUrl": "https://diziboxizle.com/favicon.ico",
-        "fileHash": "sha256-6d7d0d8af0b0bcc2acec9226a6275dfd94ffe21448d9fb096a0b8dd905d0de56",
+        "fileHash": "sha256-d9fc07c4091ee5aa45a4cbb83dc750cb2cbb731be9f4a4d740af1d7462ed5b8a",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 103594,
+        "fileSize": 103921,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -104,10 +104,10 @@
     },
     {
         "iconUrl": "https://dizigecesi.com/favicon.ico",
-        "fileHash": "sha256-642690853f83103b87c3d5872653f50c41de87a743985ce2090d0e91abdd9bf0",
+        "fileHash": "sha256-061a8387154d522c4aa92e96759eef0e1ba788b223b7642022b118944a482081",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 77386,
+        "fileSize": 77663,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -125,10 +125,10 @@
     },
     {
         "iconUrl": "https://dizipal1586.com/favicon.ico",
-        "fileHash": "sha256-b2ca3a20ccf58ab6caa4a9700602d3786138194c1b1d04282a455b86e9ab1117",
+        "fileHash": "sha256-f724313b8e2c00f60f07452e17255dd5963ecb74e64e438cb089235df28526c8",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 69024,
+        "fileSize": 69291,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -146,10 +146,10 @@
     },
     {
         "iconUrl": "https://www.dramadizilerim.com/favicon.ico",
-        "fileHash": "sha256-1d2068eb6e4ae36014501e5035acfd38f1ddd682dd68ee65825f5cbaa4ba869c",
+        "fileHash": "sha256-e0af2efde7f2eeeb7fd2813d91c58d812f370cf97da39928517694101844fa4e",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 59005,
+        "fileSize": 59295,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -166,10 +166,10 @@
     },
     {
         "iconUrl": "https://www.filmmodu.one/favicon.ico",
-        "fileHash": "sha256-4bb6df4d5cdfbccf3f29c3cbe39da9789a7626c38838b7a6c35f4b95d45c4934",
+        "fileHash": "sha256-3d0ab2bdf307872dcc8164f50dbd905d13d3ab72a118ee5a4f5250457a88f3ef",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 63338,
+        "fileSize": 63661,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -186,10 +186,10 @@
     },
     {
         "iconUrl": "https://www.google.com/s2/favicons?domain=jetfilmizle.now&sz=%size%",
-        "fileHash": "sha256-3c76b1170694bb3366ac8aa81708fedc1d44e894aa9f0cb74aa24216ec7fe0af",
+        "fileHash": "sha256-308406379eb92ad9106e3a9b01342631d0ec4e412baaf33a90feb96b05f3e0fb",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 60531,
+        "fileSize": 60867,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -207,10 +207,10 @@
     },
     {
         "iconUrl": "https://www.setfilmizle.ltd/favicon.ico",
-        "fileHash": "sha256-7f7907525955e6da2734993ef5c581c377ea5712ddb410dcf53709b6bc755f71",
+        "fileHash": "sha256-24ea99aa51ccc4859e81457e4dec7a8e4cc14b1b74b47f33ef8e4705ae2c9e8a",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 73253,
+        "fileSize": 73566,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -228,10 +228,10 @@
     },
     {
         "iconUrl": "https://www.google.com/s2/favicons?domain=sinemacc.com&sz=%size%",
-        "fileHash": "sha256-e4eb1e7487276947827c07d73103f67329c6a350b41933a04ddeb01fc1210b07",
+        "fileHash": "sha256-0b1917517649c973b2f556097f40ac72eb2250c94afdef33d49fd36877fd5c32",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 73019,
+        "fileSize": 73291,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -248,10 +248,10 @@
     },
     {
         "iconUrl": "https://www.google.com/s2/favicons?domain=https://webdramaturkey2.com&sz=%size%",
-        "fileHash": "sha256-7d4988287c4efe4417d89d43a8899d1abd2b77bd506034c75d5f9e840689f608",
+        "fileHash": "sha256-5e7489b21c4f60ae6d3d78734e099251d6e994d00691b3649e4da0fdd9a2b0f5",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 80469,
+        "fileSize": 80716,
         "status": 1,
         "language": "tr",
         "authors": [
