@@ -967,6 +967,9 @@ class AutoTvdizilerTv : NeonMainAPI() {
         Log.d(name.uppercase().take(23), "loadLinks candidates=${candidates.size}: ${candidateSummary.take(1800)}")
         val resolverCandidates = candidates.toList().take(24)
         val emitted = LinkedHashSet<String>()
+        // Collect extension-less sources from host extractors until validated as HLS.
+        val pendingHlsLinks = LinkedHashMap<String, ExtractorLink>()
+        val rejectedHlsUrls = LinkedHashSet<String>()
         val forwardingCallback: (ExtractorLink) -> Unit = { link ->
             if (!isValidHttpUrl(link.url)) {
                 Log.w(name.uppercase().take(23), "filtered malformed media URL")
@@ -990,7 +993,15 @@ class AutoTvdizilerTv : NeonMainAPI() {
                     type = link.type,
                     audioTracks = link.audioTracks,
                 )
-                if (emitted.add(outputLink.url)) callback(outputLink)
+                val outputPath = runCatching { URI(outputLink.url).path.orEmpty() }.getOrDefault("")
+                if (outputLink.type == ExtractorLinkType.M3U8 &&
+                    !outputPath.endsWith(".m3u8", ignoreCase = true)
+                ) {
+                    pendingHlsLinks.putIfAbsent(outputLink.url, outputLink)
+                    Log.d(name.uppercase().take(23), "queued extension-less HLS candidate for validation")
+                } else if (emitted.add(outputLink.url)) {
+                    callback(outputLink)
+                }
             }
         }
         // Resolve TvDiziler's own player frame before the generic crawler. The page's
@@ -1040,7 +1051,6 @@ class AutoTvdizilerTv : NeonMainAPI() {
                 }
                 if (emitted.isNotEmpty()) break
             }
-            if (emitted.isNotEmpty()) break
 
             val frameSources = (
                 playerElementSources(frameDocument, frame) + playerSources(playerText, frame)
@@ -1063,11 +1073,16 @@ class AutoTvdizilerTv : NeonMainAPI() {
                 var mediaReferer = preferredRefererForMedia(source.url, frame)
                 val path = runCatching { URI(source.url).path.orEmpty() }.getOrDefault("")
                 if (linkType == ExtractorLinkType.M3U8 && !path.endsWith(".m3u8", ignoreCase = true)) {
-                    mediaReferer = findValidHlsReferer(
+                    val validatedReferer = findValidHlsReferer(
                         source.url,
                         listOf(frame, normalized, "$mainUrl/"),
                         playerUserAgent,
-                    ) ?: continue
+                    )
+                    if (validatedReferer == null) {
+                        rejectedHlsUrls.add(source.url)
+                        continue
+                    }
+                    mediaReferer = validatedReferer
                 }
                 if (emitted.add(source.url)) {
                     callback(
@@ -1091,14 +1106,14 @@ class AutoTvdizilerTv : NeonMainAPI() {
                     )
                 }
             }
-            if (emitted.isNotEmpty()) break
 
+            // Even after finding a link, try the registered extractor too; the first source
+            // may be stale/session-bound while another source for this frame remains usable.
             // When no direct source array is present, still try CloudStream's host-specific
             // extractor against the exact frame using the site's referer.
             runCatching {
                 loadExtractor(frame, "$mainUrl/", subtitleCallback, forwardingCallback)
             }
-            if (emitted.isNotEmpty()) break
         }
 
         var found = emitted.isNotEmpty()
@@ -1122,6 +1137,28 @@ class AutoTvdizilerTv : NeonMainAPI() {
                 loadExtractor(candidate, normalized, subtitleCallback, forwardingCallback)
             }
             if (emitted.size > before) found = true
+        }
+
+        // Only expose extension-less HLS links after a real playlist signature is confirmed.
+        for (pending in pendingHlsLinks.values) {
+            if (pending.url in rejectedHlsUrls || pending.url in emitted) continue
+            val validatedReferer = findValidHlsReferer(
+                pending.url,
+                listOf(pending.referer, pending.headers["Referer"], normalized, "$mainUrl/"),
+                playerUserAgent,
+            ) ?: continue
+            val validatedLink = ExtractorLink(
+                source = pending.source,
+                name = pending.name,
+                url = pending.url,
+                referer = validatedReferer,
+                quality = pending.quality,
+                headers = pending.headers + ("Referer" to validatedReferer),
+                extractorData = pending.extractorData,
+                type = pending.type,
+                audioTracks = pending.audioTracks,
+            )
+            if (emitted.add(validatedLink.url)) callback(validatedLink)
         }
 
         Log.d(name.uppercase().take(23), "loadLinks finished candidates=${candidates.size}; attempted=${resolverCandidates.size}; emitted=${emitted.size}")

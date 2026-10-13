@@ -45,6 +45,9 @@ class AutoDdizimagCom : NeonMainAPI() {
         // Referer plus Sec-Fetch metadata, but normally do not attach an Origin header
         // to a top-level GET navigation. Some hosts reject that synthetic Origin.
         return headers(parentPage) + mapOf(
+            // Browser-like headers may be required by cross-origin player CDNs.
+            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+            "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
             "Sec-Fetch-Dest" to "iframe",
             "Sec-Fetch-Mode" to "navigate",
             "Sec-Fetch-Site" to "cross-site",
