@@ -38,6 +38,39 @@ class AutoTvdizilerTv : NeonMainAPI() {
             "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
         )
 
+    private data class PlayerSource(val url: String, val type: String, val label: String)
+
+    private fun playerSources(raw: String, baseUrl: String): List<PlayerSource> {
+        val decoded = raw
+            .replace("\\/", "/")
+            .replace("\\u0026", "&")
+            .replace("&amp;", "&")
+            .replace("&#x2F;", "/")
+        if (decoded.isBlank()) return emptyList()
+
+        // The current site places its media in JavaScript: sources: [{file, type, label}].
+        // Parse each source object without assuming the object is strict JSON (the site
+        // also serves JavaScript objects with unquoted property names).
+        val sourceArray = Regex("""(?is)\bsources\s*:\s*\[([\s\S]{0,20000}?)\]""")
+            .find(decoded)?.groupValues?.get(1) ?: decoded
+        val objectPattern = Regex("""(?is)\{([^{}]{1,5000})\}""")
+        val filePattern = Regex("""(?is)["']?file["']?\s*:\s*["']([^"']+)["']""")
+        val typePattern = Regex("""(?is)["']?(?:type|format)["']?\s*:\s*["']([^"']+)["']""")
+        val labelPattern = Regex("""(?is)["']?(?:label|quality|res)["']?\s*:\s*["']([^"']+)["']""")
+
+        return objectPattern.findAll(sourceArray).mapNotNull { match ->
+            val item = match.groupValues[1]
+            val rawUrl = filePattern.find(item)?.groupValues?.get(1)?.trim()
+                ?: return@mapNotNull null
+            val url = normalize(rawUrl, baseUrl)
+            if (!isValidHttpUrl(url)) return@mapNotNull null
+
+            val type = typePattern.find(item)?.groupValues?.get(1)?.trim()?.lowercase().orEmpty()
+            val label = labelPattern.find(item)?.groupValues?.get(1)?.trim().orEmpty()
+            PlayerSource(url, type, label.ifBlank { type.uppercase().ifBlank { "Video" } })
+        }.distinctBy { it.url }.take(8).toList()
+    }
+
     private fun siteHost(url: String): String =
         runCatching { URI(url).host.orEmpty().lowercase().removePrefix("www.") }.getOrDefault("")
 
@@ -822,17 +855,94 @@ class AutoTvdizilerTv : NeonMainAPI() {
                 callback(link)
             }
         }
-        var found = neonResolveLinkCandidates(
-            candidates = resolverCandidates,
-            sourceName = name,
-            subtitleCallback = subtitleCallback,
-            callback = forwardingCallback,
-            maxDepth = 4,
-            referer = normalized,
+        // Resolve TvDiziler's own player frame before the generic crawler. The page's
+        // JavaScript source array can contain valid HLS/MP4 links without an iframe
+        // wrapping them in another recognizable extractor.
+        val playerUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0"
+        val playerHeaders = mapOf(
+            "User-Agent" to playerUserAgent,
+            "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Referer" to "$mainUrl/",
         )
+        for (frame in activePlayerUrls.take(6)) {
+            val frameResponse = runCatching {
+                app.get(
+                    frame,
+                    headers = playerHeaders,
+                    referer = "$mainUrl/",
+                    timeout = 10_000L,
+                    allowRedirects = true,
+                )
+            }.getOrNull()
+            if (frameResponse == null || !frameResponse.isSuccessful) {
+                Log.w(name.uppercase().take(23), "player frame unavailable HTTP ${frameResponse?.code ?: 0}")
+                continue
+            }
+
+            val frameDocument = frameResponse.document
+            val playerText = buildString {
+                append(frameResponse.text)
+                frameDocument.select("script").forEach { script ->
+                    append('\n')
+                    append(script.data().ifBlank { script.html() })
+                }
+            }
+            val frameSources = playerSources(playerText, frame)
+            for (source in frameSources) {
+                val linkType = when {
+                    source.type.contains("hls") || source.type.contains("m3u8") ||
+                        source.url.contains(".m3u8", true) -> ExtractorLinkType.M3U8
+                    source.type.contains("dash") || source.type.contains("mpd") ||
+                        source.url.contains(".mpd", true) -> ExtractorLinkType.DASH
+                    source.type.contains("mp4") || source.type.contains("video") ||
+                        source.url.contains(".mp4", true) -> ExtractorLinkType.VIDEO
+                    else -> neonMediaType(source.url)
+                }
+                if (emitted.add(source.url)) {
+                    callback(
+                        newExtractorLink(
+                            source = name,
+                            name = "$name • ${source.label}",
+                            url = source.url,
+                            type = linkType,
+                        ) {
+                            this.referer = "$mainUrl/"
+                            this.quality = getQualityFromName(source.label)
+                            this.headers = mapOf(
+                                "User-Agent" to playerUserAgent,
+                                "Accept" to "*/*",
+                                "Referer" to "$mainUrl/",
+                            )
+                        },
+                    )
+                }
+            }
+            if (emitted.isNotEmpty()) break
+
+            // When no direct source array is present, still try CloudStream's host-specific
+            // extractor against the exact frame using the site's referer.
+            runCatching {
+                loadExtractor(frame, "$mainUrl/", subtitleCallback, forwardingCallback)
+            }
+            if (emitted.isNotEmpty()) break
+        }
+
+        var found = emitted.isNotEmpty()
+        if (emitted.isEmpty()) {
+            found = neonResolveLinkCandidates(
+                candidates = resolverCandidates,
+                sourceName = name,
+                subtitleCallback = subtitleCallback,
+                callback = forwardingCallback,
+                maxDepth = 4,
+                referer = normalized,
+            )
+        }
 
         // Some embedded players require the site's regular CloudStream extractor.
         for (candidate in resolverCandidates.take(12)) {
+            if (emitted.isNotEmpty()) break
             if (isSiteUrl(candidate) || neonIsMediaUrl(candidate)) continue
             val before = emitted.size
             runCatching {
