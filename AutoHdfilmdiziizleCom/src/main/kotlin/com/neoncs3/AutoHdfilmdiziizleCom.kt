@@ -849,7 +849,7 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
             playerUrlsFromText(controlMarkup, normalized).forEach(found::add)
             // onclick handlers sometimes contain a direct embed URL without a named
             // src/url property, which the structured parser above intentionally ignores.
-            Regex("""(?i)https?://[^"'<>\\s]+""").findAll(controlMarkup).forEach { match ->
+            Regex("""(?i)https?://[^"'<>\s]+""").findAll(controlMarkup).forEach { match ->
                 val rawUrl = match.value.trimEnd(')', ']', '}', ',', ';')
                 val candidate = normalize(rawUrl, normalized)
                 if ((candidate.startsWith("http://", true) || candidate.startsWith("https://", true)) &&
