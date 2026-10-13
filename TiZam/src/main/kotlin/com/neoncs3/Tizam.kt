@@ -120,7 +120,9 @@ class Tizam : MainAPI() {
             this.plot = plot
             this.year = year
             this.duration = duration
-            if (actors.isNotEmpty()) addActors(actors)
+            if (actors.isNotEmpty()) {
+                this.actors = actors.map { ActorData(Actor(it)) }
+            }
         }
     }
 
