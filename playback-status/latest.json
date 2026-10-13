@@ -1,6 +1,15 @@
 {
   "results": [
     {
+      "provider": "HDFilmDiziizle • Tron",
+      "status": "FAIL",
+      "query": null,
+      "item": "HDFilmDiziizle • Tron",
+      "links": 0,
+      "positionMs": 0,
+      "error": "loadLinks=false. Aday denemeleri: doğrudan: HDFilmDiziizle • Tron -> bağlantı yok (loadLinks=false)"
+    },
+    {
       "provider": "Dizimag • Below S1E1",
       "status": "FAIL",
       "query": null,
@@ -69,11 +78,11 @@
       "query": null,
       "item": "TvDiziler • Haysiyet 6",
       "links": 1,
-      "positionMs": 2985,
+      "positionMs": 3159,
       "error": null
     }
   ],
   "pass": 1,
   "blocked": 3,
-  "fail": 4
+  "fail": 5
 }

@@ -1,11 +1,12 @@
 # 🎬 NeonCS Gerçek Oynatma Durumu
 
-**PASS:** 1  **BLOCKED:** 3  **FAIL:** 4
+**PASS:** 1  **BLOCKED:** 3  **FAIL:** 5
 
 
 
 | Provider | Durum | Link | Position | Sorgu | İçerik | Hata |
 |---|---|---:|---:|---|---|---|
+| **HDFilmDiziizle • Tron** | 🔴 FAIL | 0 | 0 ms | - | HDFilmDiziizle • Tron | loadLinks=false. Aday denemeleri: doğrudan: HDFilmDiziizle • Tron -> bağlantı yok (loadLinks=false) |
 | **Dizimag • Below S1E1** | 🔴 FAIL | 0 | 0 ms | - | Dizimag • Below S1E1 | loadLinks=false. Aday denemeleri: doğrudan: Dizimag • Below S1E1 -> bağlantı yok (loadLinks=false) |
 | **Dizimag • Below S1E2** | 🔴 FAIL | 0 | 0 ms | - | Dizimag • Below S1E2 | loadLinks=false. Aday denemeleri: doğrudan: Dizimag • Below S1E2 -> bağlantı yok (loadLinks=false) |
 | **Dizimag • Below S1E3** | 🔴 FAIL | 0 | 0 ms | - | Dizimag • Below S1E3 | loadLinks=false. Aday denemeleri: doğrudan: Dizimag • Below S1E3 -> bağlantı yok (loadLinks=false) |
@@ -13,4 +14,4 @@
 | **TvDiziler • Medcezir** | 🟡 BLOCKED | 1 | 0 ms | - | TvDiziler • Medcezir | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
 | **TvDiziler • Tuzlu Kahve 7** | 🟡 BLOCKED | 1 | 0 ms | - | TvDiziler • Tuzlu Kahve 7 | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
 | **TvDiziler • Anne Yarısı 4** | 🟡 BLOCKED | 1 | 0 ms | - | TvDiziler • Anne Yarısı 4 | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
-| **TvDiziler • Haysiyet 6** | 🟢 PASS | 1 | 2985 ms | - | TvDiziler • Haysiyet 6 | - |
+| **TvDiziler • Haysiyet 6** | 🟢 PASS | 1 | 3159 ms | - | TvDiziler • Haysiyet 6 | - |
