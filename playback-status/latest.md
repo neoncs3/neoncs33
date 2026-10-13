@@ -13,4 +13,4 @@
 | **TvDiziler • Medcezir** | 🟡 BLOCKED | 1 | 0 ms | - | TvDiziler • Medcezir | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
 | **TvDiziler • Tuzlu Kahve 7** | 🟡 BLOCKED | 1 | 0 ms | - | TvDiziler • Tuzlu Kahve 7 | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
 | **TvDiziler • Anne Yarısı 4** | 🟡 BLOCKED | 1 | 0 ms | - | TvDiziler • Anne Yarısı 4 | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
-| **TvDiziler • Haysiyet 6** | 🟢 PASS | 1 | 3100 ms | - | TvDiziler • Haysiyet 6 | - |
+| **TvDiziler • Haysiyet 6** | 🟢 PASS | 1 | 3062 ms | - | TvDiziler • Haysiyet 6 | - |
