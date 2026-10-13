@@ -972,7 +972,7 @@ class __CLASS__ : NeonMainAPI() {
     private val configuredSearchAction = __SEARCH_ACTION__
     private val configuredSearchField = __SEARCH_FIELD__
     // Scraped from actual poster-backed catalogue cards; consumed by the real-playback smoke test.
-    private val neonSmokeTestQueries = listOf(__SMOKE_QUERIES__)
+    private val neonSmokeTestQueries = listOf<String>(__SMOKE_QUERIES__)
 
     override val mainPage = mainPageOf(
 __MAIN_PAGES__
