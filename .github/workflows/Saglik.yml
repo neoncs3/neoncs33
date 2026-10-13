@@ -82,3 +82,46 @@ jobs:
             echo "::error::Sağlık raporu master dalına gönderilemedi."
             exit 1
           fi
+
+      - name: Kırmızı sağlayıcıları hata olarak bildir
+        if: success()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          report = Path("health-status/summary.json")
+          if not report.exists():
+              print("::error::Sağlık raporu oluşturulmadı; provider hatalarını raporlayamıyorum.")
+              sys.exit(1)
+
+          try:
+              data = json.loads(report.read_text(encoding="utf-8"))
+          except Exception as exc:
+              print(f"::error::Sağlık raporu JSON olarak okunamadı: {exc}")
+              sys.exit(1)
+
+          providers = data.get("providers", [])
+          red = [
+              item for item in providers
+              if item.get("status") == "red"
+          ]
+          if red:
+              print("::error::Bir veya daha fazla sağlayıcı erişim kontrolünden geçemedi.")
+              for item in red:
+                  live = item.get("live", {})
+                  print(
+                      f"::error title={item.get('provider', 'Bilinmeyen')}::"
+                      f"domain={item.get('configured_domain', item.get('domain', '-'))}; "
+                      f"HTTP={live.get('status_code', '-')}; "
+                      f"hata={live.get('error') or 'HTTP erişimi başarısız'}"
+                  )
+              sys.exit(1)
+
+          print(
+              f"Sağlık raporu tamamlandı: {len(providers)} sağlayıcı; "
+              f"kırmızı hata yok, sarı uyarı sayısı={data.get('yellow', 0)}."
+          )
+          PY
