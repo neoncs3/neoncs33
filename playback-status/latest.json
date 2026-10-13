@@ -1,13 +1,31 @@
 {
   "results": [
     {
-      "provider": "Dizimag",
+      "provider": "Dizimag • Below S1E1",
       "status": "FAIL",
       "query": null,
-      "item": "Dizimag",
+      "item": "Dizimag • Below S1E1",
       "links": 0,
       "positionMs": 0,
-      "error": "loadLinks=false. Aday denemeleri: doğrudan: Dizimag -> bağlantı yok (loadLinks=false)"
+      "error": "loadLinks=false. Aday denemeleri: doğrudan: Dizimag • Below S1E1 -> bağlantı yok (loadLinks=false)"
+    },
+    {
+      "provider": "Dizimag • Below S1E2",
+      "status": "FAIL",
+      "query": null,
+      "item": "Dizimag • Below S1E2",
+      "links": 0,
+      "positionMs": 0,
+      "error": "loadLinks=false. Aday denemeleri: doğrudan: Dizimag • Below S1E2 -> bağlantı yok (loadLinks=false)"
+    },
+    {
+      "provider": "Dizimag • Below S1E3",
+      "status": "FAIL",
+      "query": null,
+      "item": "Dizimag • Below S1E3",
+      "links": 0,
+      "positionMs": 0,
+      "error": "loadLinks=false. Aday denemeleri: doğrudan: Dizimag • Below S1E3 -> bağlantı yok (loadLinks=false)"
     },
     {
       "provider": "TvDiziler • Aşk 101",
@@ -26,9 +44,36 @@
       "links": 1,
       "positionMs": 0,
       "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403"
+    },
+    {
+      "provider": "TvDiziler • Tuzlu Kahve 7",
+      "status": "BLOCKED",
+      "query": null,
+      "item": "TvDiziler • Tuzlu Kahve 7",
+      "links": 1,
+      "positionMs": 0,
+      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403"
+    },
+    {
+      "provider": "TvDiziler • Anne Yarısı 4",
+      "status": "BLOCKED",
+      "query": null,
+      "item": "TvDiziler • Anne Yarısı 4",
+      "links": 1,
+      "positionMs": 0,
+      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403"
+    },
+    {
+      "provider": "TvDiziler • Haysiyet 6",
+      "status": "PASS",
+      "query": null,
+      "item": "TvDiziler • Haysiyet 6",
+      "links": 1,
+      "positionMs": 3100,
+      "error": null
     }
   ],
-  "pass": 0,
-  "blocked": 1,
-  "fail": 2
+  "pass": 1,
+  "blocked": 3,
+  "fail": 4
 }
