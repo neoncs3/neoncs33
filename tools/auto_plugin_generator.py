@@ -2290,7 +2290,7 @@ def run_self_test() -> None:
     assert "navigationOnlyPaths" in generated
     assert "isValidPosterUrl(poster)" in generated
     assert "private fun isFlagOrIconAsset(value: String): Boolean" in generated
-    assert "private val neonSmokeTestQueries = listOf(\"Flag Day\", \"Örnek Film\")" in generated
+    assert "private val neonSmokeTestQueries = listOf<String>(\"Flag Day\", \"Örnek Film\")" in generated
     assert "if (isFlagOrIconAsset(" in generated
     assert "isNavigationChrome(it)" in generated
     assert "profile photo" in generated
