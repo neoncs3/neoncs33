@@ -11,12 +11,12 @@
     },
     {
       "provider": "TvDiziler • Aşk 101",
-      "status": "FAIL",
+      "status": "PASS",
       "query": null,
       "item": "TvDiziler • Aşk 101",
-      "links": 0,
-      "positionMs": 0,
-      "error": "loadLinks=false. Aday denemeleri: doğrudan: TvDiziler • Aşk 101 -> bağlantı yok (loadLinks=false)"
+      "links": 1,
+      "positionMs": 3293,
+      "error": null
     },
     {
       "provider": "TvDiziler • Medcezir",
@@ -28,7 +28,7 @@
       "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403"
     }
   ],
-  "pass": 0,
+  "pass": 1,
   "blocked": 1,
-  "fail": 2
+  "fail": 1
 }
