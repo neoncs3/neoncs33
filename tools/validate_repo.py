@@ -26,6 +26,7 @@ required = [
     ".github/workflows/OtomatikEklentiOlustur.yml",
     ".github/workflows/Saglik.yml",
     ".github/workflows/Oynatma.yml",
+    ".github/workflows/HataRaporu.yml",
 ]
 for item in required:
     if not (ROOT / item).exists():
@@ -69,6 +70,19 @@ if generator.exists():
     ):
         if token not in generator_text:
             errors.append(f"Otomatik eklenti oluşturucu özelliği eksik: {token}")
+
+error_report = ROOT / ".github/workflows/HataRaporu.yml"
+if error_report.exists():
+    error_report_text = error_report.read_text(encoding="utf-8", errors="replace")
+    for token in (
+        "workflow_run:",
+        "issues: write",
+        "gh run view",
+        "gh issue create",
+        "gh issue comment",
+    ):
+        if token not in error_report_text:
+            errors.append(f"Otomatik hata raporlama özelliği eksik: {token}")
 
 auto_workflow = ROOT / ".github/workflows/OtomatikEklentiOlustur.yml"
 if auto_workflow.exists():
