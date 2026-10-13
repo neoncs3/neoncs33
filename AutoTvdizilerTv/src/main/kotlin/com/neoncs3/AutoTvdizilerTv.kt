@@ -702,15 +702,18 @@ class AutoTvdizilerTv : NeonMainAPI() {
         // exposing it as an iframe on the episode page itself.
         val activePlayerUrls = document?.select(
             "li.series-alter-active button[data-hhs], li.series-alter-active [data-hhs], " +
-                ".series-alter-active [data-hhs]"
-        )?.mapNotNull { node ->
+                ".series-alter-active [data-hhs], li.series-alter button[data-hhs], " +
+                "li.series-alter [data-hhs], .series-alter button[data-hhs], .series-alter [data-hhs]"
+        )?.sortedByDescending { node ->
+            if (node.hasClass("series-alter-active") ||
+                node.parents().any { parent -> parent.hasClass("series-alter-active") }
+            ) 1 else 0
+        }?.mapNotNull { node ->
             val raw = node.attr("data-hhs").trim()
             if (raw.isBlank() || raw.startsWith("javascript:", true) || raw.startsWith("data:", true)) {
                 return@mapNotNull null
             }
-            normalize(raw, normalized).takeIf {
-                it.startsWith("http://", true) || it.startsWith("https://", true)
-            }
+            normalize(raw, normalized).takeIf(::isValidHttpUrl)
         }?.distinct().orEmpty()
         candidates.addAll(activePlayerUrls)
 

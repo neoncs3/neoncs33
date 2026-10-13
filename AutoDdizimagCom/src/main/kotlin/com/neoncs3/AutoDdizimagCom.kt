@@ -943,15 +943,24 @@ class AutoDdizimagCom : NeonMainAPI() {
         // page scripts and navigation endpoints.
         if (emitted.isEmpty() && externalPlayerFrames.isNotEmpty()) {
             for (frame in externalPlayerFrames.take(3)) {
-                val frameDocument = runCatching {
+                val frameResponse = runCatching {
                     app.get(
                         frame,
                         headers = frameRequestHeaders(normalized),
                         referer = normalized,
                         timeout = 8_000L,
                         allowRedirects = true,
-                    ).takeIf { it.isSuccessful }?.document
-                }.getOrNull() ?: continue
+                    )
+                }.getOrNull()
+                if (frameResponse == null || !frameResponse.isSuccessful) {
+                    val frameHost = runCatching { URI(frame).host.orEmpty() }.getOrDefault("unknown")
+                    Log.w(
+                        name.uppercase().take(23),
+                        "external embed unavailable HTTP ${frameResponse?.code ?: 0} host=$frameHost; no media exposed",
+                    )
+                    continue
+                }
+                val frameDocument = frameResponse.document
                 // Inspect the cross-origin frame already fetched using iframe-like headers.
                 // Some players expose the playable URL in inline config or a small JS bundle.
                 candidates.addAll(playerUrlsFromText(frameDocument.html(), frame))

@@ -541,8 +541,15 @@ class NeonPlaybackSmokeTest {
             lastQuery = query
             lastItem = result.name
 
+            // Direct episode controls must resolve the selected episode itself.
+            // Loading the series page and taking episodes.first() can silently test
+            // the *next* episode, hiding per-episode player differences.
             val data = runCatching {
-                loadData(api, result)
+                if (target.directOnly && result.url in target.directUrls) {
+                    result.url
+                } else {
+                    loadData(api, result)
+                }
             }.getOrElse {
                 lastError = err(it)
                 null

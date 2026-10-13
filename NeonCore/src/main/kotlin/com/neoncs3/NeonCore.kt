@@ -58,10 +58,16 @@ open class NeonMainAPI : MainAPI() {
     protected fun neonNormalizeUrl(value: String?, baseUrl: String = mainUrl): String {
         val raw = neonCleanText(value).orEmpty()
         if (raw.isBlank()) return ""
-        if (raw.startsWith("http://") || raw.startsWith("https://")) return raw
+        if (raw.startsWith("http://", ignoreCase = true) || raw.startsWith("https://", ignoreCase = true)) return raw
         if (raw.startsWith("//")) {
             val scheme = runCatching { URI(baseUrl).scheme }.getOrNull() ?: "https"
             return "$scheme:$raw"
+        }
+        // A player script sometimes stores absolute URLs without their scheme
+        // (for example: www.tvdiziler.tv/vid/assets). URI.resolve() treats those
+        // strings as relative paths and builds /vid/ply/www.tvdiziler.tv/... .
+        if (Regex("""(?i)^www\.[a-z0-9.-]+(?::\d+)?(?:/|[?#]|$)""").containsMatchIn(raw)) {
+            return "https://$raw"
         }
         return runCatching {
             URI(baseUrl).resolve(raw).toString()
@@ -337,18 +343,25 @@ open class NeonMainAPI : MainAPI() {
             }
         }
 
+        val uri = runCatching { URI(normalized) }.getOrNull()
+        val host = uri?.host.orEmpty().lowercase().removePrefix("www.")
+        val isSignedYouTubeMedia = (host == "googlevideo.com" || host.endsWith(".googlevideo.com")) &&
+            uri?.rawQuery.orEmpty().split("&").any { it.equals("source=youtube", ignoreCase = true) }
+        val mediaReferer = if (isSignedYouTubeMedia) "https://www.youtube.com/" else referer
+
         val link = newExtractorLink(
             source = sourceName,
             name = label,
             url = normalized,
             type = type,
         ) {
-            this.referer = referer
+            this.referer = mediaReferer
             this.quality = quality
-            // HTML-oriented Accept headers can trigger denials on signed media endpoints.
+            // Use media-friendly request headers. Google Video signed streams expect a
+            // YouTube player referer, not the TVDiziler episode/iframe URL.
             this.headers = neonHeaders + mapOf(
                 "Accept" to "*/*",
-                "Referer" to referer,
+                "Referer" to mediaReferer,
             )
         }
 
@@ -437,15 +450,28 @@ open class NeonMainAPI : MainAPI() {
 
             val document = Jsoup.parse(html, documentBase)
 
+            neonSubtitleUrls(document, normalized).forEach { (url, label) ->
+                neonEmitSubtitle(url, label, normalized, subtitleCallback)
+            }
+
+            // If the player frame itself is a YouTube video, resolve that page first
+            // through CloudStream's native YouTube extractor. Scraped googlevideo URLs
+            // can be tied to the IP/client that fetched them and then fail with HTTP 403.
+            val youtubeFrames = neonExtractIframeUrls(document, documentBase)
+                .filter(::neonIsYouTubePlaybackPage)
+                .distinct()
+                .take(4)
+            if (depth < maxDepth && youtubeFrames.isNotEmpty()) {
+                val foundBeforeYouTube = found
+                youtubeFrames.forEach { frame -> visit(frame, normalized, depth + 1) }
+                if (!foundBeforeYouTube && found) return
+            }
+
             neonExtractMediaUrls(html).forEach { media ->
                 if (!mediaSeen.add(media)) return@forEach
                 if (neonEmitMedia(media, sourceName, normalized, callback)) {
                     found = true
                 }
-            }
-
-            neonSubtitleUrls(document, normalized).forEach { (url, label) ->
-                neonEmitSubtitle(url, label, normalized, subtitleCallback)
             }
 
             // Embedded players frequently keep the stream URL in data-* attributes or
