@@ -902,16 +902,17 @@ class AutoDdizimagCom : NeonMainAPI() {
                 isBrokenSiteMediaUrl(resolvedUrl) -> Log.d(name.uppercase().take(23), "filtered dead manifest")
                 youtubeMedia -> Log.d(name.uppercase().take(23), "filtered YouTube trailer source name=${link.name}")
                 else -> {
-                    val outputLink = if (resolvedUrl == link.url) link else newExtractorLink(
-                        source = name,
+                    val outputLink = if (resolvedUrl == link.url) link else ExtractorLink(
+                        source = link.source,
                         name = link.name,
                         url = resolvedUrl,
+                        referer = linkReferer,
+                        quality = link.quality,
+                        headers = link.headers + ("Referer" to linkReferer),
+                        extractorData = link.extractorData,
                         type = link.type,
-                    ) {
-                        referer = linkReferer
-                        quality = link.quality
-                        headers = link.headers + ("Referer" to linkReferer)
-                    }
+                        audioTracks = link.audioTracks,
+                    )
                     if (emitted.add(outputLink.url)) callback(outputLink)
                 }
             }
