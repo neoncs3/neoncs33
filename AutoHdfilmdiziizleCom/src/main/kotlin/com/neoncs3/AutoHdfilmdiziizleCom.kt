@@ -835,11 +835,15 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
                 ) return@forEach
 
                 playerUrlsFromText(raw, normalized).forEach(found::add)
-                val candidate = normalize(raw, normalized)
-                if ((candidate.startsWith("http://", true) || candidate.startsWith("https://", true)) &&
-                    ( !isSiteUrl(candidate) || isLikelyPlayerUrl(candidate) )
-                ) {
-                    found.add(candidate)
+                val looksLikeUrl = raw.startsWith("http://", true) ||
+                    raw.startsWith("https://", true) || raw.startsWith("//") || raw.startsWith("/")
+                if (looksLikeUrl) {
+                    val candidate = normalize(raw, normalized)
+                    if ((candidate.startsWith("http://", true) || candidate.startsWith("https://", true)) &&
+                        (!isSiteUrl(candidate) || isLikelyPlayerUrl(candidate))
+                    ) {
+                        found.add(candidate)
+                    }
                 }
             }
             val controlMarkup = node.outerHtml()
