@@ -6,6 +6,7 @@ Bu tablo KONTROL.py tarafından otomatik güncellenir. Domain değişikliği anc
 |---|---|---|---|---|
 | **AsyaFilmIzle** | 🛡️ **KORUMALI** | [https://asyafilmizle.com](https://asyafilmizle.com) | - | - |
 | **AutoDdizimagCom** | ✅ **DEĞİŞMEDİ** | [https://dizimag.onl](https://dizimag.onl) | - | - |
+| **AutoHdfilmdiziizleCom** | 🛡️ **KORUMALI** | [https://www.hdfilmdiziizle.com](https://www.hdfilmdiziizle.com) | - | - |
 | **AutoTvdizilerTv** | ✅ **DEĞİŞMEDİ** | [https://tvdiziler.tv](https://tvdiziler.tv) | - | - |
 | **DiziBoxizle** | ✅ **DEĞİŞMEDİ** | [https://diziboxizle.com](https://diziboxizle.com) | - | - |
 | **DiziPal** | 🛡️ **KORUMALI** | [https://dizipal1586.com](https://dizipal1586.com) | - | - |
