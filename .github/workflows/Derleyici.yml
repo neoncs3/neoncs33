@@ -377,59 +377,60 @@ jobs:
       - name: Derlemeleri Yükle
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
           cd "$GITHUB_WORKSPACE/builds"
 
           git config --local user.email "actions@github.com"
           git config --local user.name "GitHub Actions"
 
-          echo ""
-          echo "=========================================="
-          echo "GIT ADD"
-          echo "=========================================="
+          # Keep the just-built artifacts outside the checkout so we can safely
+          # reset to the newest builds branch if another publisher wins the race.
+          SNAPSHOT="$RUNNER_TEMP/neoncs-publish"
+          rm -rf "$SNAPSHOT"
+          mkdir -p "$SNAPSHOT"
 
-          git add -A
-
-          echo ""
-          echo "=========================================="
-          echo "GIT STATUS"
-          echo "=========================================="
-
-          git status
-
-          echo ""
-          echo "=========================================="
-          echo "COMMIT"
-          echo "=========================================="
-
-          if git diff --cached --quiet; then
-            echo "Yeni değişiklik yok."
-            exit 0
+          shopt -s nullglob
+          files=( "$GITHUB_WORKSPACE/builds"/*.cs3 )
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::Yayınlanacak .cs3 dosyası bulunamadı."
+            exit 1
+          fi
+          if [ ! -s "$GITHUB_WORKSPACE/builds/plugins.json" ]; then
+            echo "::error::Yayınlanacak plugins.json bulunamadı."
+            exit 1
           fi
 
-          git commit \
-            -m "CloudStream eklentilerini güncelle $GITHUB_SHA"
+          cp "${files[@]}" "$SNAPSHOT/"
+          cp "$GITHUB_WORKSPACE/builds/plugins.json" "$SNAPSHOT/plugins.json"
+          python3 "$GITHUB_WORKSPACE/src/tools/verify_published.py" "$SNAPSHOT"
 
-          echo ""
-          echo "=========================================="
-          echo "GIT PUSH"
-          echo "=========================================="
-
-          # A separate publisher may update builds while this run is compiling.
-          # Retry after fetching/rebasing instead of failing the successful build on a push race.
           for attempt in 1 2 3 4 5; do
-            if git push origin builds; then
+            echo "=== builds yayın denemesi $attempt/5 ==="
+            git fetch origin builds
+            git reset --hard origin/builds
+
+            # The snapshot is the complete output of this build, not a merge
+            # of potentially stale generated files from the old branch revision.
+            rm -f -- ./*.cs3
+            cp "$SNAPSHOT"/*.cs3 .
+            cp "$SNAPSHOT/plugins.json" ./plugins.json
+
+            git add -A -- '*.cs3' plugins.json
+            if git diff --cached --quiet; then
+              echo "Yayınlanacak fark yok; builds dalı zaten güncel."
               exit 0
             fi
 
-            echo "Push başarısız (deneme ${attempt}); builds dalı güncellenecek."
-            git fetch origin builds
-            if ! git rebase origin/builds; then
-              echo "::error::Derleme çıktıları builds dalındaki değişikliklerle çakıştı."
-              exit 1
+            git commit -m "CloudStream eklentilerini güncelle $GITHUB_SHA"
+            if git push origin HEAD:builds; then
+              echo "CS3 paketleri ve plugins.json builds dalına gönderildi."
+              exit 0
             fi
+
+            echo "Yayın yarışı oluştu; son builds sürümü alınarak tekrar denenecek."
+            sleep "$((attempt * 2))"
           done
 
-          echo "::error::Derleme çıktıları beş denemede builds dalına gönderilemedi."
+          echo "::error::Paketler beş denemede builds dalına gönderilemedi."
           exit 1
