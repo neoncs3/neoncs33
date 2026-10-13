@@ -1,115 +1,34 @@
 {
   "results": [
     {
-      "provider": "AsyaFilmIzle",
-      "status": "BLOCKED",
-      "query": null,
-      "item": null,
-      "links": 0,
-      "positionMs": 0,
-      "error": "Provider origin HTTP 403"
-    },
-    {
-      "provider": "DiziBoxizle",
-      "status": "BLOCKED",
-      "query": null,
-      "item": "DiziBoxizle",
-      "links": 42,
-      "positionMs": 0,
-      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403"
-    },
-    {
       "provider": "Dizimag",
       "status": "FAIL",
-      "query": "Ana sayfa yedeği",
-      "item": "Harry Potter",
+      "query": null,
+      "item": "Dizimag",
       "links": 0,
       "positionMs": 0,
-      "error": "loadLinks=false. Aday denemeleri: doğrudan: Dizimag -> bağlantı yok (loadLinks=false); Below: Below -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Mayday -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Şantaj -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Koşucu -> bağlantı yok (loadLinks=false); Ana sayfa yedeği: Harry Potter -> bağlantı yok (loadLinks=false)"
+      "error": "loadLinks=false. Aday denemeleri: doğrudan: Dizimag -> bağlantı yok (loadLinks=false)"
     },
     {
-      "provider": "DiziPal",
+      "provider": "TvDiziler • Aşk 101",
+      "status": "FAIL",
+      "query": null,
+      "item": "TvDiziler • Aşk 101",
+      "links": 0,
+      "positionMs": 0,
+      "error": "loadLinks=false. Aday denemeleri: doğrudan: TvDiziler • Aşk 101 -> bağlantı yok (loadLinks=false)"
+    },
+    {
+      "provider": "TvDiziler • Medcezir",
       "status": "BLOCKED",
       "query": null,
-      "item": null,
-      "links": 0,
-      "positionMs": 0,
-      "error": "Provider origin HTTP 403"
-    },
-    {
-      "provider": "Dizigecesi",
-      "status": "BLOCKED",
-      "query": null,
-      "item": null,
-      "links": 0,
-      "positionMs": 0,
-      "error": "Provider origin HTTP 403"
-    },
-    {
-      "provider": "Dramadizilerim",
-      "status": "PASS",
-      "query": "Ana sayfa yedeği",
-      "item": "Hokey Yıldızını Boşayıp Ezeli Rakibini Seçtim",
+      "item": "TvDiziler • Medcezir",
       "links": 1,
-      "positionMs": 3195,
-      "error": null
-    },
-    {
-      "provider": "FilmModu",
-      "status": "BLOCKED",
-      "query": "Inception",
-      "item": "Inception",
-      "links": 8,
       "positionMs": 0,
       "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403"
-    },
-    {
-      "provider": "JetFilmizle",
-      "status": "PASS",
-      "query": "Interstellar",
-      "item": "Yıldızlararası",
-      "links": 1,
-      "positionMs": 3019,
-      "error": null
-    },
-    {
-      "provider": "SetFilmIzle",
-      "status": "PASS",
-      "query": "Inception",
-      "item": "Başlangıç",
-      "links": 1,
-      "positionMs": 2970,
-      "error": null
-    },
-    {
-      "provider": "SinemaCX",
-      "status": "PASS",
-      "query": "Inception",
-      "item": "Başlangıç",
-      "links": 2,
-      "positionMs": 3279,
-      "error": null
-    },
-    {
-      "provider": "WebDramaTurkey",
-      "status": "PASS",
-      "query": "Moving",
-      "item": "Moving",
-      "links": 2,
-      "positionMs": 3189,
-      "error": null
-    },
-    {
-      "provider": "TvDiziler",
-      "status": "PASS",
-      "query": "Ana sayfa yedeği",
-      "item": "Behzat Ç.: Bir Ankara Polisiyesi",
-      "links": 1,
-      "positionMs": 3044,
-      "error": null
     }
   ],
-  "pass": 6,
-  "blocked": 5,
-  "fail": 1
+  "pass": 0,
+  "blocked": 1,
+  "fail": 2
 }
