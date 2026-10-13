@@ -42,7 +42,7 @@
     },
     {
         "iconUrl": "https://www.hdfilmdiziizle.com/favicon.ico",
-        "fileHash": "sha256-b37bc9a2422a457dfb28693e799feecaf1b0689cf12ff49c2a72a933a1c3f072",
+        "fileHash": "sha256-479798ed83cf640922c2b838a8b5c157f7d680b245208f88d4022fdaa24eb1a7",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
         "fileSize": 89097,
@@ -55,7 +55,7 @@
             "Movie",
             "TvSeries"
         ],
-        "version": 1,
+        "version": 2,
         "internalName": "AutoHdfilmdiziizleCom",
         "description": "URL analizinden otomatik olu\u015fturuldu: hdfilmdiziizle.com",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/AutoHdfilmdiziizleCom.cs3",
