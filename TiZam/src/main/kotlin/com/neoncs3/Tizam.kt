@@ -204,7 +204,7 @@ class Tizam : MainAPI() {
         if (rawHref.isBlank() || rawHref.startsWith("#") || rawHref.startsWith("javascript")) return null
         val href = fixUrl(rawHref)
 
-        val card = a.closest("article, li, .item") ?: a.parent() ?: a
+        val card = findCard(a)
         val img = card.selectFirst("img.item__img, img")
 
         val title = card.selectFirst(TITLE_SELECTOR)?.text()?.trim()?.takeIf { it.isNotBlank() }
@@ -217,6 +217,16 @@ class Tizam : MainAPI() {
         return newMovieSearchResponse(title, href, TvType.NSFW) {
             this.posterUrl = poster
         }
+    }
+
+    // jsoup'un eski sürümlerinde closest() olmadığı için elle üst elemana çıkıyoruz
+    private fun findCard(a: Element): Element {
+        var el: Element? = a
+        while (el != null) {
+            if (el.tagName() == "article" || el.tagName() == "li" || el.hasClass("item")) return el
+            el = el.parent()
+        }
+        return a.parent() ?: a
     }
 
     private fun posterFrom(img: Element): String? {
