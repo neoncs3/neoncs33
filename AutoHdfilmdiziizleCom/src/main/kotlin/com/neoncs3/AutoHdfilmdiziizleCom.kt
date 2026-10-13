@@ -840,19 +840,19 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
                 "data-server-url", "data-hls", "data-hls-url", "data-stream",
                 "data-video", "data-play", "onclick"
             )
-            rawAttributes.forEach { attribute ->
+            rawAttributes.forEach attributeLoop@ { attribute ->
                 val raw = node.attr(attribute).trim()
                 if (raw.isBlank() || raw.startsWith("javascript:", true) ||
                     raw.startsWith("data:", true) || raw == "#"
-                ) return@forEach
+                ) return@attributeLoop
 
                 // data-hhs/data-hs can contain multiple player paths separated by commas.
                 val attributeValues = if (attribute == "data-hhs" || attribute == "data-hs") raw.split(',') else listOf(raw)
-                attributeValues.forEach { rawValue ->
+                attributeValues.forEach valueLoop@ { rawValue ->
                     val value = rawValue.trim()
                     if (value.isBlank() || value.startsWith("javascript:", true) ||
                         value.startsWith("data:", true) || value == "#"
-                    ) return@forEach
+                    ) return@valueLoop
 
                     playerUrlsFromText(value, normalized).forEach(found::add)
                     val looksLikeUrl = value.startsWith("http://", true) ||
@@ -941,17 +941,17 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
                     "iframe[data-src], video[data-src], source[data-src], " +
                     "iframe[data-lazy-src], video[data-lazy-src], source[data-lazy-src]"
             ).forEach { node ->
-                playerAttributes.forEach { attribute ->
+                playerAttributes.forEach playerAttributeLoop@ { attribute ->
                     val raw = node.attr(attribute).trim()
                     if (raw.isBlank() || raw.startsWith("javascript:", true) ||
                         raw.startsWith("data:", true) || raw == "#"
-                    ) return@forEach
+                    ) return@playerAttributeLoop
                     val values = if (attribute == "data-hhs" || attribute == "data-hs") raw.split(',') else listOf(raw)
-                    values.forEach { part ->
+                    values.forEach valueLoop@ { part ->
                         val value = part.trim()
                         if (value.isBlank() || value.startsWith("javascript:", true) ||
                             value.startsWith("data:", true) || value == "#"
-                        ) return@forEach
+                        ) return@valueLoop
                         val looksLikeUrl = value.startsWith("http://", true) ||
                             value.startsWith("https://", true) || value.startsWith("//") || value.startsWith("/")
                         if (looksLikeUrl) {
@@ -1040,7 +1040,7 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
                 wrapperCandidates.filterNot(::isYouTubePageUrl).forEach(candidates::add)
                 Log.d(
                     name.uppercase().take(23),
-                    "player wrapper resolved; candidates=\${wrapperCandidates.size}"
+                    "player wrapper resolved; candidates=${wrapperCandidates.size}"
                 )
             }
 
