@@ -175,7 +175,16 @@ open class NeonMainAPI : MainAPI() {
 
     protected fun neonIsMediaUrl(url: String): Boolean {
         val value = url.lowercase().substringBefore('#')
-        return value.contains(".m3u8") ||
+        val uri = runCatching { URI(value) }.getOrNull()
+        val host = uri?.host.orEmpty().lowercase().removePrefix("www.")
+        val path = uri?.path.orEmpty().lowercase()
+        // Google Video uses signed /videoplayback endpoints with no media extension.
+        // Treating these as HTML pages made the resolver fetch the stream URL as a page,
+        // which commonly returns 403 and then emits no ExtractorLink for ExoPlayer.
+        val googleVideoPlayback = host.endsWith(".googlevideo.com") &&
+            (path == "/videoplayback" || path.endsWith("/videoplayback"))
+        return googleVideoPlayback ||
+            value.contains(".m3u8") ||
             value.contains(".mpd") ||
             value.contains(".mp4") ||
             value.contains(".m4v") ||
@@ -336,7 +345,11 @@ open class NeonMainAPI : MainAPI() {
         ) {
             this.referer = referer
             this.quality = quality
-            this.headers = neonHeaders + ("Referer" to referer)
+            // HTML-oriented Accept headers can trigger denials on signed media endpoints.
+            this.headers = neonHeaders + mapOf(
+                "Accept" to "*/*",
+                "Referer" to referer,
+            )
         }
 
         callback(link)
