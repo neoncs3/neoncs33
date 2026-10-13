@@ -71,6 +71,39 @@ class AutoTvdizilerTv : NeonMainAPI() {
         }.distinctBy { it.url }.take(8).toList()
     }
 
+    private fun playerElementSources(document: Document, baseUrl: String): List<PlayerSource> {
+        return document.select(
+            "video[src], video source[src], source[src], video[data-src], source[data-src], " +
+                "[data-hls], [data-file], [data-stream]"
+        ).mapNotNull { node ->
+            val rawUrl = sequenceOf(
+                node.attr("src"),
+                node.attr("data-src"),
+                node.attr("data-hls"),
+                node.attr("data-file"),
+                node.attr("data-stream"),
+            ).firstOrNull { it.isNotBlank() } ?: return@mapNotNull null
+            val url = normalize(rawUrl, baseUrl)
+            if (!isValidHttpUrl(url)) return@mapNotNull null
+
+            val declared = (node.attr("type") + " " + node.attr("data-type")).lowercase()
+            val urlPath = url.lowercase().substringBefore('?').substringBefore('#')
+            val type = when {
+                declared.contains("mpegurl") || declared.contains("m3u8") || urlPath.endsWith(".m3u8") -> "hls"
+                declared.contains("dash") || declared.contains("mpd") || urlPath.endsWith(".mpd") -> "dash"
+                declared.contains("mp4") || urlPath.endsWith(".mp4") || urlPath.endsWith(".m4v") -> "mp4"
+                else -> return@mapNotNull null
+            }
+            val label = sequenceOf(
+                node.attr("label"),
+                node.attr("data-quality"),
+                node.attr("title"),
+            ).firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+                .ifBlank { type.uppercase() }
+            PlayerSource(url, type, label)
+        }.distinctBy { it.url }.take(8).toList()
+    }
+
     private fun siteHost(url: String): String =
         runCatching { URI(url).host.orEmpty().lowercase().removePrefix("www.") }.getOrDefault("")
 
@@ -888,10 +921,17 @@ class AutoTvdizilerTv : NeonMainAPI() {
                     append(script.data().ifBlank { script.html() })
                 }
             }
-            val frameSources = playerSources(playerText, frame)
+            val frameSources = (
+                playerElementSources(frameDocument, frame) + playerSources(playerText, frame)
+            ).distinctBy { it.url }
+            val safeFramePath = runCatching {
+                URI(frame).let { it.host.orEmpty() + it.path.orEmpty() }
+            }.getOrDefault("player")
+            Log.d(name.uppercase().take(23), "player frame parsed sources=${frameSources.size} path=$safeFramePath htmlChars=${playerText.length}")
             for (source in frameSources) {
                 val linkType = when {
                     source.type.contains("hls") || source.type.contains("m3u8") ||
+                        source.type.contains("mpegurl") ||
                         source.url.contains(".m3u8", true) -> ExtractorLinkType.M3U8
                     source.type.contains("dash") || source.type.contains("mpd") ||
                         source.url.contains(".mpd", true) -> ExtractorLinkType.DASH
@@ -907,12 +947,15 @@ class AutoTvdizilerTv : NeonMainAPI() {
                             url = source.url,
                             type = linkType,
                         ) {
-                            this.referer = "$mainUrl/"
+                            // The media request originates from the embedded player page.
+                            this.referer = frame
                             this.quality = getQualityFromName(source.label)
                             this.headers = mapOf(
                                 "User-Agent" to playerUserAgent,
-                                "Accept" to "*/*",
-                                "Referer" to "$mainUrl/",
+                                "Accept" to if (linkType == ExtractorLinkType.M3U8) {
+                                    "application/vnd.apple.mpegurl,application/x-mpegURL,*/*"
+                                } else "*/*",
+                                "Referer" to frame,
                             )
                         },
                     )
