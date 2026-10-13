@@ -100,8 +100,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          EXISTING_ISSUE="$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues?state=open&per_page=100" \
-            --jq 'add | .[] | select((has("pull_request") | not) and .title == env.TITLE) | .number' | sed -n '1p')"
+          EXISTING_ISSUE="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues?state=open&per_page=100" \
+            --jq '.[] | select((has("pull_request") | not) and .title == env.TITLE) | .number' | sed -n '1p')"
 
           BODY_FILE="$RUNNER_TEMP/issue-body.md"
           {
