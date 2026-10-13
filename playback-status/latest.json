@@ -14,9 +14,9 @@
       "status": "FAIL",
       "query": null,
       "item": "TvDiziler • Aşk 101",
-      "links": 1,
+      "links": 0,
       "positionMs": 0,
-      "error": "ExoPlaybackException: Source error <- ParserException: Input does not start with the #EXTM3U header. {contentIsMalformed=true, dataType=4}. Aday denemeleri: doğrudan: TvDiziler • Aşk 101 -> oynatma başarısız (ExoPlaybackException: Source error <- ParserException: Input does not start with the #EXTM3U header. {contentIsMalformed=true, dataType=4})"
+      "error": "loadLinks=false. Aday denemeleri: doğrudan: TvDiziler • Aşk 101 -> bağlantı yok (loadLinks=false)"
     },
     {
       "provider": "TvDiziler • Medcezir",
