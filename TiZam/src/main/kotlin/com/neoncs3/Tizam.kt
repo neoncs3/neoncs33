@@ -1,4 +1,4 @@
-package com.lagradost.cloudstream3.plugins.tizam
+package com.neoncs3
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
