@@ -66,6 +66,14 @@ class NeonPlaybackSmokeTest {
             ),
         ),
         Target(
+            "HDFilmDiziizle • Tron",
+            listOf("Tron"),
+            // Fixed public film page: tests loadLinks independently of catalogue search.
+            directUrls = listOf("https://www.hdfilmdiziizle.com/film/tron/"),
+            pluginInternalName = "AutoHdfilmdiziizleCom",
+            apiName = "HdFilmDiziizle",
+        ),
+        Target(
             "Dizimag • Below S1E1",
             emptyList(),
             listOf("https://dizimag.onl/dizi/below/sezon-1/bolum-1"),
