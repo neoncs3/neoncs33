@@ -21,7 +21,7 @@
     },
     {
         "iconUrl": "https://dizimag.onl/favicon.ico",
-        "fileHash": "sha256-044adae8150c734b37ca51b28ad3420d86bcebe3ede529b478a1a17c0c9e9fb3",
+        "fileHash": "sha256-86552f082347cc8763c4a01df38571a7f80604b6cec77caa2dd0f94b60006ab8",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
         "fileSize": 81022,
@@ -34,7 +34,7 @@
             "Movie",
             "TvSeries"
         ],
-        "version": 3,
+        "version": 4,
         "internalName": "AutoDdizimagCom",
         "description": "URL analizinden otomatik olu\u015fturuldu: dizimag.onl",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/AutoDdizimagCom.cs3",
@@ -62,7 +62,7 @@
     },
     {
         "iconUrl": "https://tvdiziler.tv/favicon.ico",
-        "fileHash": "sha256-bee31f8c8fce69621b57ba4d33b6571e6eca3108fcbe876ccfa79aeee1df140a",
+        "fileHash": "sha256-8c528664b8e457b3487975c58c7c51c9b8b5cdff27171b80bf9ad9746d609963",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
         "fileSize": 72063,
@@ -75,7 +75,7 @@
             "Movie",
             "TvSeries"
         ],
-        "version": 3,
+        "version": 4,
         "internalName": "AutoTvdizilerTv",
         "description": "URL analizinden otomatik olu\u015fturuldu: tvdiziler.tv",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/AutoTvdizilerTv.cs3",
