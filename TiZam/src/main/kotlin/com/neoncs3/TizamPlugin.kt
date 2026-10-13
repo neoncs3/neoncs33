@@ -1,4 +1,4 @@
-package com.lagradost.cloudstream3.plugins.tizam
+package com.neoncs3
 
 import android.content.Context
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
