@@ -268,6 +268,25 @@
         "name": "SinemaCX"
     },
     {
+        "fileHash": "sha256-bbf91d83979026cb865a68b2a27feb86c1d45aa78b0b5c7619f5ada3f5197996",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
+        "fileSize": 40690,
+        "status": 1,
+        "language": "ru",
+        "authors": [
+            "KULLANICI_ADIN"
+        ],
+        "tvTypes": [
+            "NSFW"
+        ],
+        "version": 1,
+        "internalName": "TiZam",
+        "description": "Tizam",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/TiZam.cs3",
+        "name": "TiZam"
+    },
+    {
         "iconUrl": "https://www.google.com/s2/favicons?domain=https://webdramaturkey2.com&sz=%size%",
         "fileHash": "sha256-3336abced1ab6a6e9600253c351cf94d6ec8db01cf9fef1962fa17010bf8aac8",
         "apiVersion": 1,
