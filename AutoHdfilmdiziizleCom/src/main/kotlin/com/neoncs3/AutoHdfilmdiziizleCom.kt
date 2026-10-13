@@ -800,7 +800,7 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
                     node.attr("href") + " " + node.attr("onclick")
             )
             val sourceLabel = Regex(
-                """(?i)\\b(?:kaynak|source|server|player|video|vidrame|vidmoly|oplay|phd|alternatif|tr\\s*[-/]?\\s*en|trplay|canavar|roket)\\b"""
+                """(?i)\b(?:kaynak|source|server|player|video|vidrame|vidmoly|oplay|phd|alternatif|tr\s*[-/]?\s*en|trplay|canavar|roket)\b"""
             ).containsMatchIn(labelHint)
             var parent: Element? = node
             var inPlayerContainer = false
