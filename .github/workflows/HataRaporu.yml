@@ -1,0 +1,159 @@
+name: Otomatik Hata Raporu
+
+on:
+  workflow_run:
+    workflows:
+      - CloudStream Derleyici
+      - NeonCS Gerçek Oynatma Testi
+      - NeonCS Sağlık Kontrolü
+      - Domain Değişiklik Kontrolü
+      - Otomatik Eklenti Oluşturucu
+    types:
+      - completed
+    branches:
+      - master
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: neon-error-report-${{ github.event.workflow_run.name }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  report:
+    if: ${{ contains(fromJSON('["failure","timed_out","action_required","startup_failure"]'), github.event.workflow_run.conclusion) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      RUN_URL: ${{ github.event.workflow_run.html_url }}
+      WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+      HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+      TITLE: "[OtoHata] ${{ github.event.workflow_run.name }} — ${{ github.event.workflow_run.head_branch }}"
+
+    steps:
+      - name: Başarısız çalışma günlüklerini al ve hassas verileri temizle
+        shell: bash
+        run: |
+          set -euo pipefail
+          RAW_LOG="$RUNNER_TEMP/failed-logs.raw"
+          CLEAN_LOG="$RUNNER_TEMP/failed-logs.txt"
+
+          gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --log-failed > "$RAW_LOG" 2>&1 || true
+
+          python3 - "$RAW_LOG" "$CLEAN_LOG" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+          from urllib.parse import urlsplit, urlunsplit
+
+          source = Path(sys.argv[1])
+          target = Path(sys.argv[2])
+          text = source.read_text(encoding="utf-8", errors="replace")
+
+          # URL'lerin sorgu/fragment bölümleri oturum belirteci içerebileceği için çıkarılır.
+          url_pattern = re.compile(r"""https?://[^\s<>'"`]+""")
+          def clean_url(match):
+              raw = match.group(0)
+              suffix = ""
+              while raw and raw[-1] in ".,;:)]}":
+                  suffix = raw[-1] + suffix
+                  raw = raw[:-1]
+              try:
+                  parts = urlsplit(raw)
+                  clean = urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+                  if parts.query:
+                      clean += "?[query-redacted]"
+                  return clean + suffix
+              except Exception:
+                  return "[URL redacted]" + suffix
+
+          text = url_pattern.sub(clean_url, text)
+          text = re.sub(
+              r"(?i)\b(token|sig|signature|expires|auth|authorization|api[_-]?key|password|passwd|secret|policy)=([^\s&]+)",
+              r"\1=[REDACTED]",
+              text,
+          )
+          text = re.sub(
+              r"(?im)^(\s*(?:authorization|cookie|set-cookie|x-api-key)\s*:\s*).+$",
+              r"\1[REDACTED]",
+              text,
+          )
+          text = text.replace("```", "'''")
+
+          lines = text.splitlines()
+          text = "\n".join(lines[-180:])
+          if len(text) > 14000:
+              text = text[-14000:]
+          target.write_text(text.strip() + "\n", encoding="utf-8")
+          PY
+
+      - name: Aynı hata için açık Issue var mı kontrol et
+        id: issue
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXISTING_ISSUE="$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues?state=open&per_page=100" \
+            --jq 'add | .[] | select((has("pull_request") | not) and .title == env.TITLE) | .number' | sed -n '1p')"
+
+          BODY_FILE="$RUNNER_TEMP/issue-body.md"
+          cat > "$BODY_FILE" <<EOF
+          ## Otomatik hata kaydı
+
+          Bir GitHub Actions iş akışı başarısız oldu. Bu kayıt, hatayı bu sohbet içinde inceleyip kaynak kodla ilişkilendirebilmek için oluşturuldu.
+
+          - **İş akışı:** $WORKFLOW_NAME
+          - **Sonuç:** $CONCLUSION
+          - **Dal:** `$HEAD_BRANCH`
+          - **Commit:** `$HEAD_SHA`
+          - **Çalıştırma kimliği:** `$RUN_ID`
+          - **Tam Actions kaydı:** $RUN_URL
+
+          ### Başarısız adımlardan günlük özeti
+
+          Aşağıdaki günlükler hassas olabilecek URL sorguları ve yaygın belirteçler temizlenerek kısaltılmıştır. Tam günlük için Actions bağlantısını açın.
+
+          ```text
+          EOF
+          cat "$RUNNER_TEMP/failed-logs.txt" >> "$BODY_FILE"
+          printf '\n```\n' >> "$BODY_FILE"
+          cat >> "$BODY_FILE" <<'EOF'
+
+          ### Sonraki adım
+          Bu Issue bağlantısını ChatGPT sohbetine gönder. Hata kaydı, kaynak dosyaları ve ilgili Actions günlükleri üzerinden incelenmelidir. Düzeltme yapıldıktan sonra derleme ve uygun testler yeniden çalıştırılmalıdır.
+          EOF
+
+          if [ -n "$EXISTING_ISSUE" ]; then
+            echo "Mevcut hata Issue'su bulundu: #$EXISTING_ISSUE"
+            gh issue comment "$EXISTING_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file "$BODY_FILE"
+            echo "issue_number=$EXISTING_ISSUE" >> "$GITHUB_OUTPUT"
+            echo "issue_action=commented" >> "$GITHUB_OUTPUT"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body-file "$BODY_FILE" > "$RUNNER_TEMP/created-issue-url.txt"
+            ISSUE_URL="$(cat "$RUNNER_TEMP/created-issue-url.txt")"
+            ISSUE_NUMBER="${ISSUE_URL##*/}"
+            echo "Yeni hata Issue'su oluşturuldu: $ISSUE_URL"
+            echo "issue_number=$ISSUE_NUMBER" >> "$GITHUB_OUTPUT"
+            echo "issue_action=created" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Hata bağlantısını çalışma özetine yaz
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Otomatik hata raporu"
+            echo ""
+            echo "- İş akışı: $WORKFLOW_NAME"
+            echo "- Actions kaydı: $RUN_URL"
+            if [ -n "${{ steps.issue.outputs.issue_number }}" ]; then
+              echo "- GitHub Issue: https://github.com/$GITHUB_REPOSITORY/issues/${{ steps.issue.outputs.issue_number }}"
+              echo "- İşlem: ${{ steps.issue.outputs.issue_action }}"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
