@@ -65,7 +65,26 @@ jobs:
             echo "Yeni dosya farkı yok; mevcut kaynakla derleme kontrolü yapılacak."
           else
             git commit -m "Otomatik CloudStream eklentisi oluştur"
-            git push origin HEAD:master
+            pushed=0
+            for attempt in 1 2 3 4 5; do
+              if git push origin HEAD:master; then
+                pushed=1
+                break
+              fi
+
+              echo "master dalı eşzamanlı değişti; yeniden alıp commit'i taşıyoruz (deneme $attempt/5)."
+              git fetch origin master
+              if ! git rebase origin/master; then
+                echo "::error::Otomatik eklenti commit'i master üzerine taşınamadı; olası dosya çakışmasını düzeltmek gerekiyor."
+                git rebase --abort || true
+                exit 1
+              fi
+            done
+
+            if [ "$pushed" -ne 1 ]; then
+              echo "::error::Beş denemeden sonra otomatik eklenti master dalına gönderilemedi."
+              exit 1
+            fi
           fi
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "commit=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
