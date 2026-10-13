@@ -1144,7 +1144,7 @@ class AutoTvdizilerTv : NeonMainAPI() {
             if (pending.url in rejectedHlsUrls || pending.url in emitted) continue
             val validatedReferer = findValidHlsReferer(
                 pending.url,
-                listOf(pending.referer, pending.headers["Referer"], normalized, "$mainUrl/"),
+                listOf(pending.referer, pending.headers["Referer"].orEmpty(), normalized, "$mainUrl/"),
                 playerUserAgent,
             ) ?: continue
             val validatedLink = ExtractorLink(
