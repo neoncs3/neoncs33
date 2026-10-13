@@ -71,6 +71,49 @@ class AutoTvdizilerTv : NeonMainAPI() {
         }.distinctBy { it.url }.take(8).toList()
     }
 
+    // Some player servers label a plain HTML/error response as HLS (for example master.txt).
+    // Validate extension-less/text HLS candidates before handing them to ExoPlayer, then keep
+    // trying other player alternatives instead of stopping at the first unusable URL.
+    private suspend fun isValidHlsPlaylist(url: String, referer: String, userAgent: String): Boolean {
+        val safeTarget = runCatching {
+            URI(url).let { it.host.orEmpty() + it.path.orEmpty() }
+        }.getOrDefault("unknown")
+        val response = runCatching {
+            app.get(
+                url,
+                headers = mapOf(
+                    "User-Agent" to userAgent,
+                    "Accept" to "application/vnd.apple.mpegurl,application/x-mpegURL,*/*",
+                    "Referer" to referer,
+                ),
+                referer = referer,
+                timeout = 8_000L,
+                allowRedirects = true,
+            )
+        }.getOrNull()
+        if (response == null || !response.isSuccessful) {
+            Log.w(name.uppercase().take(23), "HLS candidate check failed HTTP ${response?.code ?: 0} target=$safeTarget")
+            return false
+        }
+
+        val body = response.text.trimStart('\uFEFF', ' ', '\t', '\r', '\n')
+        val valid = body.startsWith("#EXTM3U")
+        if (!valid) {
+            Log.w(name.uppercase().take(23), "Rejected non-HLS response from declared HLS candidate target=$safeTarget")
+        }
+        return valid
+    }
+
+    private fun isSignedYouTubeMediaUrl(raw: String): Boolean {
+        val uri = runCatching { URI(raw) }.getOrNull() ?: return false
+        val host = uri.host.orEmpty().lowercase().removePrefix("www.")
+        return (host == "googlevideo.com" || host.endsWith(".googlevideo.com")) &&
+            uri.rawQuery.orEmpty().split("&").any { it.equals("source=youtube", ignoreCase = true) }
+    }
+
+    private fun preferredRefererForMedia(raw: String, fallback: String): String =
+        if (isSignedYouTubeMediaUrl(raw)) "https://www.youtube.com/" else fallback
+
     private fun playerElementSources(document: Document, baseUrl: String): List<PlayerSource> {
         return document.select(
             "video[src], video source[src], source[src], video[data-src], source[data-src], " +
@@ -901,8 +944,27 @@ class AutoTvdizilerTv : NeonMainAPI() {
         val forwardingCallback: (ExtractorLink) -> Unit = { link ->
             if (!isValidHttpUrl(link.url)) {
                 Log.w(name.uppercase().take(23), "filtered malformed media URL")
-            } else if (emitted.add(link.url)) {
-                callback(link)
+            } else {
+                // Google Video playback URLs are session-bound; they need the YouTube
+                // referer rather than the wrapper iframe's referer or they can return 403.
+                val linkReferer = preferredRefererForMedia(
+                    link.url,
+                    link.referer.takeIf(::isValidHttpUrl) ?: normalized,
+                )
+                val outputLink = if (
+                    linkReferer == link.referer && link.headers["Referer"] == linkReferer
+                ) link else ExtractorLink(
+                    source = link.source,
+                    name = link.name,
+                    url = link.url,
+                    referer = linkReferer,
+                    quality = link.quality,
+                    headers = link.headers + ("Referer" to linkReferer),
+                    extractorData = link.extractorData,
+                    type = link.type,
+                    audioTracks = link.audioTracks,
+                )
+                if (emitted.add(outputLink.url)) callback(outputLink)
             }
         }
         // Resolve TvDiziler's own player frame before the generic crawler. The page's
@@ -972,6 +1034,16 @@ class AutoTvdizilerTv : NeonMainAPI() {
                         source.url.contains(".mp4", true) -> ExtractorLinkType.VIDEO
                     else -> neonMediaType(source.url)
                 }
+                val mediaReferer = preferredRefererForMedia(source.url, frame)
+                val path = runCatching { URI(source.url).path.orEmpty() }.getOrDefault("")
+                if (
+                    linkType == ExtractorLinkType.M3U8 &&
+                    !path.endsWith(".m3u8", ignoreCase = true) &&
+                    !isValidHlsPlaylist(source.url, mediaReferer, playerUserAgent)
+                ) {
+                    // Don't stop at a mislabeled page/placeholder; another selected player may work.
+                    continue
+                }
                 if (emitted.add(source.url)) {
                     callback(
                         newExtractorLink(
@@ -980,15 +1052,15 @@ class AutoTvdizilerTv : NeonMainAPI() {
                             url = source.url,
                             type = linkType,
                         ) {
-                            // The media request originates from the embedded player page.
-                            this.referer = frame
+                            // Signed Google Video URLs need the origin YouTube referer.
+                            this.referer = mediaReferer
                             this.quality = getQualityFromName(source.label)
                             this.headers = mapOf(
                                 "User-Agent" to playerUserAgent,
                                 "Accept" to if (linkType == ExtractorLinkType.M3U8) {
                                     "application/vnd.apple.mpegurl,application/x-mpegURL,*/*"
                                 } else "*/*",
-                                "Referer" to frame,
+                                "Referer" to mediaReferer,
                             )
                         },
                     )
