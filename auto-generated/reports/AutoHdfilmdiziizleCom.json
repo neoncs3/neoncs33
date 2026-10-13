@@ -1,0 +1,57 @@
+{
+  "host": "hdfilmdiziizle.com",
+  "origin": "https://www.hdfilmdiziizle.com",
+  "site_name": "Just a moment...",
+  "http_status": 403,
+  "blocked": true,
+  "signals": {
+    "poster": false,
+    "imdb_rating": false,
+    "actors": false,
+    "genres": false,
+    "seasons": false,
+    "episodes": false,
+    "subtitles": false,
+    "player_embed_or_media": false,
+    "media_endpoint_reachable": false,
+    "schema_metadata": false,
+    "search_form": false,
+    "listing_cards": false,
+    "series_or_movie_schema": false
+  },
+  "counts": {
+    "pages": 1,
+    "images": 0,
+    "card_like_links": 0,
+    "season_links": 0,
+    "episode_links": 0,
+    "subtitle_hints": 0,
+    "schema_objects": 0,
+    "episodes_detected": 0,
+    "episode_seasons_detected": 0,
+    "episode_gaps": 0,
+    "media_urls_probed": 0,
+    "media_urls_reachable": 0
+  },
+  "categories": [],
+  "sample_titles": [],
+  "quality": {
+    "score": 0,
+    "status": "BLOCKED_OR_UNREACHABLE",
+    "issues": [
+      "Bot koruması veya erişim engeli sinyali var.",
+      "Ana sayfa HTTP 403; normal bir katalog yanıtı doğrulanamadı.",
+      "Kart/katalog bağlantısı gözlenmedi.",
+      "Afiş görüntüsü sinyali gözlenmedi.",
+      "Ne arama formu ne de güvenilir kategori bağlantısı bulundu.",
+      "Oynatıcı veya doğrudan medya sinyali bulunamadı."
+    ]
+  },
+  "schema_version": 1,
+  "observed_at": "2026-10-13 10:49 UTC",
+  "fingerprint": "8e99b2d080b45720",
+  "previous_fingerprint": null,
+  "changes": [
+    "İlk tarama: sonraki çalıştırmalar için başlangıç profili kaydedildi."
+  ]
+}
