@@ -200,6 +200,28 @@ class AutoTvdizilerTv : NeonMainAPI() {
         (url.startsWith("http://", true) || url.startsWith("https://", true)) &&
             siteHost(url) == siteHost(mainUrl)
 
+    // Avoid spending resolver requests on posters, icons, site navigation and JavaScript
+    // bundles that the broad page-script parser can mistake for player URLs.
+    private fun isUtilityCandidate(raw: String): Boolean {
+        if (!isSiteUrl(raw)) return false
+        val uri = runCatching { URI(raw) }.getOrNull() ?: return true
+        val path = uri.path.orEmpty().lowercase()
+        if (path.startsWith("/assets/") ||
+            path.startsWith("/search") ||
+            path.startsWith("/ajax/") ||
+            path.startsWith("/profile/") ||
+            path.startsWith("/profil/") ||
+            path.startsWith("/users/") ||
+            path.startsWith("/uploads/icons/") ||
+            path.startsWith("/uploads/users/") ||
+            path.startsWith("/uploads/series/thumb/")
+        ) return true
+
+        return Regex(
+            """(?i)\\.(?:png|jpe?g|webp|gif|svg|ico|css|js|woff2?|ttf|eot|map|json)$"""
+        ).containsMatchIn(path)
+    }
+
     // Never pass malformed or hostless URLs to CloudStream's player.
     private fun isValidHttpUrl(raw: String): Boolean {
         val uri = runCatching { URI(raw.trim()) }.getOrNull() ?: return false
@@ -858,13 +880,17 @@ class AutoTvdizilerTv : NeonMainAPI() {
         val activePlayerUrls = document?.select(
             "li.series-alter-active button[data-hhs], li.series-alter-active [data-hhs], " +
                 ".series-alter-active [data-hhs], li.series-alter button[data-hhs], " +
-                "li.series-alter [data-hhs], .series-alter button[data-hhs], .series-alter [data-hhs]"
+                "li.series-alter [data-hhs], .series-alter button[data-hhs], .series-alter [data-hhs], " +
+                "li.series-alter-active button[data-hs], li.series-alter-active [data-hs], " +
+                ".series-alter-active [data-hs], li.series-alter button[data-hs], " +
+                "li.series-alter [data-hs], .series-alter button[data-hs], .series-alter [data-hs]"
         )?.sortedByDescending { node ->
             if (node.hasClass("series-alter-active") ||
                 node.parents().any { parent -> parent.hasClass("series-alter-active") }
             ) 1 else 0
         }?.mapNotNull { node ->
-            val raw = node.attr("data-hhs").trim()
+            val raw = sequenceOf(node.attr("data-hhs"), node.attr("data-hs"))
+                .firstOrNull { it.isNotBlank() }?.trim().orEmpty()
             if (raw.isBlank() || raw.startsWith("javascript:", true) || raw.startsWith("data:", true)) {
                 return@mapNotNull null
             }
@@ -875,13 +901,13 @@ class AutoTvdizilerTv : NeonMainAPI() {
         if (document != null) {
             candidates.addAll(neonExtractPlayerCandidates(document, normalized))
             val playerAttributes = listOf(
-                "src", "data-src", "data-lazy-src", "data-url", "data-vsrc", "data-hhs",
-                "data-video-src", "data-player", "data-embed", "data-embed-url",
-                "data-iframe", "data-file", "data-source", "data-hls",
-                "data-stream", "data-video", "data-play"
+                "src", "data-src", "data-lazy-src", "data-url", "data-vsrc", "data-hhs", "data-hs",
+                "data-video-src", "data-player", "data-player-url", "data-embed", "data-embed-url",
+                "data-iframe", "data-iframe-url", "data-file", "data-source", "data-server",
+                "data-hls", "data-stream", "data-video", "data-play"
             )
             document.select(
-                "iframe, video, source, [data-src], [data-lazy-src], [data-url], [data-hhs], " +
+                "iframe, video, source, [data-src], [data-lazy-src], [data-url], [data-hhs], [data-hs], " +
                     "[data-vsrc], [data-video-src], [data-player], [data-embed], " +
                     "[data-embed-url], [data-iframe], [data-file], [data-source], " +
                     "[data-hls], [data-stream], [data-video], [data-play]"
@@ -962,7 +988,7 @@ class AutoTvdizilerTv : NeonMainAPI() {
 
         // Try the episode page itself only after any explicit player endpoint.
         candidates.add(normalized)
-        candidates.removeAll { !isValidHttpUrl(it) }
+        candidates.removeAll { !isValidHttpUrl(it) || isUtilityCandidate(it) }
         val candidateSummary = candidates.joinToString(" | ") {
             runCatching { URI(it).let { u -> u.host.orEmpty() + u.path.orEmpty() } }
                 .getOrDefault("invalid-url")
@@ -1132,20 +1158,24 @@ class AutoTvdizilerTv : NeonMainAPI() {
         }
 
         var found = emitted.isNotEmpty()
-        if (emitted.isEmpty()) {
-            found = neonResolveLinkCandidates(
-                candidates = resolverCandidates,
-                sourceName = name,
-                subtitleCallback = subtitleCallback,
-                callback = forwardingCallback,
-                maxDepth = 4,
-                referer = normalized,
-            )
-        }
+
+        // An emitted URL is only a candidate, not proof that the CDN will play it.
+        // Continue exploring the other public page/player endpoints so an HTTP 403 or
+        // expired source does not hide an alternative host supplied by the page.
+        val resolverFound = neonResolveLinkCandidates(
+            candidates = resolverCandidates,
+            sourceName = name,
+            subtitleCallback = subtitleCallback,
+            callback = forwardingCallback,
+            maxDepth = 4,
+            referer = normalized,
+        )
+        found = found || resolverFound || emitted.isNotEmpty()
 
         // Some embedded players require the site's regular CloudStream extractor.
+        // Continue across candidates even after one link is found: alternate hosts may
+        // be the only source that actually starts playback in ExoPlayer.
         for (candidate in resolverCandidates.take(12)) {
-            if (emitted.isNotEmpty()) break
             if (isSiteUrl(candidate) || neonIsMediaUrl(candidate)) continue
             val before = emitted.size
             runCatching {
