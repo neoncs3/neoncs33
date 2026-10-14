@@ -838,11 +838,14 @@ class AutoDdizimagCom : NeonMainAPI() {
     private fun seasonLinks(document: Document, baseUrl: String): List<Pair<String, Int?>> {
         return document.select("a[href]").mapNotNull { anchor ->
             if (isNonContentAnchor(anchor, baseUrl)) return@mapNotNull null
-            val href = normalize(anchor.attr("href"), baseUrl)
-            if (!isDetailUrl(href, baseUrl) || href == baseUrl) return@mapNotNull null
-            val text = anchor.text() + " " + anchor.attr("title") + " " + href
+            // Check the anchor's own label/path before URI normalization. This avoids
+            // interpreting alphabetic directory entries or episode links as seasons.
+            val rawHref = anchor.attr("href")
+            val text = anchor.text() + " " + anchor.attr("title") + " " + rawHref
             if (episodeInfo(text, null) != null) return@mapNotNull null
             val season = seasonNumber(text) ?: return@mapNotNull null
+            val href = normalize(rawHref, baseUrl)
+            if (!isDetailUrl(href, baseUrl) || href == baseUrl) return@mapNotNull null
             href to season
         }.distinctBy { it.first }.take(12)
     }
@@ -854,23 +857,35 @@ class AutoDdizimagCom : NeonMainAPI() {
     ): List<EpisodeItem> {
         return document.select("a[href]").mapNotNull { anchor ->
             if (isNonContentAnchor(anchor, baseUrl)) return@mapNotNull null
-            val href = normalize(anchor.attr("href"), baseUrl)
+            val rawHref = anchor.attr("href")
+            // Classify each link using only its own title/text/path before examining
+            // parent containers. The live page's parent text contains every episode,
+            // which used to assign sibling episode numbers and posters to one link.
+            val anchorIdentity = listOf(
+                anchor.attr("title"),
+                anchor.attr("aria-label"),
+                anchor.text(),
+                rawHref,
+                anchor.classNames().joinToString(" ")
+            ).joinToString(" ")
+            val numbers = episodeInfo(anchorIdentity, defaultSeason) ?: return@mapNotNull null
+            if (numbers.second !in 1..999 || numbers.first !in 1..99) return@mapNotNull null
+
+            val href = normalize(rawHref, baseUrl)
             if (!isDetailUrl(href, baseUrl) || href == baseUrl) return@mapNotNull null
             val container = containerFor(anchor)
             val image = anchor.selectFirst("img") ?: container.selectFirst("img")
-            // Use only text belonging to this episode link. Parent/container text
-            // includes neighbouring seasons and episodes, which assigned the same
-            // episode number and inherited unrelated posters across the whole list.
             val title = sequenceOf(
                 anchor.attr("title"),
                 anchor.attr("aria-label"),
                 anchor.text(),
                 image?.attr("alt"),
                 href
-            ).mapNotNull { neonCleanText(it) }.firstOrNull { it.length in 1..180 } ?: return@mapNotNull null
-            val combined = title + " " + href + " " + anchor.classNames().joinToString(" ")
-            val numbers = episodeInfo(combined, defaultSeason) ?: return@mapNotNull null
-            if (numbers.second !in 1..999 || numbers.first !in 1..99) return@mapNotNull null
+            ).mapNotNull { neonCleanText(it) }
+                .firstOrNull {
+                    it.length in 1..180 &&
+                        normalizedFilterText(it) !in setOf("izledim", "izlendi", "watched")
+                } ?: return@mapNotNull null
             EpisodeItem(
                 url = href,
                 title = title,
