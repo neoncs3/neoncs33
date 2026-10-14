@@ -52,7 +52,7 @@
       "item": "TvDiziler • Medcezir",
       "links": 1,
       "positionMs": 0,
-      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403"
+      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403. Aday denemeleri: doğrudan: TvDiziler • Medcezir -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403)"
     },
     {
       "provider": "TvDiziler • Tuzlu Kahve 7",
@@ -61,7 +61,7 @@
       "item": "TvDiziler • Tuzlu Kahve 7",
       "links": 1,
       "positionMs": 0,
-      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403"
+      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403. Aday denemeleri: doğrudan: TvDiziler • Tuzlu Kahve 7 -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403)"
     },
     {
       "provider": "TvDiziler • Anne Yarısı 4",
@@ -70,19 +70,19 @@
       "item": "TvDiziler • Anne Yarısı 4",
       "links": 1,
       "positionMs": 0,
-      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403"
+      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403. Aday denemeleri: doğrudan: TvDiziler • Anne Yarısı 4 -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403)"
     },
     {
       "provider": "TvDiziler • Haysiyet 6",
-      "status": "PASS",
+      "status": "BLOCKED",
       "query": null,
       "item": "TvDiziler • Haysiyet 6",
       "links": 1,
-      "positionMs": 3159,
-      "error": null
+      "positionMs": 0,
+      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403. Aday denemeleri: doğrudan: TvDiziler • Haysiyet 6 -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403)"
     }
   ],
-  "pass": 1,
-  "blocked": 3,
+  "pass": 0,
+  "blocked": 4,
   "fail": 5
 }

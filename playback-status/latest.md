@@ -1,6 +1,6 @@
 # 🎬 NeonCS Gerçek Oynatma Durumu
 
-**PASS:** 1  **BLOCKED:** 3  **FAIL:** 5
+**PASS:** 0  **BLOCKED:** 4  **FAIL:** 5
 
 
 
@@ -11,7 +11,7 @@
 | **Dizimag • Below S1E2** | 🔴 FAIL | 0 | 0 ms | - | Dizimag • Below S1E2 | loadLinks=false. Aday denemeleri: doğrudan: Dizimag • Below S1E2 -> bağlantı yok (loadLinks=false) |
 | **Dizimag • Below S1E3** | 🔴 FAIL | 0 | 0 ms | - | Dizimag • Below S1E3 | loadLinks=false. Aday denemeleri: doğrudan: Dizimag • Below S1E3 -> bağlantı yok (loadLinks=false) |
 | **TvDiziler • Aşk 101** | 🔴 FAIL | 0 | 0 ms | - | TvDiziler • Aşk 101 | loadLinks=false. Aday denemeleri: doğrudan: TvDiziler • Aşk 101 -> bağlantı yok (loadLinks=false) |
-| **TvDiziler • Medcezir** | 🟡 BLOCKED | 1 | 0 ms | - | TvDiziler • Medcezir | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
-| **TvDiziler • Tuzlu Kahve 7** | 🟡 BLOCKED | 1 | 0 ms | - | TvDiziler • Tuzlu Kahve 7 | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
-| **TvDiziler • Anne Yarısı 4** | 🟡 BLOCKED | 1 | 0 ms | - | TvDiziler • Anne Yarısı 4 | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403 |
-| **TvDiziler • Haysiyet 6** | 🟢 PASS | 1 | 3159 ms | - | TvDiziler • Haysiyet 6 | - |
+| **TvDiziler • Medcezir** | 🟡 BLOCKED | 1 | 0 ms | - | TvDiziler • Medcezir | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403. Aday denemeleri: doğrudan: TvDiziler • Medcezir -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403) |
+| **TvDiziler • Tuzlu Kahve 7** | 🟡 BLOCKED | 1 | 0 ms | - | TvDiziler • Tuzlu Kahve 7 | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403. Aday denemeleri: doğrudan: TvDiziler • Tuzlu Kahve 7 -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403) |
+| **TvDiziler • Anne Yarısı 4** | 🟡 BLOCKED | 1 | 0 ms | - | TvDiziler • Anne Yarısı 4 | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403. Aday denemeleri: doğrudan: TvDiziler • Anne Yarısı 4 -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403) |
+| **TvDiziler • Haysiyet 6** | 🟡 BLOCKED | 1 | 0 ms | - | TvDiziler • Haysiyet 6 | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403. Aday denemeleri: doğrudan: TvDiziler • Haysiyet 6 -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403) |
