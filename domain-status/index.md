@@ -5,7 +5,7 @@ Bu tablo KONTROL.py tarafından otomatik güncellenir. Domain değişikliği anc
 | Eklenti | Durum | Güncel Domain | Önceki Domain | Tarih |
 |---|---|---|---|---|
 | **AsyaFilmIzle** | 🛡️ **KORUMALI** | [https://asyafilmizle.com](https://asyafilmizle.com) | - | - |
-| **AutoDdizimagCom** | ✅ **DEĞİŞMEDİ** | [https://dizimag.onl](https://dizimag.onl) | - | - |
+| **AutoDdizimagCom** | ✅ **DEĞİŞMEDİ** | [https://dizimag.one](https://dizimag.one) | - | - |
 | **AutoHdfilmdiziizleCom** | 🛡️ **KORUMALI** | [https://www.hdfilmdiziizle.com](https://www.hdfilmdiziizle.com) | - | - |
 | **AutoTvdizilerTv** | ✅ **DEĞİŞMEDİ** | [https://tvdiziler.tv](https://tvdiziler.tv) | - | - |
 | **DiziBoxizle** | ✅ **DEĞİŞMEDİ** | [https://diziboxizle.com](https://diziboxizle.com) | - | - |

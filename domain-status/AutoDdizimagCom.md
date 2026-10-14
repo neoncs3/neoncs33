@@ -1,6 +1,6 @@
 # ✅ **DEĞİŞMEDİ** AutoDdizimagCom
 
-**Güncel domain:** [https://dizimag.onl](https://dizimag.onl)
+**Güncel domain:** [https://dizimag.one](https://dizimag.one)
 
 **Önceki domain:** -
 
