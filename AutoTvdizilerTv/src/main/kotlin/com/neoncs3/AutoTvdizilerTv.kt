@@ -977,8 +977,8 @@ class AutoTvdizilerTv : NeonMainAPI() {
             if (!isValidHttpUrl(link.url)) {
                 Log.w(name.uppercase().take(23), "filtered malformed media URL")
             } else {
-                // Google Video playback URLs are session-bound; they need the YouTube
-                // referer rather than the wrapper iframe's referer or they can return 403.
+                // Signed Google Video URLs are session-bound. Preserve the native
+                // YouTube extractor's headers/referer exactly; forcing a Referer can cause 403.
                 val youtubeCdnLink = isSignedYouTubeMediaUrl(link.url)
                 // Keep the native extractor's Referer/headers for YouTube CDN links.
                 // For ordinary page/player sources, attach the resolved parent-page Referer.
