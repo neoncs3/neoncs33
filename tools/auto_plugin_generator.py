@@ -2353,7 +2353,7 @@ def run_self_test() -> None:
     assert "isNonContentAnchor(anchor, baseUrl)" in generated
     assert 'container.text(),' not in generated[generated.index("private fun episodeItems"):generated.index("private fun cleanSeriesTitle")]
     assert "Stop processing card details when the maximum number of unique results is reached." in generated
-    assert "Never fall back to the global alphabetical directory." in generated
+    assert "never use a global a[href] fallback" in generated
     assert 'val rawHref = anchor.attr("href").trim()' in generated
     assert 'if (rawHref.startsWith("#")) return true' in generated
     assert 'val anchorIdentity = listOf(' in generated
