@@ -597,10 +597,8 @@ class AutoDdizimagCom : NeonMainAPI() {
             base + (if (base.contains("?")) "&" else "?") + "paged=" + page,
         ).distinct()
         for (candidate in candidates) {
-            val document = runCatching {
-                cachedDocumentFast(candidate, candidate, timeoutMs = 6_500L)
-                    ?: continue
-            }.getOrNull() ?: continue
+            val document = cachedDocumentFast(candidate, candidate, timeoutMs = 6_500L)
+                ?: continue
             val results = resultsFrom(document, candidate)
             if (results.isNotEmpty()) {
                 return newHomePageResponse(request.name, results, hasNext = page < 100)
