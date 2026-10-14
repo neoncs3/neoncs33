@@ -7,10 +7,10 @@
 | Provider | Durum | Link | Position | Sorgu | İçerik | Hata |
 |---|---|---:|---:|---|---|---|
 | **HDFilmDiziizle • Tron** | 🔴 FAIL | 0 | 0 ms | - | HDFilmDiziizle • Tron | loadLinks=false. Aday denemeleri: doğrudan: HDFilmDiziizle • Tron -> bağlantı yok (loadLinks=false) |
-| **Dizimag • Below S1E1** | 🟢 PASS | 3 | 2905 ms | - | Dizimag • Below S1E1 | - |
-| **Dizimag • Below S1E2** | 🟢 PASS | 3 | 3369 ms | - | Dizimag • Below S1E2 | - |
-| **Dizimag • Below S1E3** | 🟢 PASS | 3 | 3230 ms | - | Dizimag • Below S1E3 | - |
-| **Dizimag • Below S1E6** | 🟢 PASS | 3 | 2659 ms | - | Dizimag • Below S1E6 | - |
+| **Dizimag • Below S1E1** | 🟢 PASS | 3 | 2910 ms | - | Dizimag • Below S1E1 | - |
+| **Dizimag • Below S1E2** | 🟢 PASS | 3 | 2844 ms | - | Dizimag • Below S1E2 | - |
+| **Dizimag • Below S1E3** | 🟢 PASS | 3 | 3135 ms | - | Dizimag • Below S1E3 | - |
+| **Dizimag • Below S1E6** | 🟢 PASS | 3 | 3205 ms | - | Dizimag • Below S1E6 | - |
 | **TvDiziler • Aşk 101** | 🔴 FAIL | 0 | 0 ms | - | TvDiziler • Aşk 101 | loadLinks=false. Aday denemeleri: doğrudan: TvDiziler • Aşk 101 -> bağlantı yok (loadLinks=false) |
 | **TvDiziler • Medcezir** | 🟡 BLOCKED | 1 | 0 ms | - | TvDiziler • Medcezir | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403. Aday denemeleri: doğrudan: TvDiziler • Medcezir -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403) |
 | **TvDiziler • Tuzlu Kahve 7** | 🟡 BLOCKED | 1 | 0 ms | - | TvDiziler • Tuzlu Kahve 7 | ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403. Aday denemeleri: doğrudan: TvDiziler • Tuzlu Kahve 7 -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403) |
