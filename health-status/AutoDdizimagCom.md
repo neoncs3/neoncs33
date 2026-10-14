@@ -1,14 +1,14 @@
-# 🟢 AutoDdizimagCom
+# 🔴 AutoDdizimagCom
 
 Kodda kayıtlı domain: https://dizimag.one
 
 Son HTTP URL: https://dizimag.one
 
-HTTP: ✅ 200
+HTTP: ❌ 
 
 Anti-bot engeli: hayır
 
-Sayfa başlığı: Dizimag - Yabancı Dizi izle Güncel Adres
+Sayfa başlığı: -
 
 Canlı medya ipucu: 0 media URL, 0 iframe
 
@@ -26,3 +26,5 @@ Not: Bu rapor kaynak kodunun yapısını ve site HTTP erişimini ölçer; gerçe
 - TMDB playback yasağı: ✅
 
 Kaynak: AutoDdizimagCom/src/main/kotlin/com/neoncs3/AutoDdizimagCom.kt
+
+Hata: ReadTimeout: HTTPSConnectionPool(host='dizimag.one', port=443): Read timed out. (read timeout=20)

@@ -31,20 +31,19 @@
     },
     {
       "provider": "AutoDdizimagCom",
-      "status": "green",
+      "status": "red",
       "domain": "https://dizimag.one",
       "configured_domain": "https://dizimag.one",
       "live_domain": "https://dizimag.one",
       "live": {
-        "ok": true,
-        "anti_bot_blocked": false,
-        "status_code": 200,
+        "ok": false,
+        "status_code": null,
         "final_url": "https://dizimag.one",
-        "bytes": 326520,
-        "title": "Dizimag - Yabancı Dizi izle Güncel Adres",
+        "bytes": 0,
+        "title": "",
         "media_hints": 0,
         "iframe_hints": 0,
-        "error": null
+        "error": "ReadTimeout: HTTPSConnectionPool(host='dizimag.one', port=443): Read timed out. (read timeout=20)"
       },
       "pipelines": {
         "load": true,
@@ -69,7 +68,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://www.hdfilmdiziizle.com",
-        "bytes": 5662,
+        "bytes": 5683,
         "title": "Just a moment...",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -140,7 +139,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://diziboxizle.com",
-        "bytes": 268893,
+        "bytes": 268847,
         "title": "Dizibox İzle - Güncel Yabancı Dizi izle, HD Diziler izle",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -169,7 +168,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://dizigecesi.com",
-        "bytes": 4917,
+        "bytes": 4916,
         "title": "Attention Required! | Cloudflare",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -198,7 +197,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://dizipal1588.com",
-        "bytes": 4551,
+        "bytes": 4550,
         "title": "Attention Required! | Cloudflare",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -314,7 +313,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://www.setfilmizle.ltd",
-        "bytes": 109749,
+        "bytes": 109651,
         "title": "Set Film izle | HD Film | Yabancı Dizi",
         "media_hints": 1,
         "iframe_hints": 0,
@@ -404,7 +403,7 @@
       "source": "WebDramaTurkey/src/main/kotlin/com/neoncs3/WebDramaTurkey.kt"
     }
   ],
-  "green": 9,
+  "green": 8,
   "yellow": 6,
-  "red": 0
+  "red": 1
 }
