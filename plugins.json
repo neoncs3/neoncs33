@@ -83,7 +83,7 @@
     },
     {
         "iconUrl": "https://tvdiziler.tv/favicon.ico",
-        "fileHash": "sha256-349097e33d73f78b268aff4ad1799b95e5c156beea268653cc51f69619fd70c0",
+        "fileHash": "sha256-8430f4a9c884e4ac4df1a080ca7d119edc6c73582adc581eaefc2cb09e406474",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
         "fileSize": 89308,
@@ -96,7 +96,7 @@
             "Movie",
             "TvSeries"
         ],
-        "version": 6,
+        "version": 7,
         "internalName": "AutoTvdizilerTv",
         "description": "URL analizinden otomatik olu\u015fturuldu: tvdiziler.tv",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/AutoTvdizilerTv.cs3",
