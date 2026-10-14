@@ -2311,6 +2311,8 @@ def run_self_test() -> None:
     assert "private fun isNavigationChrome(anchor: Element): Boolean" in generated
     assert "private fun isNonContentAnchor(anchor: Element, baseUrl: String): Boolean" in generated
     assert "isNonContentAnchor(anchor, baseUrl)" in generated
+    assert 'anchor.attr("href").trim().startsWith("#")' in generated
+    assert 'it.equals("alphabetical-category-link", ignoreCase = true)' in generated
     assert "private fun isNavigationItem(title: String, url: String): Boolean" in generated
     assert "navigationOnlyPaths" in generated
     assert "isValidPosterUrl(poster)" in generated
