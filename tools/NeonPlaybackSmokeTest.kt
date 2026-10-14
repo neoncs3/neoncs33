@@ -584,6 +584,7 @@ class NeonPlaybackSmokeTest {
         var lastLinkCount = 0
         var lastPositionMs = 0L
         val attemptDiagnostics = mutableListOf<String>()
+        var sawAntiBotBlock = false
 
         for ((result, query) in candidates) {
             lastQuery = query
@@ -615,16 +616,10 @@ class NeonPlaybackSmokeTest {
                 lastError = safeDiagnostic(linkError ?: "Gerçek video bağlantısı bulunamadı")
                 attemptDiagnostics.add((query ?: "doğrudan") + ": " + result.name + " -> bağlantı yok (" + lastError.take(180) + ")")
 
-                if (antiBot(lastError)) {
-                    return Result(
-                        provider = target.name,
-                        status = "BLOCKED",
-                        query = query,
-                        item = result.name,
-                        links = links.size,
-                        error = lastError,
-                    )
-                }
+                // A blocked candidate must not prevent trying other legitimate
+                // episode/player candidates; some providers expose a mix of stale and
+                // working sources. Preserve BLOCKED in the final result if none succeeds.
+                if (antiBot(lastError)) sawAntiBotBlock = true
 
                 continue
             }
@@ -644,7 +639,7 @@ class NeonPlaybackSmokeTest {
                         it.url.startsWith("https://")
                 }
                 .sortedByDescending { it.quality }
-                .take(2)
+                .take(4)
 
             for (link in playableLinks) {
                 val (played, position, playerError) = realPlay(
@@ -678,23 +673,13 @@ class NeonPlaybackSmokeTest {
                     ?: "ExoPlayer position ilerlemedi: " + position + "ms")
                 attemptDiagnostics.add((query ?: "doğrudan") + ": " + result.name + " -> oynatma başarısız (" + lastError.take(180) + ")")
 
-                if (antiBot(lastError)) {
-                    return Result(
-                        provider = target.name,
-                        status = "BLOCKED",
-                        query = query,
-                        item = result.name,
-                        links = links.size,
-                        positionMs = position,
-                        error = lastError,
-                    )
-                }
+                if (antiBot(lastError)) sawAntiBotBlock = true
             }
         }
 
         return Result(
             provider = target.name,
-            status = if (antiBot(lastError)) "BLOCKED" else "FAIL",
+            status = if (sawAntiBotBlock || antiBot(lastError)) "BLOCKED" else "FAIL",
             query = lastQuery,
             item = lastItem,
             links = lastLinkCount,
