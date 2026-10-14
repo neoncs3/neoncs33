@@ -1327,11 +1327,26 @@ __MAIN_PAGES__
     }
 
     private fun candidateAnchors(document: Document): List<Element> {
-        return document.select(
+        // Category archive cards may use CSS backgrounds/lazy data attributes instead
+        // of an <img>. Never fall back to the global alphabetical directory.
+        val cardSelector =
             "article a[href], .movie-card a[href], .film-card a[href], .dizi-card a[href], " +
-                ".post a[href], .item a[href], .card a[href], .movie a[href], .film a[href], " +
-                ".dizi a[href], .poster a[href], .videos a[href], a[href]"
-        )
+                ".post:has(img) a[href], .post:has([style*=background]) a[href], " +
+                ".item:has(img) a[href], .item:has([data-poster]) a[href], " +
+                ".item:has([style*=background]) a[href], .card:has(img) a[href], " +
+                ".card:has([data-poster]) a[href], .card:has([style*=background]) a[href], " +
+                ".movie a[href], .film a[href], .dizi a[href], .poster a[href], .videos a[href]"
+        val cards = document.select(cardSelector)
+        val candidates = if (cards.isNotEmpty()) {
+            cards
+        } else {
+            document.select(
+                "a[href]:has(img), a[href]:has(picture), a[href][data-poster], " +
+                    "a[href][data-image], a[href][data-src], a[href][style*=background], " +
+                    "a[href]:has([style*=background])"
+            )
+        }
+        return candidates
             .filterNot { isNavigationChrome(it) || isNonContentAnchor(it, mainUrl) }
             .distinctBy { normalize(it.attr("href"), mainUrl) }
     }
@@ -1377,10 +1392,14 @@ __MAIN_PAGES__
     }
 
     private fun resultsFrom(document: Document, baseUrl: String): List<SearchResponse> {
-        return candidateAnchors(document)
-            .mapNotNull { responseFromAnchor(it, baseUrl) }
-            .distinctBy { it.url }
-            .take(120)
+        // Stop processing card details when the maximum number of unique results is reached.
+        val results = LinkedHashMap<String, SearchResponse>()
+        for (anchor in candidateAnchors(document)) {
+            if (results.size >= 120) break
+            val item = responseFromAnchor(anchor, baseUrl) ?: continue
+            if (!results.containsKey(item.url)) results[item.url] = item
+        }
+        return results.values.toList()
     }
 
     override suspend fun getMainPage(
@@ -1611,11 +1630,14 @@ __MAIN_PAGES__
             val href = normalize(anchor.attr("href"), baseUrl)
             if (!isDetailUrl(href, baseUrl) || href == baseUrl) return@mapNotNull null
             val container = containerFor(anchor)
+            val image = anchor.selectFirst("img") ?: container.selectFirst("img")
+            // Never parse parent/container text for the episode number: it contains
+            // neighbour cards and can mix season/episode numbers and posters.
             val title = sequenceOf(
                 anchor.attr("title"),
                 anchor.attr("aria-label"),
                 anchor.text(),
-                container.text(),
+                image?.attr("alt"),
                 href
             ).mapNotNull { neonCleanText(it) }.firstOrNull { it.length in 1..180 } ?: return@mapNotNull null
             val combined = title + " " + href + " " + anchor.classNames().joinToString(" ")
@@ -2311,6 +2333,9 @@ def run_self_test() -> None:
     assert "private fun isNavigationChrome(anchor: Element): Boolean" in generated
     assert "private fun isNonContentAnchor(anchor: Element, baseUrl: String): Boolean" in generated
     assert "isNonContentAnchor(anchor, baseUrl)" in generated
+    assert 'container.text(),' not in generated[generated.index("private fun episodeItems"):generated.index("private fun cleanSeriesTitle")]
+    assert "Stop processing card details when the maximum number of unique results is reached." in generated
+    assert "Never fall back to the global alphabetical directory." in generated
     assert 'val rawHref = anchor.attr("href").trim()' in generated
     assert 'if (rawHref.startsWith("#")) return true' in generated
     assert 'it.equals("alphabetical-category-link", ignoreCase = true)' in generated
