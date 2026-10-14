@@ -21,10 +21,10 @@
     },
     {
         "iconUrl": "https://dizimag.one/favicon.ico",
-        "fileHash": "sha256-ff0d0509d24b892f0539adb290a9bac159b3b01391759f2518718de1c7d97b66",
+        "fileHash": "sha256-ff17da9cc692ec6e46394c3c42c884ba735089cf494ce51cd2f3f6d4b92a71ed",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 89876,
+        "fileSize": 90689,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -34,7 +34,7 @@
             "Movie",
             "TvSeries"
         ],
-        "version": 9,
+        "version": 10,
         "internalName": "AutoDdizimagCom",
         "description": "Dizimag g\u00fcncel alan ad\u0131 ve b\u00f6l\u00fcm oynat\u0131c\u0131 deste\u011fi",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/AutoDdizimagCom.cs3",
