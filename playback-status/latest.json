@@ -11,30 +11,39 @@
     },
     {
       "provider": "Dizimag • Below S1E1",
-      "status": "FAIL",
+      "status": "PASS",
       "query": null,
       "item": "Dizimag • Below S1E1",
-      "links": 0,
-      "positionMs": 0,
-      "error": "loadLinks=false. Aday denemeleri: doğrudan: Dizimag • Below S1E1 -> bağlantı yok (loadLinks=false)"
+      "links": 3,
+      "positionMs": 2835,
+      "error": null
     },
     {
       "provider": "Dizimag • Below S1E2",
-      "status": "FAIL",
+      "status": "PASS",
       "query": null,
       "item": "Dizimag • Below S1E2",
-      "links": 0,
-      "positionMs": 0,
-      "error": "loadLinks=false. Aday denemeleri: doğrudan: Dizimag • Below S1E2 -> bağlantı yok (loadLinks=false)"
+      "links": 3,
+      "positionMs": 3185,
+      "error": null
     },
     {
       "provider": "Dizimag • Below S1E3",
-      "status": "FAIL",
+      "status": "PASS",
       "query": null,
       "item": "Dizimag • Below S1E3",
-      "links": 0,
-      "positionMs": 0,
-      "error": "loadLinks=false. Aday denemeleri: doğrudan: Dizimag • Below S1E3 -> bağlantı yok (loadLinks=false)"
+      "links": 3,
+      "positionMs": 3019,
+      "error": null
+    },
+    {
+      "provider": "Dizimag • Below S1E6",
+      "status": "PASS",
+      "query": null,
+      "item": "Dizimag • Below S1E6",
+      "links": 3,
+      "positionMs": 2646,
+      "error": null
     },
     {
       "provider": "TvDiziler • Aşk 101",
@@ -82,7 +91,7 @@
       "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403. Aday denemeleri: doğrudan: TvDiziler • Haysiyet 6 -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403)"
     }
   ],
-  "pass": 0,
+  "pass": 4,
   "blocked": 4,
-  "fail": 5
+  "fail": 2
 }
