@@ -31,7 +31,7 @@ class AutoDdizimagCom : NeonMainAPI() {
 
     private val configuredSearchAction = "https://dizimag.one/ara"
     private val configuredSearchField = "q"
-    private val seasonFetchSemaphore = Semaphore(4)
+    private val seasonFetchSemaphore = Semaphore(6)
     // Scraped from actual poster-backed catalogue cards; consumed by the real-playback smoke test.
     private val neonSmokeTestQueries = listOf("Animeler", "Amazon Prime", "A Apple TV+", "ATV", "BluTV", "Crunchyroll")
 
@@ -597,7 +597,7 @@ class AutoDdizimagCom : NeonMainAPI() {
             base + (if (base.contains("?")) "&" else "?") + "paged=" + page,
         ).distinct()
         for (candidate in candidates) {
-            val document = cachedDocumentFast(candidate, candidate, timeoutMs = 6_500L)
+            val document = cachedDocumentFast(candidate, candidate, timeoutMs = 4_500L)
                 ?: continue
             val results = resultsFrom(document, candidate)
             if (results.isNotEmpty()) {
@@ -645,7 +645,7 @@ class AutoDdizimagCom : NeonMainAPI() {
         val encoded = URLEncoder.encode(cleanQuery, "UTF-8")
         for (searchUrl in searchUrls(encoded)) {
             val response = runCatching {
-                app.get(searchUrl, headers = headers(searchUrl), timeout = 7_000L)
+                app.get(searchUrl, headers = headers(searchUrl), timeout = 4_500L)
             }.getOrNull() ?: continue
             // Some sites ignore ?s= / ?q= and return the home page for every query.
             // Never leak those unrelated home-page items into search results.
@@ -840,7 +840,7 @@ class AutoDdizimagCom : NeonMainAPI() {
 
     override suspend fun load(url: String): LoadResponse? {
         val normalizedUrl = normalize(url)
-        val document = cachedDocumentFast(normalizedUrl, normalizedUrl, timeoutMs = 8_000L)
+        val document = cachedDocumentFast(normalizedUrl, normalizedUrl, timeoutMs = 6_000L)
             ?: return null
         val title = neonPageTitle(document) ?: schemaValue(document, "name") ?: return null
         val poster = neonPoster(document, normalizedUrl)
@@ -861,14 +861,22 @@ class AutoDdizimagCom : NeonMainAPI() {
 
         // Up to 12 season pages were previously fetched sequentially with 10s timeouts.
         // Fetch them in bounded parallel batches and reuse recent HTML from the cache.
+        // The show page sometimes already contains most/all episodes for a season.
+        // Avoid re-fetching those season pages; request remaining seasons concurrently,
+        // with a short timeout so one slow page cannot hold the whole detail screen.
+        val episodeCountsBySeason = foundEpisodes.groupingBy { it.season }.eachCount()
+        val seasonsToFetch = linkedSeasons.filter { (seasonUrl, seasonNo) ->
+            val seasonId = seasonNo ?: seasonNumber(seasonUrl)
+            seasonId == null || (episodeCountsBySeason[seasonId] ?: 0) < 8
+        }
         val seasonEpisodes = coroutineScope {
-            linkedSeasons.map { (seasonUrl, seasonNo) ->
+            seasonsToFetch.map { (seasonUrl, seasonNo) ->
                 async {
                     seasonFetchSemaphore.withPermit {
                         val seasonDocument = cachedDocumentFast(
                             seasonUrl,
                             normalizedUrl,
-                            timeoutMs = 5_000L,
+                            timeoutMs = 3_500L,
                         ) ?: return@withPermit emptyList<EpisodeItem>()
                         episodeItems(seasonDocument, seasonUrl, seasonNo ?: seasonNumber(seasonUrl))
                     }
@@ -946,7 +954,7 @@ class AutoDdizimagCom : NeonMainAPI() {
         // load() often fetched this page immediately beforehand; reuse it instead of
         // performing another potentially slow 15-second request.
         val candidates = LinkedHashSet<String>()
-        val document = cachedDocumentFast(normalized, normalized, timeoutMs = 8_000L)
+        val document = cachedDocumentFast(normalized, normalized, timeoutMs = 6_000L)
         if (document != null) {
             neonSubtitleUrls(document, normalized).forEach { (url, label) ->
                 neonEmitSubtitle(url, label, normalized, forwardingSubtitleCallback)
