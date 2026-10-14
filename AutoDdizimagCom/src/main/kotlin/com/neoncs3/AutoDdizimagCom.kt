@@ -1214,7 +1214,7 @@ class AutoDdizimagCom : NeonMainAPI() {
             for (candidate in resolverCandidates.take(8)) {
                 if (isSiteUrl(candidate) || neonIsMediaUrl(candidate)) continue
                 runCatching {
-                    loadExtractor(candidate, normalized, subtitleCallback, forwardingCallback)
+                    loadExtractor(candidate, normalized, forwardingSubtitleCallback, forwardingCallback)
                 }
                 if (emitted.isNotEmpty()) break
             }
