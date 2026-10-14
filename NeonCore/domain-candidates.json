@@ -101,5 +101,16 @@
       "webdramaturkey",
       "web drama turkey"
     ]
+  },
+  "AutoDdizimagCom": {
+    "candidates": [
+      "https://dizimag.one",
+      "https://www.dizimag.one",
+      "https://dizimag.onl"
+    ],
+    "markers": [
+      "dizimag",
+      "dizi mag"
+    ]
   }
 }
