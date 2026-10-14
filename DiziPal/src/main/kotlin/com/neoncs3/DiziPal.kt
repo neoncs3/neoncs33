@@ -107,7 +107,8 @@ class DiziPal : NeonMainAPI() {
                 .filterNot { isEpisodeUrl(it.url) }
                 .distinctBy { it.url }
 
-            if (results.isNotEmpty()) return results
+            val relevantResults = neonRelevantSearchResults(results, q)
+            if (relevantResults.isNotEmpty()) return relevantResults
         }
 
         return emptyList()

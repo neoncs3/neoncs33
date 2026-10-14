@@ -202,10 +202,13 @@ class WebDramaTurkey : NeonMainAPI() {
             ).document
         }.getOrNull() ?: return emptyList()
 
-        return document
-            .select("div.tab-pane:not(#actors) div.col, div.col")
-            .mapNotNull { it.toSearchResult() }
-            .distinctBy { it.url }
+        return neonRelevantSearchResults(
+            document
+                .select("div.tab-pane:not(#actors) div.col, div.col")
+                .mapNotNull { it.toSearchResult() }
+                .distinctBy { it.url },
+            q
+        )
     }
 
     private fun Element.toSearchResult(): SearchResponse? {

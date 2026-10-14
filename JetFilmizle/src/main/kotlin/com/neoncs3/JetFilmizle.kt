@@ -191,6 +191,7 @@ class JetFilmizle : NeonMainAPI() {
                     })
                 }
             }.distinctBy { it.url }
+                .let { neonRelevantSearchResults(it, q) }
         } catch (e: Exception) {
             Log.e(JET_TAG, "search hata: ${e.message}")
             emptyList()

@@ -307,7 +307,7 @@ class SinemaCX : NeonMainAPI() {
             }
         }
 
-        val results = searchResults.distinctBy { it.url }
+        val results = neonRelevantSearchResults(searchResults.distinctBy { it.url }, q)
         Log.d(SCX_TAG, "TMDB arama: " + q + " -> " + results.size + " SinemaCX sonucu")
         return results
     }

@@ -1470,22 +1470,9 @@ __MAIN_PAGES__
     }
 
     private fun matchesQuery(result: SearchResponse, query: String): Boolean {
-        val wanted = normalizedFilterText(query)
-        if (wanted.length < 2) return false
-        val title = normalizedFilterText(result.name)
-        val path = runCatching {
-            normalizedFilterText(URI(result.url).path.orEmpty())
-        }.getOrDefault("")
-        if (title.contains(wanted) || path.contains(wanted)) return true
-
-        val genericWords = setOf(
-            "the", "and", "of", "with", "for", "bir", "ve", "ile",
-            "izle", "full", "hd", "film", "filmler", "dizi", "diziler",
-            "movie", "movies", "series", "watch"
-        )
-        val terms = wanted.split(" ").filter { it.length >= 2 && it !in genericWords }
-        return terms.size >= 2 && terms.all { term -> title.contains(term) || path.contains(term) }
+        return neonRelevantSearchResults(listOf(result), query).isNotEmpty()
     }
+
 
     override suspend fun search(query: String): List<SearchResponse> {
         val cleanQuery = query.trim()

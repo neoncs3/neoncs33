@@ -170,7 +170,7 @@ class Dizigecesi : NeonMainAPI() {
 
         val results = parseSearchResults(document)
         return newSearchResponseList(
-            results,
+            neonRelevantSearchResults(results, q),
             hasNext = page < 20 && hasNextPage(document, page)
         )
     }

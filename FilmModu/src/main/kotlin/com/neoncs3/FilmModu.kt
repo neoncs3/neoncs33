@@ -178,10 +178,13 @@ class FilmModu : NeonMainAPI() {
             ).document
         }.getOrNull() ?: return emptyList()
 
-        return document.select("a[href]")
-            .filter { isFilmDetailLink(it.attr("href")) }
-            .mapNotNull { it.toSearchResult() }
-            .distinctBy { it.url }
+        return neonRelevantSearchResults(
+            document.select("a[href]")
+                .filter { isFilmDetailLink(it.attr("href")) }
+                .mapNotNull { it.toSearchResult() }
+                .distinctBy { it.url },
+            query
+        )
     }
 
     override suspend fun load(url: String): LoadResponse? {

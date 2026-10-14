@@ -68,7 +68,7 @@ class Dramadizilerim : NeonMainAPI() {
 
         // Bazı kurulumlarda arama parametresi çalışmıyorsa ilgili ilk sayfayı
         // tekrar kullanmamak için başlık benzerliği olan kayıtları döndürürüz.
-        return found.values.toList()
+        return neonRelevantSearchResults(found.values, query)
     }
 
     // ------------------------------------------------------------------------

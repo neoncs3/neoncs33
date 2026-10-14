@@ -91,7 +91,8 @@ class DiziBoxizle : NeonMainAPI() {
                 .filterNot { isEpisodeUrl(it.url) }
                 .toList()
 
-            if (results.isNotEmpty()) return results
+            val relevantResults = neonRelevantSearchResults(results, q)
+            if (relevantResults.isNotEmpty()) return relevantResults
         }
 
         return emptyList()

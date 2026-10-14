@@ -259,7 +259,7 @@ class AsyaFilmIzle : NeonMainAPI() {
             if (merged.isNotEmpty()) break
         }
 
-        return newSearchResponseList(merged, hasNext = false)
+        return newSearchResponseList(neonRelevantSearchResults(merged, query), hasNext = false)
     }
 
     override suspend fun quickSearch(query: String): List<SearchResponse>? {

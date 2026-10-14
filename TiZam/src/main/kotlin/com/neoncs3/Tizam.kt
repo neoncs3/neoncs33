@@ -80,7 +80,7 @@ class Tizam : MainAPI() {
             if (items.isEmpty()) break
             results.addAll(items)
         }
-        return results.distinctBy { it.url }
+        return neonRelevantSearchResults(results.distinctBy { it.url }, query)
     }
 
     // ---------------------------------------------------------------- Detay

@@ -144,7 +144,8 @@ class SetFilmIzle : NeonMainAPI() {
                 .filterNot { it.url.contains("/bolum/") }
                 .distinctBy { it.url }
 
-            if (results.isNotEmpty()) return results
+            val relevantResults = neonRelevantSearchResults(results, q)
+            if (relevantResults.isNotEmpty()) return relevantResults
         }
 
         val encoded = URLEncoder.encode(q, "UTF-8")
@@ -165,7 +166,8 @@ class SetFilmIzle : NeonMainAPI() {
                 .filterNot { it.url.contains("/bolum/") }
                 .distinctBy { it.url }
 
-            if (results.isNotEmpty()) return results
+            val relevantResults = neonRelevantSearchResults(results, q)
+            if (relevantResults.isNotEmpty()) return relevantResults
         }
 
         return emptyList()
