@@ -532,19 +532,22 @@ class AutoDdizimagCom : NeonMainAPI() {
     }
 
     private fun posterFor(anchor: Element, baseUrl: String): String? {
-        // Episode cards can store thumbnails in srcset/data-* or CSS background-image
-        // on a wrapper rather than directly in an <img src>.
+        // Only take a poster from the anchor's own card. If a higher-level list/grid
+        // contains several images, picking the first one makes sibling items all reuse
+        // the same poster.
         var node: Element? = anchor
-        for (depth in 0..6) {
+        for (depth in 0..4) {
             val current = node ?: break
             imageUrl(current, baseUrl)?.let { return it }
-            val nested = current.select(
+            val urls = LinkedHashSet<String>()
+            current.select(
                 "img, picture source, source[srcset], [data-poster], [data-bg], " +
                     "[data-background], [style*=background]"
-            )
-            for (candidate in nested) {
-                imageUrl(candidate, baseUrl)?.let { return it }
+            ).forEach { candidate ->
+                imageUrl(candidate, baseUrl)?.let(urls::add)
             }
+            if (urls.size == 1) return urls.first()
+            if (urls.size > 1) return null
             node = current.parent()
         }
         return null
@@ -837,13 +840,13 @@ class AutoDdizimagCom : NeonMainAPI() {
 
     private fun seasonLinks(document: Document, baseUrl: String): List<Pair<String, Int?>> {
         return document.select("a[href]").mapNotNull { anchor ->
-            if (isNonContentAnchor(anchor, baseUrl)) return@mapNotNull null
-            // Check the anchor's own label/path before URI normalization. This avoids
-            // interpreting alphabetic directory entries or episode links as seasons.
             val rawHref = anchor.attr("href")
+            // Check visible label/path before URI normalization; the alphabetical
+            // directory contains many links but almost no season indicators.
             val text = anchor.text() + " " + anchor.attr("title") + " " + rawHref
             if (episodeInfo(text, null) != null) return@mapNotNull null
             val season = seasonNumber(text) ?: return@mapNotNull null
+            if (isNonContentAnchor(anchor, baseUrl)) return@mapNotNull null
             val href = normalize(rawHref, baseUrl)
             if (!isDetailUrl(href, baseUrl) || href == baseUrl) return@mapNotNull null
             href to season
@@ -856,11 +859,9 @@ class AutoDdizimagCom : NeonMainAPI() {
         defaultSeason: Int?
     ): List<EpisodeItem> {
         return document.select("a[href]").mapNotNull { anchor ->
-            if (isNonContentAnchor(anchor, baseUrl)) return@mapNotNull null
             val rawHref = anchor.attr("href")
-            // Classify each link using only its own title/text/path before examining
-            // parent containers. The live page's parent text contains every episode,
-            // which used to assign sibling episode numbers and posters to one link.
+            // Classify using only this link's own text/path before doing URL or poster
+            // work. Parent/container text spans neighbouring episodes and seasons.
             val anchorIdentity = listOf(
                 anchor.attr("title"),
                 anchor.attr("aria-label"),
@@ -870,6 +871,7 @@ class AutoDdizimagCom : NeonMainAPI() {
             ).joinToString(" ")
             val numbers = episodeInfo(anchorIdentity, defaultSeason) ?: return@mapNotNull null
             if (numbers.second !in 1..999 || numbers.first !in 1..99) return@mapNotNull null
+            if (isNonContentAnchor(anchor, baseUrl)) return@mapNotNull null
 
             val href = normalize(rawHref, baseUrl)
             if (!isDetailUrl(href, baseUrl) || href == baseUrl) return@mapNotNull null
