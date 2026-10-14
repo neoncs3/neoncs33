@@ -26,7 +26,7 @@ class AutoDdizimagCom : NeonMainAPI() {
     override var lang = "tr"
     override val hasMainPage = true
     override val hasQuickSearch = true
-    override var sequentialMainPage = true
+    override var sequentialMainPage = false
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
     private val configuredSearchAction = "https://dizimag.one/ara"
@@ -598,7 +598,8 @@ class AutoDdizimagCom : NeonMainAPI() {
         ).distinct()
         for (candidate in candidates) {
             val document = runCatching {
-                app.get(candidate, headers = headers(candidate), timeout = 12_000L).document
+                cachedDocumentFast(candidate, candidate, timeoutMs = 6_500L)
+                    ?: continue
             }.getOrNull() ?: continue
             val results = resultsFrom(document, candidate)
             if (results.isNotEmpty()) {
@@ -646,7 +647,7 @@ class AutoDdizimagCom : NeonMainAPI() {
         val encoded = URLEncoder.encode(cleanQuery, "UTF-8")
         for (searchUrl in searchUrls(encoded)) {
             val response = runCatching {
-                app.get(searchUrl, headers = headers(searchUrl), timeout = 12_000L)
+                app.get(searchUrl, headers = headers(searchUrl), timeout = 7_000L)
             }.getOrNull() ?: continue
             // Some sites ignore ?s= / ?q= and return the home page for every query.
             // Never leak those unrelated home-page items into search results.
@@ -907,6 +908,7 @@ class AutoDdizimagCom : NeonMainAPI() {
         val response: LoadResponse = if (series) {
             newTvSeriesLoadResponse(cleanSeriesTitle(title), normalizedUrl, TvType.TvSeries, episodeResponses) {
                 posterUrl = poster
+                posterHeaders = headers(normalizedUrl)
                 this.plot = plot
                 this.year = year
                 this.tags = tags
@@ -916,6 +918,7 @@ class AutoDdizimagCom : NeonMainAPI() {
         } else {
             newMovieLoadResponse(title, normalizedUrl, TvType.Movie, normalizedUrl) {
                 posterUrl = poster
+                posterHeaders = headers(normalizedUrl)
                 this.plot = plot
                 this.year = year
                 this.tags = tags
