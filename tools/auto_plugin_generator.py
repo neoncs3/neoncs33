@@ -1299,23 +1299,35 @@ __MAIN_PAGES__
             image.attr("class") + " " + image.id() + " " +
                 image.attr("alt") + " " + image.attr("title")
         )
-        if (isFlagOrIconAsset(
-                imageHint + " " + image.attr("src") + " " + image.attr("data-src") + " " +
-                    image.attr("data-lazy-src") + " " + image.attr("data-original") + " " +
-                    image.attr("data-poster")
-            )) return null
+        val assetHints = imageHint + " " + listOf(
+            "src", "data-src", "data-lazy-src", "data-lazy", "data-original", "data-original-src",
+            "data-poster", "data-image", "data-img", "data-thumb", "data-cover", "data-bg",
+            "data-background", "srcset", "data-srcset", "style"
+        ).joinToString(" ") { image.attr(it) }
+        if (isFlagOrIconAsset(assetHints)) return null
         if (listOf(
                 "avatar", "user photo", "profile photo", "profile picture",
                 "member photo", "author photo", "account photo", "user profile"
             ).any { imageHint.contains(it) }) return null
-        return sequenceOf(
-            image.attr("data-src"),
-            image.attr("data-lazy-src"),
-            image.attr("data-original"),
-            image.attr("data-poster"),
-            image.attr("data-image"),
-            image.attr("src")
+
+        val direct = sequenceOf(
+            image.attr("data-poster"), image.attr("data-src"), image.attr("data-lazy-src"),
+            image.attr("data-lazy"), image.attr("data-original"), image.attr("data-original-src"),
+            image.attr("data-image"), image.attr("data-img"), image.attr("data-thumb"),
+            image.attr("data-cover"), image.attr("data-bg"), image.attr("data-background"),
+            image.attr("poster"), image.attr("src"),
         )
+        val responsive = sequenceOf(image.attr("data-srcset"), image.attr("srcset"))
+            .flatMap { value ->
+                value.split(",").asSequence()
+                    .map { it.trim().substringBefore(" ") }
+                    .filter { it.isNotBlank() }
+            }
+        val cssBackgrounds = Regex("""(?i)url\(\s*['"]?([^'")]+)['"]?\s*\)""")
+            .findAll(image.attr("style"))
+            .map { it.groupValues[1].trim() }
+
+        return (direct + responsive + cssBackgrounds)
             .filter { it.isNotBlank() && !it.startsWith("data:", true) }
             .map { normalize(it, baseUrl) }
             .firstOrNull { isValidPosterUrl(it) }
