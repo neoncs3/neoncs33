@@ -956,11 +956,34 @@ private fun neonSearchTokens(value: String): List<String> =
         .split(Regex("""\s+"""))
         .filter { token -> token.isNotBlank() && (token.length >= 2 || token.all { ch -> ch.isDigit() }) }
 
-private fun neonTokenMatches(queryToken: String, titleTokens: List<String>): Boolean {
-    if (queryToken in titleTokens) return true
-    return queryToken.length >= 4 && titleTokens.any { token ->
-        token.startsWith(queryToken) && token.length - queryToken.length in 1..2
+private fun neonTokenMatches(queryToken: String, titleToken: String): Boolean {
+    if (queryToken == titleToken) return true
+    return queryToken.length >= 4 &&
+        titleToken.startsWith(queryToken) &&
+        titleToken.length - queryToken.length in 1..2
+}
+
+/**
+ * Match complete title words in the same order as the query.
+ * A substring such as "man" inside "Superman" is not a valid match.
+ * Extra title words may occur between query words ("House of the Dragon").
+ */
+private fun neonOrderedTokensMatch(queryTokens: List<String>, titleTokens: List<String>): Boolean {
+    if (queryTokens.isEmpty() || titleTokens.isEmpty()) return false
+
+    var nextTitleIndex = 0
+    for (queryToken in queryTokens) {
+        var matched = false
+        for (index in nextTitleIndex until titleTokens.size) {
+            if (neonTokenMatches(queryToken, titleTokens[index])) {
+                nextTitleIndex = index + 1
+                matched = true
+                break
+            }
+        }
+        if (!matched) return false
     }
+    return true
 }
 
 /**
@@ -989,13 +1012,16 @@ fun neonRelevantSearchResults(
         val title = neonSearchNormalize(result.name)
         val titleTokens = neonSearchTokens(result.name)
         if (title.isBlank()) return@mapIndexedNotNull null
-        val fullTitleMatch = title.contains(normalizedQuery)
-        val allTokensMatch = queryTokens.all { neonTokenMatches(it, titleTokens) }
-        if (!fullTitleMatch && !allTokensMatch) return@mapIndexedNotNull null
+        // Never use raw substring matching for relevance: query "man" must not
+        // accept "Superman", and query "it" must not accept "Little Women".
+        if (!neonOrderedTokensMatch(queryTokens, titleTokens)) return@mapIndexedNotNull null
+
+        // Rank exact and phrase matches above other valid ordered-token matches.
+        val phraseMatch = (" $title ").contains(" $normalizedQuery ")
         val rank = when {
             title == normalizedQuery -> 0
-            title.startsWith(normalizedQuery) -> 1
-            fullTitleMatch -> 2
+            title.startsWith("$normalizedQuery ") -> 1
+            phraseMatch -> 2
             else -> 3
         }
         Ranked(index, rank, result)
