@@ -1,14 +1,14 @@
 # 🟢 AutoDdizimagCom
 
-Kodda kayıtlı domain: https://dizimag.onl
+Kodda kayıtlı domain: https://dizimag.one
 
-Son HTTP URL: https://dizimag.onl
+Son HTTP URL: https://dizimag.one
 
 HTTP: ✅ 200
 
 Anti-bot engeli: hayır
 
-Sayfa başlığı: Dizimag | Yabancı Dizi Film İzle – Türkçe Altyazılı HD
+Sayfa başlığı: Dizimag - Yabancı Dizi izle Güncel Adres
 
 Canlı medya ipucu: 0 media URL, 0 iframe
 
