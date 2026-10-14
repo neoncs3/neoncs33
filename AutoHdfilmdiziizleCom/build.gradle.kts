@@ -1,4 +1,4 @@
-version = 2
+version = 3
 
 cloudstream {
     description = "URL analizinden otomatik oluşturuldu: hdfilmdiziizle.com"

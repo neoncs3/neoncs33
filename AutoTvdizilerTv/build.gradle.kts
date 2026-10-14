@@ -1,4 +1,5 @@
-version = 7
+version = 8
+
 cloudstream {
     description = "URL analizinden otomatik oluşturuldu: tvdiziler.tv"
     authors = listOf("neoncs3")

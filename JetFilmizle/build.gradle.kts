@@ -1,4 +1,4 @@
-version = 23
+version = 24
 
 cloudstream {
     description = "Jet Film - Türkçe dublajlı ve altyazılı film sağlayıcısı"
@@ -7,4 +7,10 @@ cloudstream {
     tvTypes = listOf("Movie", "TvSeries")
     language = "tr"
     iconUrl = "https://www.google.com/s2/favicons?domain=jetfilmizle.now&sz=%size%"
+}
+
+android {
+    buildFeatures {
+        buildConfig = true
+    }
 }

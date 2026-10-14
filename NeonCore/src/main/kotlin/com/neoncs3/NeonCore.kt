@@ -943,13 +943,6 @@ object NeonMemoryCache {
  * Strict, shared relevance filter for provider search results.
  * Rejects homepage/catalogue cards when a source ignores its search query.
  */
-private val NEON_SEARCH_STOP_WORDS = setOf(
-    "the", "and", "of", "with", "for", "from", "bir", "ve", "ile",
-    "film", "filmi", "filmler", "movie", "movies", "dizi", "diziler",
-    "series", "season", "sezon", "full", "hd", "fullhd", "izle", "watch",
-    "turkce", "altyazili", "dublaj", "dublajli", "720p", "1080p", "4k"
-)
-
 private fun neonSearchNormalize(value: String): String {
     val lower = value.lowercase(java.util.Locale.ROOT).replace('ı', 'i')
     return java.text.Normalizer.normalize(lower, java.text.Normalizer.Form.NFD)
@@ -962,17 +955,18 @@ private fun neonSearchTokens(value: String): List<String> =
     neonSearchNormalize(value)
         .split(Regex("""\s+"""))
         .filter { token -> token.isNotBlank() && (token.length >= 2 || token.all { ch -> ch.isDigit() }) }
-        .filterNot { it in NEON_SEARCH_STOP_WORDS }
 
-private fun neonSearchTokenMatches(term: String, tokens: List<String>, compact: String): Boolean {
-    if (tokens.any { it == term }) return true
-    if (term.length >= 3 && tokens.any { it.startsWith(term) && it.length - term.length <= 3 }) return true
-    return term.length >= 5 && compact.contains(term)
+private fun neonTokenMatches(queryToken: String, titleTokens: List<String>): Boolean {
+    if (queryToken in titleTokens) return true
+    return queryToken.length >= 4 && titleTokens.any { token ->
+        token.startsWith(queryToken) && token.length - queryToken.length in 1..2
+    }
 }
 
 /**
- * Keeps only plausible title matches and ranks title matches above URL-slug
- * fallbacks for sites whose display title is translated.
+ * Strict title-only relevance filter. Do not match against URL paths: a site's
+ * slug, category, search endpoint or unrelated query string can otherwise make
+ * unrelated catalogue cards look like valid results.
  */
 fun neonRelevantSearchResults(
     results: Iterable<com.lagradost.cloudstream3.SearchResponse>,
@@ -981,7 +975,7 @@ fun neonRelevantSearchResults(
 ): List<com.lagradost.cloudstream3.SearchResponse> {
     val normalizedQuery = neonSearchNormalize(query)
     val queryTokens = neonSearchTokens(query)
-    if (queryTokens.isEmpty()) return emptyList()
+    if (normalizedQuery.isBlank() || queryTokens.isEmpty()) return emptyList()
 
     data class Ranked(
         val originalIndex: Int,
@@ -990,29 +984,22 @@ fun neonRelevantSearchResults(
     )
 
     val seen = HashSet<String>()
-    val ranked = results.mapIndexedNotNull { index, result ->
+    return results.mapIndexedNotNull { index, result ->
         if (!seen.add(result.url)) return@mapIndexedNotNull null
         val title = neonSearchNormalize(result.name)
         val titleTokens = neonSearchTokens(result.name)
-        val path = runCatching { neonSearchNormalize(java.net.URI(result.url).path.orEmpty()) }.getOrDefault("")
-        val pathTokens = neonSearchTokens(path)
-        val titleCompact = titleTokens.joinToString("")
-        val pathCompact = pathTokens.joinToString("")
-        val titleMatch = queryTokens.all { neonSearchTokenMatches(it, titleTokens, titleCompact) }
-        val pathMatch = queryTokens.all { neonSearchTokenMatches(it, pathTokens, pathCompact) }
-        if (!titleMatch && !pathMatch) return@mapIndexedNotNull null
+        if (title.isBlank()) return@mapIndexedNotNull null
+        val fullTitleMatch = title.contains(normalizedQuery)
+        val allTokensMatch = queryTokens.all { neonTokenMatches(it, titleTokens) }
+        if (!fullTitleMatch && !allTokensMatch) return@mapIndexedNotNull null
         val rank = when {
             title == normalizedQuery -> 0
             title.startsWith(normalizedQuery) -> 1
-            title.contains(normalizedQuery) -> 2
-            titleMatch -> 3
-            else -> 4
+            fullTitleMatch -> 2
+            else -> 3
         }
         Ranked(index, rank, result)
-    }
-
-    return ranked
-        .sortedWith(compareBy<Ranked> { it.rank }.thenBy { it.originalIndex })
+    }.sortedWith(compareBy<Ranked> { it.rank }.thenBy { it.originalIndex })
         .take(limit.coerceIn(1, 120))
         .map { it.result }
 }

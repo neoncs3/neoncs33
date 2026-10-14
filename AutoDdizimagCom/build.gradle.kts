@@ -1,4 +1,4 @@
-version = 14
+version = 15
 
 cloudstream {
     description = "Dizimag güncel alan adı ve bölüm oynatıcı desteği"
