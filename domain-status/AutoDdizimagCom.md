@@ -1,7 +1,7 @@
-# ✅ **DEĞİŞMEDİ** AutoDdizimagCom
+# 🔄 **DEĞİŞTİ** AutoDdizimagCom
 
-**Güncel domain:** [https://dizimag.one](https://dizimag.one)
+**Güncel domain:** [https://dizimag.onl](https://dizimag.onl)
 
-**Önceki domain:** -
+**Önceki domain:** https://dizimag.one
 
-**Değişiklik tarihi:** -
+**Değişiklik tarihi:** 2026-10-14T14:29:36Z
