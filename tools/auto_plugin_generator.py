@@ -1236,6 +1236,26 @@ __MAIN_PAGES__
         return file.isNotBlank()
     }
 
+    // Navigation chips such as <a href="#other-series" class="alphabetical-category-link">#
+    // are page anchors, not episode/detail links. Reject them before deriving titles
+    // or poster images from their shared parent container.
+    private fun isNonContentAnchor(anchor: Element, baseUrl: String): Boolean {
+        if (anchor.classNames().any { it.equals("alphabetical-category-link", ignoreCase = true) }) {
+            return true
+        }
+        val rawHref = anchor.attr("href").trim()
+        if (rawHref.startsWith("#")) return true
+
+        // Also reject absolute/relative links that point to a fragment on this same page.
+        val target = runCatching { URI(normalize(rawHref, baseUrl)) }.getOrNull() ?: return false
+        val base = runCatching { URI(normalize(baseUrl)) }.getOrNull() ?: return false
+        return !target.rawFragment.isNullOrBlank() &&
+            target.scheme.equals(base.scheme, ignoreCase = true) &&
+            target.host.equals(base.host, ignoreCase = true) &&
+            target.path.orEmpty().trimEnd('/') == base.path.orEmpty().trimEnd('/') &&
+            target.rawQuery.orEmpty() == base.rawQuery.orEmpty()
+    }
+
     private fun isDetailUrl(raw: String, base: String = mainUrl): Boolean {
         val url = normalize(raw, base)
         if (!url.startsWith("http", true) || siteHost(url) != siteHost(mainUrl)) return false
@@ -1312,11 +1332,12 @@ __MAIN_PAGES__
                 ".post a[href], .item a[href], .card a[href], .movie a[href], .film a[href], " +
                 ".dizi a[href], .poster a[href], .videos a[href], a[href]"
         )
-            .filterNot { isNavigationChrome(it) }
+            .filterNot { isNavigationChrome(it) || isNonContentAnchor(it, mainUrl) }
             .distinctBy { normalize(it.attr("href"), mainUrl) }
     }
 
     private fun responseFromAnchor(anchor: Element, baseUrl: String): SearchResponse? {
+        if (isNonContentAnchor(anchor, baseUrl)) return null
         val href = normalize(anchor.attr("href"), baseUrl)
         if (!isDetailUrl(href, baseUrl)) return null
         val container = containerFor(anchor)
@@ -1570,6 +1591,7 @@ __MAIN_PAGES__
 
     private fun seasonLinks(document: Document, baseUrl: String): List<Pair<String, Int?>> {
         return document.select("a[href]").mapNotNull { anchor ->
+            if (isNonContentAnchor(anchor, baseUrl)) return@mapNotNull null
             val href = normalize(anchor.attr("href"), baseUrl)
             if (!isDetailUrl(href, baseUrl) || href == baseUrl) return@mapNotNull null
             val text = anchor.text() + " " + anchor.attr("title") + " " + href
@@ -1585,6 +1607,7 @@ __MAIN_PAGES__
         defaultSeason: Int?
     ): List<EpisodeItem> {
         return document.select("a[href]").mapNotNull { anchor ->
+            if (isNonContentAnchor(anchor, baseUrl)) return@mapNotNull null
             val href = normalize(anchor.attr("href"), baseUrl)
             if (!isDetailUrl(href, baseUrl) || href == baseUrl) return@mapNotNull null
             val container = containerFor(anchor)
@@ -2286,6 +2309,8 @@ def run_self_test() -> None:
     assert "posterFor(anchor, baseUrl) ?: return null" in generated
     assert "isNavigationItem(title, href)" in generated
     assert "private fun isNavigationChrome(anchor: Element): Boolean" in generated
+    assert "private fun isNonContentAnchor(anchor: Element, baseUrl: String): Boolean" in generated
+    assert "isNonContentAnchor(anchor, baseUrl)" in generated
     assert "private fun isNavigationItem(title: String, url: String): Boolean" in generated
     assert "navigationOnlyPaths" in generated
     assert "isValidPosterUrl(poster)" in generated
