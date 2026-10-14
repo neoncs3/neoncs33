@@ -1327,26 +1327,28 @@ __MAIN_PAGES__
     }
 
     private fun candidateAnchors(document: Document): List<Element> {
-        // Category archive cards may use CSS backgrounds/lazy data attributes instead
-        // of an <img>. Never fall back to the global alphabetical directory.
+        // Prefer explicit catalogue cards and elements that actually carry poster data.
+        // The live site renders a very large alphabetical directory before archive cards;
+        // never use a global a[href] fallback, or these links dominate parsing and can
+        // inherit a neighbour's poster from a shared ancestor.
         val cardSelector =
-            "article a[href], .movie-card a[href], .film-card a[href], .dizi-card a[href], " +
-                ".post:has(img) a[href], .post:has([style*=background]) a[href], " +
-                ".item:has(img) a[href], .item:has([data-poster]) a[href], " +
-                ".item:has([style*=background]) a[href], .card:has(img) a[href], " +
-                ".card:has([data-poster]) a[href], .card:has([style*=background]) a[href], " +
-                ".movie a[href], .film a[href], .dizi a[href], .poster a[href], .videos a[href]"
-        val cards = document.select(cardSelector)
-        val candidates = if (cards.isNotEmpty()) {
-            cards
-        } else {
-            document.select(
-                "a[href]:has(img), a[href]:has(picture), a[href][data-poster], " +
-                    "a[href][data-image], a[href][data-src], a[href][style*=background], " +
-                    "a[href]:has([style*=background])"
-            )
-        }
-        return candidates
+            "article:has(img) a[href], article:has([style*=background]) a[href], " +
+                "article:has([data-poster]) a[href], .movie-card a[href], .film-card a[href], " +
+                ".dizi-card a[href], .post:has(img) a[href], .post:has([style*=background]) a[href], " +
+                ".post:has([data-poster]) a[href], .item:has(img) a[href], " +
+                ".item:has([style*=background]) a[href], .item:has([data-poster]) a[href], " +
+                ".item:has([data-src]) a[href], .card:has(img) a[href], " +
+                ".card:has([style*=background]) a[href], .card:has([data-poster]) a[href], " +
+                ".card:has([data-src]) a[href], .movie:has(img) a[href], " +
+                ".movie:has([style*=background]) a[href], .film:has(img) a[href], " +
+                ".film:has([style*=background]) a[href], .dizi:has(img) a[href], " +
+                ".dizi:has([style*=background]) a[href], .poster a[href], " +
+                ".videos:has(img) a[href], .videos:has([style*=background]) a[href]"
+        val mediaSelector =
+            "a[href]:has(img), a[href]:has(picture), a[href][data-poster], " +
+                "a[href][data-image], a[href][data-src], a[href][data-lazy-src], " +
+                "a[href][style*=background], a[href]:has([style*=background])"
+        return document.select("$cardSelector, $mediaSelector")
             .filterNot { isNavigationChrome(it) || isNonContentAnchor(it, mainUrl) }
             .distinctBy { normalize(it.attr("href"), mainUrl) }
     }
