@@ -76,7 +76,7 @@ class NeonPlaybackSmokeTest {
         Target(
             "Dizimag • Below S1E1",
             emptyList(),
-            listOf("https://dizimag.onl/dizi/below/sezon-1/bolum-1"),
+            listOf("https://dizimag.one/below-1-sezon-1-bolum/"),
             pluginInternalName = "AutoDdizimagCom",
             directOnly = true,
             apiName = "Dizimag",
@@ -84,7 +84,7 @@ class NeonPlaybackSmokeTest {
         Target(
             "Dizimag • Below S1E2",
             emptyList(),
-            listOf("https://dizimag.onl/dizi/below/sezon-1/bolum-2"),
+            listOf("https://dizimag.one/below-1-sezon-2-bolum/"),
             pluginInternalName = "AutoDdizimagCom",
             directOnly = true,
             apiName = "Dizimag",
@@ -92,7 +92,7 @@ class NeonPlaybackSmokeTest {
         Target(
             "Dizimag • Below S1E3",
             emptyList(),
-            listOf("https://dizimag.onl/dizi/below/sezon-1/bolum-3"),
+            listOf("https://dizimag.one/below-1-sezon-3-bolum/"),
             pluginInternalName = "AutoDdizimagCom",
             directOnly = true,
             apiName = "Dizimag",
