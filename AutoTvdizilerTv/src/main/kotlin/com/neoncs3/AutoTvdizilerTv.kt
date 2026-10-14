@@ -138,7 +138,10 @@ class AutoTvdizilerTv : NeonMainAPI() {
     }
 
     private fun preferredRefererForMedia(raw: String, fallback: String): String =
-        if (isSignedYouTubeMediaUrl(raw)) "https://www.youtube.com/" else fallback
+        // Preserve CloudStream's native YouTube extractor behavior: signed googlevideo
+        // links often intentionally have no Referer header. Adding one can change the
+        // request and produce HTTP 403, so do not invent a header for these URLs.
+        if (isSignedYouTubeMediaUrl(raw)) "" else fallback
 
     private fun playerElementSources(document: Document, baseUrl: String): List<PlayerSource> {
         return document.select(
@@ -976,19 +979,28 @@ class AutoTvdizilerTv : NeonMainAPI() {
             } else {
                 // Google Video playback URLs are session-bound; they need the YouTube
                 // referer rather than the wrapper iframe's referer or they can return 403.
-                val linkReferer = preferredRefererForMedia(
-                    link.url,
-                    link.referer.takeIf(::isValidHttpUrl) ?: normalized,
-                )
+                val youtubeCdnLink = isSignedYouTubeMediaUrl(link.url)
+                // Keep the native extractor's Referer/headers for YouTube CDN links.
+                // For ordinary page/player sources, attach the resolved parent-page Referer.
+                val linkReferer = if (youtubeCdnLink) {
+                    link.referer
+                } else {
+                    link.referer.takeIf(::isValidHttpUrl) ?: normalized
+                }
+                val outputHeaders = if (youtubeCdnLink) {
+                    link.headers
+                } else {
+                    link.headers + ("Referer" to linkReferer)
+                }
                 val outputLink = if (
-                    linkReferer == link.referer && link.headers["Referer"] == linkReferer
+                    linkReferer == link.referer && outputHeaders == link.headers
                 ) link else ExtractorLink(
                     source = link.source,
                     name = link.name,
                     url = link.url,
                     referer = linkReferer,
                     quality = link.quality,
-                    headers = link.headers + ("Referer" to linkReferer),
+                    headers = outputHeaders,
                     extractorData = link.extractorData,
                     type = link.type,
                     audioTracks = link.audioTracks,
@@ -1095,13 +1107,16 @@ class AutoTvdizilerTv : NeonMainAPI() {
                             // Signed Google Video URLs need the origin YouTube referer.
                             this.referer = mediaReferer
                             this.quality = getQualityFromName(source.label)
-                            this.headers = mapOf(
-                                "User-Agent" to playerUserAgent,
-                                "Accept" to if (linkType == ExtractorLinkType.M3U8) {
-                                    "application/vnd.apple.mpegurl,application/x-mpegURL,*/*"
-                                } else "*/*",
-                                "Referer" to mediaReferer,
-                            )
+                            this.headers = buildMap {
+                                put("User-Agent", playerUserAgent)
+                                put(
+                                    "Accept",
+                                    if (linkType == ExtractorLinkType.M3U8) {
+                                        "application/vnd.apple.mpegurl,application/x-mpegURL,*/*"
+                                    } else "*/*",
+                                )
+                                if (mediaReferer.isNotBlank()) put("Referer", mediaReferer)
+                            }
                         },
                     )
                 }
