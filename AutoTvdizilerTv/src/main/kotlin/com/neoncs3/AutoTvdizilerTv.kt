@@ -218,7 +218,7 @@ class AutoTvdizilerTv : NeonMainAPI() {
         ) return true
 
         return Regex(
-            """(?i)\\.(?:png|jpe?g|webp|gif|svg|ico|css|js|woff2?|ttf|eot|map|json)$"""
+            """(?i)\.(?:png|jpe?g|webp|gif|svg|ico|css|js|woff2?|ttf|eot|map|json)$"""
         ).containsMatchIn(path)
     }
 
