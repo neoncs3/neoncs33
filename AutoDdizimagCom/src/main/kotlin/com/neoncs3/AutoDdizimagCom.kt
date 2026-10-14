@@ -531,11 +531,22 @@ class AutoDdizimagCom : NeonMainAPI() {
     }
 
     private fun candidateAnchors(document: Document): List<Element> {
-        return document.select(
+        // Dizimag's root page includes a huge alphabetical directory (~1,200 plain
+        // title links) before its actual poster catalog. The old final "a[href]"
+        // selector made every directory entry an expensive poster-search candidate.
+        // Prefer known card layouts; only fall back to links that actually contain
+        // poster/image attributes when the site's markup changes.
+        val cardSelector =
             "article a[href], .movie-card a[href], .film-card a[href], .dizi-card a[href], " +
                 ".post a[href], .item a[href], .card a[href], .movie a[href], .film a[href], " +
-                ".dizi a[href], .poster a[href], .videos a[href], a[href]"
-        )
+                ".dizi a[href], .poster a[href], .videos a[href]"
+        val cards = document.select(cardSelector)
+        val candidates = if (cards.isNotEmpty()) {
+            cards
+        } else {
+            document.select("a[href]:has(img), a[href][data-poster], a[href][data-image], a[href][data-src]")
+        }
+        return candidates
             .filterNot { isNavigationChrome(it) }
             .distinctBy { normalize(it.attr("href"), mainUrl) }
     }
@@ -580,10 +591,16 @@ class AutoDdizimagCom : NeonMainAPI() {
     }
 
     private fun resultsFrom(document: Document, baseUrl: String): List<SearchResponse> {
-        return candidateAnchors(document)
-            .mapNotNull { responseFromAnchor(it, baseUrl) }
-            .distinctBy { it.url }
-            .take(120)
+        // Stop parsing card details as soon as the requested result cap is reached.
+        // Using mapNotNull(...).take(120) still processed every link in the giant
+        // alphabetical directory before taking the first 120 items.
+        val results = LinkedHashMap<String, SearchResponse>()
+        for (anchor in candidateAnchors(document)) {
+            if (results.size >= 120) break
+            val item = responseFromAnchor(anchor, baseUrl) ?: continue
+            if (!results.containsKey(item.url)) results[item.url] = item
+        }
+        return results.values.toList()
     }
 
     override suspend fun getMainPage(
