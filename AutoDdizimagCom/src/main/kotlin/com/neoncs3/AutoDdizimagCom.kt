@@ -537,9 +537,11 @@ class AutoDdizimagCom : NeonMainAPI() {
         // Prefer known card layouts; only fall back to links that actually contain
         // poster/image attributes when the site's markup changes.
         val cardSelector =
-            "article a[href], .movie-card a[href], .film-card a[href], .dizi-card a[href], " +
-                ".post a[href], .item a[href], .card a[href], .movie a[href], .film a[href], " +
-                ".dizi a[href], .poster a[href], .videos a[href]"
+            "article:has(img) a[href], .movie-card:has(img) a[href], " +
+                ".film-card:has(img) a[href], .dizi-card:has(img) a[href], " +
+                ".post:has(img) a[href], .item:has(img) a[href], .card:has(img) a[href], " +
+                ".movie:has(img) a[href], .film:has(img) a[href], .dizi:has(img) a[href], " +
+                ".poster:has(img) a[href], .videos:has(img) a[href]"
         val cards = document.select(cardSelector)
         val candidates = if (cards.isNotEmpty()) {
             cards
