@@ -98,6 +98,15 @@ class NeonPlaybackSmokeTest {
             apiName = "Dizimag",
         ),
         Target(
+            "Dizimag • Below S1E6",
+            emptyList(),
+            // Verified current public episode page (indexed on 2026-10-14).
+            listOf("https://dizimag.one/below-1-sezon-6-bolum/"),
+            pluginInternalName = "AutoDdizimagCom",
+            directOnly = true,
+            apiName = "Dizimag",
+        ),
+        Target(
             "TvDiziler • Aşk 101",
             listOf("Aşk 101"),
             listOf("https://tvdiziler.tv/ask-101-1-bolum-izle"),
