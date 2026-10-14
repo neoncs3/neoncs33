@@ -1,12 +1,12 @@
-version = 6
+version = 7
 
 cloudstream {
-    description = "URL analizinden otomatik oluşturuldu: dizimag.onl"
+    description = "Dizimag güncel alan adı ve bölüm oynatıcı desteği"
     authors = listOf("neoncs3")
     status = 1
     tvTypes = listOf("Movie", "TvSeries")
     language = "tr"
-    iconUrl = "https://dizimag.onl/favicon.ico"
+    iconUrl = "https://dizimag.one/favicon.ico"
 }
 
 android {
