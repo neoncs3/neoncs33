@@ -556,17 +556,25 @@ class AutoDdizimagCom : NeonMainAPI() {
         // selector made every directory entry an expensive poster-search candidate.
         // Prefer known card layouts; only fall back to links that actually contain
         // poster/image attributes when the site's markup changes.
+        // Category archive cards may use CSS background images or lazy-load attributes
+        // instead of an <img> descendant. Keep known card containers, but never fall
+        // back to the site's global alphabetical directory (thousands of plain links).
         val cardSelector =
-            "article:has(img) a[href], .movie-card:has(img) a[href], " +
-                ".film-card:has(img) a[href], .dizi-card:has(img) a[href], " +
-                ".post:has(img) a[href], .item:has(img) a[href], .card:has(img) a[href], " +
-                ".movie:has(img) a[href], .film:has(img) a[href], .dizi:has(img) a[href], " +
-                ".poster:has(img) a[href], .videos:has(img) a[href]"
+            "article a[href], .movie-card a[href], .film-card a[href], .dizi-card a[href], " +
+                ".post:has(img) a[href], .post:has([style*=background]) a[href], " +
+                ".item:has(img) a[href], .item:has([data-poster]) a[href], " +
+                ".item:has([style*=background]) a[href], .card:has(img) a[href], " +
+                ".card:has([data-poster]) a[href], .card:has([style*=background]) a[href], " +
+                ".movie a[href], .film a[href], .dizi a[href], .poster a[href], .videos a[href]"
         val cards = document.select(cardSelector)
         val candidates = if (cards.isNotEmpty()) {
             cards
         } else {
-            document.select("a[href]:has(img), a[href][data-poster], a[href][data-image], a[href][data-src]")
+            document.select(
+                "a[href]:has(img), a[href]:has(picture), a[href][data-poster], " +
+                    "a[href][data-image], a[href][data-src], a[href][style*=background], " +
+                    "a[href]:has([style*=background])"
+            )
         }
         return candidates
             .filterNot { isNavigationChrome(it) || isNonContentAnchor(it, mainUrl) }
@@ -853,11 +861,15 @@ class AutoDdizimagCom : NeonMainAPI() {
             val href = normalize(anchor.attr("href"), baseUrl)
             if (!isDetailUrl(href, baseUrl) || href == baseUrl) return@mapNotNull null
             val container = containerFor(anchor)
+            val image = anchor.selectFirst("img") ?: container.selectFirst("img")
+            // Use only text belonging to this episode link. Parent/container text
+            // includes neighbouring seasons and episodes, which assigned the same
+            // episode number and inherited unrelated posters across the whole list.
             val title = sequenceOf(
                 anchor.attr("title"),
                 anchor.attr("aria-label"),
                 anchor.text(),
-                container.text(),
+                image?.attr("alt"),
                 href
             ).mapNotNull { neonCleanText(it) }.firstOrNull { it.length in 1..180 } ?: return@mapNotNull null
             val combined = title + " " + href + " " + anchor.classNames().joinToString(" ")
