@@ -1,4 +1,4 @@
-version = 2
+version = 3
 
     // Eklenti sürümü: her değişiklikte artır, yoksa CloudStream güncelleme görmez.
 

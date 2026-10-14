@@ -1,4 +1,4 @@
-version = 2
+version = 3
 
 cloudstream {
     description = "Web Drama Turkey Kore, Çin ve Asya dizileri sağlayıcısı"

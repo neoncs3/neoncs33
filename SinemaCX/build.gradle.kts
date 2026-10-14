@@ -1,4 +1,4 @@
-version = 22
+version = 23
 
 cloudstream {
     description = "Sinema CC - Türkçe dublaj ve altyazılı film sağlayıcısı"

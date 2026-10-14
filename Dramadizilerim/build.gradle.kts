@@ -1,4 +1,4 @@
-version = 2
+version = 3
 
 cloudstream {
     description = "DiziPal Türkiye katalog ve bölüm sağlayıcısı"
