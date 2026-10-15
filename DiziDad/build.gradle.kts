@@ -1,5 +1,5 @@
-// use an integer for version numbers
-version = 1
+// CloudStream updates require a higher version number for existing installations.
+version = 2
 
 cloudstream {
     description = "DiziDad - yerli, yabancı ve eski diziler"
