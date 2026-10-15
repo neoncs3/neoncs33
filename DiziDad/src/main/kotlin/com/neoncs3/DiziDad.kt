@@ -120,23 +120,31 @@ class DiziDad : MainAPI() {
     private fun Document.cards(): List<SearchResponse> {
         val out = LinkedHashMap<String, SearchResponse>()
         for (a in select("a[href]")) {
-            // Sadece görsel taşıyan içerik kartlarını al; afiş img, lazy-load veri alanı
-            // veya CSS background-image şeklinde verilebilir.
-            val hasImage = a.selectFirst(
-                "img, [data-poster], [data-image], [data-bg], [data-background], [data-background-image], [style*=background]"
-            ) != null ||
-                a.hasAttr("data-poster") || a.hasAttr("data-image") ||
-                a.hasAttr("data-bg") || a.hasAttr("data-background") ||
-                a.attr("style").contains("background", ignoreCase = true)
-            if (!hasImage) continue
-
             val href = a.attr("href").trim()
             if (href.isEmpty() || href.startsWith("#") || href.startsWith("javascript")) continue
             val url = absUrl(href)
             if (!url.startsWith(mainUrl)) continue
             val path = url.removePrefix(mainUrl).trim('/')
             if (path.isEmpty() || path.startsWith("wp-") || path.contains("page/")) continue
-            if (path.startsWith("wp-") || path.contains("yorum") || path.contains("comment")) continue
+            if (path.contains("yorum") || path.contains("comment")) continue
+
+            // Önce bağlantının kendisindeki, sonra yalnızca kartı çevreleyen kapsayıcılardaki afişi ara.
+            // Afiş kapsayıcıda background/data-bg ise a:has(img) filtresi bu bölümü kaçırırdı.
+            val poster = a.posterUrl()
+                ?: a.parent()?.posterUrl()
+                ?: a.parent()?.parent()?.posterUrl()
+                ?: a.parent()?.parent()?.parent()?.posterUrl()
+
+            val hasImage = poster != null ||
+                a.selectFirst(
+                    "img, [data-poster], [data-poster-url], [data-image], [data-bg], [data-background], [data-background-image], [data-src], [data-original], [data-lazy-src], [style*=background]"
+                ) != null ||
+                listOf(
+                    "data-poster", "data-poster-url", "data-image", "data-bg",
+                    "data-background", "data-background-image", "data-src", "data-original",
+                    "data-lazy-src", "srcset", "style"
+                ).any { a.hasAttr(it) }
+            if (!hasImage) continue
 
             val title = cleanTitle(
                 a.selectFirst("img[alt]")?.attr("alt")?.ifBlank { null }
@@ -144,19 +152,10 @@ class DiziDad : MainAPI() {
                     ?: a.text()
             )
             if (title.isBlank()) continue
-            if (!out.containsKey(url)) {
-                // Afiş bazen bağlantı içinde değil, birkaç seviye üstteki kart kabında tutulur.
-                val poster = a.posterUrl()
-                    ?: a.parent()?.posterUrl()
-                    ?: a.parent()?.parent()?.posterUrl()
-                    ?: a.parent()?.parent()?.parent()?.posterUrl()
-                    ?: a.parent()?.parent()?.parent()?.parent()?.posterUrl()
-                out[url] = makeCard(title, url, poster)
-            }
+            if (!out.containsKey(url)) out[url] = makeCard(title, url, poster)
         }
         return out.values.toList()
     }
-
     // ------------------------------------------------------------------ ana sayfa
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
