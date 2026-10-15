@@ -25,6 +25,10 @@ class AutoTvdizilerTv : NeonMainAPI() {
     private val configuredSearchAction = ""
     private val configuredSearchField = "s"
     private val neonSmokeTestQueries = listOf("Eşref Rüya", "Aşk 101", "Daha 17", "Uzak Şehir", "Medcezir")
+    // Use one browser identity from iframe probing through ExoPlayer playback. Some
+    // providers return HTTP 403 when extraction uses a browser UA but playback falls
+    // back to CloudStream's default UA.
+    private val playerUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0"
 
     override val mainPage = mainPageOf(
         "https://tvdiziler.tv/" to "Ana Sayfa",
@@ -1001,9 +1005,18 @@ class AutoTvdizilerTv : NeonMainAPI() {
                     link.referer.takeIf(::isValidHttpUrl) ?: normalized
                 }
                 val outputHeaders = if (youtubeCdnLink) {
+                    // Signed Google Video URLs are tied to the native YouTube extractor;
+                    // do not add or replace its request headers.
                     link.headers
                 } else {
-                    link.headers + ("Referer" to linkReferer)
+                    // Keep extractor-provided values, but align a missing User-Agent with
+                    // the browser used to probe the embedded player. This is a targeted
+                    // compatibility fallback for CDNs that reject ExoPlayer's default UA.
+                    link.headers + mapOf(
+                        "Referer" to linkReferer,
+                        "User-Agent" to link.headers["User-Agent"].takeIf { !it.isNullOrBlank() }
+                            .orEmpty().ifBlank { playerUserAgent }
+                    )
                 }
                 val outputLink = if (
                     linkReferer == link.referer && outputHeaders == link.headers
@@ -1032,7 +1045,6 @@ class AutoTvdizilerTv : NeonMainAPI() {
         // Resolve TvDiziler's own player frame before the generic crawler. The page's
         // JavaScript source array can contain valid HLS/MP4 links without an iframe
         // wrapping them in another recognizable extractor.
-        val playerUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0"
         val playerHeaders = mapOf(
             "User-Agent" to playerUserAgent,
             "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
