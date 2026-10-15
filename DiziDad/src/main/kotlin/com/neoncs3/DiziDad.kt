@@ -55,17 +55,59 @@ class DiziDad : MainAPI() {
         else -> fixUrl(v)
     }
 
-    /** HTML içine gömülmüş WordPress afiş URL'lerini doğrudan yakalar. */
-    private fun posterFromMarkup(markup: String): String? {
-        val normalized = markup
-            .replace("\\/", "/")
-            .replace("&amp;", "&")
+    private fun posterSlug(url: String?): String {
+        if (url.isNullOrBlank()) return ""
+        var slug = url.substringBefore("?").substringBefore("#").trimEnd('/')
+            .substringAfterLast('/').lowercase(Locale.ROOT)
+        slug = slug
+            .replace(Regex("(?i)-\\d+-sezon-.*$"), "")
+            .replace(Regex("(?i)-\\d+-bolum.*$"), "")
+            .replace(Regex("(?i)-(?:turkce-)?(?:dublaj|altyazili)-izle.*$"), "")
+            .replace(Regex("(?i)-izle.*$"), "")
+        return slug
+    }
+
+    private fun isUsablePoster(url: String?): Boolean {
+        if (url.isNullOrBlank() || !url.startsWith("http", true)) return false
+        return !Regex(
+            "(?i)(/themes/|placeholder|no[-_]?image|blank\\.(gif|png|jpe?g|webp)|logo|avatar|spacer|transparent|pixel|default[-_]?poster)"
+        ).containsMatchIn(url)
+    }
+
+    /** HTML/script içinde geçen WordPress afiş URL'lerini bulur ve başlık slug'ını tercih eder. */
+    private fun posterFromMarkup(markup: String, targetUrl: String? = null): String? {
+        val normalized = markup.replace("\\/", "/").replace("&amp;", "&")
         val uploadPoster = Regex(
             """(?i)(?:https?:)?//[^"'<>\s]+?/wp-content/uploads/[^"'<>\s]+?\.(?:jpe?g|png|webp)|/wp-content/uploads/[^"'<>\s]+?\.(?:jpe?g|png|webp)"""
         )
-        return uploadPoster.findAll(normalized)
+        val slug = posterSlug(targetUrl)
+        val candidates = uploadPoster.findAll(normalized)
             .map { absUrl(it.value.trim().trim('"', '\'')) }
-            .firstOrNull { it.startsWith("http://") || it.startsWith("https://") }
+            .filter { isUsablePoster(it) }
+            .distinct()
+            .toList()
+        return candidates.firstOrNull {
+            slug.isNotBlank() && it.substringBefore("?").contains(slug, ignoreCase = true)
+        } ?: candidates.firstOrNull()
+    }
+
+    /** WordPress temalarının lazy-load görsellerini aynı öncelikle çözer. */
+    private fun Element.posterOfElement(): String? {
+        val raw = attr("data-src")
+            .ifBlank { attr("data-lazy-src") }
+            .ifBlank { attr("data-original") }
+            .ifBlank { attr("data-image") }
+            .ifBlank { attr("data-poster") }
+            .ifBlank { attr("data-lazy-srcset") }
+            .ifBlank { attr("data-srcset") }
+            .ifBlank { attr("srcset") }
+            .ifBlank { attr("src") }
+
+        val candidate = Regex("""https?://[^\s,]+""", RegexOption.IGNORE_CASE)
+            .find(raw)?.value?.trimEnd(',')
+            ?: raw.split(',').firstOrNull()?.trim()?.substringBefore(' ')?.takeIf { it.isNotBlank() }
+            ?: return null
+        return absUrl(candidate).takeIf { isUsablePoster(it) }
     }
 
     /** Karttaki gerçek afişi bulur (yer tutucu ve tema ikonlarını atlar; dublaj ikonu rozeti gösterilmez). */
@@ -121,22 +163,35 @@ class DiziDad : MainAPI() {
      * Bölüm listelerinde afiş, metin bağlantısının içinde değil aynı kartın kardeş
      * bağlantısında bulunabiliyor. Kart kapsayıcısına kadar çıkıp görseli oradan al.
      */
-    private fun Element.posterFromCardAncestors(maxDepth: Int = 4): String? {
-        var node: Element? = this
+    private fun Element.posterFromCardAncestors(targetUrl: String? = null): String? {
+        selectFirst("img")?.posterOfElement()?.let { return it }
+
+        val slug = posterSlug(targetUrl)
+        var current: Element? = parent()
         var depth = 0
-        while (node != null && depth <= maxDepth) {
-            // Üst sayfa/nav/footer içindeki ilgisiz görselleri içerik afişi sanma.
-            val tag = node.tagName().lowercase(Locale.ROOT)
-            val classes = node.classNames().joinToString(" ").lowercase(Locale.ROOT)
-            if (tag in setOf("body", "html", "header", "nav", "footer") ||
-                classes.contains("site-header") || classes.contains("navbar") ||
-                classes.contains("navigation") || classes.contains("breadcrumb") ||
-                classes.contains("menu-item")
+        while (current != null && depth < 4) {
+            val tag = current.tagName().lowercase(Locale.ROOT)
+            if (tag in setOf("header", "nav", "footer", "aside", "body", "html")) break
+
+            val marker = (current.id() + " " + current.classNames().joinToString(" ")).lowercase(Locale.ROOT)
+            if (Regex("\\b(site[-_]?header|site[-_]?footer|navbar|navigation|main[-_]?menu|mobile[-_]?menu|side[-_]?bar|sidebar|widget|login|register|alphabet|social|user[-_]?menu)\\b")
+                    .containsMatchIn(marker)
             ) break
 
-            val poster = node.posterUrl()
-            if (!poster.isNullOrBlank()) return poster
-            node = node.parent()
+            val looksLikeCard = Regex("\\b(card|item|post|entry|movie|film|series|dizi|content|thumbnail|list|archive|episode|bolum)\\b")
+                .containsMatchIn(marker)
+            val images = current.select("img")
+            if (images.size == 1 || looksLikeCard) {
+                val selected = images.firstOrNull { image ->
+                    slug.isNotBlank() && image.posterOfElement().orEmpty().contains(slug, ignoreCase = true)
+                } ?: images.firstOrNull()
+                selected?.posterOfElement()?.let { return it }
+
+                // Tema CSS background/data-bg alanını kullanıyorsa yalnızca kart kapsayıcısında dene.
+                val background = current.posterUrl()
+                if (isUsablePoster(background)) return background
+            }
+            current = current.parent()
             depth++
         }
         return null
@@ -178,7 +233,7 @@ class DiziDad : MainAPI() {
                     .any { link.hasAttr(it) }
             if (!hasImageMarker) continue
 
-            val poster = link.posterFromCardAncestors()
+            val poster = link.posterFromCardAncestors(url)
             if (!poster.isNullOrBlank()) posterByUrl.putIfAbsent(url, poster)
         }
 
@@ -192,7 +247,7 @@ class DiziDad : MainAPI() {
             if (path.contains("yorum") || path.contains("comment")) continue
 
             // Başlık linkiyle afiş linki aynı URL'yi taşıyorsa görsel bağlantısından alınan adresi kullan.
-            val poster = posterByUrl[url] ?: a.posterFromCardAncestors()
+            val poster = posterByUrl[url] ?: a.posterFromCardAncestors(url)
             val hasImage = !poster.isNullOrBlank() || a.selectFirst(posterBearingSelector) != null ||
                 listOf("data-poster", "data-poster-url", "data-image", "data-bg",
                     "data-background", "data-background-image", "data-src", "data-original",
@@ -275,10 +330,10 @@ class DiziDad : MainAPI() {
         )?.attr("content")?.trim()
             ?.takeIf { it.isNotEmpty() && !it.startsWith("data:") && !it.contains("logo", true) }
             ?.let { absUrl(it) }
-        if (poster.isNullOrBlank()) {
-            // Örneğin /wp-content/uploads/2026/08/our-sticky-love.jpg biçimindeki afiş,
-            // bazen img özniteliğinde değil HTML/script verisinin içinde yer alır.
-            poster = posterFromMarkup(doc.html()) ?: doc.posterUrl()
+        if (poster.isNullOrBlank() || !isUsablePoster(poster)) {
+            poster = posterFromMarkup(doc.html(), pageUrl)
+                ?: doc.select("img").firstNotNullOfOrNull { it.posterOfElement() }
+                ?: doc.posterUrl()
         }
 
         val rawDesc = doc.selectFirst("meta[property=og:description]")?.attr("content") ?: ""
@@ -320,9 +375,9 @@ class DiziDad : MainAPI() {
             val text = a.text().trim()
             if (!text.contains("Bölüm", ignoreCase = true)) continue
             if (!seen.add(epUrl)) continue
-            episodePosters[epUrl] = a.posterUrl()
-                ?: a.parent()?.posterUrl()
-                ?: a.parent()?.parent()?.posterUrl()
+            episodePosters[epUrl] = a.posterFromCardAncestors(epUrl)
+                ?: a.parent()?.posterFromCardAncestors(epUrl)
+                ?: posterFromMarkup(doc.html(), pageUrl)
             val season = Regex("(\\d+)\\s*\\.\\s*Sezon", RegexOption.IGNORE_CASE).find(text)
                 ?.groupValues?.get(1)?.toIntOrNull()
                 ?: Regex("-(\\d+)-sezon-").find(epUrl)?.groupValues?.get(1)?.toIntOrNull()
@@ -340,8 +395,14 @@ class DiziDad : MainAPI() {
                     this.name = pair.second
                     this.season = season
                     this.episode = ep
-                    this.posterUrl = episodePosters[pair.first]?.let { fixUrlNull(it) }
-                        ?: fixUrlNull(poster ?: posterFromMarkup(doc.html()))
+                    this.posterUrl = episodePosters[pair.first]
+                        ?.takeIf { isUsablePoster(it) }
+                        ?.let { fixUrlNull(it) }
+                        ?: fixUrlNull(
+                            poster?.takeIf { isUsablePoster(it) }
+                                ?: posterFromMarkup(doc.html(), pageUrl)
+                                ?: doc.select("img").firstNotNullOfOrNull { it.posterOfElement() }
+                        )
                 }
             }
 
