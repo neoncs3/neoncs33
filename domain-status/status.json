@@ -23,9 +23,21 @@
     "previous_domain": null,
     "changed_at": null
   },
+  "DDizi": {
+    "status": "unchanged",
+    "domain": "https://www.ddizi.tel",
+    "previous_domain": null,
+    "changed_at": null
+  },
   "DiziBoxizle": {
     "status": "unchanged",
     "domain": "https://diziboxizle.com",
+    "previous_domain": null,
+    "changed_at": null
+  },
+  "DiziDad": {
+    "status": "unchanged",
+    "domain": "https://www.dizidad.com",
     "previous_domain": null,
     "changed_at": null
   },

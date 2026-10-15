@@ -8,7 +8,9 @@ Bu tablo KONTROL.py tarafından otomatik güncellenir. Domain değişikliği anc
 | **AutoDdizimagCom** | ✅ **DEĞİŞMEDİ** | [https://dizimag.onl](https://dizimag.onl) | - | - |
 | **AutoHdfilmdiziizleCom** | 🛡️ **KORUMALI** | [https://www.hdfilmdiziizle.com](https://www.hdfilmdiziizle.com) | - | - |
 | **AutoTvdizilerTv** | ✅ **DEĞİŞMEDİ** | [https://tvdiziler.tv](https://tvdiziler.tv) | - | - |
+| **DDizi** | ✅ **DEĞİŞMEDİ** | [https://www.ddizi.tel](https://www.ddizi.tel) | - | - |
 | **DiziBoxizle** | ✅ **DEĞİŞMEDİ** | [https://diziboxizle.com](https://diziboxizle.com) | - | - |
+| **DiziDad** | ✅ **DEĞİŞMEDİ** | [https://www.dizidad.com](https://www.dizidad.com) | - | - |
 | **DiziPal** | 🛡️ **KORUMALI** | [https://dizipal1586.com](https://dizipal1586.com) | - | - |
 | **Dizigecesi** | 🛡️ **KORUMALI** | [https://dizigecesi.com](https://dizigecesi.com) | - | - |
 | **Dramadizilerim** | ✅ **DEĞİŞMEDİ** | [https://dramadizilerim.com](https://dramadizilerim.com) | - | - |
