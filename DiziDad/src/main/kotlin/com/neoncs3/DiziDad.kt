@@ -349,29 +349,33 @@ class DiziDad : MainAPI() {
         return null
     }
 
-    private fun Document.cards(): List<SearchResponse> {
+    private fun Document.cards(maxCards: Int? = null): List<SearchResponse> {
         val out = LinkedHashMap<String, SearchResponse>()
         val anchors = select("a[href]")
 
         // Önce her gerçek poster img'sini kendi başlık/izleme bağlantısına bağla.
         // Bu, görsel ve başlık farklı <a> etiketlerinde olduğunda da poster bilgisini kaybetmez.
-        select("img[data-src], img[data-lazy-src], img[data-original], img[data-image], img[data-poster], img[data-lazyloaded], img[src]")
-            .forEach { image ->
-                val poster = image.posterOfElement() ?: return@forEach
-                val alt = image.attr("alt").ifBlank { image.attr("title") }
-                val link = image.contentAnchorForImage(alt) ?: return@forEach
-                val href = link.attr("href").trim()
-                val url = absUrl(href)
-                if (!url.startsWith(mainUrl) || !isContentCardUrl(url)) return@forEach
-                val title = cleanTitle(link.text().ifBlank { link.attr("title").ifBlank { alt } })
-                if (title.isBlank()) return@forEach
-                if (!out.containsKey(url)) out[url] = makeCard(title, url, poster)
-            }
+        for (image in select("img[data-src], img[data-lazy-src], img[data-original], img[data-image], img[data-poster], img[data-lazyloaded], img[src]")) {
+            if (maxCards != null && out.size >= maxCards) break
+            val poster = image.posterOfElement() ?: continue
+            val alt = image.attr("alt").ifBlank { image.attr("title") }
+            val link = image.contentAnchorForImage(alt) ?: continue
+            val href = link.attr("href").trim()
+            val url = absUrl(href)
+            if (!url.startsWith(mainUrl) || !isContentCardUrl(url)) continue
+            val title = cleanTitle(link.text().ifBlank { link.attr("title").ifBlank { alt } })
+            if (title.isBlank()) continue
+            if (!out.containsKey(url)) out[url] = makeCard(title, url, poster)
+        }
+        // İstek başına belirlenmiş kart sınırına ulaşıldıysa ikinci geçişin tüm sayfayı
+        // tekrar taramasını önle; ana sayfadaki son bölümler çok uzayabiliyor.
+        if (maxCards != null && out.size >= maxCards) return out.values.take(maxCards)
 
         // Yalnızca dizi/film/bölüm bağlantılarının içindeki gerçek görsel taşıyan linkleri
         // önbelleğe al. Menü ve sayfa üstbilgisindeki logolar asla kart afişi sayılmaz.
         val posterByUrl = LinkedHashMap<String, String>()
         for (link in anchors) {
+            if (maxCards != null && out.size >= maxCards) break
             val href = link.attr("href").trim()
             if (href.isEmpty() || href.startsWith("#") || href.startsWith("javascript")) continue
             val url = absUrl(href)
@@ -389,6 +393,7 @@ class DiziDad : MainAPI() {
         }
 
         for (a in anchors) {
+            if (maxCards != null && out.size >= maxCards) break
             val href = a.attr("href").trim()
             if (href.isEmpty() || href.startsWith("#") || href.startsWith("javascript")) continue
             val url = absUrl(href)
@@ -424,7 +429,10 @@ class DiziDad : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
         val url = if (page <= 1) request.data else "${request.data}page/$page/"
         val doc = app.get(url).document
-        val items = doc.cards()
+        // Son bölümlerde ilk etapta 20 kartla sınırla; büyük sayfalardaki fazla
+        // HTML taramasının posterlerin işlenmesini geciktirip geciktirmediğini test et.
+        val cardLimit = if (request.data.contains("/tum-bolumler/")) 20 else 30
+        val items = doc.cards(cardLimit)
         val hasNext = doc.select("a[href*='/page/${page + 1}/']").isNotEmpty()
         return newHomePageResponse(request.name, items, hasNext)
     }
@@ -525,7 +533,7 @@ class DiziDad : MainAPI() {
 
         // Bölümler: dizi sayfasındaki "1.Sezon 3.Bölüm" bağlantıları.
         val seen = HashSet<String>()
-        val episodePosters = HashMap<String, String?>()
+        val episodeAnchors = HashMap<String, Element>()
         val raw = ArrayList<Triple<Int, Int, Pair<String, String>>>()
         for (a in doc.select("a[href]")) {
             val href = a.attr("href").trim()
@@ -535,9 +543,7 @@ class DiziDad : MainAPI() {
             val text = a.text().trim()
             if (!text.contains("Bölüm", ignoreCase = true)) continue
             if (!seen.add(epUrl)) continue
-            episodePosters[epUrl] = a.posterFromCardAncestors(epUrl)
-                ?: a.parent()?.posterFromCardAncestors(epUrl)
-                ?: posterFromMarkup(doc.html(), pageUrl)
+            episodeAnchors[epUrl] = a
             val season = Regex("(\\d+)\\s*\\.\\s*Sezon", RegexOption.IGNORE_CASE).find(text)
                 ?.groupValues?.get(1)?.toIntOrNull()
                 ?: Regex("-(\\d+)-sezon-").find(epUrl)?.groupValues?.get(1)?.toIntOrNull()
@@ -554,19 +560,32 @@ class DiziDad : MainAPI() {
             ?: poster?.takeIf { isUsablePoster(it) }
             ?: doc.select("img").firstNotNullOfOrNull { it.posterOfElement() }
 
-        val episodes = raw
+        // Çok uzun sezon listelerinde poster aramayı tüm bölümlerde yapmak yerine
+        // en yeni 24 bölümü sınırla; önce afişi olan yakın kartlar üzerinde deneme yap.
+        val selectedEpisodes = raw
+            .sortedWith(compareByDescending<Triple<Int, Int, Pair<String, String>>> { it.first }
+                .thenByDescending { it.second })
+            .take(24)
             .sortedWith(compareBy({ it.first }, { it.second }))
-            .map { (season, ep, pair) ->
-                newEpisode(pair.first) {
-                    this.name = pair.second
-                    this.season = season
-                    this.episode = ep
-                    // poster URL'leri mutlak URL olarak çözülüyor; burada tekrar fixUrlNull
-                    // uygulamak yerine DiziBoxizle'deki çalışan Episode kullanımına uygun aktar.
-                    this.posterUrl = episodePosters[pair.first]?.takeIf { isUsablePoster(it) }
-                        ?: seriesPosterFallback
-                }
+
+        val episodePosters = HashMap<String, String?>()
+        for ((_, _, pair) in selectedEpisodes) {
+            val anchor = episodeAnchors[pair.first] ?: continue
+            episodePosters[pair.first] = anchor.posterFromCardAncestors(pair.first)
+                ?: anchor.parent()?.posterFromCardAncestors(pair.first)
+                ?: posterForTarget(pair.first, pair.second)
+                ?: posterFromMarkup(doc.html(), pageUrl)
+        }
+
+        val episodes = selectedEpisodes.map { (season, ep, pair) ->
+            newEpisode(pair.first) {
+                this.name = pair.second
+                this.season = season
+                this.episode = ep
+                this.posterUrl = episodePosters[pair.first]?.takeIf { isUsablePoster(it) }
+                    ?: seriesPosterFallback
             }
+        }
 
         return newTvSeriesLoadResponse(title, pageUrl, TvType.TvSeries, episodes) {
             this.posterUrl = fixUrlNull(poster)
