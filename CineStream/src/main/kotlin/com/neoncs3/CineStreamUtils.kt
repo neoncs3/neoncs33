@@ -1,4 +1,4 @@
-package com.megix
+package com.neoncs3
 
 // Cloudstream & NiceHttp
 import com.lagradost.api.Log
