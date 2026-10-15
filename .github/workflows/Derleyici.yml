@@ -1,9 +1,9 @@
 name: CloudStream Derleyici
 
 concurrency:
-  # Serialize all build triggers because they publish to the same builds branch.
+  # Keep only the newest source build; stale runs must not delay or overwrite newer plugins.
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 on:
   workflow_dispatch:
