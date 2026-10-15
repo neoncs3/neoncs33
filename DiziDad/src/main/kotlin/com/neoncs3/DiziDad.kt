@@ -301,9 +301,72 @@ class DiziDad : MainAPI() {
             newMovieSearchResponse(title, url, TvType.Movie) { this.posterUrl = poster }
         }
 
+    /**
+     * Gerçek img öğesinden başlayıp aynı karttaki içerik bağlantısını bulur.
+     * DiziDAD'da görsel <a> içinde olmayabilir; alt="Tyson izle" gibi alt
+     * metinlerini bağlantı başlığı/slug'ıyla eşleştirip posterUrl'yi doğrudan taşır.
+     */
+    private fun Element.contentAnchorForImage(imageAlt: String): Element? {
+        val alt = norm(cleanTitle(imageAlt))
+        val tokens = alt.split(" ")
+            .filter { it.length >= 3 && it !in setOf("izle", "sezon", "bolum", "dizi", "film", "turkce", "dublaj", "altyazili") }
+            .distinct()
+        var current: Element? = parent()
+        var depth = 0
+
+        while (current != null && depth < 7) {
+            val tag = current.tagName().lowercase(Locale.ROOT)
+            if (tag in setOf("header", "nav", "footer", "aside", "body", "html")) break
+            val marker = (current.id() + " " + current.classNames().joinToString(" ")).lowercase(Locale.ROOT)
+            if (Regex("\\b(site[-_]?header|site[-_]?footer|navbar|navigation|main[-_]?menu|mobile[-_]?menu|side[-_]?bar|sidebar|widget|login|register|alphabet|social|user[-_]?menu)\\b").containsMatchIn(marker)) break
+
+            val links = current.select("a[href]").filter { link ->
+                val href = link.attr("href").trim()
+                href.isNotBlank() && !href.startsWith("#") && !href.startsWith("javascript") &&
+                    absUrl(href).startsWith(mainUrl) && isContentCardUrl(absUrl(href))
+            }
+
+            val scored = links.mapNotNull { link ->
+                val href = absUrl(link.attr("href"))
+                val linkText = norm(cleanTitle(link.text().ifBlank { link.attr("title") }))
+                val slug = norm(posterSlug(href).replace('-', ' '))
+                var score = 0
+                tokens.forEach { token ->
+                    if (linkText.split(" ").contains(token)) score += 8
+                    else if (linkText.contains(token)) score += 4
+                    if (slug.split(" ").contains(token)) score += 6
+                    else if (slug.contains(token)) score += 3
+                }
+                if (score > 0) link to score else null
+            }.sortedByDescending { it.second }
+
+            if (scored.isNotEmpty()) return scored.first().first
+            if (alt.isBlank() && links.size == 1) return links.first()
+
+            current = current.parent()
+            depth++
+        }
+        return null
+    }
+
     private fun Document.cards(): List<SearchResponse> {
         val out = LinkedHashMap<String, SearchResponse>()
         val anchors = select("a[href]")
+
+        // Önce her gerçek poster img'sini kendi başlık/izleme bağlantısına bağla.
+        // Bu, görsel ve başlık farklı <a> etiketlerinde olduğunda da poster bilgisini kaybetmez.
+        select("img[data-src], img[data-lazy-src], img[data-original], img[data-image], img[data-poster], img[data-lazyloaded], img[src]")
+            .forEach { image ->
+                val poster = image.posterOfElement() ?: return@forEach
+                val alt = image.attr("alt").ifBlank { image.attr("title") }
+                val link = image.contentAnchorForImage(alt) ?: return@forEach
+                val href = link.attr("href").trim()
+                val url = absUrl(href)
+                if (!url.startsWith(mainUrl) || !isContentCardUrl(url)) return@forEach
+                val title = cleanTitle(link.text().ifBlank { link.attr("title").ifBlank { alt } })
+                if (title.isBlank()) return@forEach
+                if (!out.containsKey(url)) out[url] = makeCard(title, url, poster)
+            }
 
         // Yalnızca dizi/film/bölüm bağlantılarının içindeki gerçek görsel taşıyan linkleri
         // önbelleğe al. Menü ve sayfa üstbilgisindeki logolar asla kart afişi sayılmaz.
