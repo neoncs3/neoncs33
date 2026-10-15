@@ -2,7 +2,7 @@
 version = 1
 
 cloudstream {
-    description = "DDizi - yerli, yabancı ve eski diziler"
+    description = "DiziDad - yerli, yabancı ve eski diziler"
     authors = listOf("neoncs3")
 
     /**
@@ -18,5 +18,5 @@ cloudstream {
     requiresResources = false
     language = "tr"
 
-    iconUrl = "https://www.google.com/s2/favicons?domain=ddizi.tel&sz=%size%"
+    iconUrl = "https://www.google.com/s2/favicons?domain=dizidad.com&sz=%size%"
 }
