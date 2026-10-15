@@ -17,7 +17,7 @@ import android.view.WindowInsets
 import android.view.WindowManager
 import android.webkit.*
 import android.widget.*
-import com.megix.settings.SettingsTheme.dp
+import com.neoncs3.settings.SettingsTheme.dp
 
 
 //WebView login dialog for extracting authentication tokens.
