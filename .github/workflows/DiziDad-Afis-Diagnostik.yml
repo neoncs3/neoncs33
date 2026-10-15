@@ -1,0 +1,101 @@
+name: DiziDad Afiş Tanılama
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - 'DiziDad/**'
+      - '.github/workflows/DiziDad-Afis-Diagnostik.yml'
+  schedule:
+    - cron: '17 4 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  poster-probe:
+    name: DiziDad kaynak ve proxy görsellerini test et
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Kaynak sayfa, doğrudan afiş ve proxy yanıtlarını ölç
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import re
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/131.0.0.0 Safari/537.36")
+          REFERER = "https://www.dizidad.com/"
+          pages = [
+              "https://www.dizidad.com/diziler/tyson-izle/",
+              "https://www.dizidad.com/tyson-1-sezon-4-bolum-izle/",
+          ]
+
+          def fetch(url, referer=None, limit=2_000_000):
+              headers = {"User-Agent": UA, "Accept": "image/avif,image/webp,image/*,*/*;q=0.8"}
+              if referer:
+                  headers["Referer"] = referer
+              req = urllib.request.Request(url, headers=headers)
+              try:
+                  with urllib.request.urlopen(req, timeout=25) as response:
+                      data = response.read(limit)
+                      ctype = response.headers.get("Content-Type", "")
+                      length = response.headers.get("Content-Length", "?")
+                      magic = data[:16].hex(" ")
+                      looks_image = (
+                          data.startswith(b"\xff\xd8\xff") or
+                          data.startswith(b"\x89PNG\r\n\x1a\n") or
+                          data.startswith((b"GIF87a", b"GIF89a")) or
+                          (data.startswith(b"RIFF") and data[8:12] == b"WEBP") or
+                          ctype.lower().startswith("image/")
+                      )
+                      print(f"RESULT status={response.status} type={ctype!r} "
+                            f"length={length} sample_bytes={len(data)} "
+                            f"image_like={looks_image} magic={magic} final={response.geturl()}")
+                      return response.status, ctype, data
+              except urllib.error.HTTPError as e:
+                  snippet = e.read(180).decode("utf-8", "replace").replace("\n", " ")
+                  print(f"RESULT status={e.code} type={e.headers.get('Content-Type','')!r} "
+                        f"error_body={snippet!r} url={url}")
+              except Exception as e:
+                  print(f"RESULT ERROR {type(e).__name__}: {e} url={url}")
+              return None, "", b""
+
+          print("=== Dizi ve bölüm sayfaları ===")
+          found = []
+          for page in pages:
+              print(f"PAGE {page}")
+              status, ctype, body = fetch(page)
+              html = body.decode("utf-8", "replace")
+              if status and status < 400 and ("html" in ctype.lower() or "<html" in html.lower()):
+                  attrs = re.findall(
+                      r"""(?is)(?:src|data-src|data-lazy-src|data-original|data-image|data-poster|srcset|data-srcset)\s*=\s*["']([^"']*wp-content/uploads/[^"']+)""",
+                      html
+                  )
+                  for raw in attrs:
+                      raw = raw.split(",")[0].strip().split(" ")[0].replace("&amp;", "&")
+                      candidate = urllib.parse.urljoin(page, raw)
+                      if candidate.startswith("http") and candidate not in found:
+                          found.append(candidate)
+
+          sample = "https://www.dizidad.com/wp-content/uploads/2026/10/tyson.jpg"
+          candidates = [sample] + [u for u in found if u != sample]
+          candidates = candidates[:4]
+          print("=== Doğrudan görseller (Referer olmadan / Referer ile) ve wsrv.nl proxy ===")
+          print(f"HTML'den bulunan farklı uploads görseli: {len(found)}")
+          for image_url in candidates:
+              print(f"IMAGE {image_url}")
+              fetch(image_url, referer=None, limit=512_000)
+              fetch(image_url, referer=REFERER, limit=512_000)
+              proxy = "https://wsrv.nl/?" + urllib.parse.urlencode({
+                  "url": image_url, "w": "342", "maxage": "31d"
+              })
+              print(f"PROXY {proxy}")
+              fetch(proxy, referer=None, limit=512_000)
+          PY
