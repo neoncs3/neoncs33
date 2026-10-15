@@ -170,7 +170,7 @@ class AutoTvdizilerTv : NeonMainAPI() {
                 )
             }.getOrNull() ?: continue
             if (!response.isSuccessful) continue
-            val body = response.text.trimStart('\\uFEFF', ' ', '\\t', '\\r', '\\n')
+            val body = response.text.trimStart('\uFEFF', ' ', '\t', '\r', '\n')
             if (body.startsWith("#EXTM3U")) return referer
         }
         Log.w(name.uppercase().take(23), "Twitter HLS source rejected: no valid playlist response")
