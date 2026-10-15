@@ -103,6 +103,30 @@
         "name": "AutoTvdizilerTv"
     },
     {
+        "iconUrl": "https://github.com/SaurabhKaperwan/CSX/raw/refs/heads/master/CineStream/icon.png",
+        "fileHash": "sha256-8f063c03bf16a3da054c13ca205f37a9f84783c703b89fc0995ed8d925477ed7",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
+        "fileSize": 621944,
+        "status": 1,
+        "language": "en",
+        "authors": [
+            "megix"
+        ],
+        "tvTypes": [
+            "TvSeries",
+            "Movie",
+            "AsianDrama",
+            "Anime",
+            "Torrent"
+        ],
+        "version": 487,
+        "internalName": "CineStream",
+        "description": "One stop solution for Movies, Series, Anime, AsianDrama and Torrents",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/CineStream.cs3",
+        "name": "CineStream"
+    },
+    {
         "iconUrl": "https://diziboxizle.com/favicon.ico",
         "fileHash": "sha256-f90fe336b229f44d24a0c57d12521ca00119250bf866dd603ba4cd1dd752aaa4",
         "apiVersion": 1,
