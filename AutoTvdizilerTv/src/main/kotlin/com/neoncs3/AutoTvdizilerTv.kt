@@ -147,6 +147,36 @@ class AutoTvdizilerTv : NeonMainAPI() {
         // request and produce HTTP 403, so do not invent a header for these URLs.
         if (isSignedYouTubeMediaUrl(raw)) "" else fallback
 
+    private fun isTwitterMediaUrl(raw: String): Boolean {
+        val host = runCatching { URI(raw).host.orEmpty().lowercase() }.getOrDefault("")
+        return host == "video.twimg.com" || host.endsWith(".twimg.com")
+    }
+
+    // X/Twitter media URLs may require the hosting page's browser context. Confirm the
+    // playlist with a normal GET before publishing it; a 403/HTML body is not a video.
+    private suspend fun findValidTwitterHlsReferer(url: String, userAgent: String): String? {
+        for (referer in listOf("https://twitter.com/", "https://x.com/")) {
+            val response = runCatching {
+                app.get(
+                    url,
+                    headers = mapOf(
+                        "User-Agent" to userAgent,
+                        "Accept" to "application/vnd.apple.mpegurl,application/x-mpegURL,*/*",
+                        "Referer" to referer,
+                    ),
+                    referer = referer,
+                    timeout = 3_500L,
+                    allowRedirects = true,
+                )
+            }.getOrNull() ?: continue
+            if (!response.isSuccessful) continue
+            val body = response.text.trimStart('\\uFEFF', ' ', '\\t', '\\r', '\\n')
+            if (body.startsWith("#EXTM3U")) return referer
+        }
+        Log.w(name.uppercase().take(23), "Twitter HLS source rejected: no valid playlist response")
+        return null
+    }
+
     private fun playerElementSources(document: Document, baseUrl: String): List<PlayerSource> {
         return document.select(
             "video[src], video source[src], source[src], video[data-src], source[data-src], " +
@@ -990,9 +1020,19 @@ class AutoTvdizilerTv : NeonMainAPI() {
         // Collect extension-less sources from host extractors until validated as HLS.
         val pendingHlsLinks = LinkedHashMap<String, ExtractorLink>()
         val rejectedHlsUrls = LinkedHashSet<String>()
+        val nestedPlayerFrames = LinkedHashMap<String, String>()
         val forwardingCallback: (ExtractorLink) -> Unit = { link ->
             if (!isValidHttpUrl(link.url)) {
                 Log.w(name.uppercase().take(23), "filtered malformed media URL")
+            } else if (
+                isSignedYouTubeMediaUrl(link.url) &&
+                    !link.source.contains("youtube", ignoreCase = true) &&
+                    !link.name.contains("youtube", ignoreCase = true)
+            ) {
+                // Signed googlevideo URLs scraped out of arbitrary page scripts are
+                // usually bound to the extractor's IP/session and reliably return 403.
+                // Keep native YouTube extractor results, but do not advertise stale copies.
+                Log.w(name.uppercase().take(23), "filtered scraped session-bound YouTube media URL")
             } else {
                 // Signed Google Video URLs are session-bound. Preserve the native
                 // YouTube extractor's headers/referer exactly; forcing a Referer can cause 403.
@@ -1089,6 +1129,18 @@ class AutoTvdizilerTv : NeonMainAPI() {
                 if (emitted.isNotEmpty()) break
             }
 
+            // Player pages can wrap a second host/player iframe. The original crawler
+            // only received URLs found on the episode page, so these nested frames were
+            // silently missed when the first iframe advertised a stale master.txt file.
+            neonExtractIframeUrls(frameDocument, frame)
+                .filter { nested ->
+                    nested != frame && isValidHttpUrl(nested) &&
+                        !isYouTubePlaybackFrame(nested) && !isUtilityCandidate(nested)
+                }
+                .distinct()
+                .take(4)
+                .forEach { nestedPlayerFrames.putIfAbsent(it, frame) }
+
             val frameSources = (
                 playerElementSources(frameDocument, frame) + playerSources(playerText, frame)
             ).distinctBy { it.url }
@@ -1109,6 +1161,14 @@ class AutoTvdizilerTv : NeonMainAPI() {
                 }
                 var mediaReferer = preferredRefererForMedia(source.url, frame)
                 val path = runCatching { URI(source.url).path.orEmpty() }.getOrDefault("")
+                if (linkType == ExtractorLinkType.M3U8 && isTwitterMediaUrl(source.url)) {
+                    val validatedReferer = findValidTwitterHlsReferer(source.url, playerUserAgent)
+                    if (validatedReferer == null) {
+                        rejectedHlsUrls.add(source.url)
+                        continue
+                    }
+                    mediaReferer = validatedReferer
+                }
                 if (linkType == ExtractorLinkType.M3U8 && !path.endsWith(".m3u8", ignoreCase = true)) {
                     val validatedReferer = findValidHlsReferer(
                         source.url,
@@ -1157,6 +1217,28 @@ class AutoTvdizilerTv : NeonMainAPI() {
         }
 
         var found = emitted.isNotEmpty()
+
+        // Resolve nested player frames found inside an external embed. Limit the work so
+        // a page with advertising iframes does not stall playback for a long time.
+        for ((nestedFrame, parentFrame) in nestedPlayerFrames.entries.take(4)) {
+            val nestedResolved = runCatching {
+                neonResolveLinkCandidates(
+                    candidates = listOf(nestedFrame),
+                    sourceName = name,
+                    subtitleCallback = subtitleCallback,
+                    callback = forwardingCallback,
+                    maxDepth = 3,
+                    referer = parentFrame,
+                )
+            }.getOrDefault(false)
+            found = found || nestedResolved || emitted.isNotEmpty()
+            runCatching {
+                loadExtractor(nestedFrame, parentFrame, subtitleCallback, forwardingCallback)
+            }.onFailure {
+                Log.w(name.uppercase().take(23), "nested player extraction failed: ${it.javaClass.simpleName}")
+            }
+            if (emitted.isNotEmpty()) found = true
+        }
 
         // An emitted URL is only a candidate, not proof that the CDN will play it.
         // Continue exploring the other public page/player endpoints so an HTTP 403 or
