@@ -1382,9 +1382,24 @@ __MAIN_PAGES__
             "a[href]:has(img), a[href]:has(picture), a[href][data-poster], " +
                 "a[href][data-image], a[href][data-src], a[href][data-lazy-src], " +
                 "a[href][style*=background], a[href]:has([style*=background])"
-        return document.select("$cardSelector, $mediaSelector")
-            .filterNot { isNavigationChrome(it) || isNonContentAnchor(it, mainUrl) }
-            .distinctBy { normalize(it.attr("href"), mainUrl) }
+        // Poster-bearing anchors are the fastest and most reliable path. The old combined
+        // selector walked every link in the very large alphabetical directory before the
+        // result cap in resultsFrom() could take effect.
+        val anchors = ArrayList<Element>()
+        val seen = LinkedHashSet<String>()
+        fun collect(selector: String, limit: Int) {
+            for (anchor in document.select(selector)) {
+                if (anchors.size >= limit) break
+                if (isNavigationChrome(anchor) || isNonContentAnchor(anchor, mainUrl)) continue
+                if (posterFor(anchor, mainUrl) == null) continue
+                val href = normalize(anchor.attr("href"), mainUrl)
+                if (seen.add(href)) anchors.add(anchor)
+            }
+        }
+        collect(mediaSelector, 200)
+        // Only pay for broad card selectors on sites whose anchors do not carry posters directly.
+        if (anchors.size < 15) collect(cardSelector, 200)
+        return anchors
     }
 
     private fun responseFromAnchor(anchor: Element, baseUrl: String): SearchResponse? {
@@ -2394,6 +2409,8 @@ def run_self_test() -> None:
     assert "private fun isNavigationChrome(anchor: Element): Boolean" in generated
     assert "private fun isNonContentAnchor(anchor: Element, baseUrl: String): Boolean" in generated
     assert "isNonContentAnchor(anchor, baseUrl)" in generated
+    assert "collect(mediaSelector, 200)" in generated
+    assert "posterFor(anchor, mainUrl) == null" in generated
     assert 'container.text(),' not in generated[generated.index("private fun episodeItems"):generated.index("private fun cleanSeriesTitle")]
     assert "Stop processing card details when the maximum number of unique results is reached." in generated
     assert "never use a global a[href] fallback" in generated
