@@ -1,4 +1,4 @@
-package com.megix
+package com.neoncs3
 
 // Cloudstream Core, Network, Utils, & Logging
 import com.lagradost.api.Log
