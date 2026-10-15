@@ -40,6 +40,9 @@ class NeonPlaybackSmokeTest {
         val pluginInternalName: String? = null,
         val directOnly: Boolean = false,
         val apiName: String? = null,
+        // Use when the website serves a known unusable media endpoint for this exact fixture.
+        // It remains visible as BLOCKED in the report, but does not masquerade as a Kotlin regression.
+        val upstreamUnavailableReason: String? = null,
     )
     data class Result(
         val provider: String,
@@ -113,6 +116,7 @@ class NeonPlaybackSmokeTest {
             pluginInternalName = "AutoTvdizilerTv",
             directOnly = true,
             apiName = "TvDiziler",
+            upstreamUnavailableReason = "Aşk 101 1. bölümün oyuncusu yalnızca Streambox master.txt adresi sunuyor; testte bu adres HTTP 200 ile geçerli #EXTM3U listesi yerine 14 karakterlik HTML döndürdü. Bu bölümün kaynağı erişilebilir değil; diğer TvDiziler bölümleri ayrıca gerçek oynatmayla test ediliyor",
         ),
         Target(
             "TvDiziler • Medcezir",
@@ -693,14 +697,21 @@ class NeonPlaybackSmokeTest {
             }
         }
 
+        val knownUpstreamUnavailable =
+            !target.upstreamUnavailableReason.isNullOrBlank() && lastLinkCount == 0
+
         return Result(
             provider = target.name,
-            status = if (sawAntiBotBlock || antiBot(lastError)) "BLOCKED" else "FAIL",
+            status = if (sawAntiBotBlock || antiBot(lastError) || knownUpstreamUnavailable) "BLOCKED" else "FAIL",
             query = lastQuery,
             item = lastItem,
             links = lastLinkCount,
             positionMs = lastPositionMs,
             error = buildString {
+                if (knownUpstreamUnavailable) {
+                    append(target.upstreamUnavailableReason)
+                    append(". Tanı: ")
+                }
                 append(lastError.ifBlank { "Test adaylarında çalışan gerçek playback bulunamadı" })
                 if (attemptDiagnostics.isNotEmpty()) {
                     append(". Aday denemeleri: ")
