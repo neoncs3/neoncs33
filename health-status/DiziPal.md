@@ -2,7 +2,7 @@
 
 Kodda kayıtlı domain: https://dizipal1586.com
 
-Son HTTP URL: https://dizipal1588.com
+Son HTTP URL: https://dizipal1590.com
 
 HTTP: ❌ 403
 
