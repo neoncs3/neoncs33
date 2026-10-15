@@ -9,11 +9,13 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: write
 
 concurrency:
-  # This workflow writes playback reports to master. Serialize runs to avoid concurrent report pushes.
-  group: neon-real-playback-master
+  # v2 releases the queue from a stuck earlier emulator run. The report-write step
+  # checks timestamps so an older run cannot overwrite a newer report.
+  group: neon-real-playback-master-v2
   cancel-in-progress: false
 
 jobs:
@@ -75,9 +77,28 @@ jobs:
       - name: Playback raporunu GitHub'a yaz
         if: always()
         shell: bash
+        env:
+          RUN_STARTED_AT: ${{ github.event.workflow_run.created_at || github.run_started_at }}
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          run_started_epoch="$(date -u -d "$RUN_STARTED_AT" +%s)"
+          git fetch origin master
+
+          # A previous emulator run got stuck and blocked newer runs. After it is
+          # unblocked, it must not replace a playback report produced by a newer run.
+          skip_if_stale_report() {
+            latest_report_epoch="$(git log -1 --format=%ct origin/master -- playback-status/latest.json || true)"
+            if [[ -n "$latest_report_epoch" && "$latest_report_epoch" -gt "$run_started_epoch" ]]; then
+              echo "Bu testten daha yeni bir playback raporu zaten yayımlanmış; eski rapor atlanıyor."
+              return 0
+            fi
+            return 1
+          }
+
+          if skip_if_stale_report; then exit 0; fi
 
           git add playback-status/latest.md playback-status/latest.json
 
@@ -95,6 +116,7 @@ jobs:
 
             echo "Push yarış nedeniyle başarısız oldu; master yeniden alınacak."
             git fetch origin master
+            if skip_if_stale_report; then exit 0; fi
             git rebase origin/master || {
               echo "Rebase çatışması oluştu."
               exit 1
