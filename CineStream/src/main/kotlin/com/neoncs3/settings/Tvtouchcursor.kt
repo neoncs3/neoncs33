@@ -9,7 +9,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.webkit.WebView
 import android.widget.FrameLayout
-import com.megix.settings.SettingsTheme.dp
+import com.neoncs3.settings.SettingsTheme.dp
 
 /**
  * A movable, D-pad controlled on-screen touch cursor.
