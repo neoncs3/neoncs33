@@ -1,5 +1,5 @@
 // CloudStream updates require a higher version number for existing installations.
-version = 10
+version = 11
 
 cloudstream {
     description = "DiziDad - yerli, yabancı ve eski diziler"
