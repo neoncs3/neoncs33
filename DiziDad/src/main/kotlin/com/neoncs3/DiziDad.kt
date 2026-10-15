@@ -194,13 +194,21 @@ class DiziDad : MainAPI() {
      * bağlantısında bulunabiliyor. Kart kapsayıcısına kadar çıkıp görseli oradan al.
      */
     private fun Element.posterFromCardAncestors(targetUrl: String? = null): String? {
+        // Verilen DiziDAD HTML biçimi:
+        // <img data-lazyloaded="1" src=".../tyson.jpg" data-src=".../tyson.jpg" ...>
+        // Hem lazy-load alanlarını hem de gerçek src alanını doğrudan değerlendir.
         diziMomPoster(targetUrl)?.let { return it }
-        selectFirst("img")?.posterOfElement()?.let { return it }
+        select("img[data-src], img[data-lazy-src], img[data-original], img[data-lazyloaded], img[src]")
+            .firstNotNullOfOrNull { it.posterOfElement() }
+            ?.let { return it }
+        if (tagName().equals("img", ignoreCase = true)) {
+            posterOfElement()?.let { return it }
+        }
 
         val slug = posterSlug(targetUrl)
         var current: Element? = parent()
         var depth = 0
-        while (current != null && depth < 4) {
+        while (current != null && depth < 9) {
             val tag = current.tagName().lowercase(Locale.ROOT)
             if (tag in setOf("header", "nav", "footer", "aside", "body", "html")) break
 
@@ -209,18 +217,22 @@ class DiziDad : MainAPI() {
                     .containsMatchIn(marker)
             ) break
 
-            val looksLikeCard = Regex("\\b(card|item|post|entry|movie|film|series|dizi|content|thumbnail|list|archive|episode|bolum)\\b")
+            val looksLikeCard = Regex("\\b(card|item|post|entry|movie|film|series|dizi|content|thumbnail|list|archive|episode|bolum|single-item|cat-img|episode-box)\\b")
                 .containsMatchIn(marker)
-            val images = current.select("img")
-            if (images.size == 1 || looksLikeCard) {
-                // Kart kapsayıcısında DiziMom'un kullandığı kategori/bölüm görselini önce ara.
-                current.diziMomPoster(targetUrl)?.let { return it }
-                val selected = images.firstOrNull { image ->
-                    slug.isNotBlank() && image.posterOfElement().orEmpty().contains(slug, ignoreCase = true)
-                } ?: images.firstOrNull()
-                selected?.posterOfElement()?.let { return it }
+            val images = current.select("img[data-src], img[data-lazy-src], img[data-original], img[data-lazyloaded], img[src]")
+            // Küçük kart gruplarını tara; ana sayfadaki uzun görsel listelerine çıkıp yanlış afiş alma.
+            if (images.isNotEmpty() && images.size <= 12 && (images.size <= 3 || looksLikeCard)) {
+                val usable = images.mapNotNull { image ->
+                    image.posterOfElement()?.let { poster -> image to poster }
+                }
+                val preferred = usable.firstOrNull { (image, poster) ->
+                    (slug.isNotBlank() && poster.contains(slug, ignoreCase = true)) ||
+                    norm(image.attr("alt")).let { alt -> slug.isNotBlank() && alt.contains(norm(slug)) }
+                } ?: usable.firstOrNull { (_, poster) ->
+                    poster.contains("/wp-content/uploads/", ignoreCase = true)
+                } ?: usable.firstOrNull()
+                preferred?.second?.let { return it }
 
-                // Tema CSS background/data-bg alanını kullanıyorsa yalnızca kart kapsayıcısında dene.
                 val background = current.posterUrl()
                 if (isUsablePoster(background)) return background
             }
@@ -235,6 +247,10 @@ class DiziDad : MainAPI() {
         return isEpisode(url) || isSeries(url) ||
             path.contains("izle") || path.contains("filmler") || path.contains("film-")
     }
+
+    private fun contentUrlKey(url: String): String =
+        url.substringBefore("?").substringBefore("#").trimEnd('/').lowercase(Locale.ROOT)
+
 
     private val posterBearingSelector =
         "img, [data-poster], [data-poster-url], [data-image], [data-bg], [data-background], [data-background-image], [data-src], [data-original], [data-lazy-src], [data-lazy-background], [data-srcset], [data-lazy-srcset], [srcset], [style*=background]"
@@ -267,7 +283,7 @@ class DiziDad : MainAPI() {
             if (!hasImageMarker) continue
 
             val poster = link.posterFromCardAncestors(url)
-            if (!poster.isNullOrBlank()) posterByUrl.putIfAbsent(url, poster)
+            if (!poster.isNullOrBlank()) posterByUrl.putIfAbsent(contentUrlKey(url), poster)
         }
 
         for (a in anchors) {
@@ -280,7 +296,7 @@ class DiziDad : MainAPI() {
             if (path.contains("yorum") || path.contains("comment")) continue
 
             // Başlık linkiyle afiş linki aynı URL'yi taşıyorsa görsel bağlantısından alınan adresi kullan.
-            val poster = posterByUrl[url] ?: a.posterFromCardAncestors(url)
+            val poster = posterByUrl[contentUrlKey(url)] ?: a.posterFromCardAncestors(url)
             val hasImage = !poster.isNullOrBlank() || a.selectFirst(posterBearingSelector) != null ||
                 listOf("data-poster", "data-poster-url", "data-image", "data-bg",
                     "data-background", "data-background-image", "data-src", "data-original",
@@ -442,8 +458,8 @@ class DiziDad : MainAPI() {
                     this.episode = ep
                     // poster URL'leri mutlak URL olarak çözülüyor; burada tekrar fixUrlNull
                     // uygulamak yerine DiziBoxizle'deki çalışan Episode kullanımına uygun aktar.
-                    this.posterUrl = seriesPosterFallback
-                        ?: episodePosters[pair.first]?.takeIf { isUsablePoster(it) }
+                    this.posterUrl = episodePosters[pair.first]?.takeIf { isUsablePoster(it) }
+                        ?: seriesPosterFallback
                 }
             }
 
