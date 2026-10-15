@@ -538,6 +538,9 @@ class AutoDdizimagCom : NeonMainAPI() {
         var node: Element? = anchor
         for (depth in 0..4) {
             val current = node ?: break
+            // Do not walk into a shared archive/list wrapper: its single poster can be
+            // incorrectly reused by unrelated title links (notably alphabetical lists).
+            if (depth > 0 && current.select("a[href]").any { it !== anchor }) return null
             imageUrl(current, baseUrl)?.let { return it }
             val urls = LinkedHashSet<String>()
             current.select(
