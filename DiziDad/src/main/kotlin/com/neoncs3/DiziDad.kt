@@ -81,7 +81,7 @@ class DiziDad : MainAPI() {
 
                 val values = when {
                     attr == "style" -> Regex(
-                        """(?i)url\\(\\s*['"]?([^)'"]+)"""
+                        """(?i)url\(\s*['"]?([^)'"]+)"""
                     ).findAll(raw).map { it.groupValues[1].trim() }.toList()
                     attr.contains("srcset") -> listOf(
                         raw.substringBefore(",").trim().substringBefore(" ").trim()
@@ -90,7 +90,7 @@ class DiziDad : MainAPI() {
                 }
 
                 for (candidate in values) {
-                    val value = candidate.trim().trim('\\'', '"')
+                    val value = candidate.trim().removeSurrounding("\"").removeSurrounding("'")
                     if (value.isEmpty() || value.startsWith("data:") ||
                         value.startsWith("javascript:", true) || invalidPoster.containsMatchIn(value)
                     ) continue
