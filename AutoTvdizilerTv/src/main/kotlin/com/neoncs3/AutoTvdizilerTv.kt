@@ -56,23 +56,29 @@ class AutoTvdizilerTv : NeonMainAPI() {
         // Parse each source object without assuming the object is strict JSON (the site
         // also serves JavaScript objects with unquoted property names).
         val sourceArray = Regex("""(?is)\bsources\s*:\s*\[([\s\S]{0,20000}?)\]""")
-            .find(decoded)?.groupValues?.get(1) ?: decoded
+            .find(decoded)?.groupValues?.get(1)
+        // Prefer the declared source array, but also inspect the full player script:
+        // several episodes leave a stale master.txt in sources[] and their usable
+        // alternate URLs in a separate JavaScript object.
+        val sourceTexts = listOfNotNull(sourceArray, decoded).distinct()
         val objectPattern = Regex("""(?is)\{([^{}]{1,5000})\}""")
         val filePattern = Regex("""(?is)["']?file["']?\s*:\s*["']([^"']+)["']""")
         val typePattern = Regex("""(?is)["']?(?:type|format)["']?\s*:\s*["']([^"']+)["']""")
         val labelPattern = Regex("""(?is)["']?(?:label|quality|res)["']?\s*:\s*["']([^"']+)["']""")
 
-        return objectPattern.findAll(sourceArray).mapNotNull { match ->
-            val item = match.groupValues[1]
-            val rawUrl = filePattern.find(item)?.groupValues?.get(1)?.trim()
-                ?: return@mapNotNull null
-            val url = normalize(rawUrl, baseUrl)
-            if (!isValidHttpUrl(url)) return@mapNotNull null
+        return sourceTexts.flatMap { sourceText ->
+            objectPattern.findAll(sourceText).mapNotNull { match ->
+                val item = match.groupValues[1]
+                val rawUrl = filePattern.find(item)?.groupValues?.get(1)?.trim()
+                    ?: return@mapNotNull null
+                val url = normalize(rawUrl, baseUrl)
+                if (!isValidHttpUrl(url)) return@mapNotNull null
 
-            val type = typePattern.find(item)?.groupValues?.get(1)?.trim()?.lowercase().orEmpty()
-            val label = labelPattern.find(item)?.groupValues?.get(1)?.trim().orEmpty()
-            PlayerSource(url, type, label.ifBlank { type.uppercase().ifBlank { "Video" } })
-        }.distinctBy { it.url }.take(8).toList()
+                val type = typePattern.find(item)?.groupValues?.get(1)?.trim()?.lowercase().orEmpty()
+                val label = labelPattern.find(item)?.groupValues?.get(1)?.trim().orEmpty()
+                PlayerSource(url, type, label.ifBlank { type.uppercase().ifBlank { "Video" } })
+            }.toList()
+        }.distinctBy { it.url }.take(12)
     }
 
     // Some player servers label a plain HTML/error response as HLS (for example master.txt).
