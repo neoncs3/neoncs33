@@ -2,48 +2,48 @@
   "results": [
     {
       "provider": "HDFilmDiziizle • Tron",
-      "status": "FAIL",
+      "status": "BLOCKED",
       "query": null,
-      "item": "HDFilmDiziizle • Tron",
+      "item": null,
       "links": 0,
       "positionMs": 0,
-      "error": "loadLinks=false. Aday denemeleri: doğrudan: HDFilmDiziizle • Tron -> bağlantı yok (loadLinks=false)"
+      "error": "Provider origin erişimi engellendi HTTP 403 (anti-bot challenge)"
     },
     {
       "provider": "Dizimag • Below S1E1",
-      "status": "PASS",
+      "status": "BLOCKED",
       "query": null,
-      "item": "Dizimag • Below S1E1",
-      "links": 3,
-      "positionMs": 3284,
-      "error": null
+      "item": null,
+      "links": 0,
+      "positionMs": 0,
+      "error": "Provider origin erişimi engellendi HTTP 200 (anti-bot challenge)"
     },
     {
       "provider": "Dizimag • Below S1E2",
-      "status": "PASS",
+      "status": "BLOCKED",
       "query": null,
-      "item": "Dizimag • Below S1E2",
-      "links": 3,
-      "positionMs": 2951,
-      "error": null
+      "item": null,
+      "links": 0,
+      "positionMs": 0,
+      "error": "Provider origin erişimi engellendi HTTP 200 (anti-bot challenge)"
     },
     {
       "provider": "Dizimag • Below S1E3",
-      "status": "PASS",
+      "status": "BLOCKED",
       "query": null,
-      "item": "Dizimag • Below S1E3",
-      "links": 3,
-      "positionMs": 3287,
-      "error": null
+      "item": null,
+      "links": 0,
+      "positionMs": 0,
+      "error": "Provider origin erişimi engellendi HTTP 200 (anti-bot challenge)"
     },
     {
       "provider": "Dizimag • Below S1E6",
-      "status": "PASS",
+      "status": "BLOCKED",
       "query": null,
-      "item": "Dizimag • Below S1E6",
-      "links": 3,
-      "positionMs": 2952,
-      "error": null
+      "item": null,
+      "links": 0,
+      "positionMs": 0,
+      "error": "Provider origin erişimi engellendi HTTP 200 (anti-bot challenge)"
     },
     {
       "provider": "TvDiziler • Aşk 101",
@@ -65,33 +65,33 @@
     },
     {
       "provider": "TvDiziler • Tuzlu Kahve 7",
-      "status": "BLOCKED",
+      "status": "PASS",
       "query": null,
       "item": "TvDiziler • Tuzlu Kahve 7",
       "links": 1,
-      "positionMs": 0,
-      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403. Aday denemeleri: doğrudan: TvDiziler • Tuzlu Kahve 7 -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403)"
+      "positionMs": 3039,
+      "error": null
     },
     {
       "provider": "TvDiziler • Anne Yarısı 4",
-      "status": "BLOCKED",
+      "status": "PASS",
       "query": null,
       "item": "TvDiziler • Anne Yarısı 4",
       "links": 1,
-      "positionMs": 0,
-      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403. Aday denemeleri: doğrudan: TvDiziler • Anne Yarısı 4 -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403)"
+      "positionMs": 3283,
+      "error": null
     },
     {
       "provider": "TvDiziler • Haysiyet 6",
-      "status": "BLOCKED",
+      "status": "PASS",
       "query": null,
       "item": "TvDiziler • Haysiyet 6",
       "links": 1,
-      "positionMs": 0,
-      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403. Aday denemeleri: doğrudan: TvDiziler • Haysiyet 6 -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403)"
+      "positionMs": 3134,
+      "error": null
     }
   ],
-  "pass": 4,
-  "blocked": 4,
-  "fail": 2
+  "pass": 3,
+  "blocked": 6,
+  "fail": 1
 }
