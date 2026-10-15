@@ -213,6 +213,8 @@ class DiziDad : MainAPI() {
                 .containsMatchIn(marker)
             val images = current.select("img")
             if (images.size == 1 || looksLikeCard) {
+                // Kart kapsayıcısında DiziMom'un kullandığı kategori/bölüm görselini önce ara.
+                current.diziMomPoster(targetUrl)?.let { return it }
                 val selected = images.firstOrNull { image ->
                     slug.isNotBlank() && image.posterOfElement().orEmpty().contains(slug, ignoreCase = true)
                 } ?: images.firstOrNull()
