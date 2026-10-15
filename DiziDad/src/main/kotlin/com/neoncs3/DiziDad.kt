@@ -284,10 +284,6 @@ class DiziDad : MainAPI() {
         val path = url.removePrefix(mainUrl).lowercase(Locale.ROOT)
         return isEpisode(url) || isSeries(url) ||
             path.contains("izle") || path.contains("filmler") || path.contains("film-")
-    }    private fun isContentCardUrl(url: String): Boolean {
-        val path = url.removePrefix(mainUrl).lowercase(Locale.ROOT)
-        return isEpisode(url) || isSeries(url) ||
-            path.contains("izle") || path.contains("filmler") || path.contains("film-")
     }
 
     private fun contentUrlKey(url: String): String =
