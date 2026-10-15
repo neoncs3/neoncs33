@@ -5,7 +5,7 @@ import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
 
 @CloudstreamPlugin
-class DDiziPlugin : Plugin() {
+class DiziDadPlugin : Plugin() {
     override fun load(context: Context) {
         registerMainAPI(DDizi())
     }
