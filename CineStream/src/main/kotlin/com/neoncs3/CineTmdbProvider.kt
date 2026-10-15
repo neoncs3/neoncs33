@@ -8,7 +8,7 @@ import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.LoadResponse.Companion.addImdbId
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
-import com.megix.CineStreamExtractors.invokeAllSources
+import com.neoncs3.CineStreamExtractors.invokeAllSources
 
 class CineTmdbProvider: MainAPI() {
     override var name = "CineTmdb"
