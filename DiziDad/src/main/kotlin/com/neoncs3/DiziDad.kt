@@ -395,14 +395,13 @@ class DiziDad : MainAPI() {
                     this.name = pair.second
                     this.season = season
                     this.episode = ep
+                    // poster URL'leri mutlak URL olarak çözülüyor; burada tekrar fixUrlNull
+                    // uygulamak yerine DiziBoxizle'deki çalışan Episode kullanımına uygun aktar.
                     this.posterUrl = episodePosters[pair.first]
                         ?.takeIf { isUsablePoster(it) }
-                        ?.let { fixUrlNull(it) }
-                        ?: fixUrlNull(
-                            poster?.takeIf { isUsablePoster(it) }
-                                ?: posterFromMarkup(doc.html(), pageUrl)
-                                ?: doc.select("img").firstNotNullOfOrNull { it.posterOfElement() }
-                        )
+                        ?: poster?.takeIf { isUsablePoster(it) }
+                        ?: posterFromMarkup(doc.html(), pageUrl)
+                        ?: doc.select("img").firstNotNullOfOrNull { it.posterOfElement() }
                 }
             }
 
