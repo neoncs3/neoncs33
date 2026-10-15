@@ -160,10 +160,41 @@ class DiziDad : MainAPI() {
     }
 
     /**
+     * DiziMom eklentisindeki açık kart seçicilerini önceliklendirir:
+     * kategori afişi, bölüm kartı ve ardından bağlantının içindeki img.
+     * Lazy-load alanları posterOfElement() tarafından çözülür.
+     */
+    private fun Element.diziMomPoster(targetUrl: String? = null): String? {
+        val selectors = listOf(
+            "div.cat-img img",
+            "div.category_image img",
+            "div.episode-box a img",
+            "div.episode-name img",
+            "div.single-item a img",
+            "a img",
+            "img"
+        )
+        val candidates = LinkedHashSet<String>()
+        for (selector in selectors) {
+            val images = if (selector == "img" && tagName().equals("img", ignoreCase = true)) {
+                listOf(this)
+            } else {
+                select(selector)
+            }
+            images.forEach { image -> image.posterOfElement()?.let { candidates.add(it) } }
+        }
+        val slug = posterSlug(targetUrl)
+        return candidates.firstOrNull {
+            slug.isNotBlank() && posterSlug(it).contains(slug, ignoreCase = true)
+        } ?: candidates.firstOrNull()
+    }
+
+    /**
      * Bölüm listelerinde afiş, metin bağlantısının içinde değil aynı kartın kardeş
      * bağlantısında bulunabiliyor. Kart kapsayıcısına kadar çıkıp görseli oradan al.
      */
     private fun Element.posterFromCardAncestors(targetUrl: String? = null): String? {
+        diziMomPoster(targetUrl)?.let { return it }
         selectFirst("img")?.posterOfElement()?.let { return it }
 
         val slug = posterSlug(targetUrl)
@@ -297,13 +328,15 @@ class DiziDad : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val fromRest = runCatching { restSearch(query) }.getOrDefault(emptyList())
-        if (fromRest.isNotEmpty()) return fromRest
         val q = URLEncoder.encode(query, "UTF-8")
         val nq = norm(query)
-        return runCatching { app.get("$mainUrl/?s=$q").document.cards() }
+        // HTML sonuçları DiziMom tarzı kart seçicileriyle afişleri de alabilir.
+        // REST araması sadece title/url döndürdüğü için önce afiş taşıyan HTML kartlarını dene.
+        val htmlResults = runCatching { app.get("$mainUrl/?s=$q").document.cards() }
             .getOrDefault(emptyList())
             .filter { norm(it.name).contains(nq) }
+        if (htmlResults.isNotEmpty()) return htmlResults
+        return runCatching { restSearch(query) }.getOrDefault(emptyList())
     }
 
     // ------------------------------------------------------------------ yük (dizi / film)
@@ -325,11 +358,15 @@ class DiziDad : MainAPI() {
         )
         val bodyText = doc.text()
 
-        var poster = doc.selectFirst(
-            "meta[property=og:image], meta[property=og:image:secure_url], meta[name=twitter:image]"
-        )?.attr("content")?.trim()
-            ?.takeIf { it.isNotEmpty() && !it.startsWith("data:") && !it.contains("logo", true) }
-            ?.let { absUrl(it) }
+        // DiziMom'daki kategori afişi seçicileri, OpenGraph ve genel görsel taramasından önce denenir.
+        var poster = doc.selectFirst("div.category_image img")?.posterOfElement()
+            ?: doc.selectFirst("div.cat-img img")?.posterOfElement()
+            ?: doc.selectFirst("div.single-item img")?.posterOfElement()
+            ?: doc.selectFirst(
+                "meta[property=og:image], meta[property=og:image:secure_url], meta[name=twitter:image]"
+            )?.attr("content")?.trim()
+                ?.takeIf { it.isNotEmpty() && !it.startsWith("data:") && !it.contains("logo", true) }
+                ?.let { absUrl(it) }
         if (poster.isNullOrBlank() || !isUsablePoster(poster)) {
             poster = posterFromMarkup(doc.html(), pageUrl)
                 ?: doc.select("img").firstNotNullOfOrNull { it.posterOfElement() }
