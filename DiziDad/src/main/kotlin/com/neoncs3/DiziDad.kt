@@ -60,6 +60,19 @@ class DiziDad : MainAPI() {
         else -> fixUrl(v)
     }
 
+    /** HTML içine gömülmüş WordPress afiş URL'lerini doğrudan yakalar. */
+    private fun posterFromMarkup(markup: String): String? {
+        val normalized = markup
+            .replace("\\/", "/")
+            .replace("&amp;", "&")
+        val uploadPoster = Regex(
+            """(?i)(?:https?:)?//[^"'<>\s]+?/wp-content/uploads/[^"'<>\s]+?\.(?:jpe?g|png|webp)|/wp-content/uploads/[^"'<>\s]+?\.(?:jpe?g|png|webp)"""
+        )
+        return uploadPoster.findAll(normalized)
+            .map { absUrl(it.value.trim().trim('"', '\'')) }
+            .firstOrNull { it.startsWith("http://") || it.startsWith("https://") }
+    }
+
     /** Karttaki gerçek afişi bulur (yer tutucu ve tema ikonlarını atlar; dublaj ikonu rozeti gösterilmez). */
     private fun Element.posterUrl(): String? {
         // DiziDAD kartları hem img/src lazy-load hem de CSS background-image/data-bg kullanabiliyor.
@@ -222,7 +235,9 @@ class DiziDad : MainAPI() {
             ?.takeIf { it.isNotEmpty() && !it.startsWith("data:") && !it.contains("logo", true) }
             ?.let { absUrl(it) }
         if (poster.isNullOrBlank()) {
-            poster = doc.posterUrl()
+            // Örneğin /wp-content/uploads/2026/08/our-sticky-love.jpg biçimindeki afiş,
+            // bazen img özniteliğinde değil HTML/script verisinin içinde yer alır.
+            poster = posterFromMarkup(doc.html()) ?: doc.posterUrl()
         }
 
         val rawDesc = doc.selectFirst("meta[property=og:description]")?.attr("content") ?: ""
@@ -285,7 +300,7 @@ class DiziDad : MainAPI() {
                     this.season = season
                     this.episode = ep
                     this.posterUrl = episodePosters[pair.first]?.let { fixUrlNull(it) }
-                        ?: fixUrlNull(poster)
+                        ?: fixUrlNull(poster ?: posterFromMarkup(doc.html()))
                 }
             }
 
