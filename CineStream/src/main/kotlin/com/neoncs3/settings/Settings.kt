@@ -4,7 +4,7 @@ import android.content.Context
 import android.net.Uri
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.getKey
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.setKey
-import com.megix.ProviderRegistry
+import com.neoncs3.ProviderRegistry
 
 object Settings {
 
