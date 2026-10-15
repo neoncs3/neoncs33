@@ -973,6 +973,8 @@ class __CLASS__ : NeonMainAPI() {
     private val configuredSearchField = __SEARCH_FIELD__
     // Scraped from actual poster-backed catalogue cards; consumed by the real-playback smoke test.
     private val neonSmokeTestQueries = listOf<String>(__SMOKE_QUERIES__)
+    // Keep media requests consistent with the browser used for iframe probing when an extractor omits a UA.
+    private val playerUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0"
 
     override val mainPage = mainPageOf(
 __MAIN_PAGES__
@@ -1916,7 +1918,26 @@ __MAIN_PAGES__
             when {
                 isBrokenSiteMediaUrl(link.url) -> Log.d(name.uppercase().take(23), "filtered dead manifest")
                 isYouTubeMediaLink(link) -> Log.d(name.uppercase().take(23), "filtered YouTube trailer source name=${link.name}")
-                emitted.add(link.url) -> callback(link)
+                emitted.add(link.url) -> {
+                    val linkReferer = link.referer.takeIf(::isValidHttpUrl) ?: normalized
+                    val outputHeaders = link.headers + mapOf(
+                        "Referer" to linkReferer,
+                        "User-Agent" to link.headers["User-Agent"].takeIf { !it.isNullOrBlank() }
+                            .orEmpty().ifBlank { playerUserAgent }
+                    )
+                    val outputLink = if (linkReferer == link.referer && outputHeaders == link.headers) link else ExtractorLink(
+                        source = link.source,
+                        name = link.name,
+                        url = link.url,
+                        referer = linkReferer,
+                        quality = link.quality,
+                        headers = outputHeaders,
+                        extractorData = link.extractorData,
+                        type = link.type,
+                        audioTracks = link.audioTracks,
+                    )
+                    callback(outputLink)
+                }
             }
         }
         // Keep resolver work bounded and stop after the first usable source instead of
@@ -2349,6 +2370,9 @@ def run_self_test() -> None:
     assert "provider page has site.error and no active media element" in generated
     assert "isYouTubeMediaLink(link)" in generated
     assert "loadLinks candidates=" in generated
+    assert "private val playerUserAgent = " in generated
+    assert 'link.headers["User-Agent"].takeIf { !it.isNullOrBlank() }' in generated
+    assert "callback(outputLink)" in generated
     assert "neonExtractPlayerCandidates(document, normalized)" in generated
     assert "neonExtractIframeUrls(page, normalized)" in generated
     assert "external player iframe prioritized; continuing page media/script discovery" in generated
