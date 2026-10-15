@@ -4,14 +4,31 @@ version = 487
 android {
     defaultConfig {
         val properties = Properties()
-        properties.load(project.rootProject.file("local.properties").inputStream())
-        android.buildFeatures.buildConfig=true
-        buildConfigField("String", "SIMKL_API", "\"${properties.getProperty("SIMKL_API")}\"")
-        buildConfigField("String", "TMDB_KEY", "\"${properties.getProperty("TMDB_KEY")}\"")
-        buildConfigField("String", "CASTLE_KEY", "\"${properties.getProperty("CASTLE_KEY")}\"")
-        buildConfigField("String", "MOVIEBLAST_TOKEN", "\"${properties.getProperty("MOVIEBLAST_TOKEN")}\"")
-        buildConfigField("String", "MOVIEBLAST_API", "\"${properties.getProperty("MOVIEBLAST_API")}\"")
-        buildConfigField("String", "MOVIEBLAST_KEY", "\"${properties.getProperty("MOVIEBLAST_KEY")}\"")
+        // local.properties is developer-local and is intentionally not committed.
+        // Keep CI builds reproducible when it is absent; allow environment values
+        // to override local settings for hosted builds.
+        val localPropertiesFile = project.rootProject.file("local.properties")
+        if (localPropertiesFile.isFile) {
+            localPropertiesFile.inputStream().use { properties.load(it) }
+        }
+
+        fun buildConfigString(name: String): String {
+            val value = System.getenv(name) ?: properties.getProperty(name, "")
+            val escaped = value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+            return "\"$escaped\""
+        }
+
+        android.buildFeatures.buildConfig = true
+        buildConfigField("String", "SIMKL_API", buildConfigString("SIMKL_API"))
+        buildConfigField("String", "TMDB_KEY", buildConfigString("TMDB_KEY"))
+        buildConfigField("String", "CASTLE_KEY", buildConfigString("CASTLE_KEY"))
+        buildConfigField("String", "MOVIEBLAST_TOKEN", buildConfigString("MOVIEBLAST_TOKEN"))
+        buildConfigField("String", "MOVIEBLAST_API", buildConfigString("MOVIEBLAST_API"))
+        buildConfigField("String", "MOVIEBLAST_KEY", buildConfigString("MOVIEBLAST_KEY"))
     }
 }
 
