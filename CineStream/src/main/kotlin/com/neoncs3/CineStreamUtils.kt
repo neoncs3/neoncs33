@@ -55,7 +55,7 @@ import kotlin.math.min
 import java.util.Base64
 
 // Settings
-import com.megix.settings.Settings
+import com.neoncs3.settings.Settings
 
 
 class SpecOption(searchTerms: List<String>, val label: String) {
