@@ -1340,6 +1340,9 @@ __MAIN_PAGES__
         var node: Element? = anchor
         for (depth in 0..4) {
             val current = node ?: break
+            // Do not walk into a shared archive/list wrapper: its single poster can be
+            // incorrectly reused by unrelated title links (notably alphabetical lists).
+            if (depth > 0 && current.select("a[href]").any { it !== anchor }) return null
             imageUrl(current, baseUrl)?.let { return it }
             val urls = LinkedHashSet<String>()
             current.select(
@@ -2362,6 +2365,7 @@ def run_self_test() -> None:
     assert "private fun matchesQuery(result: SearchResponse, query: String): Boolean" in generated
     assert "Never leak those unrelated home-page items" in generated
     assert "posterFor(anchor, baseUrl) ?: return null" in generated
+    assert 'current.select("a[href]").any { it !== anchor }' in generated
     assert "isNavigationItem(title, href)" in generated
     assert "private fun isNavigationChrome(anchor: Element): Boolean" in generated
     assert "private fun isNonContentAnchor(anchor: Element, baseUrl: String): Boolean" in generated
