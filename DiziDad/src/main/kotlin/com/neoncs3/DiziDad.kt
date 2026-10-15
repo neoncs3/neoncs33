@@ -62,11 +62,27 @@ class DiziDad : MainAPI() {
 
     /** Karttaki gerçek afişi bulur (yer tutucu ve tema ikonlarını atlar; dublaj ikonu rozeti gösterilmez). */
     private fun Element.posterUrl(): String? {
+        // Tema yer tutucuları yerine önce gerçek lazy-load görsel adreslerini dene.
+        val invalidPoster = Regex(
+            "(?i)(/themes/|placeholder|no[-_]?image|blank\\.(gif|png|jpe?g|webp)|logo)"
+        )
         for (img in select("img")) {
-            for (attr in listOf("data-src", "data-original", "data-lazy-src", "src")) {
-                val v = img.attr(attr).trim()
-                if (v.isNotEmpty() && !v.startsWith("data:") && !v.contains("/themes/")) {
-                    return fixUrlNull(v)
+            for (attr in listOf(
+                "data-src", "data-original", "data-lazy-src", "data-srcset",
+                "data-lazy-srcset", "srcset", "data-url", "src"
+            )) {
+                var value = img.attr(attr).trim()
+                if (attr.contains("srcset")) {
+                    value = value.substringBefore(",").trim().substringBefore(" ")
+                }
+                if (value.isEmpty() || value.startsWith("data:") || invalidPoster.containsMatchIn(value)) {
+                    continue
+                }
+                val resolved = fixUrlNull(value)
+                if (!resolved.isNullOrBlank() &&
+                    (resolved.startsWith("https://") || resolved.startsWith("http://"))
+                ) {
+                    return resolved
                 }
             }
         }
@@ -94,7 +110,14 @@ class DiziDad : MainAPI() {
                 a.selectFirst("img[alt]")?.attr("alt")?.ifBlank { null } ?: a.text()
             )
             if (title.isBlank()) continue
-            if (!out.containsKey(url)) out[url] = makeCard(title, url, a.posterUrl())
+            if (!out.containsKey(url)) {
+                // Bazı kart tasarımlarında afiş bağlantının içinde değil, kartın üst kapsayıcısında.
+                val poster = a.posterUrl()
+                    ?: a.parent()?.posterUrl()
+                    ?: a.parent()?.parent()?.posterUrl()
+                    ?: a.parent()?.parent()?.parent()?.posterUrl()
+                out[url] = makeCard(title, url, poster)
+            }
         }
         return out.values.toList()
     }
@@ -159,10 +182,13 @@ class DiziDad : MainAPI() {
         )
         val bodyText = doc.text()
 
-        var poster = doc.select("img").map { it.attr("src").ifBlank { it.attr("data-src") } }
-            .firstOrNull { it.contains("/uploads/") && !it.contains("logo", true) }
+        var poster = doc.selectFirst(
+            "meta[property=og:image], meta[property=og:image:secure_url], meta[name=twitter:image]"
+        )?.attr("content")?.trim()
+            ?.takeIf { it.isNotEmpty() && !it.startsWith("data:") && !it.contains("logo", true) }
+            ?.let { absUrl(it) }
         if (poster.isNullOrBlank()) {
-            poster = doc.selectFirst("meta[property=og:image]")?.attr("content")
+            poster = doc.posterUrl()
         }
 
         val rawDesc = doc.selectFirst("meta[property=og:description]")?.attr("content") ?: ""
@@ -194,6 +220,7 @@ class DiziDad : MainAPI() {
 
         // Bölümler: dizi sayfasındaki "1.Sezon 3.Bölüm" bağlantıları.
         val seen = HashSet<String>()
+        val episodePosters = HashMap<String, String?>()
         val raw = ArrayList<Triple<Int, Int, Pair<String, String>>>()
         for (a in doc.select("a[href]")) {
             val href = a.attr("href").trim()
@@ -203,6 +230,9 @@ class DiziDad : MainAPI() {
             val text = a.text().trim()
             if (!text.contains("Bölüm", ignoreCase = true)) continue
             if (!seen.add(epUrl)) continue
+            episodePosters[epUrl] = a.posterUrl()
+                ?: a.parent()?.posterUrl()
+                ?: a.parent()?.parent()?.posterUrl()
             val season = Regex("(\\d+)\\s*\\.\\s*Sezon", RegexOption.IGNORE_CASE).find(text)
                 ?.groupValues?.get(1)?.toIntOrNull()
                 ?: Regex("-(\\d+)-sezon-").find(epUrl)?.groupValues?.get(1)?.toIntOrNull()
@@ -220,7 +250,8 @@ class DiziDad : MainAPI() {
                     this.name = pair.second
                     this.season = season
                     this.episode = ep
-                    this.posterUrl = fixUrlNull(poster)
+                    this.posterUrl = episodePosters[pair.first]?.let { fixUrlNull(it) }
+                        ?: fixUrlNull(poster)
                 }
             }
 
