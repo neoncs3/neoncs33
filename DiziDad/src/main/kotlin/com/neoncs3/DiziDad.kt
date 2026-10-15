@@ -580,8 +580,10 @@ class DiziDad : MainAPI() {
         }
         // Her bölüm için ilk tercih, dizinin kendi afişidir. Özellikle DiziDad bölüm
         // satırları bazen başlık/izleme bağlantısı taşır ama bölüm görseli taşımaz.
-        val seriesPosterFallback = posterFromMarkup(doc.html(), pageUrl)
-            ?: poster?.takeIf { isUsablePoster(it) }
+        // Önce sayfa yükü sırasında elde edilen ana dizi afişini koru.
+        // HTML içindeki ilk uploads URL'si logo/yan içerik olabileceğinden onu ilk tercih yapma.
+        val seriesPosterFallback = poster?.takeIf { isUsablePoster(it) }
+            ?: posterFromMarkup(doc.html(), pageUrl)
             ?: doc.select("img").firstNotNullOfOrNull { it.posterOfElement() }
 
         // Çok uzun sezon listelerinde poster aramayı tüm bölümlerde yapmak yerine
@@ -601,13 +603,16 @@ class DiziDad : MainAPI() {
                 ?: posterFromMarkup(doc.html(), pageUrl)
         }
 
+        // Bölüm listesi çoğu zaman ayrı bölüm görseli barındırmıyor.
+        // Çalıştığı doğrulanan dizi afişini önce ata ki her bölüm kartı görselsiz kalmasın.
+        val fallbackEpisodePoster = episodePosterUrl(seriesPosterFallback)
         val episodes = selectedEpisodes.map { (season, ep, pair) ->
             newEpisode(pair.first) {
                 this.name = pair.second
                 this.season = season
                 this.episode = ep
-                this.posterUrl = episodePosterUrl(episodePosters[pair.first])
-                    ?: episodePosterUrl(seriesPosterFallback)
+                this.posterUrl = fallbackEpisodePoster
+                    ?: episodePosterUrl(episodePosters[pair.first])
             }
         }
 
