@@ -111,7 +111,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://tvdiziler.tv",
-        "bytes": 82332,
+        "bytes": 82371,
         "title": "Dizi izle, Yerli ve Full HD Diziler, Dizi Seyret | TvDiziler.tv",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -166,7 +166,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://diziboxizle.com",
-        "bytes": 271081,
+        "bytes": 271238,
         "title": "Dizibox İzle - Güncel Yabancı Dizi izle, HD Diziler izle",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -183,6 +183,19 @@
         "tmdb_playback_forbidden": true
       },
       "source": "DiziBoxizle/src/main/kotlin/com/neoncs3/DiziBoxizle.kt"
+    },
+    {
+      "provider": "DiziDad",
+      "status": "yellow",
+      "domain": "",
+      "configured_domain": "",
+      "live_domain": "",
+      "live": {
+        "ok": false,
+        "anti_bot_blocked": false,
+        "error": "NeonMainAPI provider source bulunamadı"
+      },
+      "pipelines": {}
     },
     {
       "provider": "Dizigecesi",
@@ -253,7 +266,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://dramadizilerim.com",
-        "bytes": 193572,
+        "bytes": 193540,
         "title": "Drama Dizilerim - Dikey Mini Dizi &amp; Kısa Dizi İzle (Türkçe Dublaj &amp; Altyazılı)",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -311,7 +324,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://jetfilmizle.now",
-        "bytes": 288660,
+        "bytes": 288664,
         "title": "JetFilmizle - Film İzle, Türkçe Dublaj, Altyazılı ve Yerli Filmler",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -340,7 +353,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://www.setfilmizle.ltd",
-        "bytes": 109822,
+        "bytes": 109805,
         "title": "Set Film izle | HD Film | Yabancı Dizi",
         "media_hints": 1,
         "iframe_hints": 0,
@@ -431,6 +444,6 @@
     }
   ],
   "green": 9,
-  "yellow": 8,
+  "yellow": 9,
   "red": 0
 }

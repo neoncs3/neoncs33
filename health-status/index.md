@@ -12,6 +12,7 @@ Bu rapor tools/provider_health.py tarafından otomatik güncellenir.
 | **CineStream** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **DDizi** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **DiziBoxizle** | 🟢 | https://diziboxizle.com | https://diziboxizle.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **DiziDad** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **Dizigecesi** | 🟡 | https://dizigecesi.com | https://dizigecesi.com | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **DiziPal** | 🟡 | https://dizipal1586.com | https://dizipal1590.com | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **Dramadizilerim** | 🟢 | https://dramadizilerim.com | https://dramadizilerim.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
