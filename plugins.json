@@ -169,10 +169,10 @@
     },
     {
         "iconUrl": "https://www.google.com/s2/favicons?domain=dizidad.com&sz=%size%",
-        "fileHash": "sha256-db1b97acf9d8a6e60134326f183931be506121ad8a66ee2dc5f1b57e5be40d1e",
+        "fileHash": "sha256-49684601042651328d4dba4cbb847e55abf20d3a9df67076962c176fa3711488",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 71472,
+        "fileSize": 71498,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -181,7 +181,7 @@
         "tvTypes": [
             "TvSeries"
         ],
-        "version": 11,
+        "version": 12,
         "internalName": "DiziDad",
         "description": "DiziDad - yerli, yabanc\u0131 ve eski diziler",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/DiziDad.cs3",
