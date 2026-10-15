@@ -34,7 +34,7 @@ import java.net.URL
 import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 
-import com.megix.settings.Settings
+import com.neoncs3.settings.Settings
 
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -3819,7 +3819,8 @@ object CineStreamExtractors {
 
              for (i in 0 until sources.length()) {
                 val src     = sources.getJSONObject(i)
-                val rawUrl  = src.optString("url").ifEmpty { continue }
+                val rawUrl  = src.optString("url")
+                if (rawUrl.isEmpty()) continue
                 val dub     = src.optString("dub", "")
                 val srcType = src.optString("type", "hls")
                 val quality = src.optInt("quality", 0)
