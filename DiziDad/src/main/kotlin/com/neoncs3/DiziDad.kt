@@ -13,6 +13,12 @@ import java.util.Locale
 class DiziDad : MainAPI() {
     override var mainUrl = "https://www.dizidad.com"
     override var name = "DiziDAD"
+
+    // DiziDAD medyası hotlink kontrolü yaparsa CloudStream görsel isteğine site referer'ını ver.
+    private val posterRequestHeaders = mapOf(
+        "Referer" to "$mainUrl/",
+        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    )
     override val hasMainPage = true
     override var lang = "tr"
     override val hasQuickSearch = false
@@ -296,9 +302,15 @@ class DiziDad : MainAPI() {
     private fun makeCard(title: String, url: String, poster: String?): SearchResponse =
         // Afişte rozet/buton (dublaj, kalite, IMDb vb.) gösterilmiyor; sadece başlık ve görsel.
         if (isSeries(url) || isEpisode(url)) {
-            newTvSeriesSearchResponse(title, url, TvType.TvSeries) { this.posterUrl = poster }
+            newTvSeriesSearchResponse(title, url, TvType.TvSeries) {
+                this.posterUrl = poster
+                this.posterHeaders = posterRequestHeaders
+            }
         } else {
-            newMovieSearchResponse(title, url, TvType.Movie) { this.posterUrl = poster }
+            newMovieSearchResponse(title, url, TvType.Movie) {
+                this.posterUrl = poster
+                this.posterHeaders = posterRequestHeaders
+            }
         }
 
     /**
@@ -524,6 +536,7 @@ class DiziDad : MainAPI() {
         if (!isSeries(pageUrl)) {
             return newMovieLoadResponse(title, pageUrl, TvType.Movie, pageUrl) {
                 this.posterUrl = fixUrlNull(poster)
+                this.posterHeaders = posterRequestHeaders
                 this.plot = plot
                 this.year = year
                 this.tags = tags
@@ -589,6 +602,7 @@ class DiziDad : MainAPI() {
 
         return newTvSeriesLoadResponse(title, pageUrl, TvType.TvSeries, episodes) {
             this.posterUrl = fixUrlNull(poster)
+            this.posterHeaders = posterRequestHeaders
             this.plot = plot
             this.year = year
             this.tags = tags
