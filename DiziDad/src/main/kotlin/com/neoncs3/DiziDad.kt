@@ -62,27 +62,46 @@ class DiziDad : MainAPI() {
 
     /** Karttaki gerçek afişi bulur (yer tutucu ve tema ikonlarını atlar; dublaj ikonu rozeti gösterilmez). */
     private fun Element.posterUrl(): String? {
-        // Tema yer tutucuları yerine önce gerçek lazy-load görsel adreslerini dene.
+        // DiziDAD kartları hem img/src lazy-load hem de CSS background-image/data-bg kullanabiliyor.
         val invalidPoster = Regex(
-            "(?i)(/themes/|placeholder|no[-_]?image|blank\\.(gif|png|jpe?g|webp)|logo)"
+            "(?i)(/themes/|placeholder|no[-_]?image|blank\\.(gif|png|jpe?g|webp)|logo|avatar|spacer|transparent|pixel|default[-_]?poster)"
         )
-        for (img in select("img")) {
-            for (attr in listOf(
-                "data-src", "data-original", "data-lazy-src", "data-srcset",
-                "data-lazy-srcset", "srcset", "data-url", "src"
-            )) {
-                var value = img.attr(attr).trim()
-                if (attr.contains("srcset")) {
-                    value = value.substringBefore(",").trim().substringBefore(" ")
+        val nodes = listOf(this) + select("*")
+        val attributes = listOf(
+            "data-poster", "data-image", "data-bg", "data-background",
+            "data-background-image", "data-original", "data-lazy-src",
+            "data-src", "data-url", "poster", "srcset", "data-srcset",
+            "data-lazy-srcset", "src", "style"
+        )
+
+        for (node in nodes) {
+            for (attr in attributes) {
+                val raw = node.attr(attr).trim()
+                if (raw.isEmpty()) continue
+
+                val values = when {
+                    attr == "style" -> Regex(
+                        """(?i)url\\(\\s*['"]?([^)'"]+)"""
+                    ).findAll(raw).map { it.groupValues[1].trim() }.toList()
+                    attr.contains("srcset") -> listOf(
+                        raw.substringBefore(",").trim().substringBefore(" ").trim()
+                    )
+                    else -> listOf(raw)
                 }
-                if (value.isEmpty() || value.startsWith("data:") || invalidPoster.containsMatchIn(value)) {
-                    continue
-                }
-                val resolved = fixUrlNull(value)
-                if (!resolved.isNullOrBlank() &&
-                    (resolved.startsWith("https://") || resolved.startsWith("http://"))
-                ) {
-                    return resolved
+
+                for (candidate in values) {
+                    val value = candidate.trim().trim('\\'', '"')
+                    if (value.isEmpty() || value.startsWith("data:") ||
+                        value.startsWith("javascript:", true) || invalidPoster.containsMatchIn(value)
+                    ) continue
+
+                    val resolved = fixUrlNull(value)
+                    if (!resolved.isNullOrBlank() &&
+                        (resolved.startsWith("https://") || resolved.startsWith("http://")) &&
+                        !invalidPoster.containsMatchIn(resolved)
+                    ) {
+                        return resolved
+                    }
                 }
             }
         }
@@ -99,23 +118,38 @@ class DiziDad : MainAPI() {
 
     private fun Document.cards(): List<SearchResponse> {
         val out = LinkedHashMap<String, SearchResponse>()
-        for (a in select("a[href]:has(img)")) {
+        for (a in select("a[href]")) {
+            // Sadece görsel taşıyan içerik kartlarını al; afiş img, lazy-load veri alanı
+            // veya CSS background-image şeklinde verilebilir.
+            val hasImage = a.selectFirst(
+                "img, [data-poster], [data-image], [data-bg], [data-background], [data-background-image], [style*=background]"
+            ) != null ||
+                a.hasAttr("data-poster") || a.hasAttr("data-image") ||
+                a.hasAttr("data-bg") || a.hasAttr("data-background") ||
+                a.attr("style").contains("background", ignoreCase = true)
+            if (!hasImage) continue
+
             val href = a.attr("href").trim()
             if (href.isEmpty() || href.startsWith("#") || href.startsWith("javascript")) continue
             val url = absUrl(href)
             if (!url.startsWith(mainUrl)) continue
             val path = url.removePrefix(mainUrl).trim('/')
             if (path.isEmpty() || path.startsWith("wp-") || path.contains("page/")) continue
+            if (path.startsWith("wp-") || path.contains("yorum") || path.contains("comment")) continue
+
             val title = cleanTitle(
-                a.selectFirst("img[alt]")?.attr("alt")?.ifBlank { null } ?: a.text()
+                a.selectFirst("img[alt]")?.attr("alt")?.ifBlank { null }
+                    ?: a.selectFirst("[title]")?.attr("title")?.ifBlank { null }
+                    ?: a.text()
             )
             if (title.isBlank()) continue
             if (!out.containsKey(url)) {
-                // Bazı kart tasarımlarında afiş bağlantının içinde değil, kartın üst kapsayıcısında.
+                // Afiş bazen bağlantı içinde değil, birkaç seviye üstteki kart kabında tutulur.
                 val poster = a.posterUrl()
                     ?: a.parent()?.posterUrl()
                     ?: a.parent()?.parent()?.posterUrl()
                     ?: a.parent()?.parent()?.parent()?.posterUrl()
+                    ?: a.parent()?.parent()?.parent()?.parent()?.posterUrl()
                 out[url] = makeCard(title, url, poster)
             }
         }
