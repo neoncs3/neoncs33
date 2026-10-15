@@ -25,8 +25,8 @@ import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import com.fasterxml.jackson.annotation.JsonProperty
 
-import com.megix.CineStreamExtractors.invokeAllSources
-import com.megix.CineStreamExtractors.invokeAllAnimeSources
+import com.neoncs3.CineStreamExtractors.invokeAllSources
+import com.neoncs3.CineStreamExtractors.invokeAllAnimeSources
 
 open class CineStreamProvider : MainAPI() {
     override var mainUrl = "https://cinemeta-catalogs.strem.io"
