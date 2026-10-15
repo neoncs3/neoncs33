@@ -322,6 +322,23 @@ class DDizi : MainAPI() {
     )
     private val playerRegex = Regex("""/player/oynat/[A-Za-z0-9_-]+""")
 
+    // Bölüm sayfasının verdiği çerezler oynatıcı sayfası için gerekebilir (aksi halde 404 dönüyor).
+    private var sessionCookies: Map<String, String> = emptyMap()
+
+    private val playerHeaders = mapOf(
+        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Sec-Fetch-Dest" to "iframe",
+        "Sec-Fetch-Mode" to "navigate",
+        "Sec-Fetch-Site" to "same-origin"
+    )
+
+    // Tarayıcı, farklı bir siteden gelen medya isteğinde sadece "https://www.ddizi.tel/" gönderir.
+    private val mediaReferer get() = "$mainUrl/"
+    private val mediaHeaders get() = mapOf("Origin" to mainUrl)
+
+    private fun hostOf(u: String): String =
+        runCatching { java.net.URI(u).host }.getOrNull() ?: "link"
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -330,6 +347,7 @@ class DDizi : MainAPI() {
     ): Boolean {
         val epUrl = fixUrl(data)
         val res = app.get(epUrl, referer = "$mainUrl/")
+        sessionCookies = res.cookies
         val html = res.text
         val doc = res.document
 
@@ -346,8 +364,8 @@ class DDizi : MainAPI() {
         for (c in candidates) {
             if (resolve(c, epUrl, 0, subtitleCallback, callback)) found = true
         }
-        // Sayfa kaynağında doğrudan gömülü akışlar varsa onları da tara.
-        if (scanText(html, epUrl, epUrl, 0, subtitleCallback, callback)) found = true
+        // Oynatıcıdan sonuç çıkmadıysa bölüm sayfasının kaynağında doğrudan gömülü akış ara.
+        if (!found && scanText(html, epUrl, epUrl, 0, subtitleCallback, callback)) found = true
         return found
     }
 
@@ -363,7 +381,9 @@ class DDizi : MainAPI() {
             return runCatching { loadExtractor(url, referer, subtitleCallback, callback) }
                 .getOrDefault(false)
         }
-        val res = runCatching { app.get(url, referer = referer) }.getOrNull() ?: return false
+        val res = runCatching {
+            app.get(url, referer = referer, headers = playerHeaders, cookies = sessionCookies)
+        }.getOrNull() ?: return false
         if (res.code !in 200..299) return false
         return scanText(res.text, url, url, depth, subtitleCallback, callback)
     }
@@ -388,14 +408,16 @@ class DDizi : MainAPI() {
 
         // Doğrudan HLS
         for (m in m3u8Regex.findAll(all).map { it.value }.distinct()) {
-            M3u8Helper.generateM3u8(name, m, referer).forEach(callback)
+            M3u8Helper.generateM3u8("$name ${hostOf(m)}", m, mediaReferer, null, mediaHeaders)
+                .forEach(callback)
             found = true
         }
         // Doğrudan MP4
         for (m in mp4Regex.findAll(all).map { it.value }.distinct()) {
             callback(
-                newExtractorLink(name, name, m, ExtractorLinkType.VIDEO) {
-                    this.referer = referer
+                newExtractorLink(name, "$name ${hostOf(m)}", m, ExtractorLinkType.VIDEO) {
+                    this.referer = mediaReferer
+                    this.headers = mediaHeaders
                     this.quality = Qualities.Unknown.value
                 }
             )
@@ -424,8 +446,9 @@ class DDizi : MainAPI() {
             val s = it.attr("src")
             if (s.isNotBlank() && !s.endsWith(".m3u8")) {
                 callback(
-                    newExtractorLink(name, name, fixUrl(s), ExtractorLinkType.VIDEO) {
-                        this.referer = referer
+                    newExtractorLink(name, "$name ${hostOf(s)}", fixUrl(s), ExtractorLinkType.VIDEO) {
+                        this.referer = mediaReferer
+                        this.headers = mediaHeaders
                         this.quality = Qualities.Unknown.value
                     }
                 )
