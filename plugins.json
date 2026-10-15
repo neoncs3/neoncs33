@@ -128,10 +128,10 @@
     },
     {
         "iconUrl": "https://www.google.com/s2/favicons?domain=ddizi.tel&sz=%size%",
-        "fileHash": "sha256-e36e4b1a1cbcd7c9fe4685daf49f6355a591fd6fa962be870c21f1490923920e",
+        "fileHash": "sha256-42a9e9709b7460bee80446b1136b3f12dc8a8f27e73e1e1ea7765cc476a0e636",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 67501,
+        "fileSize": 67952,
         "status": 1,
         "language": "tr",
         "authors": [
