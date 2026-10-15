@@ -339,6 +339,13 @@ class DDizi : MainAPI() {
     private fun hostOf(u: String): String =
         runCatching { java.net.URI(u).host }.getOrNull() ?: "link"
 
+    // Videolar Twitter/X CDN'inden (video.twimg.com/amplify_video/.../pl/xxx.m3u8) geliyor.
+    // Bu CDN için ddizi Referer/Origin göndermiyoruz; Twitter'ın kendi oynatıcısı gibi x.com kullanıyoruz.
+    private fun isTwimg(u: String) = hostOf(u).endsWith("twimg.com")
+    private fun refererFor(u: String) = if (isTwimg(u)) "https://x.com/" else mediaReferer
+    private fun headersFor(u: String): Map<String, String> =
+        if (isTwimg(u)) emptyMap() else mediaHeaders
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -397,18 +404,26 @@ class DDizi : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         var found = false
-        val text = raw.replace("\\/", "/").replace("&amp;", "&")
+        val text = raw
+            .replace("\\/", "/").replace("\\u002F", "/").replace("\\u002f", "/")
+            .replace("\\u0026", "&").replace("\\u003d", "=").replace("\\u003D", "=")
+            .replace("\\x2F", "/").replace("&amp;", "&")
 
         // atob("...") ile gizlenmiş içerikleri de çöz.
         val decoded = Regex("""atob\(\s*["']([A-Za-z0-9+/=]{16,})["']\s*\)""")
             .findAll(text).mapNotNull {
                 runCatching { String(Base64.decode(it.groupValues[1], Base64.DEFAULT)) }.getOrNull()
             }.joinToString("\n")
-        val all = if (decoded.isBlank()) text else text + "\n" + decoded
+        val joined = if (decoded.isBlank()) text else text + "\n" + decoded
+        // URL-kodlu (https%3A%2F%2F...) adresleri de yakala.
+        val urlDecoded = if (joined.contains("%3A%2F%2F", ignoreCase = true)) {
+            runCatching { java.net.URLDecoder.decode(joined, "UTF-8") }.getOrDefault("")
+        } else ""
+        val all = if (urlDecoded.isBlank()) joined else joined + "\n" + urlDecoded
 
         // Doğrudan HLS
         for (m in m3u8Regex.findAll(all).map { it.value }.distinct()) {
-            M3u8Helper.generateM3u8("$name ${hostOf(m)}", m, mediaReferer, null, mediaHeaders)
+            M3u8Helper.generateM3u8("$name ${hostOf(m)}", m, refererFor(m), null, headersFor(m))
                 .forEach(callback)
             found = true
         }
@@ -416,8 +431,8 @@ class DDizi : MainAPI() {
         for (m in mp4Regex.findAll(all).map { it.value }.distinct()) {
             callback(
                 newExtractorLink(name, "$name ${hostOf(m)}", m, ExtractorLinkType.VIDEO) {
-                    this.referer = mediaReferer
-                    this.headers = mediaHeaders
+                    this.referer = refererFor(m)
+                    this.headers = headersFor(m)
                     this.quality = Qualities.Unknown.value
                 }
             )
@@ -447,8 +462,8 @@ class DDizi : MainAPI() {
             if (s.isNotBlank() && !s.endsWith(".m3u8")) {
                 callback(
                     newExtractorLink(name, "$name ${hostOf(s)}", fixUrl(s), ExtractorLinkType.VIDEO) {
-                        this.referer = mediaReferer
-                        this.headers = mediaHeaders
+                        this.referer = refererFor(s)
+                        this.headers = headersFor(s)
                         this.quality = Qualities.Unknown.value
                     }
                 )
