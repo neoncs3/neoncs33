@@ -1,4 +1,4 @@
-package com.megix.settings
+package com.neoncs3.settings
 
 import android.app.AlertDialog
 import android.content.Context
