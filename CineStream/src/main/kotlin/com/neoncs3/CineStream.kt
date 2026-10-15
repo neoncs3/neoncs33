@@ -1,4 +1,4 @@
-package com.megix
+package com.neoncs3
 
 import android.content.Context
 import com.lagradost.cloudstream3.MainActivity
