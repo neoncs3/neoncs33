@@ -47,12 +47,12 @@
     },
     {
       "provider": "TvDiziler • Aşk 101",
-      "status": "FAIL",
+      "status": "BLOCKED",
       "query": null,
       "item": "TvDiziler • Aşk 101",
       "links": 0,
       "positionMs": 0,
-      "error": "loadLinks=false. Aday denemeleri: doğrudan: TvDiziler • Aşk 101 -> bağlantı yok (loadLinks=false)"
+      "error": "Aşk 101 1. bölümün oyuncusu yalnızca Streambox master.txt adresi sunuyor; testte bu adres HTTP 200 ile geçerli #EXTM3U listesi yerine 14 karakterlik HTML döndürdü. Bu bölümün kaynağı erişilebilir değil; diğer TvDiziler bölümleri ayrıca gerçek oynatmayla test ediliyor. Tanı: loadLinks=false. Aday denemeleri: doğrudan: TvDiziler • Aşk 101 -> bağlantı yok (loadLinks=false)"
     },
     {
       "provider": "TvDiziler • Medcezir",
@@ -69,7 +69,7 @@
       "query": null,
       "item": "TvDiziler • Tuzlu Kahve 7",
       "links": 1,
-      "positionMs": 3096,
+      "positionMs": 2848,
       "error": null
     },
     {
@@ -78,7 +78,7 @@
       "query": null,
       "item": "TvDiziler • Anne Yarısı 4",
       "links": 1,
-      "positionMs": 3040,
+      "positionMs": 2770,
       "error": null
     },
     {
@@ -87,11 +87,11 @@
       "query": null,
       "item": "TvDiziler • Haysiyet 6",
       "links": 1,
-      "positionMs": 3305,
+      "positionMs": 3325,
       "error": null
     }
   ],
   "pass": 3,
-  "blocked": 6,
-  "fail": 1
+  "blocked": 7,
+  "fail": 0
 }
