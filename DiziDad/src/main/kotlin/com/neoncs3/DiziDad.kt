@@ -388,6 +388,12 @@ class DiziDad : MainAPI() {
                 ?: 0
             raw.add(Triple(season, ep, epUrl to text))
         }
+        // Her bölüm için ilk tercih, dizinin kendi afişidir. Özellikle DiziDad bölüm
+        // satırları bazen başlık/izleme bağlantısı taşır ama bölüm görseli taşımaz.
+        val seriesPosterFallback = posterFromMarkup(doc.html(), pageUrl)
+            ?: poster?.takeIf { isUsablePoster(it) }
+            ?: doc.select("img").firstNotNullOfOrNull { it.posterOfElement() }
+
         val episodes = raw
             .sortedWith(compareBy({ it.first }, { it.second }))
             .map { (season, ep, pair) ->
@@ -397,11 +403,8 @@ class DiziDad : MainAPI() {
                     this.episode = ep
                     // poster URL'leri mutlak URL olarak çözülüyor; burada tekrar fixUrlNull
                     // uygulamak yerine DiziBoxizle'deki çalışan Episode kullanımına uygun aktar.
-                    this.posterUrl = episodePosters[pair.first]
-                        ?.takeIf { isUsablePoster(it) }
-                        ?: poster?.takeIf { isUsablePoster(it) }
-                        ?: posterFromMarkup(doc.html(), pageUrl)
-                        ?: doc.select("img").firstNotNullOfOrNull { it.posterOfElement() }
+                    this.posterUrl = seriesPosterFallback
+                        ?: episodePosters[pair.first]?.takeIf { isUsablePoster(it) }
                 }
             }
 
