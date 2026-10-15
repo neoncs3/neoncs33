@@ -1,4 +1,4 @@
-package com.megix.settings
+package com.neoncs3.settings
 
 import android.annotation.SuppressLint
 import android.app.Dialog
