@@ -1,8 +1,8 @@
 # 🟡 DiziDad
 
-Kodda kayıtlı domain: -
+Kodda kayıtlı domain: https://www.dizidad.com
 
-Son HTTP URL: -
+Son HTTP URL: https://www.dizidad.com
 
 HTTP: ❌ 
 

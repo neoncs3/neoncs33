@@ -1,8 +1,8 @@
 # 🟡 DDizi
 
-Kodda kayıtlı domain: -
+Kodda kayıtlı domain: https://www.ddizi.tel
 
-Son HTTP URL: -
+Son HTTP URL: https://www.ddizi.tel
 
 HTTP: ❌ 
 
