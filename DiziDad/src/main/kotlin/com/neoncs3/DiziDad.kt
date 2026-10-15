@@ -242,7 +242,49 @@ class DiziDad : MainAPI() {
         return null
     }
 
+    /**
+     * Bazı DiziDAD şablonlarında görsel, başlık bağlantısının dışında kardeş
+     * bir öğede durur. Böyle durumlarda sayfadaki img'leri alt metni ve URL
+     * slug'ı ile eşleştirerek ilgili kartın afişini bul.
+     */
+    private fun Document.posterForTarget(targetUrl: String, titleHint: String? = null): String? {
+        val targetSlug = posterSlug(targetUrl).substringBeforeLast('.', posterSlug(targetUrl))
+        val targetTitle = norm(cleanTitle(titleHint.orEmpty()))
+        val targetTokens = (
+            targetTitle.split(" ") +
+                norm(targetSlug.replace('-', ' ')).split(" ") +
+                norm(targetUrl.substringBefore("?").substringBefore("#").substringAfterLast('/').replace('-', ' ')).split(" ")
+            )
+            .filter { it.length >= 3 && it !in setOf("izle", "sezon", "bolum", "dizi", "film", "turkce", "dublaj", "altyazili") }
+            .distinct()
+
+        val candidates = select(
+            "img[data-src], img[data-lazy-src], img[data-original], img[data-image], img[data-poster], img[data-lazyloaded], img[src]"
+        ).mapNotNull { image ->
+            val poster = image.posterOfElement() ?: return@mapNotNull null
+            val alt = norm(cleanTitle(image.attr("alt")))
+            val file = norm(poster.substringBefore("?").substringBefore("#").substringAfterLast('/').substringBeforeLast('.').replace('-', ' '))
+            var score = 0
+            targetTokens.forEach { token ->
+                if (alt.split(" ").contains(token)) score += 6
+                if (file.split(" ").contains(token)) score += 4
+                if (alt.contains(token)) score += 2
+                if (file.contains(token)) score += 1
+            }
+            Triple(poster, score, image)
+        }.distinctBy { it.first }
+
+        return candidates
+            .filter { it.second > 0 }
+            .maxByOrNull { it.second }
+            ?.first
+    }
+
     private fun isContentCardUrl(url: String): Boolean {
+        val path = url.removePrefix(mainUrl).lowercase(Locale.ROOT)
+        return isEpisode(url) || isSeries(url) ||
+            path.contains("izle") || path.contains("filmler") || path.contains("film-")
+    }    private fun isContentCardUrl(url: String): Boolean {
         val path = url.removePrefix(mainUrl).lowercase(Locale.ROOT)
         return isEpisode(url) || isSeries(url) ||
             path.contains("izle") || path.contains("filmler") || path.contains("film-")
@@ -283,6 +325,7 @@ class DiziDad : MainAPI() {
             if (!hasImageMarker) continue
 
             val poster = link.posterFromCardAncestors(url)
+                ?: posterForTarget(url, link.selectFirst("img[alt]")?.attr("alt") ?: link.text())
             if (!poster.isNullOrBlank()) posterByUrl.putIfAbsent(contentUrlKey(url), poster)
         }
 
@@ -296,7 +339,10 @@ class DiziDad : MainAPI() {
             if (path.contains("yorum") || path.contains("comment")) continue
 
             // Başlık linkiyle afiş linki aynı URL'yi taşıyorsa görsel bağlantısından alınan adresi kullan.
-            val poster = posterByUrl[contentUrlKey(url)] ?: a.posterFromCardAncestors(url)
+            val titleHint = a.selectFirst("img[alt]")?.attr("alt") ?: a.text()
+            val poster = posterByUrl[contentUrlKey(url)]
+                ?: a.posterFromCardAncestors(url)
+                ?: posterForTarget(url, titleHint)
             val hasImage = !poster.isNullOrBlank() || a.selectFirst(posterBearingSelector) != null ||
                 listOf("data-poster", "data-poster-url", "data-image", "data-bg",
                     "data-background", "data-background-image", "data-src", "data-original",
