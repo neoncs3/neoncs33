@@ -5,7 +5,7 @@ import com.lagradost.cloudstream3.MainActivity
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.getKey
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
-import com.megix.settings.Settings
+import com.neoncs3.settings.Settings
 import kotlinx.coroutines.runBlocking
 
 @CloudstreamPlugin
