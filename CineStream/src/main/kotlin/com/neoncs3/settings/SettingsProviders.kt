@@ -9,7 +9,7 @@ import android.view.View
 import android.view.animation.DecelerateInterpolator
 import android.widget.*
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.getKey
-import com.megix.settings.SettingsTheme.dp
+import com.neoncs3.settings.SettingsTheme.dp
 
 /**
  * Builds the "🎬 Providers" collapsible card and each individual provider row.
