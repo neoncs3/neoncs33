@@ -8,7 +8,7 @@ import android.view.animation.DecelerateInterpolator
 import android.widget.LinearLayout
 import android.widget.Switch
 import android.widget.TextView
-import com.megix.settings.SettingsTheme.dp
+import com.neoncs3.settings.SettingsTheme.dp
 
 /**
  * Small, reusable UI building blocks shared across all Settings card files.
