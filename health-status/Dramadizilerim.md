@@ -8,7 +8,7 @@ HTTP: ✅ 200
 
 Anti-bot engeli: hayır
 
-Sayfa başlığı: Drama Dizilerim - Çin Drama &amp; Kore Drama İzle (Full HD)
+Sayfa başlığı: Drama Dizilerim - Dikey Mini Dizi &amp; Kısa Dizi İzle (Türkçe Dublaj &amp; Altyazılı)
 
 Canlı medya ipucu: 0 media URL, 0 iframe
 
