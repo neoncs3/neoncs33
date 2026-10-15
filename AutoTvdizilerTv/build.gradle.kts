@@ -1,4 +1,4 @@
-version = 9
+version = 10
 
 cloudstream {
     description = "URL analizinden otomatik oluşturuldu: tvdiziler.tv"
