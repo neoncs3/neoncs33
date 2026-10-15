@@ -37,7 +37,7 @@ import javax.crypto.spec.SecretKeySpec
 import java.security.SecureRandom
 import javax.crypto.Cipher
 
-import com.megix.settings.Settings
+import com.neoncs3.settings.Settings
 
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
