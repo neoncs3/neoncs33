@@ -1,4 +1,4 @@
-package com.megix
+package com.neoncs3
 
 import android.util.Log
 import com.lagradost.cloudstream3.app
