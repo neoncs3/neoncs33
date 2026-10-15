@@ -67,15 +67,16 @@ class DiziDad : MainAPI() {
             "(?i)(/themes/|placeholder|no[-_]?image|blank\\.(gif|png|jpe?g|webp)|logo|avatar|spacer|transparent|pixel|default[-_]?poster)"
         )
         val nodes = listOf(this) + select("*")
+        // Alan türüne göre tara: afişin data-* / background alanları, rozetlerin src alanından önce gelir.
         val attributes = listOf(
-            "data-poster", "data-image", "data-bg", "data-background",
-            "data-background-image", "data-original", "data-lazy-src",
-            "data-src", "data-url", "poster", "srcset", "data-srcset",
-            "data-lazy-srcset", "src", "style"
+            "data-poster", "data-poster-url", "data-bg", "data-background-image",
+            "data-background", "data-original", "data-lazy-src", "data-src",
+            "data-url", "data-image", "data-lazy-background", "data-srcset",
+            "data-lazy-srcset", "srcset", "style", "poster", "src"
         )
 
-        for (node in nodes) {
-            for (attr in attributes) {
+        for (attr in attributes) {
+            for (node in nodes) {
                 val raw = node.attr(attr).trim()
                 if (raw.isEmpty()) continue
 
