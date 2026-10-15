@@ -573,7 +573,7 @@ class DiziDad : MainAPI() {
             val anchor = episodeAnchors[pair.first] ?: continue
             episodePosters[pair.first] = anchor.posterFromCardAncestors(pair.first)
                 ?: anchor.parent()?.posterFromCardAncestors(pair.first)
-                ?: posterForTarget(pair.first, pair.second)
+                ?: doc.posterForTarget(pair.first, pair.second)
                 ?: posterFromMarkup(doc.html(), pageUrl)
         }
 
