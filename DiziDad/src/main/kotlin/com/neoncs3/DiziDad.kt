@@ -122,6 +122,22 @@ class DiziDad : MainAPI() {
         return null
     }
 
+    /**
+     * Bölüm listelerinde afiş, metin bağlantısının içinde değil aynı kartın kardeş
+     * bağlantısında bulunabiliyor. Kart kapsayıcısına kadar çıkıp görseli oradan al.
+     */
+    private fun Element.posterFromCardAncestors(maxDepth: Int = 5): String? {
+        var node: Element? = this
+        var depth = 0
+        while (node != null && depth <= maxDepth) {
+            val poster = node.posterUrl()
+            if (!poster.isNullOrBlank()) return poster
+            node = node.parent()
+            depth++
+        }
+        return null
+    }
+
     private fun makeCard(title: String, url: String, poster: String?): SearchResponse =
         // Afişte rozet/buton (dublaj, kalite, IMDb vb.) gösterilmiyor; sadece başlık ve görsel.
         if (isSeries(url) || isEpisode(url)) {
@@ -132,7 +148,24 @@ class DiziDad : MainAPI() {
 
     private fun Document.cards(): List<SearchResponse> {
         val out = LinkedHashMap<String, SearchResponse>()
-        for (a in select("a[href]")) {
+        val anchors = select("a[href]")
+
+        // Aynı içerik için afiş bağlantısı ile başlık/bölüm bağlantısı farklı <a> etiketlerinde
+        // olabilir. Önce her URL için görsel taşıyan kart bağlantısını kaydet.
+        val posterByUrl = LinkedHashMap<String, String>()
+        for (link in anchors) {
+            val href = link.attr("href").trim()
+            if (href.isEmpty() || href.startsWith("#") || href.startsWith("javascript")) continue
+            val url = absUrl(href)
+            if (!url.startsWith(mainUrl)) continue
+            val path = url.removePrefix(mainUrl).trim('/')
+            if (path.isEmpty() || path.startsWith("wp-") || path.contains("page/")) continue
+
+            val poster = link.posterFromCardAncestors()
+            if (!poster.isNullOrBlank()) posterByUrl.putIfAbsent(url, poster)
+        }
+
+        for (a in anchors) {
             val href = a.attr("href").trim()
             if (href.isEmpty() || href.startsWith("#") || href.startsWith("javascript")) continue
             val url = absUrl(href)
@@ -141,22 +174,11 @@ class DiziDad : MainAPI() {
             if (path.isEmpty() || path.startsWith("wp-") || path.contains("page/")) continue
             if (path.contains("yorum") || path.contains("comment")) continue
 
-            // Önce bağlantının kendisindeki, sonra yalnızca kartı çevreleyen kapsayıcılardaki afişi ara.
-            // Afiş kapsayıcıda background/data-bg ise a:has(img) filtresi bu bölümü kaçırırdı.
-            val poster = a.posterUrl()
-                ?: a.parent()?.posterUrl()
-                ?: a.parent()?.parent()?.posterUrl()
-                ?: a.parent()?.parent()?.parent()?.posterUrl()
-
-            val hasImage = poster != null ||
-                a.selectFirst(
-                    "img, [data-poster], [data-poster-url], [data-image], [data-bg], [data-background], [data-background-image], [data-src], [data-original], [data-lazy-src], [style*=background]"
-                ) != null ||
-                listOf(
-                    "data-poster", "data-poster-url", "data-image", "data-bg",
-                    "data-background", "data-background-image", "data-src", "data-original",
-                    "data-lazy-src", "srcset", "style"
-                ).any { a.hasAttr(it) }
+            val poster = posterByUrl[url] ?: a.posterFromCardAncestors()
+            // Afiş ancak CSS background/data-* alanında bulunuyorsa da kart geçerli sayılır.
+            val hasImage = !poster.isNullOrBlank() || a.selectFirst(
+                "img, [data-poster], [data-poster-url], [data-image], [data-bg], [data-background], [data-background-image], [data-src], [data-original], [data-lazy-src], [data-lazy-background], [style*=background]"
+            ) != null
             if (!hasImage) continue
 
             val title = cleanTitle(
