@@ -30,8 +30,8 @@ import kotlinx.coroutines.coroutineScope
 import org.json.JSONObject
 import org.jsoup.parser.Parser
 
-import com.megix.CineStreamExtractors.invokeAllSources
-import com.megix.CineStreamExtractors.invokeAllAnimeSources
+import com.neoncs3.CineStreamExtractors.invokeAllSources
+import com.neoncs3.CineStreamExtractors.invokeAllAnimeSources
 
 class CineSimklProvider: MainAPI() {
     override var name = "CineSimkl"
