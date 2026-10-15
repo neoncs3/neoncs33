@@ -11,7 +11,7 @@ import android.view.Gravity
 import android.view.View
 import android.webkit.CookieManager
 import android.widget.*
-import com.megix.settings.SettingsTheme.dp
+import com.neoncs3.settings.SettingsTheme.dp
 
 /**
  * Assembles the full Settings AlertDialog and every collapsible card inside it.
