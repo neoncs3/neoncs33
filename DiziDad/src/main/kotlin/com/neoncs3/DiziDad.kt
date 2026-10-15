@@ -19,6 +19,17 @@ class DiziDad : MainAPI() {
         "Referer" to "$mainUrl/",
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
     )
+
+    /**
+     * CloudStream Episode modelinde posterHeaders alanı yok; episode-list UI
+     * görseli sadece URL ile yükler. DiziDad uploads görsellerini başlıksız
+     * isteklerde de yüklenebilir/önbelleklenmiş URL olarak sunmayı dene.
+     */
+    private fun episodePosterUrl(url: String?): String? {
+        val original = url?.trim()?.takeIf { isUsablePoster(it) } ?: return null
+        if (!original.contains("$mainUrl/wp-content/uploads/", ignoreCase = true)) return original
+        return "https://wsrv.nl/?url=${URLEncoder.encode(original, "UTF-8")}&w=342&maxage=31d"
+    }
     override val hasMainPage = true
     override var lang = "tr"
     override val hasQuickSearch = false
@@ -595,8 +606,8 @@ class DiziDad : MainAPI() {
                 this.name = pair.second
                 this.season = season
                 this.episode = ep
-                this.posterUrl = episodePosters[pair.first]?.takeIf { isUsablePoster(it) }
-                    ?: seriesPosterFallback
+                this.posterUrl = episodePosterUrl(episodePosters[pair.first])
+                    ?: episodePosterUrl(seriesPosterFallback)
             }
         }
 
