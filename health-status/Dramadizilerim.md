@@ -1,14 +1,14 @@
-# 🟢 Dramadizilerim
+# 🔴 Dramadizilerim
 
 Kodda kayıtlı domain: https://dramadizilerim.com
 
 Son HTTP URL: https://dramadizilerim.com
 
-HTTP: ✅ 200
+HTTP: ❌ 404
 
 Anti-bot engeli: hayır
 
-Sayfa başlığı: Drama Dizilerim - Dikey Mini Dizi &amp; Kısa Dizi İzle (Türkçe Dublaj &amp; Altyazılı)
+Sayfa başlığı: 404 - Sayfa BulunamadÄ± | DramaDizilerim
 
 Canlı medya ipucu: 0 media URL, 0 iframe
 
