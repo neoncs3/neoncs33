@@ -385,6 +385,7 @@ class DiziDad : MainAPI() {
     private fun Document.cards(maxCards: Int? = null): List<SearchResponse> {
         val out = LinkedHashMap<String, SearchResponse>()
         val anchors = select("a[href]")
+        var noPosterLogged = 0
 
         // Önce her gerçek poster img'sini kendi başlık/izleme bağlantısına bağla.
         for (image in select("img[data-src], img[data-lazy-src], img[data-original], img[data-image], img[data-poster], img[data-lazyloaded], img[src]")) {
@@ -447,6 +448,13 @@ class DiziDad : MainAPI() {
                     ?: a.text()
             )
             if (title.isBlank()) continue
+            if (poster.isNullOrBlank() && debugPoster && noPosterLogged < 3) {
+                noPosterLogged++
+                android.util.Log.d(
+                    "DiziDad",
+                    "NOPOSTER url=$url html=" + (a.parent()?.parent()?.outerHtml() ?: a.outerHtml()).take(900)
+                )
+            }
             if (!out.containsKey(url)) out[url] = makeCard(title, url, poster)
         }
         return out.values.toList()
@@ -495,8 +503,11 @@ class DiziDad : MainAPI() {
 
     /** Listede afişi olmayan kartlara (en fazla 10) kendi sayfasından afiş doldurur. */
     private suspend fun fillMissingPosters(items: List<SearchResponse>) {
-        items.filter { it.posterUrl.isNullOrBlank() }.take(10).amap { item ->
+        val missing = items.filter { it.posterUrl.isNullOrBlank() }.take(24)
+        android.util.Log.d("DiziDad", "FILL missing=${missing.size} of ${items.size}")
+        missing.amap { item ->
             val p = runCatching { posterFromPage(item.url) }.getOrNull()
+            android.util.Log.d("DiziDad", "FILL ${item.url} -> $p")
             if (!p.isNullOrBlank()) {
                 item.posterUrl = if (useImageProxy) proxied(p) else p
             }
