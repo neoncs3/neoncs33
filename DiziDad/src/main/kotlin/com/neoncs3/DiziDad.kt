@@ -556,6 +556,60 @@ private val m3u8Regex = Regex("""https?://[^\s"'<>\\)]+?\.m3u8[^\s"'<>\\)]*""")
     private val mp4Regex = Regex("""https?://[^\s"'<>\\)]+?\.mp4[^\s"'<>\\)]*""")
     private val hdPlayerBase = "https://hdplayersystem.com"
 
+    /**
+     * X/Twitter HLS playlistleri seekbar önizleyicisinin beklediği TS yerine
+     * CMAF/fMP4 parçaları kullanabilir. Syndication JSON'unda MP4 varsa onu tercih et;
+     * API başarısız olursa aşağıdaki kod orijinal HLS bağlantısını korur.
+     */
+    private suspend fun twitterMp4Variants(m3u8Url: String): List<Pair<Int, String>> {
+        val mediaId = Regex("""/amplify_video/(\\d+)/""")
+            .find(m3u8Url)?.groupValues?.getOrNull(1) ?: return emptyList()
+        val apiUrl = "https://cdn.syndication.twimg.com/tweet-result?id=$mediaId&lang=en"
+        val jsonText = runCatching {
+            app.get(
+                apiUrl,
+                headers = mapOf(
+                    "User-Agent" to browserHeaders.getValue("User-Agent"),
+                    "Accept" to "application/json, text/plain, */*",
+                    "Referer" to "https://x.com/"
+                )
+            ).text
+        }.getOrNull()?.takeIf { it.trimStart().startsWith("{") } ?: return emptyList()
+
+        val found = mutableListOf<Pair<Int, String>>()
+        fun scan(value: Any?) {
+            when (value) {
+                is org.json.JSONObject -> {
+                    val url = value.optString("url").trim()
+                    val mime = value.optString("content_type")
+                        .ifBlank { value.optString("contentType") }
+                    if (
+                        url.startsWith("https://video.twimg.com/") &&
+                        url.substringBefore("?").endsWith(".mp4", true) &&
+                        (mime.isBlank() || mime.contains("video/mp4", true))
+                    ) {
+                        val bitrate = value.optInt("bitrate", 0)
+                        val height = Regex("""\\d{3,4}x(\\d{3,4})""")
+                            .find(url)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
+                        found += (height.takeIf { it > 0 } ?: (bitrate / 1000)) to url
+                    }
+                    val keys = value.keys()
+                    while (keys.hasNext()) {
+                        val child = value.opt(keys.next())
+                        if (child is org.json.JSONObject || child is org.json.JSONArray) scan(child)
+                    }
+                }
+                is org.json.JSONArray -> {
+                    for (i in 0 until value.length()) {
+                        val child = value.opt(i)
+                        if (child is org.json.JSONObject || child is org.json.JSONArray) scan(child)
+                    }
+                }
+            }
+        }
+        runCatching { scan(org.json.JSONObject(jsonText)) }
+        return found.distinctBy { it.second }.sortedByDescending { it.first }.take(4)
+    }
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -584,8 +638,36 @@ private val m3u8Regex = Regex("""https?://[^\s"'<>\\)]+?\.m3u8[^\s"'<>\\)]*""")
             val ok = if (c.contains("hdplayersystem.com")) {
                 hdPlayer(c, pageUrl, subtitleCallback, callback)
             } else {
-                runCatching { loadExtractor(c, pageUrl, subtitleCallback, callback) }
-                    .getOrDefault(false)
+                // Çıkarılan bağlantıları yakala; X HLS için doğrudan MP4 varsa onu ver.
+                val emitted = mutableListOf<ExtractorLink>()
+                val extractorOk = runCatching {
+                    loadExtractor(c, pageUrl, subtitleCallback) { emitted.add(it) }
+                }.getOrDefault(false)
+
+                for (link in emitted) {
+                    val isTwitterHls = link.url.contains("video.twimg.com/amplify_video/") &&
+                        Regex("""\\.m3u8(?:\\?|$)""", RegexOption.IGNORE_CASE).containsMatchIn(link.url)
+                    if (isTwitterHls) {
+                        val mp4Variants = runCatching { twitterMp4Variants(link.url) }
+                            .getOrDefault(emptyList())
+                        if (mp4Variants.isNotEmpty()) {
+                            for ((quality, mp4Url) in mp4Variants) {
+                                callback(
+                                    newExtractorLink(name, "${link.name} MP4", mp4Url, ExtractorLinkType.VIDEO) {
+                                        this.referer = link.referer.ifBlank { pageUrl }
+                                        this.quality = quality.takeIf { it > 0 } ?: Qualities.Unknown.value
+                                    }
+                                )
+                            }
+                        } else {
+                            // API erişilemezse orijinal HLS bağlantısını kaybetme.
+                            callback(link)
+                        }
+                    } else {
+                        callback(link)
+                    }
+                }
+                extractorOk || emitted.isNotEmpty()
             }
             if (ok) found = true
         }
