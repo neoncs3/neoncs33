@@ -244,6 +244,7 @@ class NeonPlaybackSmokeTest {
             Regex("""(?i)^\s*\[[^\]]+\.(?:jpe?g|png|webp|gif|avif)\]\s*""").containsMatchIn(value) ||
             Regex("""(?i)(?:^|\s)[^\s/]+\.(?:jpe?g|png|webp|gif|avif)(?:\s|$)""").containsMatchIn(value) ||
             Regex("""(?i)^\s*\[[a-z0-9_-]{18,}\]\s*""").containsMatchIn(value) ||
+            Regex("""(?i)^\s*[a-z0-9_-]{18,}\s+""").containsMatchIn(value) ||
             Regex("""(?i)^[a-z0-9_-]{18,}$""").matches(value)
     }
 
