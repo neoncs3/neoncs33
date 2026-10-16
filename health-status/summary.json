@@ -198,19 +198,6 @@
       "pipelines": {}
     },
     {
-      "provider": "DiziDadyedek",
-      "status": "yellow",
-      "domain": "",
-      "configured_domain": "",
-      "live_domain": "",
-      "live": {
-        "ok": false,
-        "anti_bot_blocked": false,
-        "error": "NeonMainAPI provider source bulunamadı"
-      },
-      "pipelines": {}
-    },
-    {
       "provider": "Dizigecesi",
       "status": "yellow",
       "domain": "https://dizigecesi.com",
@@ -457,6 +444,6 @@
     }
   ],
   "green": 9,
-  "yellow": 10,
+  "yellow": 9,
   "red": 0
 }
