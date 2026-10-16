@@ -125,6 +125,9 @@ class DiziDadyedek : MainAPI() {
         }.getOrNull()?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
     }
 
+    // Orijinal oynatıcı kodunun kullandığı CloudStream tarzı URL çözümlemesi.
+    private fun absUrl(value: String): String = absoluteUrl(value, mainUrl) ?: value
+
     private fun pathOf(url: String): String =
         runCatching { URI(url).path.orEmpty().lowercase(Locale.ROOT) }
             .getOrDefault(url.substringBefore("?").substringBefore("#").lowercase(Locale.ROOT))
@@ -274,7 +277,7 @@ class DiziDadyedek : MainAPI() {
         imageUrl(doc.selectFirst(
             ".category_image img, .cat-img img, .post-thumbnail img, .movie-image img, .movie-poster img, .single-item img, article img"
         ) ?: doc.selectFirst("img") ?: return null)?.let { return it }
-        return images.firstOrNull()?.second
+        return candidates(doc).firstOrNull()?.second
     }
 
     private fun parseItems(doc: Document): List<SearchResponse> {
