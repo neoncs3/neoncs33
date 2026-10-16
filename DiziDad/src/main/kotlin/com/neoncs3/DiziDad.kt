@@ -562,7 +562,7 @@ private val m3u8Regex = Regex("""https?://[^\s"'<>\\)]+?\.m3u8[^\s"'<>\\)]*""")
      * API başarısız olursa aşağıdaki kod orijinal HLS bağlantısını korur.
      */
     private suspend fun twitterMp4Variants(m3u8Url: String): List<Pair<Int, String>> {
-        val mediaId = Regex("""/amplify_video/(\\d+)/""")
+        val mediaId = Regex("""/amplify_video/(\d+)/""")
             .find(m3u8Url)?.groupValues?.getOrNull(1) ?: return emptyList()
         val apiUrl = "https://cdn.syndication.twimg.com/tweet-result?id=$mediaId&lang=en"
         val jsonText = runCatching {
@@ -589,7 +589,7 @@ private val m3u8Regex = Regex("""https?://[^\s"'<>\\)]+?\.m3u8[^\s"'<>\\)]*""")
                         (mime.isBlank() || mime.contains("video/mp4", true))
                     ) {
                         val bitrate = value.optInt("bitrate", 0)
-                        val height = Regex("""\\d{3,4}x(\\d{3,4})""")
+                        val height = Regex("""\d{3,4}x(\d{3,4})""")
                             .find(url)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
                         found += (height.takeIf { it > 0 } ?: (bitrate / 1000)) to url
                     }
@@ -646,7 +646,7 @@ private val m3u8Regex = Regex("""https?://[^\s"'<>\\)]+?\.m3u8[^\s"'<>\\)]*""")
 
                 for (link in emitted) {
                     val isTwitterHls = link.url.contains("video.twimg.com/amplify_video/") &&
-                        Regex("""\\.m3u8(?:\\?|$)""", RegexOption.IGNORE_CASE).containsMatchIn(link.url)
+                        Regex("""\.m3u8(?:\?|$)""", RegexOption.IGNORE_CASE).containsMatchIn(link.url)
                     if (isTwitterHls) {
                         val mp4Variants = runCatching { twitterMp4Variants(link.url) }
                             .getOrDefault(emptyList())
