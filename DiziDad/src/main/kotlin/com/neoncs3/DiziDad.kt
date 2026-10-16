@@ -620,7 +620,14 @@ private val m3u8Regex = Regex("""https?://[^\s"'<>\\)]+?\.m3u8[^\s"'<>\\)]*""")
             for (attr in listOf("src", "data-src", "data-lazy-src", "data-litespeed-src", "data-lazy")) {
                 val v = f.attr(attr).trim()
                 if (v.isNotEmpty() && !v.startsWith("about:") && !v.startsWith("data:")) {
-                    candidates.add(absUrl(v))
+                    val candidate = absUrl(v)
+                    val host = runCatching { URI(candidate).host.orEmpty().lowercase(Locale.ROOT) }
+                        .getOrDefault("")
+                    // YouTube iframe sayfa fragmanıdır; kısa fragmanı bölüm videosu gibi sunma.
+                    val isYoutubeTrailer = host == "youtube.com" || host.endsWith(".youtube.com") ||
+                        host == "youtu.be" || host.endsWith(".youtu.be") ||
+                        host == "youtube-nocookie.com" || host.endsWith(".youtube-nocookie.com")
+                    if (!isYoutubeTrailer) candidates.add(candidate)
                 }
             }
         }
