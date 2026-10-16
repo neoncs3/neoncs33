@@ -382,6 +382,13 @@ class DiziDadyedek : MainAPI() {
         return match.groupValues[1].split(",").map { it.trim() }.filter { it.isNotBlank() && it.length < 80 }
     }
 
+    private fun pageRating(doc: Document): Double? {
+        val text = doc.text()
+        val raw = Regex("""(?:IMDb Puanı|IMDB)\s*:?\s*(10(?:[.,]0)?|[0-9](?:[.,][0-9])?)""", RegexOption.IGNORE_CASE)
+            .find(text)?.groupValues?.getOrNull(1)?.replace(',', '.')?.toDoubleOrNull()
+        return raw?.takeIf { it in 0.0..10.0 }
+    }
+
     private fun pageGenres(doc: Document): List<String> {
         val fromLinks = doc.select("a[href*=tur=], a[href*=genre], a[href*=kategori]")
             .map { cleanTitle(it.text()) }
@@ -452,6 +459,7 @@ class DiziDadyedek : MainAPI() {
         val actors = pageActors(doc)
         val tags = pageGenres(doc)
         val trailer = pageTrailer(doc)
+        val rating = pageRating(doc)
 
         if (isEpisodeUrl(pageUrl)) {
             val number = epNo(pageUrl, title)
@@ -467,6 +475,7 @@ class DiziDadyedek : MainAPI() {
                 posterHeaders = this@DiziDadyedek.posterHeaders
                 this.plot = plot
                 this.year = year
+                rating?.let { score = Score.from10(it) }
                 this.tags = tags
                 addActors(actors)
                 addTrailer(trailer)
@@ -480,6 +489,7 @@ class DiziDadyedek : MainAPI() {
                 posterHeaders = this@DiziDadyedek.posterHeaders
                 this.plot = plot
                 this.year = year
+                rating?.let { score = Score.from10(it) }
                 this.tags = tags
                 addActors(actors)
                 addTrailer(trailer)
@@ -491,6 +501,7 @@ class DiziDadyedek : MainAPI() {
             posterHeaders = this@DiziDadyedek.posterHeaders
             this.plot = plot
             this.year = year
+            rating?.let { score = Score.from10(it) }
             this.tags = tags
             addActors(actors)
             addTrailer(trailer)
