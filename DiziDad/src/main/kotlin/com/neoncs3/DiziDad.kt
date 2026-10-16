@@ -466,7 +466,18 @@ class DiziDad : MainAPI() {
             val path = url.removePrefix(mainUrl).trim('/')
             if (path.isEmpty() || path.startsWith("wp-") || path.contains("page/")) continue
             if (path.contains("yorum") || path.contains("comment")) continue
-            val titleHint = a.selectFirst("img[alt]")?.attr("alt") ?: a.text()
+            // Kategori/listing bağlantıları film sonucu değildir.
+            if (mainPage.any { contentUrlKey(absUrl(it.data)) == contentUrlKey(url) }) continue
+
+            val rawTitle = listOf(
+                a.ownText(),
+                a.attr("title"),
+                a.selectFirst("[title]")?.attr("title"),
+                a.selectFirst("img[alt]")?.attr("alt"),
+                a.text(),
+            ).firstOrNull { !it.isNullOrBlank() && !isTechnicalTitle(cleanTitle(it)) }
+
+            val titleHint = rawTitle ?: a.text()
             val poster = posterByUrl[contentUrlKey(url)]
                 ?: a.posterFromCardAncestors(url)
                 ?: posterForTarget(url, titleHint)
@@ -476,18 +487,21 @@ class DiziDad : MainAPI() {
                     "data-background", "data-background-image", "data-src", "data-original",
                     "data-lazy-src", "data-srcset", "data-lazy-srcset", "srcset", "style")
                     .any { a.hasAttr(it) }
-            if (!hasImage) continue
-            // Önce kart bağlantısının gerçek başlığını kullan; img alt bazen animal.jpg
-            // veya rastgele cache kimliği içerir ve film adı olarak gösterilmemelidir.
+
+            // Kart afişi ayrı bir kardeş bağlantıda olabilir. Gerçek metin başlıklı bağlantıyı
+            // sırf kendi içinde img bulunmuyor diye atlama; posterFromPage ikinci turda afişi bulur.
+            if (!hasImage && rawTitle.isNullOrBlank()) continue
+
             val title = resolveCardTitle(
                 url,
+                rawTitle,
                 a.ownText(),
                 a.attr("title"),
                 a.selectFirst("[title]")?.attr("title"),
                 a.selectFirst("img[alt]")?.attr("alt"),
                 a.text(),
             )
-            if (title.isBlank()) continue
+            if (title.isBlank() || isTechnicalTitle(title)) continue
             if (poster.isNullOrBlank() && noPosterLogged < 3) {
                 noPosterLogged++
                 android.util.Log.d(
@@ -543,7 +557,7 @@ class DiziDad : MainAPI() {
 
     /** Listede afişi olmayan kartlara (en fazla 10) kendi sayfasından afiş doldurur. */
     private suspend fun fillMissingPosters(items: List<SearchResponse>) {
-        val missing = items.filter { it.posterUrl.isNullOrBlank() }.take(24)
+        val missing = items.filter { it.posterUrl.isNullOrBlank() }.take(60)
         android.util.Log.d("DiziDad", "FILL missing=${missing.size} of ${items.size}")
         missing.amap { item ->
             val p = runCatching { posterFromPage(item.url) }.getOrNull()
@@ -557,9 +571,14 @@ class DiziDad : MainAPI() {
     private suspend fun posterFromPage(url: String): String? {
         val d = app.get(url).document
         return d.posterForTarget(url, d.selectFirst("h1")?.text())
-            ?: d.selectFirst("meta[property=og:image]")?.attr("content")?.trim()
+            ?: d.selectFirst(
+                "meta[property=og:image], meta[property=og:image:secure_url], meta[name=twitter:image]"
+            )?.attr("content")?.trim()
                 ?.takeIf { isUsablePoster(it) }
                 ?.let { absUrl(it) }
+            ?: posterFromMarkup(d.html(), url)
+            ?: d.select("img[alt], img[data-src], img[data-lazy-src], img[data-original], img[src]")
+                .firstNotNullOfOrNull { it.posterOfElement() }
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
