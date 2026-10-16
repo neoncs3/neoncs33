@@ -169,30 +169,10 @@
     },
     {
         "iconUrl": "https://www.google.com/s2/favicons?domain=dizidad.com&sz=%size%",
-        "fileHash": "sha256-f6c39e89886c71fc7e606acddd62894bffc4c9747080fc62f2cfa15dfa4453f3",
+        "fileHash": "sha256-cf5675b5bd044757a975ec51c2f40c6e722bb23de15db9a7c1177d0feece04b7",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 77440,
-        "status": 1,
-        "language": "tr",
-        "authors": [
-            "neoncs3"
-        ],
-        "tvTypes": [
-            "TvSeries"
-        ],
-        "version": 21,
-        "internalName": "DiziDad",
-        "description": "DiziDad - yerli, yabanc\u0131 ve eski diziler",
-        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/DiziDad.cs3",
-        "name": "DiziDad"
-    },
-    {
-        "iconUrl": "https://www.google.com/s2/favicons?domain=dizidad.com&sz=%size%",
-        "fileHash": "sha256-8a436723e044dfd284ad41c9e86eed38ddc61e49a2a0a184e9952ae61d77abbc",
-        "apiVersion": 1,
-        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 70944,
+        "fileSize": 72971,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -202,11 +182,11 @@
             "Movie",
             "TvSeries"
         ],
-        "version": 1,
-        "internalName": "DiziDadyedek",
-        "description": "DiziDAD yedek sa\u011flay\u0131c\u0131s\u0131 \u2014 ba\u011f\u0131ms\u0131z katalog ve oynatma",
-        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/DiziDadyedek.cs3",
-        "name": "DiziDadyedek"
+        "version": 22,
+        "internalName": "DiziDad",
+        "description": "DiziDAD \u2014 t\u00fcm diziler, filmler ve eksiksiz sezon/b\u00f6l\u00fcm listeleri",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/DiziDad.cs3",
+        "name": "DiziDad"
     },
     {
         "iconUrl": "https://dizigecesi.com/favicon.ico",
