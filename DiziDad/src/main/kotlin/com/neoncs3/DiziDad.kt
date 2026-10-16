@@ -298,7 +298,9 @@ class DiziDad : MainAPI() {
 
     private fun makeCard(rawTitle: String, url: String, poster: String?): SearchResponse {
         val title = if (debugPoster) {
-            "[" + (poster?.substringBefore("?")?.substringAfterLast('/')?.take(22) ?: "NULL") + "] " + rawTitle
+            "[" + (poster?.substringBefore("?")?.let { p ->
+                if (p.contains("/uploads/")) p.substringAfter("/uploads/") else p.substringAfterLast('/')
+            }?.take(45) ?: "NULL") + "] " + rawTitle
         } else rawTitle
         val finalPoster = if (useImageProxy && !poster.isNullOrBlank()) proxied(poster) else poster
         return makeCardInternal(title, url, finalPoster)
