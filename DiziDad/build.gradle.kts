@@ -1,5 +1,5 @@
 // CloudStream updates require a higher version number for existing installations.
-version = 22
+version = 23
 
 cloudstream {
     description = "DiziDAD — tüm diziler, filmler ve eksiksiz sezon/bölüm listeleri"
