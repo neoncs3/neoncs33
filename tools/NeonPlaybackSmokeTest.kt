@@ -644,10 +644,10 @@ class NeonPlaybackSmokeTest {
 
         // Exercise the real film-search path that has been returning blank posters.
         var searchQuery = "Animal"
-        var searchCards = runCatching { api.search(searchQuery) }.getOrDefault(emptyList())
+        var searchCards = runCatching { api.search(searchQuery) }.getOrNull().orEmpty()
         if (searchCards.isEmpty()) {
             searchQuery = "Animal Race"
-            searchCards = runCatching { api.search(searchQuery) }.getOrDefault(emptyList())
+            searchCards = runCatching { api.search(searchQuery) }.getOrNull().orEmpty()
         }
         observedTitles.addAll(searchCards.map { it.name })
         observedTitles.add(load.name)
