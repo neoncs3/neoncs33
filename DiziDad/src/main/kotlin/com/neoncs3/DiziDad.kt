@@ -59,10 +59,10 @@ class DiziDad : MainAPI() {
         .trim()
 
     private fun cleanTitle(s: String): String = s
-        // Eski tanılama etiketleri bir süre önbellekteki/yayımlanmış sonuçlarda kalabiliyor.
-        .replace(Regex("""(?i)^\\s*\\[(?:null|[^\\]]+\\.(?:jpe?g|png|webp|gif|avif)|[a-z0-9_-]{18,})\\]\\s*"""), "")
-        .replace(Regex("""(?i)^\\s*\\[?null\\]?\\s*(?:[-:|]\\s*)?"""), "")
-        .replace(Regex("""(?i)^\\s*\\[(?:[a-z0-9_-]{18,})\\]\\s*"""), "")
+        // Önceden yayımlanan geçici hata ayıklama etiketlerini de başlıktan temizle.
+        .replace(Regex("""(?i)^\s*\[(?:null|[^\]]+\.(?:jpe?g|png|webp|gif|avif)|[a-z0-9_-]{18,})\]\s*"""), "")
+        .replace(Regex("""(?i)^\s*\[?null\]?\s*(?:[-:|]\s*)?"""), "")
+        .replace(Regex("""(?i)^\s*\[(?:[a-z0-9_-]{18,})\]\s*"""), "")
         .replace(Regex("\\s*\\|\\s*DiziDAD.*$", RegexOption.IGNORE_CASE), "")
         .replace(Regex("\\s+izle(\\s+izle)*\\s*$", RegexOption.IGNORE_CASE), "")
         .trim()
@@ -72,8 +72,8 @@ class DiziDad : MainAPI() {
         val value = cleanTitle(raw).trim()
         if (value.isBlank()) return true
         if (Regex("""(?i)^(?:null|undefined|nan)$""").matches(value)) return true
-        if (Regex("""(?i)^.+\\.(?:jpe?g|png|webp|gif|avif)$""").matches(value)) return true
-        if (Regex("""^\\d+(?:\\.\\d+)?$""").matches(value)) return true
+        if (Regex("""(?i)^.+\.(?:jpe?g|png|webp|gif|avif)$""").matches(value)) return true
+        if (Regex("""^\d+(?:\.\d+)?$""").matches(value)) return true
         if (!value.any(Char::isWhitespace) &&
             value.length >= 18 &&
             value.any(Char::isDigit) &&
@@ -88,16 +88,16 @@ class DiziDad : MainAPI() {
         val path = runCatching { java.net.URI(url).path.orEmpty() }
             .getOrDefault(url.substringBefore('?').substringBefore('#'))
         val slug = path.trimEnd('/').substringAfterLast('/')
-            .replace(Regex("""(?i)-\\d+-sezon-.*$"""), "")
-            .replace(Regex("""(?i)-\\d+-bolum.*$"""), "")
+            .replace(Regex("""(?i)-\d+-sezon-.*$"""), "")
+            .replace(Regex("""(?i)-\d+-bolum.*$"""), "")
             .replace(Regex("""(?i)-(?:turkce-)?(?:dublaj|altyazili)-izle.*$"""), "")
             .replace(Regex("""(?i)-izle.*$"""), "")
-            .replace(Regex("""(?i)\\.(?:jpe?g|png|webp|gif|avif)$"""), "")
+            .replace(Regex("""(?i)\.(?:jpe?g|png|webp|gif|avif)$"""), "")
             .replace(Regex("""(?i)^(?:film|dizi)-"""), "")
             .replace(Regex("""[-_]+"""), " ")
             .trim()
         if (slug.isBlank()) return ""
-        return slug.split(Regex("""\\s+""")).joinToString(" ") { token ->
+        return slug.split(Regex("""\s+""")).joinToString(" ") { token ->
             token.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }
         }
     }
