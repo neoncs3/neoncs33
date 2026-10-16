@@ -148,7 +148,9 @@ jobs:
                       }))
 
           sample = "https://www.dizidad.com/wp-content/uploads/2026/10/tyson.jpg"
-          candidates = [sample] + [u for u in found if u != sample]
+          # Sayfa og:image olarak farklı bir dosya bildiriyor; onun varlığını da doğrudan test et.
+          og_sample = "https://www.dizidad.com/wp-content/uploads/2026/10/tyson-izle.jpg"
+          candidates = [og_sample, sample] + [u for u in found if u not in (sample, og_sample)]
           candidates = candidates[:4]
           print("=== Doğrudan görseller (Referer olmadan / Referer ile) ve wsrv.nl proxy ===")
           print(f"HTML'den bulunan farklı uploads görseli: {len(found)}")
