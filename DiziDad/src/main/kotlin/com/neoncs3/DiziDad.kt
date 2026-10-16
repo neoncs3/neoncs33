@@ -59,9 +59,57 @@ class DiziDad : MainAPI() {
         .trim()
 
     private fun cleanTitle(s: String): String = s
+        // Eski tanılama etiketleri bir süre önbellekteki/yayımlanmış sonuçlarda kalabiliyor.
+        .replace(Regex("""(?i)^\\s*\\[(?:null|[^\\]]+\\.(?:jpe?g|png|webp|gif|avif)|[a-z0-9_-]{18,})\\]\\s*"""), "")
+        .replace(Regex("""(?i)^\\s*\\[?null\\]?\\s*(?:[-:|]\\s*)?"""), "")
+        .replace(Regex("""(?i)^\\s*\\[(?:[a-z0-9_-]{18,})\\]\\s*"""), "")
         .replace(Regex("\\s*\\|\\s*DiziDAD.*$", RegexOption.IGNORE_CASE), "")
         .replace(Regex("\\s+izle(\\s+izle)*\\s*$", RegexOption.IGNORE_CASE), "")
         .trim()
+
+    /** Dosya adı/kimlik/puan gibi değerlerin film adı olarak gösterilmesini engeller. */
+    private fun isTechnicalTitle(raw: String): Boolean {
+        val value = cleanTitle(raw).trim()
+        if (value.isBlank()) return true
+        if (Regex("""(?i)^(?:null|undefined|nan)$""").matches(value)) return true
+        if (Regex("""(?i)^.+\\.(?:jpe?g|png|webp|gif|avif)$""").matches(value)) return true
+        if (Regex("""^\\d+(?:\\.\\d+)?$""").matches(value)) return true
+        if (!value.any(Char::isWhitespace) &&
+            value.length >= 18 &&
+            value.any(Char::isDigit) &&
+            value.any(Char::isLetter) &&
+            Regex("""^[a-zA-Z0-9_-]+$""").matches(value)
+        ) return true
+        return false
+    }
+
+    /** Eksik/bozuk HTML başlığı varsa içerik URL'sinin slug'ından okunabilir ad üretir. */
+    private fun titleFromUrl(url: String): String {
+        val path = runCatching { java.net.URI(url).path.orEmpty() }
+            .getOrDefault(url.substringBefore('?').substringBefore('#'))
+        val slug = path.trimEnd('/').substringAfterLast('/')
+            .replace(Regex("""(?i)-\\d+-sezon-.*$"""), "")
+            .replace(Regex("""(?i)-\\d+-bolum.*$"""), "")
+            .replace(Regex("""(?i)-(?:turkce-)?(?:dublaj|altyazili)-izle.*$"""), "")
+            .replace(Regex("""(?i)-izle.*$"""), "")
+            .replace(Regex("""(?i)\\.(?:jpe?g|png|webp|gif|avif)$"""), "")
+            .replace(Regex("""(?i)^(?:film|dizi)-"""), "")
+            .replace(Regex("""[-_]+"""), " ")
+            .trim()
+        if (slug.isBlank()) return ""
+        return slug.split(Regex("""\\s+""")).joinToString(" ") { token ->
+            token.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }
+        }
+    }
+
+    private fun resolveCardTitle(url: String, vararg candidates: String?): String {
+        candidates.asSequence()
+            .filterNotNull()
+            .map { cleanTitle(it) }
+            .firstOrNull { !isTechnicalTitle(it) }
+            ?.let { return it }
+        return titleFromUrl(url)
+    }
 
     private fun absUrl(v: String): String = when {
         v.startsWith("//") -> "https:$v"
@@ -287,7 +335,7 @@ class DiziDad : MainAPI() {
 
 
     private fun makeCard(rawTitle: String, url: String, poster: String?): SearchResponse =
-        makeCardInternal(rawTitle, url, poster)
+        makeCardInternal(resolveCardTitle(url, rawTitle), url, poster)
 
     private fun makeCardInternal(title: String, url: String, poster: String?): SearchResponse =
         if (isSeries(url) || isEpisode(url)) {
@@ -379,7 +427,14 @@ class DiziDad : MainAPI() {
             val href = link.attr("href").trim()
             val url = absUrl(href)
             if (!url.startsWith(mainUrl) || !isContentCardUrl(url)) continue
-            val title = cleanTitle(link.text().ifBlank { link.attr("title").ifBlank { alt } })
+            val title = resolveCardTitle(
+                url,
+                link.ownText(),
+                link.attr("title"),
+                image.attr("title"),
+                alt,
+                link.text(),
+            )
             if (title.isBlank()) continue
             if (!out.containsKey(url)) out[url] = makeCard(title, url, poster)
         }
@@ -425,10 +480,15 @@ class DiziDad : MainAPI() {
                     "data-lazy-src", "data-srcset", "data-lazy-srcset", "srcset", "style")
                     .any { a.hasAttr(it) }
             if (!hasImage) continue
-            val title = cleanTitle(
-                a.selectFirst("img[alt]")?.attr("alt")?.ifBlank { null }
-                    ?: a.selectFirst("[title]")?.attr("title")?.ifBlank { null }
-                    ?: a.text()
+            // Önce kart bağlantısının gerçek başlığını kullan; img alt bazen animal.jpg
+            // veya rastgele cache kimliği içerir ve film adı olarak gösterilmemelidir.
+            val title = resolveCardTitle(
+                url,
+                a.ownText(),
+                a.attr("title"),
+                a.selectFirst("[title]")?.attr("title"),
+                a.selectFirst("img[alt]")?.attr("alt"),
+                a.text(),
             )
             if (title.isBlank()) continue
             if (poster.isNullOrBlank() && noPosterLogged < 3) {
