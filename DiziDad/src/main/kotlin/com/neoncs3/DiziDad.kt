@@ -59,7 +59,9 @@ class DiziDad : MainAPI() {
         .trim()
 
     private fun cleanTitle(s: String): String = s
-        // Önceden yayımlanan geçici hata ayıklama etiketlerini de başlıktan temizle.
+        // Önceden yayımlanan geçici hata ayıklama etiketlerini ve başa sızan dosya adlarını temizle.
+        .replace(Regex("""(?i)^\s*(?:\[[^\]]+\.(?:jpe?g|png|webp|gif|avif)\]|[^\s/]+\.(?:jpe?g|png|webp|gif|avif))\s*[-:|]?\s*"""), "")
+        .replace(Regex("""(?i)^\s*\[?[a-z0-9_-]{18,}\]?\s*[-:|]\s*"""), "")
         .replace(Regex("""(?i)^\s*\[(?:null|[^\]]+\.(?:jpe?g|png|webp|gif|avif)|[a-z0-9_-]{18,})\]\s*"""), "")
         .replace(Regex("""(?i)^\s*\[?null\]?\s*(?:[-:|]\s*)?"""), "")
         .replace(Regex("""(?i)^\s*\[(?:[a-z0-9_-]{18,})\]\s*"""), "")
