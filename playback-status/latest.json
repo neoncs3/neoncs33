@@ -1,6 +1,15 @@
 {
   "results": [
     {
+      "provider": "DiziDad • Tyson afişleri",
+      "status": "BLOCKED",
+      "query": null,
+      "item": null,
+      "links": 0,
+      "positionMs": 0,
+      "error": "Provider origin erişimi engellendi HTTP 200 (anti-bot challenge)"
+    },
+    {
       "provider": "HDFilmDiziizle • Tron",
       "status": "BLOCKED",
       "query": null,
@@ -69,7 +78,7 @@
       "query": null,
       "item": "TvDiziler • Tuzlu Kahve 7",
       "links": 1,
-      "positionMs": 2751,
+      "positionMs": 3052,
       "error": null
     },
     {
@@ -78,7 +87,7 @@
       "query": null,
       "item": "TvDiziler • Anne Yarısı 4",
       "links": 1,
-      "positionMs": 2878,
+      "positionMs": 2981,
       "error": null
     },
     {
@@ -87,11 +96,11 @@
       "query": null,
       "item": "TvDiziler • Haysiyet 6",
       "links": 1,
-      "positionMs": 3137,
+      "positionMs": 3061,
       "error": null
     }
   ],
   "pass": 3,
-  "blocked": 7,
+  "blocked": 8,
   "fail": 0
 }
