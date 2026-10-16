@@ -13,10 +13,10 @@ permissions:
   contents: write
 
 concurrency:
-  # v2 releases the queue from a stuck earlier emulator run. The report-write step
-  # checks timestamps so an older run cannot overwrite a newer report.
-  group: neon-real-playback-master-v2
-  cancel-in-progress: false
+  # v3 lets the newest diagnostic run start even if an older emulator run is stuck.
+  # Timestamp checks still prevent older reports from overwriting newer results.
+  group: neon-real-playback-master-v3
+  cancel-in-progress: true
 
 jobs:
   playback:
