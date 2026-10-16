@@ -285,25 +285,16 @@ class DiziDad : MainAPI() {
     private val posterBearingSelector =
         "img, [data-poster], [data-poster-url], [data-image], [data-bg], [data-background], [data-background-image], [data-src], [data-original], [data-lazy-src], [data-lazy-background], [data-srcset], [data-lazy-srcset], [srcset], [style*=background]"
 
-    // GEÇİCİ TANI: true iken kart adının başına afiş dosya adı (yoksa NULL) yazılır.
-    // Sorun çözülünce false yap.
-    private val debugPoster = true
-
-    // Ana sayfa/arama kartlarında posterHeaders uygulanmıyorsa site Referer'sız isteği reddeder.
-    // true iken kart afişleri wsrv.nl proxy'si üzerinden verilir.
-    private val useImageProxy = true
+    // Katalog kartlarında kaynak görsel adresini kullan; posterHeaders Referer sağlar.
+    // Bölüm afişleri ise Episode modelinde headers alanı olmadığından episodePosterUrl() proxy'sinden geçer.
+    private val useImageProxy = false
 
     private fun proxied(url: String): String =
         "https://wsrv.nl/?url=" + URLEncoder.encode(url, "UTF-8") + "&w=400&output=jpg"
 
     private fun makeCard(rawTitle: String, url: String, poster: String?): SearchResponse {
-        val title = if (debugPoster) {
-            "[" + (poster?.substringBefore("?")?.let { p ->
-                if (p.contains("/uploads/")) p.substringAfter("/uploads/") else p.substringAfterLast('/')
-            }?.take(45) ?: "NULL") + "] " + rawTitle
-        } else rawTitle
         val finalPoster = if (useImageProxy && !poster.isNullOrBlank()) proxied(poster) else poster
-        return makeCardInternal(title, url, finalPoster)
+        return makeCardInternal(rawTitle, url, finalPoster)
     }
 
     private fun makeCardInternal(title: String, url: String, poster: String?): SearchResponse =
@@ -448,7 +439,7 @@ class DiziDad : MainAPI() {
                     ?: a.text()
             )
             if (title.isBlank()) continue
-            if (poster.isNullOrBlank() && debugPoster && noPosterLogged < 3) {
+            if (poster.isNullOrBlank() && noPosterLogged < 3) {
                 noPosterLogged++
                 android.util.Log.d(
                     "DiziDad",
