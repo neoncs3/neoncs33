@@ -188,6 +188,27 @@
         "name": "DiziDad"
     },
     {
+        "iconUrl": "https://www.google.com/s2/favicons?domain=dizidad.com&sz=%size%",
+        "fileHash": "sha256-8a436723e044dfd284ad41c9e86eed38ddc61e49a2a0a184e9952ae61d77abbc",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
+        "fileSize": 70944,
+        "status": 1,
+        "language": "tr",
+        "authors": [
+            "neoncs3"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 1,
+        "internalName": "DiziDadyedek",
+        "description": "DiziDAD yedek sa\u011flay\u0131c\u0131s\u0131 \u2014 ba\u011f\u0131ms\u0131z katalog ve oynatma",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/DiziDadyedek.cs3",
+        "name": "DiziDadyedek"
+    },
+    {
         "iconUrl": "https://dizigecesi.com/favicon.ico",
         "fileHash": "sha256-0553c301902c45600ee09b18606f3ce72389dbc5bbfba8243e9253da5c4decf8",
         "apiVersion": 1,
