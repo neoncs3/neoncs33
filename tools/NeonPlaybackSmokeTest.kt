@@ -642,34 +642,45 @@ class NeonPlaybackSmokeTest {
             }
         }
 
-        // Search results can currently expose image filenames or cache IDs as the title.
-        val searchCards = runCatching { api.search("Animal") }.getOrDefault(emptyList())
+        // Exercise the real film-search path that has been returning blank posters.
+        var searchQuery = "Animal"
+        var searchCards = runCatching { api.search(searchQuery) }.getOrDefault(emptyList())
+        if (searchCards.isEmpty()) {
+            searchQuery = "Animal Race"
+            searchCards = runCatching { api.search(searchQuery) }.getOrDefault(emptyList())
+        }
         observedTitles.addAll(searchCards.map { it.name })
         observedTitles.add(load.name)
         val badTitles = observedTitles.filter { isTechnicalPosterTitle(it) }.distinct().take(8)
+        val searchPosterCount = searchCards.count { !it.posterUrl.isNullOrBlank() }
+        val searchSamples = searchCards.filter { !it.posterUrl.isNullOrBlank() }.take(4)
 
         val episodeSamples = episodes.take(4)
-        val imageSamples = mutableListOf<Triple<String, String, Boolean>>()
+        val imageSamples = mutableListOf<Triple<String, String, String>>()
         for (episode in episodeSamples) {
             val poster = episode.posterUrl?.trim().orEmpty()
             val label = episode.name ?: "bölüm ${episode.episode}"
             if (poster.isBlank()) {
-                imageSamples.add(Triple(label, "", false))
+                imageSamples.add(Triple(label, "", "episode"))
             } else {
-                imageSamples.add(Triple(label, poster, false))
+                imageSamples.add(Triple(label, poster, "episode"))
             }
         }
         mainPageSamples.take(4).forEach { (section, title, poster) ->
-            imageSamples.add(Triple("$section / $title", poster, true))
+            imageSamples.add(Triple("$section / $title", poster, "catalog"))
+        }
+        searchSamples.forEach { card ->
+            imageSamples.add(Triple("$searchQuery / ${card.name}", card.posterUrl!!, "search"))
         }
         if (!filterFixturePoster.isNullOrBlank()) {
-            imageSamples.add(Triple("Filtre kontrolü / Avatar: Seven Havens", filterFixturePoster, true))
+            imageSamples.add(Triple("Filtre kontrolü / Avatar: Seven Havens", filterFixturePoster, "filter"))
         }
 
         var downloadedEpisodes = 0
-        var downloadedMainPage = 0
+        var downloadedCatalog = 0
+        var downloadedSearch = 0
         val fetchDetails = mutableListOf<String>()
-        for ((label, poster, isMainPage) in imageSamples) {
+        for ((label, poster, kind) in imageSamples) {
             if (poster.isBlank()) {
                 fetchDetails.add("$label: posterUrl yok")
                 continue
@@ -691,7 +702,11 @@ class NeonPlaybackSmokeTest {
             }
             when (result) {
                 is SuccessResult -> {
-                    if (isMainPage) downloadedMainPage++ else downloadedEpisodes++
+                    when (kind) {
+                        "episode" -> downloadedEpisodes++
+                        "search" -> downloadedSearch++
+                        else -> downloadedCatalog++
+                    }
                     Log.d("NEON_POSTER", "item=$label coil=SUCCESS url=${safeUrlForLog(poster)}")
                 }
                 is ErrorResult -> {
@@ -706,6 +721,7 @@ class NeonPlaybackSmokeTest {
 
         val expectedEpisodeImages = episodeSamples.count { !it.posterUrl.isNullOrBlank() }
         val expectedMainPageImages = mainPageSamples.take(4).size
+        val expectedSearchImages = searchSamples.size
         val episodesOk = episodePosterCount == episodes.size &&
             expectedEpisodeImages == episodeSamples.size &&
             downloadedEpisodes == expectedEpisodeImages
@@ -713,23 +729,29 @@ class NeonPlaybackSmokeTest {
         val mainPageOk = loadedMainPages >= 3 &&
             mainPageItemCount > 0 &&
             mainPagePosterCount == mainPageItemCount &&
-            filterFixtureOk &&
-            badTitles.isEmpty() &&
-            downloadedMainPage == expectedMainPageImages + if (filterFixtureOk) 1 else 0
-        val ok = episodesOk && mainPageOk
+            downloadedCatalog == expectedMainPageImages + if (filterFixtureOk) 1 else 0
+        val searchOk = searchCards.isNotEmpty() &&
+            searchPosterCount == searchCards.size &&
+            downloadedSearch == expectedSearchImages
+        val ok = episodesOk && mainPageOk && searchOk && filterFixtureOk && badTitles.isEmpty()
         val item = buildString {
             append("${episodes.size} bölüm; bölüm posterUrl=${episodePosterCount}/${episodes.size}; ")
             append("Coil bölüm=${downloadedEpisodes}/${expectedEpisodeImages}; ")
             append("ana sayfa posterUrl=${mainPagePosterCount}/${mainPageItemCount} (${loadedMainPages}/${testedPages.size} kategori); ")
+            append("arama[$searchQuery] posterUrl=${searchPosterCount}/${searchCards.size}; ")
+            append("Coil arama=${downloadedSearch}/${expectedSearchImages}; ")
             append("filtre AvatarPoster=${filterFixtureOk}; ")
             append("bozukBaşlık=${badTitles.size}; ")
-            append("Coil ana sayfa=${downloadedMainPage}/${expectedMainPageImages + if (filterFixtureOk) 1 else 0}")
+            append("Coil katalog=${downloadedCatalog}/${expectedMainPageImages + if (filterFixtureOk) 1 else 0}")
         }
         val error = if (ok) null else buildString {
             if (episodePosterCount != episodes.size) {
                 append("Bölüm afişi eksik: ${missingExamples.ifBlank { "isim alınamadı" }}. ")
             }
             if (mainPageIssues.isNotEmpty()) append("Ana sayfa afiş eksikleri: ${mainPageIssues.joinToString(", ")}. ")
+            if (searchCards.isEmpty()) append("Film araması boş: Animal ve Animal Race için sonuç dönmedi. ")
+            else if (searchPosterCount != searchCards.size) append("Arama sonuçlarında afiş URL'si eksik: $searchPosterCount/${searchCards.size}. ")
+            if (downloadedSearch != expectedSearchImages) append("Arama afişleri Coil ile yüklenemedi: $downloadedSearch/$expectedSearchImages. ")
             if (!filterFixtureOk) append("Filtre kontrolü başarısız: Avatar: Seven Havens afişi LoadResponse içinde yok. ")
             if (badTitles.isNotEmpty()) append("Dosya adı/NULL/kimlik olarak dönen başlıklar: ${badTitles.joinToString("; ")}. ")
             if (loadedMainPages < 3) append("Yeterli ana sayfa kategorisi yüklenemedi: ${mainPageStats.joinToString("; ")}. ")
@@ -743,7 +765,7 @@ class NeonPlaybackSmokeTest {
             provider = target.name,
             status = if (ok) "PASS" else "FAIL",
             item = item,
-            links = downloadedEpisodes + downloadedMainPage,
+            links = downloadedEpisodes + downloadedCatalog + downloadedSearch,
             error = error,
         )
     }
