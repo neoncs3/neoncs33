@@ -412,6 +412,10 @@ class DiziDad : MainAPI() {
         val doc = app.get(url).document
         val cardLimit = if (request.data.contains("/tum-bolumler/")) 20 else 30
         val items = doc.cards(cardLimit)
+        android.util.Log.d(
+            "DiziDad",
+            "MAIN ${request.name}: items=${items.size} withPoster=${items.count { !it.posterUrl.isNullOrBlank() }} first=${items.firstOrNull()?.posterUrl}"
+        )
         val hasNext = doc.select("a[href*='/page/${page + 1}/']").isNotEmpty()
         return newHomePageResponse(request.name, items, hasNext)
     }
@@ -552,6 +556,10 @@ class DiziDad : MainAPI() {
             ?: doc.select("img").firstNotNullOfOrNull { it.posterOfElement() }
 
         val fallbackEpisodePoster = episodePosterUrl(seriesPosterFallback)
+        android.util.Log.d(
+            "DiziDad",
+            "LOAD poster=$poster episodePoster=$fallbackEpisodePoster eps=${raw.size}"
+        )
 
         val episodes = raw
             .sortedWith(compareBy({ it.first }, { it.second }))
