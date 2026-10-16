@@ -11,6 +11,7 @@ import java.net.URLEncoder
 import java.util.Locale
 
 class DiziDad : MainAPI() {
+
     override var mainUrl = "https://www.dizidad.com"
     override var name = "DiziDAD"
 
@@ -21,14 +22,16 @@ class DiziDad : MainAPI() {
     )
 
     /**
-     * Bölüm afişleri CloudStream tarafından özel posterHeaders olmadan istenir.
-     * CI testinde DiziDad uploads URL'leri doğrudan image/webp veya image/png
-     * döndürüyor; bu nedenle araya proxy koymadan kaynak URL'yi kullan.
+     * Episode sınıfında posterHeaders yok; bu yüzden bölüm afişleri Referer'sız istenir ve
+     * site hotlink engeli uygularsa görünmez. Görseli wsrv.nl proxy'si üzerinden vererek
+     * Referer gereksinimini aşıyoruz.
      */
     private fun episodePosterUrl(url: String?): String? {
         val original = url?.trim()?.takeIf { isUsablePoster(it) } ?: return null
-        return absUrl(original)
+        val abs = absUrl(original)
+        return "https://wsrv.nl/?url=" + URLEncoder.encode(abs, "UTF-8") + "&w=400&output=jpg"
     }
+
     override val hasMainPage = true
     override var lang = "tr"
     override val hasQuickSearch = false
@@ -39,7 +42,7 @@ class DiziDad : MainAPI() {
         "$mainUrl/yerli-dizi-izle/" to "Yerli Diziler",
         "$mainUrl/yabanci-dizi-izle/" to "Yabancı Diziler",
         "$mainUrl/turkce-dublaj-diziler-hd/" to "Dublajlı Diziler",
-        "$mainUrl/netflix-dizileri-izle/" to "Netflix Dizileri",       
+        "$mainUrl/netflix-dizileri-izle/" to "Netflix Dizileri",
         "$mainUrl/tum-filmler/" to "Filmler",
         "$mainUrl/yabanci-filmler-izle/" to "Yabancı Filmler",
         "$mainUrl/yerli-filmler/" to "Yerli Filmler",
@@ -50,7 +53,9 @@ class DiziDad : MainAPI() {
     // ------------------------------------------------------------------ yardımcılar
 
     private val episodeRegex = Regex("-\\d+-bolum")
+
     private fun isEpisode(u: String) = episodeRegex.containsMatchIn(u)
+
     private fun isSeries(u: String) = u.contains("/diziler/")
 
     private fun norm(s: String): String = s.lowercase(Locale("tr"))
@@ -118,7 +123,6 @@ class DiziDad : MainAPI() {
             .ifBlank { attr("data-srcset") }
             .ifBlank { attr("srcset") }
             .ifBlank { attr("src") }
-
         val candidate = Regex("""https?://[^\s,]+""", RegexOption.IGNORE_CASE)
             .find(raw)?.value?.trimEnd(',')
             ?: raw.split(',').firstOrNull()?.trim()?.substringBefore(' ')?.takeIf { it.isNotBlank() }
@@ -126,26 +130,22 @@ class DiziDad : MainAPI() {
         return absUrl(candidate).takeIf { isUsablePoster(it) }
     }
 
-    /** Karttaki gerçek afişi bulur (yer tutucu ve tema ikonlarını atlar; dublaj ikonu rozeti gösterilmez). */
+    /** Karttaki gerçek afişi bulur (yer tutucu ve tema ikonlarını atlar). */
     private fun Element.posterUrl(): String? {
-        // DiziDAD kartları hem img/src lazy-load hem de CSS background-image/data-bg kullanabiliyor.
         val invalidPoster = Regex(
             "(?i)(/themes/|placeholder|no[-_]?image|blank\\.(gif|png|jpe?g|webp)|logo|avatar|spacer|transparent|pixel|default[-_]?poster)"
         )
         val nodes = listOf(this) + select("*")
-        // Alan türüne göre tara: afişin data-* / background alanları, rozetlerin src alanından önce gelir.
         val attributes = listOf(
             "data-poster", "data-poster-url", "data-bg", "data-background-image",
             "data-background", "data-original", "data-lazy-src", "data-src",
             "data-url", "data-image", "data-lazy-background", "data-srcset",
             "data-lazy-srcset", "srcset", "style", "poster", "src"
         )
-
         for (attr in attributes) {
             for (node in nodes) {
                 val raw = node.attr(attr).trim()
                 if (raw.isEmpty()) continue
-
                 val values = when {
                     attr == "style" -> Regex(
                         """(?i)url\(\s*['"]?([^)'"]+)"""
@@ -155,13 +155,11 @@ class DiziDad : MainAPI() {
                     )
                     else -> listOf(raw)
                 }
-
                 for (candidate in values) {
                     val value = candidate.trim().removeSurrounding("\"").removeSurrounding("'")
                     if (value.isEmpty() || value.startsWith("data:") ||
                         value.startsWith("javascript:", true) || invalidPoster.containsMatchIn(value)
                     ) continue
-
                     val resolved = fixUrlNull(value)
                     if (!resolved.isNullOrBlank() &&
                         (resolved.startsWith("https://") || resolved.startsWith("http://")) &&
@@ -175,11 +173,7 @@ class DiziDad : MainAPI() {
         return null
     }
 
-    /**
-     * DiziMom eklentisindeki açık kart seçicilerini önceliklendirir:
-     * kategori afişi, bölüm kartı ve ardından bağlantının içindeki img.
-     * Lazy-load alanları posterOfElement() tarafından çözülür.
-     */
+    /** Açık kart seçicilerini önceliklendirir. */
     private fun Element.diziMomPoster(targetUrl: String? = null): String? {
         val selectors = listOf(
             "div.cat-img img",
@@ -205,14 +199,8 @@ class DiziDad : MainAPI() {
         } ?: candidates.firstOrNull()
     }
 
-    /**
-     * Bölüm listelerinde afiş, metin bağlantısının içinde değil aynı kartın kardeş
-     * bağlantısında bulunabiliyor. Kart kapsayıcısına kadar çıkıp görseli oradan al.
-     */
+    /** Afiş, metin bağlantısının içinde değilse kart kapsayıcısına kadar çıkıp görseli oradan alır. */
     private fun Element.posterFromCardAncestors(targetUrl: String? = null): String? {
-        // Verilen DiziDAD HTML biçimi:
-        // <img data-lazyloaded="1" src=".../tyson.jpg" data-src=".../tyson.jpg" ...>
-        // Hem lazy-load alanlarını hem de gerçek src alanını doğrudan değerlendir.
         diziMomPoster(targetUrl)?.let { return it }
         select("img[data-src], img[data-lazy-src], img[data-original], img[data-lazyloaded], img[src]")
             .firstNotNullOfOrNull { it.posterOfElement() }
@@ -220,35 +208,30 @@ class DiziDad : MainAPI() {
         if (tagName().equals("img", ignoreCase = true)) {
             posterOfElement()?.let { return it }
         }
-
         val slug = posterSlug(targetUrl)
         var current: Element? = parent()
         var depth = 0
         while (current != null && depth < 9) {
             val tag = current.tagName().lowercase(Locale.ROOT)
             if (tag in setOf("header", "nav", "footer", "aside", "body", "html")) break
-
             val marker = (current.id() + " " + current.classNames().joinToString(" ")).lowercase(Locale.ROOT)
             if (Regex("\\b(site[-_]?header|site[-_]?footer|navbar|navigation|main[-_]?menu|mobile[-_]?menu|side[-_]?bar|sidebar|widget|login|register|alphabet|social|user[-_]?menu)\\b")
                     .containsMatchIn(marker)
             ) break
-
             val looksLikeCard = Regex("\\b(card|item|post|entry|movie|film|series|dizi|content|thumbnail|list|archive|episode|bolum|single-item|cat-img|episode-box)\\b")
                 .containsMatchIn(marker)
             val images = current.select("img[data-src], img[data-lazy-src], img[data-original], img[data-lazyloaded], img[src]")
-            // Küçük kart gruplarını tara; ana sayfadaki uzun görsel listelerine çıkıp yanlış afiş alma.
             if (images.isNotEmpty() && images.size <= 12 && (images.size <= 3 || looksLikeCard)) {
                 val usable = images.mapNotNull { image ->
                     image.posterOfElement()?.let { poster -> image to poster }
                 }
                 val preferred = usable.firstOrNull { (image, poster) ->
                     (slug.isNotBlank() && poster.contains(slug, ignoreCase = true)) ||
-                    norm(image.attr("alt")).let { alt -> slug.isNotBlank() && alt.contains(norm(slug)) }
+                        norm(image.attr("alt")).let { alt -> slug.isNotBlank() && alt.contains(norm(slug)) }
                 } ?: usable.firstOrNull { (_, poster) ->
                     poster.contains("/wp-content/uploads/", ignoreCase = true)
                 } ?: usable.firstOrNull()
                 preferred?.second?.let { return it }
-
                 val background = current.posterUrl()
                 if (isUsablePoster(background)) return background
             }
@@ -258,11 +241,7 @@ class DiziDad : MainAPI() {
         return null
     }
 
-    /**
-     * Bazı DiziDAD şablonlarında görsel, başlık bağlantısının dışında kardeş
-     * bir öğede durur. Böyle durumlarda sayfadaki img'leri alt metni ve URL
-     * slug'ı ile eşleştirerek ilgili kartın afişini bul.
-     */
+    /** Sayfadaki img'leri alt metni ve URL slug'ı ile eşleştirerek ilgili kartın afişini bulur. */
     private fun Document.posterForTarget(targetUrl: String, titleHint: String? = null): String? {
         val targetSlug = posterSlug(targetUrl).substringBeforeLast('.', posterSlug(targetUrl))
         val targetTitle = norm(cleanTitle(titleHint.orEmpty()))
@@ -273,7 +252,6 @@ class DiziDad : MainAPI() {
             )
             .filter { it.length >= 3 && it !in setOf("izle", "sezon", "bolum", "dizi", "film", "turkce", "dublaj", "altyazili") }
             .distinct()
-
         val candidates = select(
             "img[data-src], img[data-lazy-src], img[data-original], img[data-image], img[data-poster], img[data-lazyloaded], img[src]"
         ).mapNotNull { image ->
@@ -289,7 +267,6 @@ class DiziDad : MainAPI() {
             }
             Triple(poster, score, image)
         }.distinctBy { it.first }
-
         return candidates
             .filter { it.second > 0 }
             .maxByOrNull { it.second }
@@ -305,12 +282,10 @@ class DiziDad : MainAPI() {
     private fun contentUrlKey(url: String): String =
         url.substringBefore("?").substringBefore("#").trimEnd('/').lowercase(Locale.ROOT)
 
-
     private val posterBearingSelector =
         "img, [data-poster], [data-poster-url], [data-image], [data-bg], [data-background], [data-background-image], [data-src], [data-original], [data-lazy-src], [data-lazy-background], [data-srcset], [data-lazy-srcset], [srcset], [style*=background]"
 
     private fun makeCard(title: String, url: String, poster: String?): SearchResponse =
-        // Afişte rozet/buton (dublaj, kalite, IMDb vb.) gösterilmiyor; sadece başlık ve görsel.
         if (isSeries(url) || isEpisode(url)) {
             newTvSeriesSearchResponse(title, url, TvType.TvSeries) {
                 this.posterUrl = poster
@@ -323,11 +298,7 @@ class DiziDad : MainAPI() {
             }
         }
 
-    /**
-     * Gerçek img öğesinden başlayıp aynı karttaki içerik bağlantısını bulur.
-     * DiziDAD'da görsel <a> içinde olmayabilir; alt="Tyson izle" gibi alt
-     * metinlerini bağlantı başlığı/slug'ıyla eşleştirip posterUrl'yi doğrudan taşır.
-     */
+    /** Gerçek img öğesinden başlayıp aynı karttaki içerik bağlantısını bulur. */
     private fun Element.contentAnchorForImage(imageAlt: String): Element? {
         val alt = norm(cleanTitle(imageAlt))
         val tokens = alt.split(" ")
@@ -335,19 +306,16 @@ class DiziDad : MainAPI() {
             .distinct()
         var current: Element? = parent()
         var depth = 0
-
         while (current != null && depth < 7) {
             val tag = current.tagName().lowercase(Locale.ROOT)
             if (tag in setOf("header", "nav", "footer", "aside", "body", "html")) break
             val marker = (current.id() + " " + current.classNames().joinToString(" ")).lowercase(Locale.ROOT)
             if (Regex("\\b(site[-_]?header|site[-_]?footer|navbar|navigation|main[-_]?menu|mobile[-_]?menu|side[-_]?bar|sidebar|widget|login|register|alphabet|social|user[-_]?menu)\\b").containsMatchIn(marker)) break
-
             val links = current.select("a[href]").filter { link ->
                 val href = link.attr("href").trim()
                 href.isNotBlank() && !href.startsWith("#") && !href.startsWith("javascript") &&
                     absUrl(href).startsWith(mainUrl) && isContentCardUrl(absUrl(href))
             }
-
             val scored = links.mapNotNull { link ->
                 val href = absUrl(link.attr("href"))
                 val linkText = norm(cleanTitle(link.text().ifBlank { link.attr("title") }))
@@ -361,10 +329,8 @@ class DiziDad : MainAPI() {
                 }
                 if (score > 0) link to score else null
             }.sortedByDescending { it.second }
-
             if (scored.isNotEmpty()) return scored.first().first
             if (alt.isBlank() && links.size == 1) return links.first()
-
             current = current.parent()
             depth++
         }
@@ -376,7 +342,6 @@ class DiziDad : MainAPI() {
         val anchors = select("a[href]")
 
         // Önce her gerçek poster img'sini kendi başlık/izleme bağlantısına bağla.
-        // Bu, görsel ve başlık farklı <a> etiketlerinde olduğunda da poster bilgisini kaybetmez.
         for (image in select("img[data-src], img[data-lazy-src], img[data-original], img[data-image], img[data-poster], img[data-lazyloaded], img[src]")) {
             if (maxCards != null && out.size >= maxCards) break
             val poster = image.posterOfElement() ?: continue
@@ -389,12 +354,9 @@ class DiziDad : MainAPI() {
             if (title.isBlank()) continue
             if (!out.containsKey(url)) out[url] = makeCard(title, url, poster)
         }
-        // İstek başına belirlenmiş kart sınırına ulaşıldıysa ikinci geçişin tüm sayfayı
-        // tekrar taramasını önle; ana sayfadaki son bölümler çok uzayabiliyor.
+
         if (maxCards != null && out.size >= maxCards) return out.values.take(maxCards)
 
-        // Yalnızca dizi/film/bölüm bağlantılarının içindeki gerçek görsel taşıyan linkleri
-        // önbelleğe al. Menü ve sayfa üstbilgisindeki logolar asla kart afişi sayılmaz.
         val posterByUrl = LinkedHashMap<String, String>()
         for (link in anchors) {
             if (maxCards != null && out.size >= maxCards) break
@@ -408,7 +370,6 @@ class DiziDad : MainAPI() {
                     "data-lazy-src", "data-srcset", "data-lazy-srcset", "srcset", "style")
                     .any { link.hasAttr(it) }
             if (!hasImageMarker) continue
-
             val poster = link.posterFromCardAncestors(url)
                 ?: posterForTarget(url, link.selectFirst("img[alt]")?.attr("alt") ?: link.text())
             if (!poster.isNullOrBlank()) posterByUrl.putIfAbsent(contentUrlKey(url), poster)
@@ -423,8 +384,6 @@ class DiziDad : MainAPI() {
             val path = url.removePrefix(mainUrl).trim('/')
             if (path.isEmpty() || path.startsWith("wp-") || path.contains("page/")) continue
             if (path.contains("yorum") || path.contains("comment")) continue
-
-            // Başlık linkiyle afiş linki aynı URL'yi taşıyorsa görsel bağlantısından alınan adresi kullan.
             val titleHint = a.selectFirst("img[alt]")?.attr("alt") ?: a.text()
             val poster = posterByUrl[contentUrlKey(url)]
                 ?: a.posterFromCardAncestors(url)
@@ -435,7 +394,6 @@ class DiziDad : MainAPI() {
                     "data-lazy-src", "data-srcset", "data-lazy-srcset", "srcset", "style")
                     .any { a.hasAttr(it) }
             if (!hasImage) continue
-
             val title = cleanTitle(
                 a.selectFirst("img[alt]")?.attr("alt")?.ifBlank { null }
                     ?: a.selectFirst("[title]")?.attr("title")?.ifBlank { null }
@@ -446,13 +404,12 @@ class DiziDad : MainAPI() {
         }
         return out.values.toList()
     }
+
     // ------------------------------------------------------------------ ana sayfa
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
         val url = if (page <= 1) request.data else "${request.data}page/$page/"
         val doc = app.get(url).document
-        // Son bölümlerde ilk etapta 20 kartla sınırla; büyük sayfalardaki fazla
-        // HTML taramasının posterlerin işlenmesini geciktirip geciktirmediğini test et.
         val cardLimit = if (request.data.contains("/tum-bolumler/")) 20 else 30
         val items = doc.cards(cardLimit)
         val hasNext = doc.select("a[href*='/page/${page + 1}/']").isNotEmpty()
@@ -483,8 +440,6 @@ class DiziDad : MainAPI() {
     override suspend fun search(query: String): List<SearchResponse> {
         val q = URLEncoder.encode(query, "UTF-8")
         val nq = norm(query)
-        // HTML sonuçları DiziMom tarzı kart seçicileriyle afişleri de alabilir.
-        // REST araması sadece title/url döndürdüğü için önce afiş taşıyan HTML kartlarını dene.
         val htmlResults = runCatching { app.get("$mainUrl/?s=$q").document.cards() }
             .getOrDefault(emptyList())
             .filter { norm(it.name).contains(nq) }
@@ -511,16 +466,14 @@ class DiziDad : MainAPI() {
         )
         val bodyText = doc.text()
 
-        // Önce görseli kendi başlık/slug'ıyla eşleştir. DiziDAD'ın og:image adresi
-        // bazı sayfalarda var olmayan "tyson-izle.jpg" varyantını verirken gerçek
-        // img[data-src] "tyson.jpg" kullanıyor; OpenGraph bu yüzden son çare olmalı.
+        // Önce görseli kendi başlık/slug'ıyla eşleştir; OpenGraph son çare.
         var poster = doc.posterForTarget(pageUrl, title)
             ?: doc.selectFirst("div.category_image img")?.posterOfElement()
             ?: doc.selectFirst("div.cat-img img")?.posterOfElement()
             ?: doc.selectFirst("div.single-item img")?.posterOfElement()
             ?: doc.select("img[alt], img[data-src], img[data-lazy-src], img[data-original], img[src]")
                 .firstNotNullOfOrNull { image ->
-                    image.posterOfElement()?.takeIf { candidate ->
+                    image.posterOfElement()?.takeIf {
                         val alt = norm(cleanTitle(image.attr("alt")))
                         val titleKey = norm(cleanTitle(title))
                         titleKey.isNotBlank() && alt.isNotBlank() &&
@@ -534,6 +487,7 @@ class DiziDad : MainAPI() {
             )?.attr("content")?.trim()
                 ?.takeIf { it.isNotEmpty() && !it.startsWith("data:") && !it.contains("logo", true) }
                 ?.let { absUrl(it) }
+
         if (poster.isNullOrBlank() || !isUsablePoster(poster)) {
             poster = doc.select("img").firstNotNullOfOrNull { it.posterOfElement() }
                 ?: posterFromMarkup(doc.html(), pageUrl)
@@ -570,8 +524,8 @@ class DiziDad : MainAPI() {
 
         // Bölümler: dizi sayfasındaki "1.Sezon 3.Bölüm" bağlantıları.
         val seen = HashSet<String>()
-        val episodeAnchors = HashMap<String, Element>()
         val raw = ArrayList<Triple<Int, Int, Pair<String, String>>>()
+
         for (a in doc.select("a[href]")) {
             val href = a.attr("href").trim()
             if (href.isEmpty() || !isEpisode(href) || isSeries(href)) continue
@@ -580,7 +534,7 @@ class DiziDad : MainAPI() {
             val text = a.text().trim()
             if (!text.contains("Bölüm", ignoreCase = true)) continue
             if (!seen.add(epUrl)) continue
-            episodeAnchors[epUrl] = a
+
             val season = Regex("(\\d+)\\s*\\.\\s*Sezon", RegexOption.IGNORE_CASE).find(text)
                 ?.groupValues?.get(1)?.toIntOrNull()
                 ?: Regex("-(\\d+)-sezon-").find(epUrl)?.groupValues?.get(1)?.toIntOrNull()
@@ -591,43 +545,24 @@ class DiziDad : MainAPI() {
                 ?: 0
             raw.add(Triple(season, ep, epUrl to text))
         }
-        // Her bölüm için ilk tercih, dizinin kendi afişidir. Özellikle DiziDad bölüm
-        // satırları bazen başlık/izleme bağlantısı taşır ama bölüm görseli taşımaz.
-        // Önce sayfa yükü sırasında elde edilen ana dizi afişini koru.
-        // HTML içindeki ilk uploads URL'si logo/yan içerik olabileceğinden onu ilk tercih yapma.
+
+        // Dizi sayfasındaki bölüm satırlarında görsel yok; bütün bölümlere dizinin afişini ver.
         val seriesPosterFallback = poster?.takeIf { isUsablePoster(it) }
             ?: posterFromMarkup(doc.html(), pageUrl)
             ?: doc.select("img").firstNotNullOfOrNull { it.posterOfElement() }
 
-        // Çok uzun sezon listelerinde poster aramayı tüm bölümlerde yapmak yerine
-        // en yeni 24 bölümü sınırla; önce afişi olan yakın kartlar üzerinde deneme yap.
-        val selectedEpisodes = raw
-            .sortedWith(compareByDescending<Triple<Int, Int, Pair<String, String>>> { it.first }
-                .thenByDescending { it.second })
-            .take(24)
-            .sortedWith(compareBy({ it.first }, { it.second }))
-
-        val episodePosters = HashMap<String, String?>()
-        for ((_, _, pair) in selectedEpisodes) {
-            val anchor = episodeAnchors[pair.first] ?: continue
-            episodePosters[pair.first] = anchor.posterFromCardAncestors(pair.first)
-                ?: anchor.parent()?.posterFromCardAncestors(pair.first)
-                ?: doc.posterForTarget(pair.first, pair.second)
-                ?: posterFromMarkup(doc.html(), pageUrl)
-        }
-
-        // Bölüm listesi çoğu zaman ayrı bölüm görseli barındırmıyor.
-        // Çalıştığı doğrulanan dizi afişini önce ata ki her bölüm kartı görselsiz kalmasın.
         val fallbackEpisodePoster = episodePosterUrl(seriesPosterFallback)
-        val episodes = selectedEpisodes.map { (season, ep, pair) ->
-            newEpisode(pair.first) {
-                this.name = pair.second
-                this.season = season
-                this.episode = ep
-                this.posterUrl = fallbackEpisodePoster
-                    ?: episodePosterUrl(episodePosters[pair.first])
+
+        val episodes = raw
+            .sortedWith(compareBy({ it.first }, { it.second }))
+            .map { (season, ep, pair) ->
+                newEpisode(pair.first) {
+                    this.name = pair.second
+                    this.season = season
+                    this.episode = ep
+                    this.posterUrl = fallbackEpisodePoster
+                }
             }
-        }
 
         return newTvSeriesLoadResponse(title, pageUrl, TvType.TvSeries, episodes) {
             this.posterUrl = fixUrlNull(poster)
@@ -696,13 +631,12 @@ class DiziDad : MainAPI() {
             .ifBlank { url.substringAfter("data=", "") }
             .substringBefore("?").substringBefore("&").substringBefore("#").trim('/')
         if (id.isBlank()) return false
-
         var found = false
 
-        // Altyazılar ve (varsa) sayfaya gömülü akışlar için gömme sayfasını da oku.
         val embedText = runCatching {
             app.get(url, referer = referer).text.replace("\\/", "/")
         }.getOrDefault("")
+
         Regex("""playerjsSubtitle\s*=\s*["']([^"']+)["']""").find(embedText)?.groupValues?.get(1)
             ?.split(",")?.forEach { part ->
                 val lang = part.substringAfter("[", "").substringBefore("]", "").ifBlank { "Türkçe" }
@@ -736,6 +670,7 @@ class DiziDad : MainAPI() {
                 .forEach(callback)
             found = true
         }
+
         if (links.isEmpty()) {
             for (m in mp4Regex.findAll(body + "\n" + embedText).map { it.value }.distinct()) {
                 callback(
