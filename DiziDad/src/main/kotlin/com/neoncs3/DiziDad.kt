@@ -71,6 +71,16 @@ class DiziDad : MainAPI() {
         if (Regex("""(?i)^(?:null|undefined|nan)$""").matches(value)) return true
         if (Regex("""(?i)^.+\.(?:jpe?g|png|webp|gif|avif)$""").matches(value)) return true
         if (Regex("""^\d+(?:\.\d+)?$""").matches(value)) return true
+
+        // Dizidad bazı afişlere içerik adı yerine yalnızca genel alt metni koyuyor.
+        // Bu etiketleri başlık sayma; başlık URL slug'ından türetilebilsin.
+        if (norm(value) in setOf(
+                "yerli dizi", "yabanci dizi", "yerli film", "yabanci film",
+                "dizi afisi", "film afisi", "dizi posteri", "film posteri",
+                "poster", "afis", "dizi", "film"
+            )
+        ) return true
+
         if (!value.any(Char::isWhitespace) &&
             value.length >= 18 &&
             value.any(Char::isDigit) &&
@@ -349,6 +359,23 @@ class DiziDad : MainAPI() {
 
     /** Gerçek img öğesinden başlayıp aynı karttaki içerik bağlantısını bulur. */
     private fun Element.contentAnchorForImage(imageAlt: String): Element? {
+        // Afiş doğrudan içerik bağlantısına sarılmışsa HTML'deki bu bağlantıyı koru.
+        // "Yerli Dizi" gibi genel alt metinleri slug ile eşleştirmeye çalışmak,
+        // doğru bağlantının bulunamamasına ve afişin karttan kopmasına neden oluyordu.
+        var ancestor: Element? = parent()
+        var ancestorDepth = 0
+        while (ancestor != null && ancestorDepth < 5) {
+            if (ancestor.tagName().equals("a", ignoreCase = true)) {
+                val href = ancestor.attr("href").trim()
+                val target = if (href.isNotBlank()) absUrl(href) else ""
+                if (target.startsWith(mainUrl) && isContentCardUrl(target)) return ancestor
+            }
+            val tag = ancestor.tagName().lowercase(Locale.ROOT)
+            if (tag in setOf("header", "nav", "footer", "aside", "body", "html")) break
+            ancestor = ancestor.parent()
+            ancestorDepth++
+        }
+
         val alt = norm(cleanTitle(imageAlt))
         val tokens = alt.split(" ")
             .filter { it.length >= 3 && it !in setOf("izle", "sezon", "bolum", "dizi", "film", "turkce", "dublaj", "altyazili") }
