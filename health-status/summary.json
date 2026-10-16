@@ -11,7 +11,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://asyafilmizle.com",
-        "bytes": 5613,
+        "bytes": 5656,
         "title": "Just a moment...",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -69,7 +69,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://www.hdfilmdiziizle.com",
-        "bytes": 5640,
+        "bytes": 5662,
         "title": "Just a moment...",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -190,6 +190,19 @@
       "domain": "https://www.dizidad.com",
       "configured_domain": "https://www.dizidad.com",
       "live_domain": "https://www.dizidad.com",
+      "live": {
+        "ok": false,
+        "anti_bot_blocked": false,
+        "error": "NeonMainAPI provider source bulunamadı"
+      },
+      "pipelines": {}
+    },
+    {
+      "provider": "DiziDadyedek",
+      "status": "yellow",
+      "domain": "",
+      "configured_domain": "",
+      "live_domain": "",
       "live": {
         "ok": false,
         "anti_bot_blocked": false,
@@ -444,6 +457,6 @@
     }
   ],
   "green": 9,
-  "yellow": 9,
+  "yellow": 10,
   "red": 0
 }
