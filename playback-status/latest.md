@@ -2,7 +2,7 @@
 
 **PASS:** 0  **BLOCKED:** 0  **FAIL:** 1
 
-**Hata:** Playback raporu alınamadı ve logcat içinde NEON_PLAYBACK sonucu bulunamadı. Tanı: > Task :app:compilePrereleaseDebugAndroidTestKotlin FAILED | e: file:///home/runner/work/neoncs33/neoncs33/cloudstream/app/src/androidTest/java/com/lagradost/cloudstream3/NeonPlaybackSmokeTest.kt:647:42 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'List<SearchResponse>?'. | FAILURE: Build failed with an exception. | Execution failed for task ':app:compilePrereleaseDebugAndroidTestKotlin'. | > Compilation error. See log for more details | Caused by: org.jetbrains.kotlin.gradle.tasks.CompilationErrorException: Compilation error. See log for more details
+**Hata:** Playback raporu alınamadı ve logcat içinde NEON_PLAYBACK sonucu bulunamadı
 
 | Provider | Durum | Link | Position | Sorgu | İçerik | Hata |
 |---|---|---:|---:|---|---|---|
