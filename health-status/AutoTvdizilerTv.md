@@ -1,14 +1,14 @@
-# 🔴 AutoTvdizilerTv
+# 🟢 AutoTvdizilerTv
 
 Kodda kayıtlı domain: https://tvdiziler.tv
 
 Son HTTP URL: https://tvdiziler.tv
 
-HTTP: ❌ 502
+HTTP: ✅ 200
 
 Anti-bot engeli: hayır
 
-Sayfa başlığı: 502 Bad Gateway
+Sayfa başlığı: Dizi izle, Yerli ve Full HD Diziler, Dizi Seyret | TvDiziler.tv
 
 Canlı medya ipucu: 0 media URL, 0 iframe
 
