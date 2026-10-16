@@ -587,6 +587,14 @@ class NeonPlaybackSmokeTest {
             .take(4)
             .joinToString { it.name ?: "bölüm ${it.episode}" }
 
+        // Regression fixture: the old broad filter rejected this valid poster because the
+        // title's filename contains the word "avatar".
+        val filterFixture = runCatching {
+            api.load("https://www.dizidad.com/diziler/avatar-seven-havens-izle/")
+        }.getOrNull()
+        val filterFixturePoster = (filterFixture as? TvSeriesLoadResponse)
+            ?.posterUrl?.trim()?.takeIf { it.isNotBlank() }
+
         // As well as the detail page, query the actual catalogue sections shown in CloudStream.
         // This catches a blank-homepage poster regression even when episode fallback posters exist.
         val mainPageStats = mutableListOf<String>()
@@ -636,6 +644,9 @@ class NeonPlaybackSmokeTest {
         mainPageSamples.take(4).forEach { (section, title, poster) ->
             imageSamples.add(Triple("$section / $title", poster, true))
         }
+        if (!filterFixturePoster.isNullOrBlank()) {
+            imageSamples.add(Triple("Filtre kontrolü / Avatar: Seven Havens", filterFixturePoster, true))
+        }
 
         var downloadedEpisodes = 0
         var downloadedMainPage = 0
@@ -680,22 +691,26 @@ class NeonPlaybackSmokeTest {
         val episodesOk = episodePosterCount == episodes.size &&
             expectedEpisodeImages == episodeSamples.size &&
             downloadedEpisodes == expectedEpisodeImages
+        val filterFixtureOk = !filterFixturePoster.isNullOrBlank()
         val mainPageOk = loadedMainPages >= 3 &&
             mainPageItemCount > 0 &&
             mainPagePosterCount == mainPageItemCount &&
-            downloadedMainPage == expectedMainPageImages
+            filterFixtureOk &&
+            downloadedMainPage == expectedMainPageImages + if (filterFixtureOk) 1 else 0
         val ok = episodesOk && mainPageOk
         val item = buildString {
             append("${episodes.size} bölüm; bölüm posterUrl=${episodePosterCount}/${episodes.size}; ")
             append("Coil bölüm=${downloadedEpisodes}/${expectedEpisodeImages}; ")
             append("ana sayfa posterUrl=${mainPagePosterCount}/${mainPageItemCount} (${loadedMainPages}/${testedPages.size} kategori); ")
-            append("Coil ana sayfa=${downloadedMainPage}/${expectedMainPageImages}")
+            append("filtre AvatarPoster=${filterFixtureOk}; ")
+            append("Coil ana sayfa=${downloadedMainPage}/${expectedMainPageImages + if (filterFixtureOk) 1 else 0}")
         }
         val error = if (ok) null else buildString {
             if (episodePosterCount != episodes.size) {
                 append("Bölüm afişi eksik: ${missingExamples.ifBlank { "isim alınamadı" }}. ")
             }
             if (mainPageIssues.isNotEmpty()) append("Ana sayfa afiş eksikleri: ${mainPageIssues.joinToString(", ")}. ")
+            if (!filterFixtureOk) append("Filtre kontrolü başarısız: Avatar: Seven Havens afişi LoadResponse içinde yok. ")
             if (loadedMainPages < 3) append("Yeterli ana sayfa kategorisi yüklenemedi: ${mainPageStats.joinToString("; ")}. ")
             if (fetchDetails.isNotEmpty()) append("Görsel istekleri: ${fetchDetails.joinToString("; ")}")
         }.take(1200)
