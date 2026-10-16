@@ -60,7 +60,9 @@ class DiziDadyedek : MainAPI() {
         "$mainUrl/yerli-filmler/" to "Yerli Filmler",
         "$mainUrl/turkce-dublaj-filmler/" to "Türkçe Dublajlı Filmler",
         "$mainUrl/turkce-altyazili-filmler/" to "Türkçe Altyazılı Filmler",
-        "$mainUrl/netflix-filmleri-izle/" to "Netflix Filmleri"
+        "$mainUrl/film-tur/netflix-filmleri/" to "Netflix Filmleri",
+        "$mainUrl/film-tur/2026-filmleri-izle/" to "2026 Filmleri",
+        "$mainUrl/film-tur/2025-filmleri/" to "2025 Filmleri"
     )
 
     private data class EpNo(val season: Int, val episode: Int)
@@ -85,9 +87,11 @@ class DiziDadyedek : MainAPI() {
         "/tv-program-bolumleri/", "/anime-dizilerin-bolumleri/",
         "/tum-filmler/", "/yabanci-filmler-izle/", "/yerli-filmler/",
         "/turkce-dublaj-filmler/", "/turkce-altyazili-filmler/",
-        "/netflix-filmleri-izle/", "/dizi-izle/", "/film-izle/",
-        "/dizi-takvimi/", "/yardim/", "/iletisim/", "/mobil-apk/",
-        "/uye-ol/", "/uye-girisi/", "/dizi-turu/", "/film-kategorileri/"
+        "/netflix-filmleri-izle/", "/film-tur/netflix-filmleri/",
+        "/film-tur/2026-filmleri-izle/", "/film-tur/2025-filmleri/",
+        "/dizi-izle/", "/film-izle/", "/dizi-takvimi/", "/yardim/",
+        "/iletisim/", "/mobil-apk/", "/uye-ol/", "/uye-girisi/",
+        "/dizi-turu/", "/film-kategorileri/"
     )
 
     private fun norm(value: String): String = value.lowercase(Locale("tr"))
@@ -252,11 +256,15 @@ class DiziDadyedek : MainAPI() {
         return null
     }
 
-    private fun posterForDocument(doc: Document, url: String, title: String): String? {
+    private fun matchingPosterFromDocument(doc: Document, url: String, title: String): String? {
         val images = candidates(doc)
-        images.maxByOrNull { scorePoster(it.first, it.second, url, title) }
+        return images.maxByOrNull { scorePoster(it.first, it.second, url, title) }
             ?.takeIf { scorePoster(it.first, it.second, url, title) >= 4 }
-            ?.let { return it.second }
+            ?.second
+    }
+
+    private fun posterForDocument(doc: Document, url: String, title: String): String? {
+        matchingPosterFromDocument(doc, url, title)?.let { return it }
 
         val og = doc.selectFirst(
             "meta[property=og:image], meta[property=og:image:secure_url], meta[name=twitter:image]"
@@ -296,7 +304,7 @@ class DiziDadyedek : MainAPI() {
                 poster = posterNearLink(link, url, title)
                 if (!poster.isNullOrBlank()) break
             }
-            if (poster.isNullOrBlank()) poster = posterForDocument(doc, url, title)
+            if (poster.isNullOrBlank()) poster = matchingPosterFromDocument(doc, url, title)
 
             output[key] = if (isSeriesUrl(url) || isEpisodeUrl(url)) {
                 newTvSeriesSearchResponse(title, url, TvType.TvSeries) {
