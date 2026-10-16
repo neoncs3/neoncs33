@@ -169,10 +169,10 @@
     },
     {
         "iconUrl": "https://www.google.com/s2/favicons?domain=dizidad.com&sz=%size%",
-        "fileHash": "sha256-68775bf1bfbf14131e335c67d28378f6fadc129d9e0281c467cb091a4db389e5",
+        "fileHash": "sha256-140c474bf3b87d2e7c59096adc66f290c2aafef0bbce3de2e34209e0ba899946",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 73775,
+        "fileSize": 73903,
         "status": 1,
         "language": "tr",
         "authors": [
