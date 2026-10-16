@@ -285,7 +285,18 @@ class DiziDad : MainAPI() {
     private val posterBearingSelector =
         "img, [data-poster], [data-poster-url], [data-image], [data-bg], [data-background], [data-background-image], [data-src], [data-original], [data-lazy-src], [data-lazy-background], [data-srcset], [data-lazy-srcset], [srcset], [style*=background]"
 
-    private fun makeCard(title: String, url: String, poster: String?): SearchResponse =
+    // GEÇİCİ TANI: true iken kart adının başına afiş dosya adı (yoksa NULL) yazılır.
+    // Sorun çözülünce false yap.
+    private val debugPoster = true
+
+    private fun makeCard(rawTitle: String, url: String, poster: String?): SearchResponse {
+        val title = if (debugPoster) {
+            "[" + (poster?.substringBefore("?")?.substringAfterLast('/')?.take(22) ?: "NULL") + "] " + rawTitle
+        } else rawTitle
+        return makeCardInternal(title, url, poster)
+    }
+
+    private fun makeCardInternal(title: String, url: String, poster: String?): SearchResponse =
         if (isSeries(url) || isEpisode(url)) {
             newTvSeriesSearchResponse(title, url, TvType.TvSeries) {
                 this.posterUrl = poster
@@ -337,6 +348,30 @@ class DiziDad : MainAPI() {
         return null
     }
 
+    /**
+     * Öznitelik adı ne olursa olsun (data-src, data-litespeed-src, srcset...) kartın ham HTML'inde
+     * geçen wp-content/uploads görsel adresini bulur. Yalnızca tek içerik bağlantısı barındıran
+     * küçük kapsayıcılarda arar ki komşu kartın afişi alınmasın.
+     */
+    private fun posterNearAnchor(anchor: Element, targetUrl: String): String? {
+        var current: Element? = anchor
+        var depth = 0
+        while (current != null && depth < 5) {
+            val tag = current.tagName().lowercase(Locale.ROOT)
+            if (tag == "body" || tag == "html") return null
+            val keys = current.select("a[href]")
+                .map { absUrl(it.attr("href").trim()) }
+                .filter { it.startsWith(mainUrl) && isContentCardUrl(it) }
+                .map { contentUrlKey(it) }
+                .distinct()
+            if (keys.size > 1) return null
+            posterFromMarkup(current.outerHtml(), targetUrl)?.let { return it }
+            current = current.parent()
+            depth++
+        }
+        return null
+    }
+
     private fun Document.cards(maxCards: Int? = null): List<SearchResponse> {
         val out = LinkedHashMap<String, SearchResponse>()
         val anchors = select("a[href]")
@@ -372,6 +407,7 @@ class DiziDad : MainAPI() {
             if (!hasImageMarker) continue
             val poster = link.posterFromCardAncestors(url)
                 ?: posterForTarget(url, link.selectFirst("img[alt]")?.attr("alt") ?: link.text())
+                ?: posterNearAnchor(link, url)
             if (!poster.isNullOrBlank()) posterByUrl.putIfAbsent(contentUrlKey(url), poster)
         }
 
@@ -388,6 +424,7 @@ class DiziDad : MainAPI() {
             val poster = posterByUrl[contentUrlKey(url)]
                 ?: a.posterFromCardAncestors(url)
                 ?: posterForTarget(url, titleHint)
+                ?: posterNearAnchor(a, url)
             val hasImage = !poster.isNullOrBlank() || a.selectFirst(posterBearingSelector) != null ||
                 listOf("data-poster", "data-poster-url", "data-image", "data-bg",
                     "data-background", "data-background-image", "data-src", "data-original",
@@ -429,16 +466,28 @@ class DiziDad : MainAPI() {
             "$mainUrl/wp-json/wp/v2/search?search=$q&per_page=30&_fields=title,url"
         ).text
         val arr = org.json.JSONArray(text)
-        val out = ArrayList<SearchResponse>()
+        val found = ArrayList<Pair<String, String>>()
         for (i in 0 until arr.length()) {
             val o = arr.getJSONObject(i)
             val url = o.optString("url")
             if (!url.startsWith(mainUrl) || isEpisode(url)) continue
             val title = cleanTitle(Jsoup.parse(o.optString("title")).text())
             if (title.isBlank()) continue
-            out.add(makeCard(title, url, null))
+            found.add(title to url)
         }
-        return out.distinctBy { it.url }
+        // REST sonucu afiş vermez; her sonucun sayfasından afişi çek (en fazla 12).
+        return found.distinctBy { it.second }.take(12).amap { (title, url) ->
+            val poster = runCatching { posterFromPage(url) }.getOrNull()
+            makeCard(title, url, poster)
+        }
+    }
+
+    private suspend fun posterFromPage(url: String): String? {
+        val d = app.get(url).document
+        return d.posterForTarget(url, d.selectFirst("h1")?.text())
+            ?: d.selectFirst("meta[property=og:image]")?.attr("content")?.trim()
+                ?.takeIf { isUsablePoster(it) }
+                ?.let { absUrl(it) }
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
