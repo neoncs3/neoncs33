@@ -582,21 +582,67 @@ class NeonPlaybackSmokeTest {
             return Result(target.name, "FAIL", item = "0 bölüm", error = "Dizi yükleniyor ama bölüm listesi boş")
         }
 
-        val withPoster = episodes.count { !it.posterUrl.isNullOrBlank() }
+        val episodePosterCount = episodes.count { !it.posterUrl.isNullOrBlank() }
         val missingExamples = episodes.filter { it.posterUrl.isNullOrBlank() }
             .take(4)
             .joinToString { it.name ?: "bölüm ${it.episode}" }
 
-        // CloudStream ImageModuleCoil sets this same application User-Agent for image requests.
-        val cloudStreamUserAgent =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
-        val sample = episodes.take(4)
-        var downloaded = 0
-        val fetchDetails = mutableListOf<String>()
-        for (episode in sample) {
+        // As well as the detail page, query the actual catalogue sections shown in CloudStream.
+        // This catches a blank-homepage poster regression even when episode fallback posters exist.
+        val mainPageStats = mutableListOf<String>()
+        val mainPageIssues = mutableListOf<String>()
+        val mainPageSamples = mutableListOf<Triple<String, String, String>>()
+        var mainPageItemCount = 0
+        var mainPagePosterCount = 0
+        var loadedMainPages = 0
+        val testedPages = api.mainPage.take(6)
+        for (mainPage in testedPages) {
+            val cards = runCatching {
+                api.getMainPage(
+                    1,
+                    MainPageRequest(mainPage.name, mainPage.data, mainPage.horizontalImages),
+                )?.items?.flatMap { it.list }.orEmpty()
+            }.getOrDefault(emptyList())
+
+            if (cards.isEmpty()) {
+                mainPageStats.add("${mainPage.name}: kart yok")
+                continue
+            }
+
+            loadedMainPages++
+            val withPoster = cards.filter { !it.posterUrl.isNullOrBlank() }
+            mainPageItemCount += cards.size
+            mainPagePosterCount += withPoster.size
+            mainPageStats.add("${mainPage.name}: posterUrl=${withPoster.size}/${cards.size}")
+            if (withPoster.size != cards.size) {
+                mainPageIssues.add("${mainPage.name} ${withPoster.size}/${cards.size}")
+            }
+            withPoster.firstOrNull()?.let { card ->
+                mainPageSamples.add(Triple(mainPage.name, card.name, card.posterUrl!!))
+            }
+        }
+
+        val episodeSamples = episodes.take(4)
+        val imageSamples = mutableListOf<Triple<String, String, Boolean>>()
+        for (episode in episodeSamples) {
             val poster = episode.posterUrl?.trim().orEmpty()
+            val label = episode.name ?: "bölüm ${episode.episode}"
             if (poster.isBlank()) {
-                fetchDetails.add("${episode.name ?: episode.episode}: URL yok")
+                imageSamples.add(Triple(label, "", false))
+            } else {
+                imageSamples.add(Triple(label, poster, false))
+            }
+        }
+        mainPageSamples.take(4).forEach { (section, title, poster) ->
+            imageSamples.add(Triple("$section / $title", poster, true))
+        }
+
+        var downloadedEpisodes = 0
+        var downloadedMainPage = 0
+        val fetchDetails = mutableListOf<String>()
+        for ((label, poster, isMainPage) in imageSamples) {
+            if (poster.isBlank()) {
+                fetchDetails.add("$label: posterUrl yok")
                 continue
             }
 
@@ -605,43 +651,63 @@ class NeonPlaybackSmokeTest {
                     .data(poster)
                     .httpHeaders(NetworkHeaders.Builder().also { headerBuilder ->
                         headerBuilder["User-Agent"] = USER_AGENT
+                        headerBuilder["Referer"] = "https://www.dizidad.com/"
                     }.build())
                     .build()
                 SingletonImageLoader.get(context).execute(request)
             }.getOrElse {
-                fetchDetails.add("${episode.name ?: episode.episode}: Coil hata verdi: ${err(it)} (${safeUrlForLog(poster)})")
-                Log.w("NEON_POSTER", "episode=${episode.name} Coil exception=${err(it)} url=${safeUrlForLog(poster)}")
+                fetchDetails.add("$label: Coil hata verdi: ${err(it)} (${safeUrlForLog(poster)})")
+                Log.w("NEON_POSTER", "item=$label Coil exception=${err(it)} url=${safeUrlForLog(poster)}")
                 null
             }
             when (result) {
                 is SuccessResult -> {
-                    downloaded++
-                    Log.d("NEON_POSTER", "episode=${episode.name} coil=SUCCESS url=${safeUrlForLog(poster)}")
+                    if (isMainPage) downloadedMainPage++ else downloadedEpisodes++
+                    Log.d("NEON_POSTER", "item=$label coil=SUCCESS url=${safeUrlForLog(poster)}")
                 }
                 is ErrorResult -> {
                     val detail = "Coil decode/istek hatası: ${err(result.throwable)}"
-                    fetchDetails.add("${episode.name ?: episode.episode}: $detail (${safeUrlForLog(poster)})")
-                    Log.w("NEON_POSTER", "episode=${episode.name} coil=ERROR error=${err(result.throwable)} url=${safeUrlForLog(poster)}")
+                    fetchDetails.add("$label: $detail (${safeUrlForLog(poster)})")
+                    Log.w("NEON_POSTER", "item=$label coil=ERROR error=${err(result.throwable)} url=${safeUrlForLog(poster)}")
                 }
                 null -> Unit
-                else -> {
-                    fetchDetails.add("${episode.name ?: episode.episode}: Beklenmeyen Coil sonucu (${safeUrlForLog(poster)})")
-                }
+                else -> fetchDetails.add("$label: Beklenmeyen Coil sonucu (${safeUrlForLog(poster)})")
             }
         }
 
-        val ok = withPoster == episodes.size && downloaded == sample.size
-        val item = "${episodes.size} bölüm; posterUrl=${withPoster}/${episodes.size}; örnek indirme=${downloaded}/${sample.size}"
+        val expectedEpisodeImages = episodeSamples.count { !it.posterUrl.isNullOrBlank() }
+        val expectedMainPageImages = mainPageSamples.take(4).size
+        val episodesOk = episodePosterCount == episodes.size &&
+            expectedEpisodeImages == episodeSamples.size &&
+            downloadedEpisodes == expectedEpisodeImages
+        val mainPageOk = loadedMainPages >= 3 &&
+            mainPageItemCount > 0 &&
+            mainPagePosterCount == mainPageItemCount &&
+            downloadedMainPage == expectedMainPageImages
+        val ok = episodesOk && mainPageOk
+        val item = buildString {
+            append("${episodes.size} bölüm; bölüm posterUrl=${episodePosterCount}/${episodes.size}; ")
+            append("Coil bölüm=${downloadedEpisodes}/${expectedEpisodeImages}; ")
+            append("ana sayfa posterUrl=${mainPagePosterCount}/${mainPageItemCount} (${loadedMainPages}/${testedPages.size} kategori); ")
+            append("Coil ana sayfa=${downloadedMainPage}/${expectedMainPageImages}")
+        }
         val error = if (ok) null else buildString {
-            if (withPoster != episodes.size) append("Afiş URL'si eksik olanlar: ${missingExamples.ifBlank { "isim alınamadı" }}. ")
+            if (episodePosterCount != episodes.size) {
+                append("Bölüm afişi eksik: ${missingExamples.ifBlank { "isim alınamadı" }}. ")
+            }
+            if (mainPageIssues.isNotEmpty()) append("Ana sayfa afiş eksikleri: ${mainPageIssues.joinToString(", ")}. ")
+            if (loadedMainPages < 3) append("Yeterli ana sayfa kategorisi yüklenemedi: ${mainPageStats.joinToString("; ")}. ")
             if (fetchDetails.isNotEmpty()) append("Görsel istekleri: ${fetchDetails.joinToString("; ")}")
         }.take(1200)
-        Log.d("NEON_POSTER", "provider=${target.name} $item result=${if (ok) "PASS" else "FAIL"}")
+        Log.d(
+            "NEON_POSTER",
+            "provider=${target.name} $item categories=[${mainPageStats.joinToString("; ")}] result=${if (ok) "PASS" else "FAIL"}",
+        )
         return Result(
             provider = target.name,
             status = if (ok) "PASS" else "FAIL",
             item = item,
-            links = downloaded,
+            links = downloadedEpisodes + downloadedMainPage,
             error = error,
         )
     }
