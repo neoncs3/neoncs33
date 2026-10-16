@@ -238,6 +238,15 @@ class NeonPlaybackSmokeTest {
         ).any(v::contains)
     }
 
+    private fun isTechnicalPosterTitle(raw: String): Boolean {
+        val value = raw.trim()
+        return Regex("""(?i)^\\s*\\[?\\s*null\\b""").containsMatchIn(value) ||
+            Regex("""(?i)^\\s*\\[[^\\]]+\\.(?:jpe?g|png|webp|gif|avif)\\]\\s*""").containsMatchIn(value) ||
+            Regex("""(?i)(?:^|\\s)[^\\s/]+\\.(?:jpe?g|png|webp|gif|avif)(?:\\s|$)""").containsMatchIn(value) ||
+            Regex("""(?i)^\\s*\\[[a-z0-9_-]{18,}\\]\\s*""").containsMatchIn(value) ||
+            Regex("""(?i)^[a-z0-9_-]{18,}$""").matches(value)
+    }
+
     private fun safeUrlForLog(raw: String): String {
         return runCatching {
             val uri = URI(raw)
@@ -600,6 +609,7 @@ class NeonPlaybackSmokeTest {
         val mainPageStats = mutableListOf<String>()
         val mainPageIssues = mutableListOf<String>()
         val mainPageSamples = mutableListOf<Triple<String, String, String>>()
+        val observedTitles = mutableListOf<String>()
         var mainPageItemCount = 0
         var mainPagePosterCount = 0
         var loadedMainPages = 0
@@ -617,6 +627,7 @@ class NeonPlaybackSmokeTest {
                 continue
             }
 
+            observedTitles.addAll(cards.map { it.name })
             loadedMainPages++
             val withPoster = cards.filter { !it.posterUrl.isNullOrBlank() }
             mainPageItemCount += cards.size
@@ -629,6 +640,12 @@ class NeonPlaybackSmokeTest {
                 mainPageSamples.add(Triple(mainPage.name, card.name, card.posterUrl!!))
             }
         }
+
+        // Search results can currently expose image filenames or cache IDs as the title.
+        val searchCards = runCatching { api.search("Animal") }.getOrDefault(emptyList())
+        observedTitles.addAll(searchCards.map { it.name })
+        observedTitles.add(load.name)
+        val badTitles = observedTitles.filter { isTechnicalPosterTitle(it) }.distinct().take(8)
 
         val episodeSamples = episodes.take(4)
         val imageSamples = mutableListOf<Triple<String, String, Boolean>>()
@@ -696,6 +713,7 @@ class NeonPlaybackSmokeTest {
             mainPageItemCount > 0 &&
             mainPagePosterCount == mainPageItemCount &&
             filterFixtureOk &&
+            badTitles.isEmpty() &&
             downloadedMainPage == expectedMainPageImages + if (filterFixtureOk) 1 else 0
         val ok = episodesOk && mainPageOk
         val item = buildString {
@@ -703,6 +721,7 @@ class NeonPlaybackSmokeTest {
             append("Coil bölüm=${downloadedEpisodes}/${expectedEpisodeImages}; ")
             append("ana sayfa posterUrl=${mainPagePosterCount}/${mainPageItemCount} (${loadedMainPages}/${testedPages.size} kategori); ")
             append("filtre AvatarPoster=${filterFixtureOk}; ")
+            append("bozukBaşlık=${badTitles.size}; ")
             append("Coil ana sayfa=${downloadedMainPage}/${expectedMainPageImages + if (filterFixtureOk) 1 else 0}")
         }
         val error = if (ok) null else buildString {
@@ -711,6 +730,7 @@ class NeonPlaybackSmokeTest {
             }
             if (mainPageIssues.isNotEmpty()) append("Ana sayfa afiş eksikleri: ${mainPageIssues.joinToString(", ")}. ")
             if (!filterFixtureOk) append("Filtre kontrolü başarısız: Avatar: Seven Havens afişi LoadResponse içinde yok. ")
+            if (badTitles.isNotEmpty()) append("Dosya adı/NULL/kimlik olarak dönen başlıklar: ${badTitles.joinToString("; ")}. ")
             if (loadedMainPages < 3) append("Yeterli ana sayfa kategorisi yüklenemedi: ${mainPageStats.joinToString("; ")}. ")
             if (fetchDetails.isNotEmpty()) append("Görsel istekleri: ${fetchDetails.joinToString("; ")}")
         }.take(1200)
