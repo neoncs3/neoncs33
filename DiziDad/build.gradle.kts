@@ -1,8 +1,8 @@
 // CloudStream updates require a higher version number for existing installations.
-version = 21
+version = 22
 
 cloudstream {
-    description = "DiziDad - yerli, yabancı ve eski diziler"
+    description = "DiziDAD — tüm diziler, filmler ve eksiksiz sezon/bölüm listeleri"
     authors = listOf("neoncs3")
 
     /**
@@ -14,7 +14,7 @@ cloudstream {
      */
     status = 1
 
-    tvTypes = listOf("TvSeries")
+    tvTypes = listOf("Movie", "TvSeries")
     requiresResources = false
     language = "tr"
 
