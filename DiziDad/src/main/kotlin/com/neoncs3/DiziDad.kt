@@ -463,6 +463,7 @@ class DiziDad : MainAPI() {
             "DiziDad",
             "MAIN ${request.name}: items=${items.size} withPoster=${items.count { !it.posterUrl.isNullOrBlank() }} first=${items.firstOrNull()?.posterUrl}"
         )
+        fillMissingPosters(items)
         val hasNext = doc.select("a[href*='/page/${page + 1}/']").isNotEmpty()
         return newHomePageResponse(request.name, items, hasNext)
     }
@@ -492,6 +493,16 @@ class DiziDad : MainAPI() {
         }
     }
 
+    /** Listede afişi olmayan kartlara (en fazla 10) kendi sayfasından afiş doldurur. */
+    private suspend fun fillMissingPosters(items: List<SearchResponse>) {
+        items.filter { it.posterUrl.isNullOrBlank() }.take(10).amap { item ->
+            val p = runCatching { posterFromPage(item.url) }.getOrNull()
+            if (!p.isNullOrBlank()) {
+                item.posterUrl = if (useImageProxy) proxied(p) else p
+            }
+        }
+    }
+
     private suspend fun posterFromPage(url: String): String? {
         val d = app.get(url).document
         return d.posterForTarget(url, d.selectFirst("h1")?.text())
@@ -506,7 +517,10 @@ class DiziDad : MainAPI() {
         val htmlResults = runCatching { app.get("$mainUrl/?s=$q").document.cards() }
             .getOrDefault(emptyList())
             .filter { norm(it.name).contains(nq) }
-        if (htmlResults.isNotEmpty()) return htmlResults
+        if (htmlResults.isNotEmpty()) {
+            fillMissingPosters(htmlResults)
+            return htmlResults
+        }
         return runCatching { restSearch(query) }.getOrDefault(emptyList())
     }
 
