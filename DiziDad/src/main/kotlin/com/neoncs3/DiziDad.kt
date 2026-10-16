@@ -4,758 +4,555 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.*
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.net.URI
 import java.net.URLEncoder
 import java.util.Locale
 
+/**
+ * Bağımsız DiziDAD katalog sağlayıcısı.
+ * Afişler karttan ayrıştırılır; data-src, src'den önce okunur ve genel alt metin
+ * içerik başlığı sayılmaz. Video çıkarımı eski, çalışan sağlayıcıdan taşınmıştır.
+ */
 class DiziDad : MainAPI() {
-
     override var mainUrl = "https://www.dizidad.com"
-    override var name = "DiziDAD"
+    override var name = "DiziDad"
+    override var lang = "tr"
+    override val hasMainPage = true
+    override val hasQuickSearch = true
+    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
+    override var sequentialMainPage = true
 
-    // DiziDAD medyası hotlink kontrolü yaparsa CloudStream görsel isteğine site referer'ını ver.
-    private val posterRequestHeaders = mapOf(
+    private val browserHeaders = mapOf(
+        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer" to "$mainUrl/"
+    )
+    private val posterHeaders = mapOf(
         "Referer" to "$mainUrl/",
-        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        "User-Agent" to browserHeaders.getValue("User-Agent")
     )
 
-    // Kaynak görsel doğrudan HTTP 200 ve geçerli WebP içeriği döndürüyor; proxy kullanma.
-    private fun episodePosterUrl(url: String?): String? =
-        url?.trim()?.takeIf { isUsablePoster(it) }?.let { absUrl(it) }
-
-    override val hasMainPage = true
-    override var lang = "tr"
-    override val hasQuickSearch = false
-    override val supportedTypes = setOf(TvType.TvSeries, TvType.Movie)
-
     override val mainPage = mainPageOf(
+        "$mainUrl/" to "Son Eklenenler",
+        "$mainUrl/dizi-arsivi/" to "Dizi Arşivi",
+        "$mainUrl/yerli-dizi-izle/" to "Yerli Diziler",
+        "$mainUrl/yabanci-dizi-izle/" to "Yabancı Diziler",
+        "$mainUrl/netflix-dizileri-izle/" to "Netflix Dizileri",
+        "$mainUrl/turkce-dublaj-diziler-hd/" to "Dublajlı Diziler",
+        "$mainUrl/anime-izle/" to "Animeler",
+        "$mainUrl/kore-dizileri-izle-hd/" to "Kore Dizileri",
+        "$mainUrl/full-hd-hint-dizileri-izle/" to "Hint Dizileri",
+        "$mainUrl/pakistan-dizileri-izle/" to "Pakistan Dizileri",
+        "$mainUrl/tv-programlari-izle/" to "TV Programları",
+        "$mainUrl/tum-bolumler/" to "Son Bölümler",
+        "$mainUrl/yerli-dizi-bolumleri/" to "Yerli Dizi Bölümleri",
+        "$mainUrl/turkce-dublaj-bolumler-hd/" to "Dublajlı Bölümler",
+        "$mainUrl/yabanci-dizilerin-son-bolumleri/" to "Yabancı Dizi Bölümleri",
+        "$mainUrl/kore-dizilerinden-son-bolumler/" to "Kore Dizi Bölümleri",
+        "$mainUrl/hint-dizilerinden-son-bolumler/" to "Hint Dizi Bölümleri",
+        "$mainUrl/pakistan-dizilerinden-son-bolumler/" to "Pakistan Dizi Bölümleri",
+        "$mainUrl/tv-program-bolumleri/" to "TV Program Bölümleri",
+        "$mainUrl/anime-dizilerin-bolumleri/" to "Anime Bölümleri",
         "$mainUrl/tum-filmler/" to "Filmler",
         "$mainUrl/yabanci-filmler-izle/" to "Yabancı Filmler",
         "$mainUrl/yerli-filmler/" to "Yerli Filmler",
-        "$mainUrl/turkce-dublaj-filmler/" to "Dublajlı Filmler",
-        "$mainUrl/turkce-altyazili-filmler/" to "Altyazılı Filmler"
+        "$mainUrl/turkce-dublaj-filmler/" to "Türkçe Dublajlı Filmler",
+        "$mainUrl/turkce-altyazili-filmler/" to "Türkçe Altyazılı Filmler",
+        "$mainUrl/film-tur/netflix-filmleri/" to "Netflix Filmleri",
+        "$mainUrl/film-tur/2026-filmleri-izle/" to "2026 Filmleri",
+        "$mainUrl/film-tur/2025-filmleri/" to "2025 Filmleri"
     )
 
-    // ------------------------------------------------------------------ yardımcılar
+    private data class EpNo(val season: Int, val episode: Int)
+    private val episodeUrlRegex = Regex("""-(\d+)-bolum(?:-|/|$)""", RegexOption.IGNORE_CASE)
+    private val seasonUrlRegex = Regex("""-(\d+)-sezon-""", RegexOption.IGNORE_CASE)
+    private val episodeTextRegex = Regex("""(\d+)\s*\.?\s*Bölüm""", RegexOption.IGNORE_CASE)
+    private val seasonTextRegex = Regex("""(\d+)\s*\.?\s*Sezon""", RegexOption.IGNORE_CASE)
+    private val genericLabels = setOf(
+        "yerli dizi", "yabanci dizi", "yerli film", "yabanci film",
+        "turkce dublaj", "turkce altyazi", "dizi", "film", "poster", "afis",
+        "dizi afisi", "film afisi", "dizi posteri", "film posteri",
+        "dizidad", "dizidad avatar"
+    )
+    private val listingPaths = setOf(
+        "/", "/dizi-arsivi/", "/yerli-dizi-izle/", "/yabanci-dizi-izle/",
+        "/netflix-dizileri-izle/", "/turkce-dublaj-diziler-hd/", "/anime-izle/",
+        "/kore-dizileri-izle-hd/", "/full-hd-hint-dizileri-izle/",
+        "/pakistan-dizileri-izle/", "/tv-programlari-izle/", "/tum-bolumler/",
+        "/yerli-dizi-bolumleri/", "/turkce-dublaj-bolumler-hd/",
+        "/yabanci-dizilerin-son-bolumleri/", "/kore-dizilerinden-son-bolumler/",
+        "/hint-dizilerinden-son-bolumler/", "/pakistan-dizilerinden-son-bolumler/",
+        "/tv-program-bolumleri/", "/anime-dizilerin-bolumleri/",
+        "/tum-filmler/", "/yabanci-filmler-izle/", "/yerli-filmler/",
+        "/turkce-dublaj-filmler/", "/turkce-altyazili-filmler/",
+        "/netflix-filmleri-izle/", "/film-tur/netflix-filmleri/",
+        "/film-tur/2026-filmleri-izle/", "/film-tur/2025-filmleri/",
+        "/dizi-izle/", "/film-izle/", "/dizi-takvimi/", "/yardim/",
+        "/iletisim/", "/mobil-apk/", "/uye-ol/", "/uye-girisi/",
+        "/dizi-turu/", "/film-kategorileri/"
+    )
 
-    private val episodeRegex = Regex("-\\d+-bolum")
-
-    private fun isEpisode(u: String) = episodeRegex.containsMatchIn(u)
-
-    private fun isSeries(u: String) = u.contains("/diziler/")
-
-    private fun norm(s: String): String = s.lowercase(Locale("tr"))
+    private fun norm(value: String): String = value.lowercase(Locale("tr"))
         .replace('ı', 'i').replace('ş', 's').replace('ğ', 'g')
         .replace('ü', 'u').replace('ö', 'o').replace('ç', 'c')
-        .replace(Regex("[^a-z0-9 ]"), " ")
-        .replace(Regex("\\s+"), " ")
-        .trim()
+        .replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
 
-    private fun cleanTitle(s: String): String = s
-        // Önceden yayımlanan geçici hata ayıklama etiketlerini ve başa sızan dosya adlarını temizle.
-        .replace(Regex("""(?i)^\s*(?:\[[^\]]+\.(?:jpe?g|png|webp|gif|avif)\]|[^\s/]+\.(?:jpe?g|png|webp|gif|avif))\s*[-:|]?\s*"""), "")
-        .replace(Regex("""(?i)^\s*\[?[a-z0-9_-]{18,}\]?\s*[-:|]\s*"""), "")
-        .replace(Regex("""(?i)^\s*\[(?:null|[^\]]+\.(?:jpe?g|png|webp|gif|avif)|[a-z0-9_-]{18,})\]\s*"""), "")
-        .replace(Regex("""(?i)^\s*\[?null\]?\s*(?:[-:|]\s*)?"""), "")
-        .replace(Regex("""(?i)^\s*\[(?:[a-z0-9_-]{18,})\]\s*"""), "")
-        .replace(Regex("\\s*\\|\\s*DiziDAD.*$", RegexOption.IGNORE_CASE), "")
-        .replace(Regex("\\s+izle(\\s+izle)*\\s*$", RegexOption.IGNORE_CASE), "")
-        .trim()
+    private fun cleanTitle(raw: String?): String = raw.orEmpty()
+        .replace(Regex("""(?i)\s*\|\s*DiziDAD.*$"""), "")
+        .replace(Regex("""(?i)\s*[-|:]\s*DiziDAD\s*$"""), "")
+        .replace(Regex("""(?i)\s+(?:izle\s*)+$"""), "")
+        .replace(Regex("""\s+"""), " ").trim(' ', '-', '|', ':', '–').trim()
 
-    /** Dosya adı/kimlik/puan gibi değerlerin film adı olarak gösterilmesini engeller. */
-    private fun isTechnicalTitle(raw: String): Boolean {
-        val value = cleanTitle(raw).trim()
-        if (value.isBlank()) return true
-        if (Regex("""(?i)^(?:null|undefined|nan)$""").matches(value)) return true
-        if (Regex("""(?i)^.+\.(?:jpe?g|png|webp|gif|avif)$""").matches(value)) return true
-        if (Regex("""^\d+(?:\.\d+)?$""").matches(value)) return true
-
-        // Dizidad bazı afişlere içerik adı yerine yalnızca genel alt metni koyuyor.
-        // Bu etiketleri başlık sayma; başlık URL slug'ından türetilebilsin.
-        if (norm(value) in setOf(
-                "yerli dizi", "yabanci dizi", "yerli film", "yabanci film",
-                "dizi afisi", "film afisi", "dizi posteri", "film posteri",
-                "poster", "afis", "dizi", "film"
-            )
-        ) return true
-
-        if (!value.any(Char::isWhitespace) &&
-            value.length >= 18 &&
-            value.any(Char::isDigit) &&
-            value.any(Char::isLetter) &&
-            Regex("""^[a-zA-Z0-9_-]+$""").matches(value)
-        ) return true
-        return false
+    private fun isGeneric(raw: String?): Boolean {
+        if (raw.isNullOrBlank()) return true
+        val value = norm(cleanTitle(raw))
+        return value.isBlank() || value in genericLabels ||
+            Regex("""^\d+(?:[.,]\d+)?$""").matches(value) ||
+            Regex("""(?i)^(?:null|undefined|none|nan)$""").matches(value) ||
+            Regex("""(?i)^.*\.(?:jpe?g|png|webp|gif|avif|svg)$""").matches(value)
     }
 
-    /** Eksik/bozuk HTML başlığı varsa içerik URL'sinin slug'ından okunabilir ad üretir. */
+    private fun absoluteUrl(rawValue: String?, base: String = mainUrl): String? {
+        val raw = rawValue?.trim()?.replace("&amp;", "&") ?: return null
+        if (raw.isBlank() || raw.startsWith("#") || raw.startsWith("javascript:", true) ||
+            raw.startsWith("data:", true) || raw.startsWith("mailto:", true)
+        ) return null
+        return runCatching {
+            URI(if (base.endsWith("/")) base else "$base/").resolve(raw).normalize()
+                .toString().substringBefore("#")
+        }.getOrNull()?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+    }
+
+    // Orijinal oynatıcı kodunun kullandığı CloudStream tarzı URL çözümlemesi.
+    private fun absUrl(value: String): String = absoluteUrl(value, mainUrl) ?: value
+
+    private fun pathOf(url: String): String =
+        runCatching { URI(url).path.orEmpty().lowercase(Locale.ROOT) }
+            .getOrDefault(url.substringBefore("?").substringBefore("#").lowercase(Locale.ROOT))
+
+    private fun urlKey(url: String): String = pathOf(url).trimEnd('/').ifBlank { "/" }
+    private fun isEpisodeUrl(url: String) = episodeUrlRegex.containsMatchIn(pathOf(url))
+    private fun isSeriesUrl(url: String) = pathOf(url).contains("/diziler/")
+
+    private fun isListingUrl(url: String): Boolean {
+        var path = pathOf(url).replace(Regex("""/page/\d+/?$"""), "/")
+        if (path.isBlank()) path = "/"
+        if (path in listingPaths) return true
+        return path.startsWith("/category/") || path.startsWith("/tag/") ||
+            path.startsWith("/author/") || path.startsWith("/wp-") ||
+            path.startsWith("/user/") || path.startsWith("/profile/") ||
+            path.startsWith("/uye/") || path.startsWith("/yorum") ||
+            path.startsWith("/comments") || path.startsWith("/search/") ||
+            path.contains("takvim") || path.contains("tartisma")
+    }
+
+    private fun isContentUrl(url: String): Boolean {
+        if (!url.startsWith(mainUrl, true) || isListingUrl(url)) return false
+        val path = pathOf(url)
+        val last = path.trimEnd('/').substringAfterLast('/')
+        if (last.isBlank() || last == "page") return false
+        if (path.contains("/wp-content/") || path.contains("/wp-admin/") ||
+            path.contains("/wp-json/") || path.contains("/feed/")
+        ) return false
+        if (isEpisodeUrl(url) || isSeriesUrl(url)) return true
+        return last.endsWith("-izle") || last.endsWith("-izle-hd") ||
+            (path.contains("/filmler/") && last != "filmler")
+    }
+
     private fun titleFromUrl(url: String): String {
-        val path = runCatching { java.net.URI(url).path.orEmpty() }
-            .getOrDefault(url.substringBefore('?').substringBefore('#'))
-        val slug = path.trimEnd('/').substringAfterLast('/')
+        var slug = pathOf(url).trimEnd('/').substringAfterLast('/')
+        slug = slug
             .replace(Regex("""(?i)-\d+-sezon-.*$"""), "")
             .replace(Regex("""(?i)-\d+-bolum.*$"""), "")
             .replace(Regex("""(?i)-(?:turkce-)?(?:dublaj|altyazili)-izle.*$"""), "")
-            .replace(Regex("""(?i)-izle.*$"""), "")
-            .replace(Regex("""(?i)\.(?:jpe?g|png|webp|gif|avif)$"""), "")
-            .replace(Regex("""(?i)^(?:film|dizi)-"""), "")
-            .replace(Regex("""[-_]+"""), " ")
-            .trim()
+            .replace(Regex("""(?i)-izle(?:-hd)?$"""), "")
+            .replace(Regex("""(?i)^(?:dizi|film)-"""), "")
+            .replace('-', ' ').replace('_', ' ').trim()
         if (slug.isBlank()) return ""
-        return slug.split(Regex("""\s+""")).joinToString(" ") { token ->
-            token.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }
+        return slug.split(Regex("\\s+")).joinToString(" ") { word ->
+            word.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }
         }
-    }
-
-    private fun resolveCardTitle(url: String, vararg candidates: String?): String {
-        candidates.asSequence()
-            .filterNotNull()
-            .map { cleanTitle(it) }
-            .firstOrNull { !isTechnicalTitle(it) }
-            ?.let { return it }
-        return titleFromUrl(url)
-    }
-
-    private fun absUrl(v: String): String = when {
-        v.startsWith("//") -> "https:$v"
-        v.startsWith("http") -> v
-        else -> fixUrl(v)
-    }
-
-    private fun posterSlug(url: String?): String {
-        if (url.isNullOrBlank()) return ""
-        var slug = url.substringBefore("?").substringBefore("#").trimEnd('/')
-            .substringAfterLast('/').lowercase(Locale.ROOT)
-        slug = slug
-            .replace(Regex("(?i)-\\d+-sezon-.*$"), "")
-            .replace(Regex("(?i)-\\d+-bolum.*$"), "")
-            .replace(Regex("(?i)-(?:turkce-)?(?:dublaj|altyazili)-izle.*$"), "")
-            .replace(Regex("(?i)-izle.*$"), "")
-        return slug
     }
 
     private fun isUsablePoster(url: String?): Boolean {
-        if (url.isNullOrBlank() || !url.startsWith("http", true)) return false
-
-        // Filtreyi tam URL yerine yalnızca dosya adına uygula.
-        // Aksi hâlde "avatar-seven-havens.jpg" gibi gerçek dizi afişleri yanlışlıkla reddedilir.
-        val path = runCatching { java.net.URI(url).path.orEmpty() }
-            .getOrDefault(url.substringBefore('?').substringBefore('#'))
-        val file = path.substringAfterLast('/').lowercase(Locale.ROOT)
-        if (file.isBlank()) return false
-
-        val placeholderName = Regex(
-            """(?i)(?:^|[-_])(?:placeholder|no[-_]?image|blank|spacer|transparent|pixel|default[-_]?poster|default[-_]?avatar)(?:[-_.]|$)"""
-        )
-        val logoName = Regex("""(?i)(?:^|[-_])logo(?:[-_.]|$)""")
-        return !placeholderName.containsMatchIn(file) &&
-            !logoName.containsMatchIn(file) &&
-            !file.startsWith("dizidadlogo.")
+        if (url.isNullOrBlank()) return false
+        val path = pathOf(url)
+        val file = path.substringAfterLast('/')
+        if (file.isBlank() || file.endsWith(".svg")) return false
+        if (Regex("""(?i)(placeholder|no[-_]?image|transparent|spacer|default[-_]?avatar|blank|pixel|logo|gravatar|avatar)""")
+                .containsMatchIn(file)
+        ) return false
+        return file.contains('.') || path.contains("/wp-content/uploads/")
     }
 
-    /** HTML/script içinde geçen WordPress afiş URL'lerini bulur ve başlık slug'ını tercih eder. */
-    private fun posterFromMarkup(markup: String, targetUrl: String? = null): String? {
-        val normalized = markup.replace("\\/", "/").replace("&amp;", "&")
-        val uploadPoster = Regex(
-            """(?i)(?:https?:)?//[^"'<>\s]+?/wp-content/uploads/[^"'<>\s]+?\.(?:jpe?g|png|webp)|/wp-content/uploads/[^"'<>\s]+?\.(?:jpe?g|png|webp)"""
+    private fun imageUrl(node: Element): String? {
+        val attrs = listOf(
+            "data-src", "data-lazy-src", "data-original", "data-image", "data-poster",
+            "data-litespeed-src", "data-lazy-srcset", "data-srcset", "srcset",
+            "data-bg", "data-background-image", "data-background", "src"
         )
-        val slug = posterSlug(targetUrl)
-        val candidates = uploadPoster.findAll(normalized)
-            .map { absUrl(it.value.trim().trim('"', '\'')) }
-            .filter { isUsablePoster(it) }
-            .distinct()
-            .toList()
-        return candidates.firstOrNull {
-            slug.isNotBlank() && it.substringBefore("?").contains(slug, ignoreCase = true)
-        } ?: candidates.firstOrNull()
+        for (attr in attrs) {
+            val raw = node.attr(attr).trim()
+            if (raw.isBlank()) continue
+            val first = if (attr.contains("srcset")) raw.substringBefore(",").trim().substringBefore(" ") else raw
+            if (first.isBlank() || first.startsWith("data:", true)) continue
+            val result = absoluteUrl(first, node.baseUri().ifBlank { mainUrl }) ?: continue
+            if (isUsablePoster(result)) return result
+        }
+        val style = node.attr("style")
+        val bg = Regex("""(?i)url\(\s*['"]?([^)'"]+)""").find(style)?.groupValues?.getOrNull(1)
+        return absoluteUrl(bg, node.baseUri().ifBlank { mainUrl })?.takeIf { isUsablePoster(it) }
     }
 
-    /** WordPress temalarının lazy-load görsellerini aynı öncelikle çözer. */
-    private fun Element.posterOfElement(): String? {
-        val raw = attr("data-src")
-            .ifBlank { attr("data-lazy-src") }
-            .ifBlank { attr("data-original") }
-            .ifBlank { attr("data-image") }
-            .ifBlank { attr("data-poster") }
-            .ifBlank { attr("data-lazy-srcset") }
-            .ifBlank { attr("data-srcset") }
-            .ifBlank { attr("srcset") }
-            .ifBlank { attr("src") }
-        val candidate = Regex("""https?://[^\s,]+""", RegexOption.IGNORE_CASE)
-            .find(raw)?.value?.trimEnd(',')
-            ?: raw.split(',').firstOrNull()?.trim()?.substringBefore(' ')?.takeIf { it.isNotBlank() }
-            ?: return null
-        return absUrl(candidate).takeIf { isUsablePoster(it) }
+    private fun scorePoster(node: Element, poster: String, targetUrl: String, title: String): Int {
+        val alt = norm(node.attr("alt") + " " + node.attr("title"))
+        val file = norm(pathOf(poster).substringAfterLast('/').substringBeforeLast('.').replace('-', ' '))
+        val target = norm(titleFromUrl(targetUrl) + " " + title)
+        var score = 0
+        for (token in target.split(" ").filter { it.length >= 3 }.distinct()) {
+            if (alt.split(" ").contains(token)) score += 8 else if (alt.contains(token)) score += 3
+            if (file.split(" ").contains(token)) score += 10 else if (file.contains(token)) score += 4
+        }
+        if (pathOf(poster).contains("/wp-content/uploads/")) score++
+        return score
     }
 
-    /** Karttaki gerçek afişi bulur (yer tutucu ve tema ikonlarını atlar). */
-    private fun Element.posterUrl(): String? {
-        val nodes = listOf(this) + select("*")
-        val attributes = listOf(
-            "data-poster", "data-poster-url", "data-bg", "data-background-image",
-            "data-background", "data-original", "data-lazy-src", "data-src",
-            "data-url", "data-image", "data-lazy-background", "data-srcset",
-            "data-lazy-srcset", "srcset", "style", "poster", "src"
-        )
-        for (attr in attributes) {
-            for (node in nodes) {
-                val raw = node.attr(attr).trim()
-                if (raw.isEmpty()) continue
-                val values = when {
-                    attr == "style" -> Regex(
-                        """(?i)url\(\s*['"]?([^)'"]+)"""
-                    ).findAll(raw).map { it.groupValues[1].trim() }.toList()
-                    attr.contains("srcset") -> listOf(
-                        raw.substringBefore(",").trim().substringBefore(" ").trim()
-                    )
-                    else -> listOf(raw)
-                }
-                for (candidate in values) {
-                    val value = candidate.trim().removeSurrounding("\"").removeSurrounding("'")
-                    if (value.isEmpty() || value.startsWith("data:") ||
-                        value.startsWith("javascript:", true)
-                    ) continue
-                    val resolved = fixUrlNull(value)
-                    if (!resolved.isNullOrBlank() && isUsablePoster(resolved)) {
-                        return resolved
+    private fun candidates(container: Element): List<Pair<Element, String>> =
+        container.select("img, [data-bg], [data-background-image], [style*=background]")
+            .mapNotNull { node -> imageUrl(node)?.let { node to it } }
+            .distinctBy { it.second }
+
+    private fun posterNearLink(link: Element, url: String, title: String): String? {
+        imageUrl(link.selectFirst("img, [data-bg], [data-background-image], [style*=background]") ?: link)
+            ?.let { return it }
+
+        var current: Element? = link
+        var depth = 0
+        while (current != null && depth < 6) {
+            val marker = (current.id() + " " + current.classNames().joinToString(" ")).lowercase(Locale.ROOT)
+            if (Regex("""\b(site[-_]?header|site[-_]?footer|navbar|navigation|main[-_]?menu|mobile[-_]?menu|sidebar|widget|login|register|comment|avatar|alphabet|social|user[-_]?menu)\b""")
+                    .containsMatchIn(marker)
+            ) return null
+
+            val localLinks = (listOf(current) + current.select("a[href]"))
+                .filter { it.tagName().equals("a", true) }
+                .mapNotNull { absoluteUrl(it.attr("href"), it.baseUri()) }
+                .filter { isContentUrl(it) }
+                .distinctBy { urlKey(it) }
+
+            if (localLinks.any { urlKey(it) == urlKey(url) }) {
+                val images = candidates(current)
+                if (images.isNotEmpty() && localLinks.size == 1) {
+                    val best = images.maxByOrNull { scorePoster(it.first, it.second, url, title) }
+                    if (best != null && (scorePoster(best.first, best.second, url, title) > 1 || images.size == 1)) {
+                        return best.second
                     }
                 }
+                if (localLinks.size > 1) return null
             }
+            if (current.tagName().lowercase(Locale.ROOT) in setOf("body", "html")) break
+            current = current.parent()
+            depth++
         }
         return null
     }
 
-    /** Açık kart seçicilerini önceliklendirir. */
-    private fun Element.diziMomPoster(targetUrl: String? = null): String? {
-        val selectors = listOf(
-            "div.cat-img img",
-            "div.category_image img",
-            "div.episode-box a img",
-            "div.episode-name img",
-            "div.single-item a img",
-            "a img",
-            "img"
-        )
-        val candidates = LinkedHashSet<String>()
-        for (selector in selectors) {
-            val images = if (selector == "img" && tagName().equals("img", ignoreCase = true)) {
-                listOf(this)
+    private fun matchingPosterFromDocument(doc: Document, url: String, title: String): String? {
+        val images = candidates(doc)
+        return images.maxByOrNull { scorePoster(it.first, it.second, url, title) }
+            ?.takeIf { scorePoster(it.first, it.second, url, title) >= 4 }
+            ?.second
+    }
+
+    private fun posterForDocument(doc: Document, url: String, title: String): String? {
+        matchingPosterFromDocument(doc, url, title)?.let { return it }
+
+        val og = doc.selectFirst(
+            "meta[property=og:image], meta[property=og:image:secure_url], meta[name=twitter:image]"
+        )?.attr("content")
+        absoluteUrl(og, url)?.takeIf { isUsablePoster(it) }?.let { return it }
+
+        imageUrl(doc.selectFirst(
+            ".category_image img, .cat-img img, .post-thumbnail img, .movie-image img, .movie-poster img, .single-item img, article img"
+        ) ?: doc.selectFirst("img") ?: return null)?.let { return it }
+        return candidates(doc).firstOrNull()?.second
+    }
+
+    private fun parseItems(doc: Document): List<SearchResponse> {
+        val groups = LinkedHashMap<String, MutableList<Element>>()
+        for (link in doc.select("a[href]")) {
+            val url = absoluteUrl(link.attr("href"), link.baseUri()) ?: continue
+            if (isContentUrl(url)) groups.getOrPut(urlKey(url)) { mutableListOf() }.add(link)
+        }
+
+        val output = LinkedHashMap<String, SearchResponse>()
+        for ((key, links) in groups) {
+            val url = absoluteUrl(links.first().attr("href"), links.first().baseUri()) ?: continue
+            val titleCandidates = mutableListOf<String>()
+            for (link in links) {
+                titleCandidates += link.ownText()
+                titleCandidates += link.attr("title")
+                titleCandidates += link.selectFirst("[title]")?.attr("title").orEmpty()
+                titleCandidates += link.select("img[alt], img[title]")
+                    .map { it.attr("alt").ifBlank { it.attr("title") } }
+            }
+            val rawTitle = titleCandidates.asSequence().map { cleanTitle(it) }
+                .firstOrNull { !isGeneric(it) }.orEmpty().ifBlank { titleFromUrl(url) }
+            if (rawTitle.isBlank() || isGeneric(rawTitle)) continue
+
+            // Son bölümler listesinde her bölüm ayrı linktir. Kartı ana dizi başlığıyla
+            // tekilleştir; load() bölüm sayfasından gerçek dizi sayfasına yönlendirecek.
+            val episodeUrl = isEpisodeUrl(url)
+            val displayTitle = if (episodeUrl) seriesTitleFromEpisode(rawTitle, url) else rawTitle
+            if (displayTitle.isBlank() || isGeneric(displayTitle)) continue
+            val itemKey = if (episodeUrl || isSeriesUrl(url)) "series:${norm(displayTitle)}" else key
+            if (output.containsKey(itemKey)) continue
+
+            var poster: String? = null
+            for (link in links) {
+                poster = posterNearLink(link, url, displayTitle)
+                if (!poster.isNullOrBlank()) break
+            }
+            if (poster.isNullOrBlank()) poster = matchingPosterFromDocument(doc, url, displayTitle)
+
+            output[itemKey] = if (isSeriesUrl(url) || episodeUrl) {
+                newTvSeriesSearchResponse(displayTitle, url, TvType.TvSeries) {
+                    this.posterUrl = poster
+                    this.posterHeaders = posterHeaders
+                }
             } else {
-                select(selector)
-            }
-            images.forEach { image -> image.posterOfElement()?.let { candidates.add(it) } }
-        }
-        val slug = posterSlug(targetUrl)
-        return candidates.firstOrNull {
-            slug.isNotBlank() && posterSlug(it).contains(slug, ignoreCase = true)
-        } ?: candidates.firstOrNull()
-    }
-
-    /** Afiş, metin bağlantısının içinde değilse kart kapsayıcısına kadar çıkıp görseli oradan alır. */
-    private fun Element.posterFromCardAncestors(targetUrl: String? = null): String? {
-        diziMomPoster(targetUrl)?.let { return it }
-        select("img[data-src], img[data-lazy-src], img[data-original], img[data-lazyloaded], img[src]")
-            .firstNotNullOfOrNull { it.posterOfElement() }
-            ?.let { return it }
-        if (tagName().equals("img", ignoreCase = true)) {
-            posterOfElement()?.let { return it }
-        }
-        val slug = posterSlug(targetUrl)
-        var current: Element? = parent()
-        var depth = 0
-        while (current != null && depth < 9) {
-            val tag = current.tagName().lowercase(Locale.ROOT)
-            if (tag in setOf("header", "nav", "footer", "aside", "body", "html")) break
-            val marker = (current.id() + " " + current.classNames().joinToString(" ")).lowercase(Locale.ROOT)
-            if (Regex("\\b(site[-_]?header|site[-_]?footer|navbar|navigation|main[-_]?menu|mobile[-_]?menu|side[-_]?bar|sidebar|widget|login|register|alphabet|social|user[-_]?menu)\\b")
-                    .containsMatchIn(marker)
-            ) break
-            val looksLikeCard = Regex("\\b(card|item|post|entry|movie|film|series|dizi|content|thumbnail|list|archive|episode|bolum|single-item|cat-img|episode-box)\\b")
-                .containsMatchIn(marker)
-            val images = current.select("img[data-src], img[data-lazy-src], img[data-original], img[data-lazyloaded], img[src]")
-            if (images.isNotEmpty() && images.size <= 12 && (images.size <= 3 || looksLikeCard)) {
-                val usable = images.mapNotNull { image ->
-                    image.posterOfElement()?.let { poster -> image to poster }
+                newMovieSearchResponse(displayTitle, url, TvType.Movie) {
+                    this.posterUrl = poster
+                    this.posterHeaders = posterHeaders
                 }
-                val preferred = usable.firstOrNull { (image, poster) ->
-                    (slug.isNotBlank() && poster.contains(slug, ignoreCase = true)) ||
-                        norm(image.attr("alt")).let { alt -> slug.isNotBlank() && alt.contains(norm(slug)) }
-                } ?: usable.firstOrNull { (_, poster) ->
-                    poster.contains("/wp-content/uploads/", ignoreCase = true)
-                } ?: usable.firstOrNull()
-                preferred?.second?.let { return it }
-                val background = current.posterUrl()
-                if (isUsablePoster(background)) return background
-            }
-            current = current.parent()
-            depth++
-        }
-        return null
-    }
-
-    /** Sayfadaki img'leri alt metni ve URL slug'ı ile eşleştirerek ilgili kartın afişini bulur. */
-    private fun Document.posterForTarget(targetUrl: String, titleHint: String? = null): String? {
-        val targetSlug = posterSlug(targetUrl).substringBeforeLast('.', posterSlug(targetUrl))
-        val targetTitle = norm(cleanTitle(titleHint.orEmpty()))
-        val targetTokens = (
-            targetTitle.split(" ") +
-                norm(targetSlug.replace('-', ' ')).split(" ") +
-                norm(targetUrl.substringBefore("?").substringBefore("#").substringAfterLast('/').replace('-', ' ')).split(" ")
-            )
-            .filter { it.length >= 3 && it !in setOf("izle", "sezon", "bolum", "dizi", "film", "turkce", "dublaj", "altyazili") }
-            .distinct()
-        val candidates = select(
-            "img[data-src], img[data-lazy-src], img[data-original], img[data-image], img[data-poster], img[data-lazyloaded], img[src]"
-        ).mapNotNull { image ->
-            val poster = image.posterOfElement() ?: return@mapNotNull null
-            val alt = norm(cleanTitle(image.attr("alt")))
-            val file = norm(poster.substringBefore("?").substringBefore("#").substringAfterLast('/').substringBeforeLast('.').replace('-', ' '))
-            var score = 0
-            targetTokens.forEach { token ->
-                if (alt.split(" ").contains(token)) score += 6
-                if (file.split(" ").contains(token)) score += 4
-                if (alt.contains(token)) score += 2
-                if (file.contains(token)) score += 1
-            }
-            Triple(poster, score, image)
-        }.distinctBy { it.first }
-        return candidates
-            .filter { it.second > 0 }
-            .maxByOrNull { it.second }
-            ?.first
-    }
-
-    private fun isContentCardUrl(url: String): Boolean {
-        val path = url.removePrefix(mainUrl).lowercase(Locale.ROOT)
-        return isEpisode(url) || isSeries(url) ||
-            path.contains("izle") || path.contains("filmler") || path.contains("film-")
-    }
-
-    private fun contentUrlKey(url: String): String =
-        url.substringBefore("?").substringBefore("#").trimEnd('/').lowercase(Locale.ROOT)
-
-    private val posterBearingSelector =
-        "img, [data-poster], [data-poster-url], [data-image], [data-bg], [data-background], [data-background-image], [data-src], [data-original], [data-lazy-src], [data-lazy-background], [data-srcset], [data-lazy-srcset], [srcset], [style*=background]"
-
-
-
-    private fun makeCard(rawTitle: String, url: String, poster: String?): SearchResponse =
-        makeCardInternal(resolveCardTitle(url, rawTitle), url, poster)
-
-    private fun makeCardInternal(title: String, url: String, poster: String?): SearchResponse =
-        if (isSeries(url) || isEpisode(url)) {
-            newTvSeriesSearchResponse(title, url, TvType.TvSeries) {
-                this.posterUrl = poster
-                this.posterHeaders = posterRequestHeaders
-            }
-        } else {
-            newMovieSearchResponse(title, url, TvType.Movie) {
-                this.posterUrl = poster
-                this.posterHeaders = posterRequestHeaders
             }
         }
-
-    /** Gerçek img öğesinden başlayıp aynı karttaki içerik bağlantısını bulur. */
-    private fun Element.contentAnchorForImage(imageAlt: String): Element? {
-        // Afiş doğrudan içerik bağlantısına sarılmışsa HTML'deki bu bağlantıyı koru.
-        // "Yerli Dizi" gibi genel alt metinleri slug ile eşleştirmeye çalışmak,
-        // doğru bağlantının bulunamamasına ve afişin karttan kopmasına neden oluyordu.
-        var ancestor: Element? = parent()
-        var ancestorDepth = 0
-        while (ancestor != null && ancestorDepth < 5) {
-            if (ancestor.tagName().equals("a", ignoreCase = true)) {
-                val href = ancestor.attr("href").trim()
-                val target = if (href.isNotBlank()) absUrl(href) else ""
-                if (target.startsWith(mainUrl) && isContentCardUrl(target)) return ancestor
-            }
-            val tag = ancestor.tagName().lowercase(Locale.ROOT)
-            if (tag in setOf("header", "nav", "footer", "aside", "body", "html")) break
-            ancestor = ancestor.parent()
-            ancestorDepth++
-        }
-
-        val alt = norm(cleanTitle(imageAlt))
-        val tokens = alt.split(" ")
-            .filter { it.length >= 3 && it !in setOf("izle", "sezon", "bolum", "dizi", "film", "turkce", "dublaj", "altyazili") }
-            .distinct()
-        var current: Element? = parent()
-        var depth = 0
-        while (current != null && depth < 7) {
-            val tag = current.tagName().lowercase(Locale.ROOT)
-            if (tag in setOf("header", "nav", "footer", "aside", "body", "html")) break
-            val marker = (current.id() + " " + current.classNames().joinToString(" ")).lowercase(Locale.ROOT)
-            if (Regex("\\b(site[-_]?header|site[-_]?footer|navbar|navigation|main[-_]?menu|mobile[-_]?menu|side[-_]?bar|sidebar|widget|login|register|alphabet|social|user[-_]?menu)\\b").containsMatchIn(marker)) break
-            val links = current.select("a[href]").filter { link ->
-                val href = link.attr("href").trim()
-                href.isNotBlank() && !href.startsWith("#") && !href.startsWith("javascript") &&
-                    absUrl(href).startsWith(mainUrl) && isContentCardUrl(absUrl(href))
-            }
-            val scored = links.mapNotNull { link ->
-                val href = absUrl(link.attr("href"))
-                val linkText = norm(cleanTitle(link.text().ifBlank { link.attr("title") }))
-                val slug = norm(posterSlug(href).replace('-', ' '))
-                var score = 0
-                tokens.forEach { token ->
-                    if (linkText.split(" ").contains(token)) score += 8
-                    else if (linkText.contains(token)) score += 4
-                    if (slug.split(" ").contains(token)) score += 6
-                    else if (slug.contains(token)) score += 3
-                }
-                if (score > 0) link to score else null
-            }.sortedByDescending { it.second }
-            if (scored.isNotEmpty()) return scored.first().first
-            if (alt.isBlank() && links.size == 1) return links.first()
-            current = current.parent()
-            depth++
-        }
-        return null
+        return output.values.toList()
     }
 
-    /**
-     * Öznitelik adı ne olursa olsun (data-src, data-litespeed-src, srcset...) kartın ham HTML'inde
-     * geçen wp-content/uploads görsel adresini bulur. Yalnızca tek içerik bağlantısı barındıran
-     * küçük kapsayıcılarda arar ki komşu kartın afişi alınmasın.
-     */
-    private fun posterNearAnchor(anchor: Element, targetUrl: String): String? {
-        var current: Element? = anchor
-        var depth = 0
-        while (current != null && depth < 5) {
-            val tag = current.tagName().lowercase(Locale.ROOT)
-            if (tag == "body" || tag == "html") return null
-            val keys = current.select("a[href]")
-                .map { absUrl(it.attr("href").trim()) }
-                .filter { it.startsWith(mainUrl) && isContentCardUrl(it) }
-                .map { contentUrlKey(it) }
-                .distinct()
-            if (keys.size > 1) return null
-            posterFromMarkup(current.outerHtml(), targetUrl)?.let { return it }
-            current = current.parent()
-            depth++
-        }
-        return null
+    private fun pagedUrl(base: String, page: Int): String {
+        if (page <= 1) return base
+        val clean = base.substringBefore("?").trimEnd('/')
+        val query = base.substringAfter("?", "").takeIf { it.isNotBlank() }
+        val paged = "$clean/page/$page/"
+        return if (query == null) paged else "$paged?$query"
     }
 
-    private fun Document.cards(maxCards: Int? = null): List<SearchResponse> {
-        val out = LinkedHashMap<String, SearchResponse>()
-        val anchors = select("a[href]")
-        var noPosterLogged = 0
+    private fun hasNext(doc: Document, page: Int): Boolean = page < 250 &&
+        doc.select("a[rel=next], .nav-links a.next, a.next, a[href*='/page/" + (page + 1) + "/']").isNotEmpty()
 
-        // Önce her gerçek poster img'sini kendi başlık/izleme bağlantısına bağla.
-        for (image in select("img[data-src], img[data-lazy-src], img[data-original], img[data-image], img[data-poster], img[data-lazyloaded], img[src]")) {
-            if (maxCards != null && out.size >= maxCards) break
-            val poster = image.posterOfElement() ?: continue
-            val alt = image.attr("alt").ifBlank { image.attr("title") }
-            val link = image.contentAnchorForImage(alt) ?: continue
-            val href = link.attr("href").trim()
-            val url = absUrl(href)
-            if (!url.startsWith(mainUrl) || !isContentCardUrl(url)) continue
-            val title = resolveCardTitle(
-                url,
-                link.ownText(),
-                link.attr("title"),
-                image.attr("title"),
-                alt,
-                link.text(),
-            )
-            if (title.isBlank()) continue
-            if (!out.containsKey(url)) out[url] = makeCard(title, url, poster)
-        }
-
-        if (maxCards != null && out.size >= maxCards) return out.values.take(maxCards)
-
-        val posterByUrl = LinkedHashMap<String, String>()
-        for (link in anchors) {
-            if (maxCards != null && out.size >= maxCards) break
-            val href = link.attr("href").trim()
-            if (href.isEmpty() || href.startsWith("#") || href.startsWith("javascript")) continue
-            val url = absUrl(href)
-            if (!url.startsWith(mainUrl) || !isContentCardUrl(url)) continue
-            val hasImageMarker = link.selectFirst(posterBearingSelector) != null ||
-                listOf("data-poster", "data-poster-url", "data-image", "data-bg",
-                    "data-background", "data-background-image", "data-src", "data-original",
-                    "data-lazy-src", "data-srcset", "data-lazy-srcset", "srcset", "style")
-                    .any { link.hasAttr(it) }
-            if (!hasImageMarker) continue
-            val poster = link.posterFromCardAncestors(url)
-                ?: posterForTarget(url, link.selectFirst("img[alt]")?.attr("alt") ?: link.text())
-                ?: posterNearAnchor(link, url)
-            if (!poster.isNullOrBlank()) posterByUrl.putIfAbsent(contentUrlKey(url), poster)
-        }
-
-        for (a in anchors) {
-            if (maxCards != null && out.size >= maxCards) break
-            val href = a.attr("href").trim()
-            if (href.isEmpty() || href.startsWith("#") || href.startsWith("javascript")) continue
-            val url = absUrl(href)
-            if (!url.startsWith(mainUrl) || !isContentCardUrl(url)) continue
-            val path = url.removePrefix(mainUrl).trim('/')
-            if (path.isEmpty() || path.startsWith("wp-") || path.contains("page/")) continue
-            if (path.contains("yorum") || path.contains("comment")) continue
-            // Kategori/listing bağlantıları film sonucu değildir.
-            if (mainPage.any { contentUrlKey(absUrl(it.data)) == contentUrlKey(url) }) continue
-
-            val rawTitle = listOf(
-                a.ownText(),
-                a.attr("title"),
-                a.selectFirst("[title]")?.attr("title"),
-                a.selectFirst("img[alt]")?.attr("alt"),
-                a.text(),
-            ).firstOrNull { !it.isNullOrBlank() && !isTechnicalTitle(cleanTitle(it)) }
-
-            val titleHint = rawTitle ?: a.text()
-            val poster = posterByUrl[contentUrlKey(url)]
-                ?: a.posterFromCardAncestors(url)
-                ?: posterForTarget(url, titleHint)
-                ?: posterNearAnchor(a, url)
-            val hasImage = !poster.isNullOrBlank() || a.selectFirst(posterBearingSelector) != null ||
-                listOf("data-poster", "data-poster-url", "data-image", "data-bg",
-                    "data-background", "data-background-image", "data-src", "data-original",
-                    "data-lazy-src", "data-srcset", "data-lazy-srcset", "srcset", "style")
-                    .any { a.hasAttr(it) }
-
-            // Kart afişi ayrı bir kardeş bağlantıda olabilir. Gerçek metin başlıklı bağlantıyı
-            // sırf kendi içinde img bulunmuyor diye atlama; posterFromPage ikinci turda afişi bulur.
-            if (!hasImage && rawTitle.isNullOrBlank()) continue
-
-            val title = resolveCardTitle(
-                url,
-                rawTitle,
-                a.ownText(),
-                a.attr("title"),
-                a.selectFirst("[title]")?.attr("title"),
-                a.selectFirst("img[alt]")?.attr("alt"),
-                a.text(),
-            )
-            if (title.isBlank() || isTechnicalTitle(title)) continue
-            if (poster.isNullOrBlank() && noPosterLogged < 3) {
-                noPosterLogged++
-                android.util.Log.d(
-                    "DiziDad",
-                    "NOPOSTER url=$url html=" + (a.parent()?.parent()?.outerHtml() ?: a.outerHtml()).take(900)
-                )
-            }
-            if (!out.containsKey(url)) out[url] = makeCard(title, url, poster)
-        }
-        return out.values.toList()
-    }
-
-    // ------------------------------------------------------------------ ana sayfa
-
-    override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
-        val url = if (page <= 1) request.data else "${request.data}page/$page/"
-        val doc = app.get(url).document
-        val cardLimit = if (request.data.contains("/tum-bolumler/")) 20 else 30
-        val items = doc.cards(cardLimit)
-        android.util.Log.d(
-            "DiziDad",
-            "MAIN ${request.name}: items=${items.size} withPoster=${items.count { !it.posterUrl.isNullOrBlank() }} first=${items.firstOrNull()?.posterUrl}"
-        )
-        fillMissingPosters(items)
-        val hasNext = doc.select("a[href*='/page/${page + 1}/']").isNotEmpty()
-        return newHomePageResponse(request.name, items, hasNext)
-    }
-
-    // ------------------------------------------------------------------ arama
-
-    /** WordPress REST araması (siteye göre kapalı olabilir; o zaman ?s= denenir). */
-    private suspend fun restSearch(query: String): List<SearchResponse> {
-        val q = URLEncoder.encode(query, "UTF-8")
-        val text = app.get(
-            "$mainUrl/wp-json/wp/v2/search?search=$q&per_page=30&_fields=title,url"
-        ).text
-        val arr = org.json.JSONArray(text)
-        val found = ArrayList<Pair<String, String>>()
-        for (i in 0 until arr.length()) {
-            val o = arr.getJSONObject(i)
-            val url = o.optString("url")
-            if (!url.startsWith(mainUrl) || isEpisode(url)) continue
-            val title = cleanTitle(Jsoup.parse(o.optString("title")).text())
-            if (title.isBlank()) continue
-            found.add(title to url)
-        }
-        // REST sonucu afiş vermez; her sonucun sayfasından afişi çek (en fazla 12).
-        return found.distinctBy { it.second }.take(12).amap { (title, url) ->
-            val poster = runCatching { posterFromPage(url) }.getOrNull()
-            makeCard(title, url, poster)
-        }
-    }
-
-    /** Listede afişi olmayan kartlara (en fazla 10) kendi sayfasından afiş doldurur. */
-    private suspend fun fillMissingPosters(items: List<SearchResponse>) {
-        val missing = items.filter { it.posterUrl.isNullOrBlank() }.take(60)
-        android.util.Log.d("DiziDad", "FILL missing=${missing.size} of ${items.size}")
-        missing.amap { item ->
-            val p = runCatching { posterFromPage(item.url) }.getOrNull()
-            android.util.Log.d("DiziDad", "FILL ${item.url} -> $p")
-            if (!p.isNullOrBlank()) {
-                item.posterUrl = p
-            }
-        }
-    }
-
-    private suspend fun posterFromPage(url: String): String? {
-        val d = app.get(url).document
-        return d.posterForTarget(url, d.selectFirst("h1")?.text())
-            ?: d.selectFirst(
-                "meta[property=og:image], meta[property=og:image:secure_url], meta[name=twitter:image]"
-            )?.attr("content")?.trim()
-                ?.takeIf { isUsablePoster(it) }
-                ?.let { absUrl(it) }
-            ?: posterFromMarkup(d.html(), url)
-            ?: d.select("img[alt], img[data-src], img[data-lazy-src], img[data-original], img[src]")
-                .firstNotNullOfOrNull { it.posterOfElement() }
+    override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        val doc = runCatching { app.get(pagedUrl(request.data, page), headers = browserHeaders).document }
+            .getOrNull() ?: return newHomePageResponse(request.name, emptyList(), false)
+        val items = parseItems(doc)
+        return newHomePageResponse(request.name, items, items.isNotEmpty() && hasNext(doc, page))
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val q = URLEncoder.encode(query, "UTF-8")
-        val nq = norm(query)
-        val htmlResults = runCatching { app.get("$mainUrl/?s=$q").document.cards() }
-            .getOrDefault(emptyList())
-            .filter { norm(it.name).contains(nq) }
-        if (htmlResults.isNotEmpty()) {
-            fillMissingPosters(htmlResults)
-            return htmlResults
+        val q = query.trim()
+        if (q.length < 2) return emptyList()
+        val encoded = URLEncoder.encode(q, "UTF-8")
+        val urls = listOf("$mainUrl/?s=$encoded", "$mainUrl/?search=$encoded", "$mainUrl/ara/$encoded/")
+        for (url in urls) {
+            val doc = runCatching { app.get(url, headers = browserHeaders).document }.getOrNull() ?: continue
+            val results = parseItems(doc).filter { norm(it.name).contains(norm(q)) }
+            if (results.isNotEmpty()) return results
         }
-        return runCatching { restSearch(query) }.getOrDefault(emptyList())
+        return emptyList()
     }
 
-    // ------------------------------------------------------------------ yük (dizi / film)
+    private fun pageTitle(doc: Document, url: String): String {
+        val raw = doc.selectFirst("h1.entry-title, h1.post-title, main h1, article h1, h1")
+            ?.text().orEmpty()
+            .ifBlank { doc.selectFirst("meta[property=og:title]")?.attr("content").orEmpty().ifBlank { doc.title() } }
+        return cleanTitle(raw).ifBlank { titleFromUrl(url) }
+    }
+
+    private fun pagePlot(doc: Document): String? {
+        val meta = doc.selectFirst("meta[property=og:description], meta[name=description]")?.attr("content").orEmpty()
+        val body = if (meta.isNotBlank()) meta else doc.selectFirst(
+            ".entry-content, .movie-description, .description, .post-content, article"
+        )?.text().orEmpty()
+        if (body.isBlank()) return null
+        return body.replace(Regex("""(?is)^.*?sizlerle,\s*"""), "")
+            .replace(Regex("""(?is)^.*?keyifle izleyin,\s*"""), "").trim().ifBlank { null }
+    }
+
+    private fun pageYear(doc: Document, title: String): Int? =
+        Regex("""(?:Yapım Yılı|Çıkış Yılı)\s*:?\s*(\d{4})""", RegexOption.IGNORE_CASE)
+            .find(doc.text())?.groupValues?.getOrNull(1)?.toIntOrNull()
+            ?: Regex("""\b(19\d{2}|20\d{2})\b""").find(title)?.groupValues?.getOrNull(1)?.toIntOrNull()
+
+    private fun pageActors(doc: Document): List<String> {
+        val match = Regex(
+            """Oyuncular\s*:?\s*(.+?)(?:IMDb|IMDB|Tür\s*:|Film Süre|IMDb Puanı|$)""",
+            RegexOption.IGNORE_CASE
+        ).find(doc.text()) ?: return emptyList()
+        return match.groupValues[1].split(",").map { it.trim() }.filter { it.isNotBlank() && it.length < 80 }
+    }
+
+    private fun pageRating(doc: Document): Double? {
+        val text = doc.text()
+        val raw = Regex("""(?:IMDb Puanı|IMDB)\s*:?\s*(10(?:[.,]0)?|[0-9](?:[.,][0-9])?)""", RegexOption.IGNORE_CASE)
+            .find(text)?.groupValues?.getOrNull(1)?.replace(',', '.')?.toDoubleOrNull()
+        return raw?.takeIf { it in 0.0..10.0 }
+    }
+
+    private fun pageGenres(doc: Document): List<String> {
+        val fromLinks = doc.select("a[href*=tur=], a[href*=genre], a[href*=kategori]")
+            .map { cleanTitle(it.text()) }
+            .filter { it.isNotBlank() && !isGeneric(it) && it.length < 32 }
+            .distinct()
+        if (fromLinks.isNotEmpty()) return fromLinks
+        return Regex("""Tür\s*:\s*([^\n]+?)(?:\s+Oyuncular|\s+Yapım Yılı|\s+IMDB|$)""", RegexOption.IGNORE_CASE)
+            .find(doc.text())?.groupValues?.getOrNull(1)?.split(",")
+            ?.map { it.trim() }?.filter { it.isNotBlank() }?.distinct().orEmpty()
+    }
+
+    private fun pageTrailer(doc: Document): String? {
+        for (iframe in doc.select("iframe[src], iframe[data-src]")) {
+            val raw = iframe.attr("src").ifBlank { iframe.attr("data-src") }
+            if (raw.contains("youtube.com/embed/") || raw.contains("youtu.be/")) {
+                return absoluteUrl(raw, doc.location())
+            }
+        }
+        return Regex("""https?://(?:www\.)?youtube\.com/embed/[A-Za-z0-9_-]+""").find(doc.html())?.value
+    }
+
+    private fun epNo(url: String, text: String) = EpNo(
+        seasonTextRegex.find(text)?.groupValues?.getOrNull(1)?.toIntOrNull()
+            ?: seasonUrlRegex.find(pathOf(url))?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 1,
+        episodeTextRegex.find(text)?.groupValues?.getOrNull(1)?.toIntOrNull()
+            ?: episodeUrlRegex.find(pathOf(url))?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 1
+    )
+
+    private fun seriesTitleFromEpisode(title: String, url: String): String {
+        val clean = cleanTitle(title)
+            .replace(Regex("""(?i)\s+\d+\s*\.?\s*Sezon.*$"""), "")
+            .replace(Regex("""(?i)\s+\d+\s*\.?\s*Bölüm.*$"""), "").trim()
+        return clean.takeIf { it.isNotBlank() && !isGeneric(it) } ?: titleFromUrl(url)
+    }
+
+    private fun collectEpisodes(doc: Document, seriesUrl: String, poster: String?): List<Episode> {
+        val episodeLinks = LinkedHashMap<String, Element>()
+        for (link in doc.select("a[href]")) {
+            val url = absoluteUrl(link.attr("href"), link.baseUri()) ?: continue
+            if (!url.startsWith(mainUrl, true) || !isEpisodeUrl(url) || isSeriesUrl(url) || isListingUrl(url)) continue
+            if (urlKey(url) != urlKey(seriesUrl)) episodeLinks.putIfAbsent(urlKey(url), link)
+        }
+
+        return episodeLinks.values.mapNotNull { link ->
+            val url = absoluteUrl(link.attr("href"), link.baseUri()) ?: return@mapNotNull null
+            val title = cleanTitle(link.text().ifBlank { link.attr("title") }).ifBlank { titleFromUrl(url) }
+            val number = epNo(url, title)
+            newEpisode(url) {
+                name = title
+                season = number.season
+                episode = number.episode
+                posterUrl = posterNearLink(link, url, seriesTitleFromEpisode(title, url)) ?: poster
+            }
+        }.sortedWith(compareBy<Episode>({ it.season ?: 1 }, { it.episode ?: 1 }, { it.name }))
+    }
+
+    private suspend fun documentFor(url: String): Document? = runCatching {
+        app.get(url, headers = browserHeaders + mapOf("Referer" to "$mainUrl/")).document
+    }.getOrNull()
 
     override suspend fun load(url: String): LoadResponse? {
-        var pageUrl = fixUrl(url)
+        var pageUrl = absoluteUrl(url) ?: return null
+        var doc = documentFor(pageUrl) ?: return null
 
-        // Bölüm adresi verildiyse dizinin sayfasına geç.
-        if (isEpisode(pageUrl) && !isSeries(pageUrl)) {
-            val epDoc = app.get(pageUrl).document
-            val link = epDoc.selectFirst("a[href*=/diziler/]")?.attr("href")
-            if (link.isNullOrBlank()) return null
-            pageUrl = absUrl(link)
-        }
-
-        val doc = app.get(pageUrl).document
-        val title = cleanTitle(
-            doc.selectFirst("meta[property=og:title]")?.attr("content") ?: doc.title()
-        )
-        val bodyText = doc.text()
-
-        // Önce görseli kendi başlık/slug'ıyla eşleştir; OpenGraph son çare.
-        var poster = doc.posterForTarget(pageUrl, title)
-            ?: doc.selectFirst("div.category_image img")?.posterOfElement()
-            ?: doc.selectFirst("div.cat-img img")?.posterOfElement()
-            ?: doc.selectFirst("div.single-item img")?.posterOfElement()
-            ?: doc.select("img[alt], img[data-src], img[data-lazy-src], img[data-original], img[src]")
-                .firstNotNullOfOrNull { image ->
-                    image.posterOfElement()?.takeIf {
-                        val alt = norm(cleanTitle(image.attr("alt")))
-                        val titleKey = norm(cleanTitle(title))
-                        titleKey.isNotBlank() && alt.isNotBlank() &&
-                            titleKey.split(" ").any { token ->
-                                token.length >= 3 && alt.split(" ").contains(token)
-                            }
-                    }
+        // Son bölümler kartı tek bölüm URL'si taşıyabilir. Bölüm sayfasındaki
+        // /diziler/... bağlantısını bulup gerçek dizi detayını yükle.
+        if (isEpisodeUrl(pageUrl)) {
+            val episodeTitle = pageTitle(doc, pageUrl)
+            val expectedWords = norm(seriesTitleFromEpisode(episodeTitle, pageUrl))
+                .split(" ").filter { it.length >= 3 }.distinct()
+            val parentSeriesUrl = doc.select("a[href*='/diziler/']")
+                .mapNotNull { link ->
+                    val target = absoluteUrl(link.attr("href"), link.baseUri()) ?: return@mapNotNull null
+                    if (isSeriesUrl(target) && !isEpisodeUrl(target) && isContentUrl(target)) link to target else null
                 }
-            ?: doc.selectFirst(
-                "meta[property=og:image], meta[property=og:image:secure_url], meta[name=twitter:image]"
-            )?.attr("content")?.trim()
-                ?.takeIf { it.isNotEmpty() && !it.startsWith("data:") && !it.contains("logo", true) }
-                ?.let { absUrl(it) }
+                .distinctBy { urlKey(it.second) }
+                .map { (link, target) ->
+                    val linkTitle = norm(cleanTitle(link.text().ifBlank { link.attr("title") }))
+                    val slugTitle = norm(titleFromUrl(target))
+                    val score = expectedWords.count { word ->
+                        linkTitle.split(" ").contains(word) || slugTitle.split(" ").contains(word)
+                    } * 10 + if (norm(link.text()).contains("dizinin sayfasina git")) 100 else 0
+                    score to target
+                }
+                .filter { it.first > 0 }
+                .maxByOrNull { it.first }?.second
 
-        if (poster.isNullOrBlank() || !isUsablePoster(poster)) {
-            poster = doc.select("img").firstNotNullOfOrNull { it.posterOfElement() }
-                ?: posterFromMarkup(doc.html(), pageUrl)
-                ?: doc.posterUrl()
+            if (!parentSeriesUrl.isNullOrBlank()) {
+                val seriesDoc = documentFor(parentSeriesUrl)
+                if (seriesDoc != null) {
+                    pageUrl = parentSeriesUrl
+                    doc = seriesDoc
+                }
+            }
         }
+        val title = pageTitle(doc, pageUrl)
+        val poster = posterForDocument(doc, pageUrl, title)
+        val plot = pagePlot(doc)
+        val year = pageYear(doc, title)
+        val actors = pageActors(doc)
+        val tags = pageGenres(doc)
+        val trailer = pageTrailer(doc)
+        val rating = pageRating(doc)
 
-        val rawDesc = doc.selectFirst("meta[property=og:description]")?.attr("content") ?: ""
-        val plot = when {
-            rawDesc.contains("sizlerle, ") -> rawDesc.substringAfter("sizlerle, ")
-            rawDesc.contains("sizlerl, ") -> rawDesc.substringAfter("sizlerl, ")
-            else -> rawDesc
-        }.trim().ifBlank { null }
-
-        val year = Regex("Yapım Yılı\\s*:\\s*(\\d{4})").find(bodyText)
-            ?.groupValues?.get(1)?.toIntOrNull()
-        val actors = Regex("Oyuncular\\s*:\\s*(.+?)\\s*(?:IMDB|Tür\\s*:|$)").find(bodyText)
-            ?.groupValues?.get(1)?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }
-        val tags = doc.select("a[href*=tur=]").map { it.text().trim() }
-            .filter { it.isNotEmpty() }.distinct()
-        val trailer = Regex("https://www\\.youtube\\.com/embed/[A-Za-z0-9_-]+")
-            .find(doc.html())?.value
-
-        // Dizi sayfası değilse film.
-        if (!isSeries(pageUrl)) {
-            return newMovieLoadResponse(title, pageUrl, TvType.Movie, pageUrl) {
-                this.posterUrl = fixUrlNull(poster)
-                this.posterHeaders = posterRequestHeaders
+        if (isEpisodeUrl(pageUrl)) {
+            val number = epNo(pageUrl, title)
+            val seriesTitle = seriesTitleFromEpisode(title, pageUrl)
+            val episode = newEpisode(pageUrl) {
+                name = title.ifBlank { "Sezon " + number.season + " Bölüm " + number.episode }
+                season = number.season
+                episode = number.episode
+                posterUrl = poster
+            }
+            return newTvSeriesLoadResponse(seriesTitle, pageUrl, TvType.TvSeries, listOf(episode)) {
+                posterUrl = poster
+                posterHeaders = this@DiziDad.posterHeaders
                 this.plot = plot
                 this.year = year
+                rating?.let { score = Score.from10(it) }
                 this.tags = tags
+                addActors(actors)
                 addTrailer(trailer)
             }
         }
 
-        // Bölümler: dizi sayfasındaki "1.Sezon 3.Bölüm" bağlantıları.
-        val seen = HashSet<String>()
-        val raw = ArrayList<Triple<Int, Int, Pair<String, String>>>()
-
-        for (a in doc.select("a[href]")) {
-            val href = a.attr("href").trim()
-            if (href.isEmpty() || !isEpisode(href) || isSeries(href)) continue
-            val epUrl = absUrl(href)
-            if (!epUrl.startsWith(mainUrl)) continue
-            val text = a.text().trim()
-            if (!text.contains("Bölüm", ignoreCase = true)) continue
-            if (!seen.add(epUrl)) continue
-
-            val season = Regex("(\\d+)\\s*\\.\\s*Sezon", RegexOption.IGNORE_CASE).find(text)
-                ?.groupValues?.get(1)?.toIntOrNull()
-                ?: Regex("-(\\d+)-sezon-").find(epUrl)?.groupValues?.get(1)?.toIntOrNull()
-                ?: 1
-            val ep = Regex("(\\d+)\\s*\\.\\s*Bölüm", RegexOption.IGNORE_CASE).find(text)
-                ?.groupValues?.get(1)?.toIntOrNull()
-                ?: Regex("-(\\d+)-bolum").find(epUrl)?.groupValues?.get(1)?.toIntOrNull()
-                ?: 0
-            raw.add(Triple(season, ep, epUrl to text))
+        if (isSeriesUrl(pageUrl)) {
+            val episodes = collectEpisodes(doc, pageUrl, poster)
+            return newTvSeriesLoadResponse(title, pageUrl, TvType.TvSeries, episodes) {
+                posterUrl = poster
+                posterHeaders = this@DiziDad.posterHeaders
+                this.plot = plot
+                this.year = year
+                rating?.let { score = Score.from10(it) }
+                this.tags = tags
+                addActors(actors)
+                addTrailer(trailer)
+            }
         }
 
-        // Dizi sayfasındaki bölüm satırlarında görsel yok; bütün bölümlere dizinin afişini ver.
-        val seriesPosterFallback = poster?.takeIf { isUsablePoster(it) }
-            ?: posterFromMarkup(doc.html(), pageUrl)
-            ?: doc.select("img").firstNotNullOfOrNull { it.posterOfElement() }
-
-        val fallbackEpisodePoster = episodePosterUrl(seriesPosterFallback)
-        android.util.Log.d(
-            "DiziDad",
-            "LOAD poster=$poster episodePoster=$fallbackEpisodePoster eps=${raw.size}"
-        )
-
-        val episodes = raw
-            .sortedWith(compareBy({ it.first }, { it.second }))
-            .map { (season, ep, pair) ->
-                newEpisode(pair.first) {
-                    this.name = pair.second
-                    this.season = season
-                    this.episode = ep
-                    this.posterUrl = fallbackEpisodePoster
-                }
-            }
-
-        return newTvSeriesLoadResponse(title, pageUrl, TvType.TvSeries, episodes) {
-            this.posterUrl = fixUrlNull(poster)
-            this.posterHeaders = posterRequestHeaders
+        return newMovieLoadResponse(title, pageUrl, TvType.Movie, pageUrl) {
+            posterUrl = poster
+            posterHeaders = this@DiziDad.posterHeaders
             this.plot = plot
             this.year = year
+            rating?.let { score = Score.from10(it) }
             this.tags = tags
             addActors(actors)
             addTrailer(trailer)
         }
     }
 
-    // ------------------------------------------------------------------ video bağlantıları
-
-    private val m3u8Regex = Regex("""https?://[^\s"'<>\\)]+?\.m3u8[^\s"'<>\\)]*""")
+    // Sadece video bağlantısı çıkarımı eski DiziDad sağlayıcısından taşınır.
+private val m3u8Regex = Regex("""https?://[^\s"'<>\\)]+?\.m3u8[^\s"'<>\\)]*""")
     private val mp4Regex = Regex("""https?://[^\s"'<>\\)]+?\.mp4[^\s"'<>\\)]*""")
     private val hdPlayerBase = "https://hdplayersystem.com"
 
@@ -863,3 +660,4 @@ class DiziDad : MainAPI() {
         return found
     }
 }
+
