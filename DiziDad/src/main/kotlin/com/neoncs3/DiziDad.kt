@@ -564,7 +564,7 @@ private val m3u8Regex = Regex("""https?://[^\s"'<>\\)]+?\.m3u8[^\s"'<>\\)]*""")
     private suspend fun twitterMp4Variants(m3u8Url: String): List<Pair<Int, String>> {
         val mediaId = Regex("""/amplify_video/(\d+)/""")
             .find(m3u8Url)?.groupValues?.getOrNull(1) ?: return emptyList()
-        val apiUrl = "https://cdn.syndication.twimg.com/tweet-result?id=$mediaId&lang=en"
+        val apiUrl = "https://cdn.syndication.twimg.com/tweet-result?id=$mediaId&token=0&lang=en"
         val jsonText = runCatching {
             app.get(
                 apiUrl,
