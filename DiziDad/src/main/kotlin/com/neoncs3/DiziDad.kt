@@ -31,11 +31,6 @@ class DiziDad : MainAPI() {
     override val supportedTypes = setOf(TvType.TvSeries, TvType.Movie)
 
     override val mainPage = mainPageOf(
-        "$mainUrl/tum-bolumler/" to "Son Eklenen Bölümler",
-        "$mainUrl/yerli-dizi-izle/" to "Yerli Diziler",
-        "$mainUrl/yabanci-dizi-izle/" to "Yabancı Diziler",
-        "$mainUrl/turkce-dublaj-diziler-hd/" to "Dublajlı Diziler",
-        "$mainUrl/netflix-dizileri-izle/" to "Netflix Dizileri",
         "$mainUrl/tum-filmler/" to "Filmler",
         "$mainUrl/yabanci-filmler-izle/" to "Yabancı Filmler",
         "$mainUrl/yerli-filmler/" to "Yerli Filmler",
