@@ -169,10 +169,10 @@
     },
     {
         "iconUrl": "https://www.google.com/s2/favicons?domain=dizidad.com&sz=%size%",
-        "fileHash": "sha256-f4057d00f6858c764b372b6215c11467a200000b9e5ac2a0e7fb45775de846e1",
+        "fileHash": "sha256-65ca3a2b19a0952b16fb343cd538dec3e07794e93a0fe24b337e19ab5029e7b4",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 76802,
+        "fileSize": 77075,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -182,7 +182,7 @@
             "Movie",
             "TvSeries"
         ],
-        "version": 25,
+        "version": 26,
         "internalName": "DiziDad",
         "description": "DiziDAD \u2014 t\u00fcm diziler, filmler ve eksiksiz sezon/b\u00f6l\u00fcm listeleri",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/DiziDad.cs3",
