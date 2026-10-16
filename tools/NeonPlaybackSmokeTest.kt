@@ -43,6 +43,9 @@ class NeonPlaybackSmokeTest {
         // Use when the website serves a known unusable media endpoint for this exact fixture.
         // It remains visible as BLOCKED in the report, but does not masquerade as a Kotlin regression.
         val upstreamUnavailableReason: String? = null,
+        // Check DiziDad's actual LoadResponse episode poster data and fetch a few image URLs
+        // through the same HTTP client/User-Agent as the installed CloudStream app.
+        val posterOnly: Boolean = false,
     )
     data class Result(
         val provider: String,
@@ -55,6 +58,15 @@ class NeonPlaybackSmokeTest {
     )
 
     private val targets = listOf(
+        Target(
+            name = "DiziDad • Tyson afişleri",
+            queries = emptyList(),
+            directUrls = listOf("https://www.dizidad.com/diziler/tyson-izle/"),
+            pluginInternalName = "DiziDad",
+            directOnly = true,
+            apiName = "DiziDAD",
+            posterOnly = true,
+        ),
         Target("AsyaFilmIzle", listOf("Squid Game", "Wednesday", "The Last of Us")),
         Target(
             "DiziBoxizle",
@@ -542,6 +554,79 @@ class NeonPlaybackSmokeTest {
             .take(MAX_CANDIDATES_PER_PROVIDER)
     }
 
+    private suspend fun testPosterUrls(api: MainAPI, target: Target): Result {
+        val page = target.directUrls.firstOrNull()
+            ?: return Result(target.name, "FAIL", error = "Afiş testi için dizi URL'si tanımlı değil")
+
+        val load = runCatching { api.load(page) }.getOrElse {
+            return Result(target.name, "FAIL", item = page, error = "load() hata verdi: " + err(it))
+        }
+        if (load !is TvSeriesLoadResponse) {
+            return Result(
+                target.name,
+                "FAIL",
+                item = page,
+                error = "Dizi sayfası TvSeriesLoadResponse döndürmedi; tür=" + (load?.javaClass?.simpleName ?: "null"),
+            )
+        }
+
+        val episodes = load.episodes
+        if (episodes.isEmpty()) {
+            return Result(target.name, "FAIL", item = "0 bölüm", error = "Dizi yükleniyor ama bölüm listesi boş")
+        }
+
+        val withPoster = episodes.count { !it.posterUrl.isNullOrBlank() }
+        val missingExamples = episodes.filter { it.posterUrl.isNullOrBlank() }
+            .take(4)
+            .joinToString { it.name ?: "bölüm ${it.episode}" }
+
+        // CloudStream ImageModuleCoil sets this same application User-Agent for image requests.
+        val cloudStreamUserAgent =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
+        val sample = episodes.take(4)
+        var downloaded = 0
+        val fetchDetails = mutableListOf<String>()
+        for (episode in sample) {
+            val poster = episode.posterUrl?.trim().orEmpty()
+            if (poster.isBlank()) {
+                fetchDetails.add("${episode.name ?: episode.episode}: URL yok")
+                continue
+            }
+
+            val response = runCatching {
+                app.get(
+                    poster,
+                    headers = mapOf("User-Agent" to cloudStreamUserAgent),
+                    timeout = 10_000L,
+                    allowRedirects = true,
+                )
+            }.getOrNull()
+            if (response != null && response.code in 200..299) {
+                downloaded++
+                Log.d("NEON_POSTER", "episode=${episode.name} status=${response.code} url=${safeUrlForLog(poster)}")
+            } else {
+                val detail = response?.let { "HTTP ${it.code}" } ?: "istek başarısız"
+                fetchDetails.add("${episode.name ?: episode.episode}: $detail (${safeUrlForLog(poster)})")
+                Log.w("NEON_POSTER", "episode=${episode.name} result=$detail url=${safeUrlForLog(poster)}")
+            }
+        }
+
+        val ok = withPoster == episodes.size && downloaded == sample.size
+        val item = "${episodes.size} bölüm; posterUrl=${withPoster}/${episodes.size}; örnek indirme=${downloaded}/${sample.size}"
+        val error = if (ok) null else buildString {
+            if (withPoster != episodes.size) append("Afiş URL'si eksik olanlar: ${missingExamples.ifBlank { "isim alınamadı" }}. ")
+            if (fetchDetails.isNotEmpty()) append("Görsel istekleri: ${fetchDetails.joinToString("; ")}")
+        }.take(1200)
+        Log.d("NEON_POSTER", "provider=${target.name} $item result=${if (ok) "PASS" else "FAIL"}")
+        return Result(
+            provider = target.name,
+            status = if (ok) "PASS" else "FAIL",
+            item = item,
+            links = downloaded,
+            error = error,
+        )
+    }
+
     private suspend fun testProvider(
         context: Context,
         target: Target,
@@ -586,6 +671,10 @@ class NeonPlaybackSmokeTest {
                 error = "Provider origin erişimi engellendi HTTP ${originProbe.first}" +
                     if (originProbe.second) " (anti-bot challenge)" else "",
             )
+        }
+
+        if (target.posterOnly) {
+            return testPosterUrls(api, target)
         }
 
         val candidates = providerCandidates(api, target)
