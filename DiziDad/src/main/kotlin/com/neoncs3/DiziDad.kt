@@ -83,9 +83,21 @@ class DiziDad : MainAPI() {
 
     private fun isUsablePoster(url: String?): Boolean {
         if (url.isNullOrBlank() || !url.startsWith("http", true)) return false
-        return !Regex(
-            "(?i)(/themes/|placeholder|no[-_]?image|blank\\.(gif|png|jpe?g|webp)|logo|avatar|spacer|transparent|pixel|default[-_]?poster)"
-        ).containsMatchIn(url)
+
+        // Filtreyi tam URL yerine yalnızca dosya adına uygula.
+        // Aksi hâlde "avatar-seven-havens.jpg" gibi gerçek dizi afişleri yanlışlıkla reddedilir.
+        val path = runCatching { java.net.URI(url).path.orEmpty() }
+            .getOrDefault(url.substringBefore('?').substringBefore('#'))
+        val file = path.substringAfterLast('/').lowercase(Locale.ROOT)
+        if (file.isBlank()) return false
+
+        val placeholderName = Regex(
+            """(?i)(?:^|[-_])(?:placeholder|no[-_]?image|blank|spacer|transparent|pixel|default[-_]?poster|default[-_]?avatar)(?:[-_.]|$)"""
+        )
+        val logoName = Regex("""(?i)(?:^|[-_])logo(?:[-_.]|$)""")
+        return !placeholderName.containsMatchIn(file) &&
+            !logoName.containsMatchIn(file) &&
+            !file.startsWith("dizidadlogo.")
     }
 
     /** HTML/script içinde geçen WordPress afiş URL'lerini bulur ve başlık slug'ını tercih eder. */
@@ -125,9 +137,6 @@ class DiziDad : MainAPI() {
 
     /** Karttaki gerçek afişi bulur (yer tutucu ve tema ikonlarını atlar). */
     private fun Element.posterUrl(): String? {
-        val invalidPoster = Regex(
-            "(?i)(/themes/|placeholder|no[-_]?image|blank\\.(gif|png|jpe?g|webp)|logo|avatar|spacer|transparent|pixel|default[-_]?poster)"
-        )
         val nodes = listOf(this) + select("*")
         val attributes = listOf(
             "data-poster", "data-poster-url", "data-bg", "data-background-image",
@@ -151,13 +160,10 @@ class DiziDad : MainAPI() {
                 for (candidate in values) {
                     val value = candidate.trim().removeSurrounding("\"").removeSurrounding("'")
                     if (value.isEmpty() || value.startsWith("data:") ||
-                        value.startsWith("javascript:", true) || invalidPoster.containsMatchIn(value)
+                        value.startsWith("javascript:", true)
                     ) continue
                     val resolved = fixUrlNull(value)
-                    if (!resolved.isNullOrBlank() &&
-                        (resolved.startsWith("https://") || resolved.startsWith("http://")) &&
-                        !invalidPoster.containsMatchIn(resolved)
-                    ) {
+                    if (!resolved.isNullOrBlank() && isUsablePoster(resolved)) {
                         return resolved
                     }
                 }
