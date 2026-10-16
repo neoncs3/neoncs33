@@ -511,18 +511,32 @@ class DiziDad : MainAPI() {
         )
         val bodyText = doc.text()
 
-        // DiziMom'daki kategori afişi seçicileri, OpenGraph ve genel görsel taramasından önce denenir.
-        var poster = doc.selectFirst("div.category_image img")?.posterOfElement()
+        // Önce görseli kendi başlık/slug'ıyla eşleştir. DiziDAD'ın og:image adresi
+        // bazı sayfalarda var olmayan "tyson-izle.jpg" varyantını verirken gerçek
+        // img[data-src] "tyson.jpg" kullanıyor; OpenGraph bu yüzden son çare olmalı.
+        var poster = doc.posterForTarget(pageUrl, title)
+            ?: doc.selectFirst("div.category_image img")?.posterOfElement()
             ?: doc.selectFirst("div.cat-img img")?.posterOfElement()
             ?: doc.selectFirst("div.single-item img")?.posterOfElement()
+            ?: doc.select("img[alt], img[data-src], img[data-lazy-src], img[data-original], img[src]")
+                .firstNotNullOfOrNull { image ->
+                    image.posterOfElement()?.takeIf { candidate ->
+                        val alt = norm(cleanTitle(image.attr("alt")))
+                        val titleKey = norm(cleanTitle(title))
+                        titleKey.isNotBlank() && alt.isNotBlank() &&
+                            titleKey.split(" ").any { token ->
+                                token.length >= 3 && alt.split(" ").contains(token)
+                            }
+                    }
+                }
             ?: doc.selectFirst(
                 "meta[property=og:image], meta[property=og:image:secure_url], meta[name=twitter:image]"
             )?.attr("content")?.trim()
                 ?.takeIf { it.isNotEmpty() && !it.startsWith("data:") && !it.contains("logo", true) }
                 ?.let { absUrl(it) }
         if (poster.isNullOrBlank() || !isUsablePoster(poster)) {
-            poster = posterFromMarkup(doc.html(), pageUrl)
-                ?: doc.select("img").firstNotNullOfOrNull { it.posterOfElement() }
+            poster = doc.select("img").firstNotNullOfOrNull { it.posterOfElement() }
+                ?: posterFromMarkup(doc.html(), pageUrl)
                 ?: doc.posterUrl()
         }
 
