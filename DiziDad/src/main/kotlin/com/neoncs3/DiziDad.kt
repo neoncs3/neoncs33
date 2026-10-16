@@ -21,14 +21,13 @@ class DiziDad : MainAPI() {
     )
 
     /**
-     * CloudStream Episode modelinde posterHeaders alanı yok; episode-list UI
-     * görseli sadece URL ile yükler. DiziDad uploads görsellerini başlıksız
-     * isteklerde de yüklenebilir/önbelleklenmiş URL olarak sunmayı dene.
+     * Bölüm afişleri CloudStream tarafından özel posterHeaders olmadan istenir.
+     * CI testinde DiziDad uploads URL'leri doğrudan image/webp veya image/png
+     * döndürüyor; bu nedenle araya proxy koymadan kaynak URL'yi kullan.
      */
     private fun episodePosterUrl(url: String?): String? {
         val original = url?.trim()?.takeIf { isUsablePoster(it) } ?: return null
-        if (!original.contains("$mainUrl/wp-content/uploads/", ignoreCase = true)) return original
-        return "https://wsrv.nl/?url=${URLEncoder.encode(original, "UTF-8")}&w=342&maxage=31d"
+        return absUrl(original)
     }
     override val hasMainPage = true
     override var lang = "tr"
