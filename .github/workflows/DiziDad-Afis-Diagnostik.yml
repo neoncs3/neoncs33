@@ -84,6 +84,69 @@ jobs:
                       if candidate.startswith("http") and candidate not in found:
                           found.append(candidate)
 
+          # Sayfa etiketlerini gerçek DOM'dan yazdır: kaynak görsel erişimi ile eklentinin
+          # posterUrl'ye hangi değeri koyabildiğini ayırır.
+          from html.parser import HTMLParser
+
+          class PageProbe(HTMLParser):
+              def __init__(self):
+                  super().__init__(convert_charrefs=True)
+                  self.metas = []
+                  self.images = []
+                  self.anchors = []
+                  self.anchor_stack = []
+
+              def handle_starttag(self, tag, attrs):
+                  a = dict(attrs)
+                  if tag.lower() == "meta" and (
+                      a.get("property", "").lower() in ("og:image", "og:image:secure_url")
+                      or a.get("name", "").lower() == "twitter:image"
+                  ):
+                      self.metas.append((a.get("property") or a.get("name"), a.get("content")))
+                  if tag.lower() == "a":
+                      item = {"href": a.get("href", ""), "text": "", "images": []}
+                      self.anchors.append(item)
+                      self.anchor_stack.append(item)
+                  if tag.lower() == "img":
+                      img = {k: a.get(k, "") for k in (
+                          "alt", "src", "data-src", "data-lazy-src", "data-original",
+                          "data-image", "data-poster", "data-srcset", "srcset", "class"
+                      )}
+                      self.images.append(img)
+                      if self.anchor_stack:
+                          self.anchor_stack[-1]["images"].append(img)
+
+              def handle_data(self, data):
+                  value = data.strip()
+                  if value:
+                      for item in self.anchor_stack:
+                          item["text"] += (" " if item["text"] else "") + value
+
+              def handle_endtag(self, tag):
+                  if tag.lower() == "a" and self.anchor_stack:
+                      self.anchor_stack.pop()
+
+          print("=== GERÇEK HTML'DE AFİŞ ALANLARI / EPISODE LINK EŞLEŞMESİ ===")
+          for page in pages:
+              code, ctype, body = fetch(page)
+              if not code or code >= 400:
+                  continue
+              probe = PageProbe()
+              probe.feed(body.decode("utf-8", "replace"))
+              print(f"PARSE_PAGE {page} og_images={probe.metas}")
+              for img in probe.images:
+                  combined = " ".join(str(v) for v in img.values())
+                  if "wp-content/uploads" in combined or "tyson" in combined.lower():
+                      print("DOM_IMG " + repr(img))
+              for a in probe.anchors:
+                  href = a.get("href", "")
+                  if re.search(r"-\\d+-bolum", href, re.I) or "/diziler/" in href:
+                      print("DOM_CONTENT_LINK " + repr({
+                          "href": href,
+                          "text": a.get("text", "").strip()[:100],
+                          "images": a.get("images", [])[:2]
+                      }))
+
           sample = "https://www.dizidad.com/wp-content/uploads/2026/10/tyson.jpg"
           candidates = [sample] + [u for u in found if u != sample]
           candidates = candidates[:4]
