@@ -44,6 +44,7 @@ adb shell mkdir -p "${PLUGIN_DIR}"
 adb shell rm -f "${PLUGIN_DIR}"/*.cs3 || true
 
 plugins=(
+  DiziDad
   AsyaFilmIzle
   DiziBoxizle
   DiziPal
@@ -130,7 +131,7 @@ echo "=== Gerçek CloudStream / ExoPlayer testi ==="
 set +e
 ./gradlew :app:connectedPrereleaseDebugAndroidTest \
   -Pandroid.testInstrumentationRunnerArguments.class=com.lagradost.cloudstream3.NeonPlaybackSmokeTest \
-  -Pandroid.testInstrumentationRunnerArguments.providers=Dizimag,TvDiziler,HdFilmDiziizle \
+  -Pandroid.testInstrumentationRunnerArguments.providers=DiziDAD,Dizimag,TvDiziler,HdFilmDiziizle \
   --no-daemon --stacktrace 2>&1 | tee "${RUNNER_TEMP}/instrumentation.log"
 TEST_EXIT="${PIPESTATUS[0]}"
 set -e
