@@ -21,16 +21,9 @@ class DiziDad : MainAPI() {
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
     )
 
-    /**
-     * Episode sınıfında posterHeaders yok; bu yüzden bölüm afişleri Referer'sız istenir ve
-     * site hotlink engeli uygularsa görünmez. Görseli wsrv.nl proxy'si üzerinden vererek
-     * Referer gereksinimini aşıyoruz.
-     */
-    private fun episodePosterUrl(url: String?): String? {
-        val original = url?.trim()?.takeIf { isUsablePoster(it) } ?: return null
-        val abs = absUrl(original)
-        return "https://wsrv.nl/?url=" + URLEncoder.encode(abs, "UTF-8") + "&w=400&output=jpg"
-    }
+    // Kaynak görsel doğrudan HTTP 200 ve geçerli WebP içeriği döndürüyor; proxy kullanma.
+    private fun episodePosterUrl(url: String?): String? =
+        url?.trim()?.takeIf { isUsablePoster(it) }?.let { absUrl(it) }
 
     override val hasMainPage = true
     override var lang = "tr"
@@ -285,17 +278,10 @@ class DiziDad : MainAPI() {
     private val posterBearingSelector =
         "img, [data-poster], [data-poster-url], [data-image], [data-bg], [data-background], [data-background-image], [data-src], [data-original], [data-lazy-src], [data-lazy-background], [data-srcset], [data-lazy-srcset], [srcset], [style*=background]"
 
-    // Katalog kartlarında kaynak görsel adresini kullan; posterHeaders Referer sağlar.
-    // Bölüm afişleri ise Episode modelinde headers alanı olmadığından episodePosterUrl() proxy'sinden geçer.
-    private val useImageProxy = false
 
-    private fun proxied(url: String): String =
-        "https://wsrv.nl/?url=" + URLEncoder.encode(url, "UTF-8") + "&w=400&output=jpg"
 
-    private fun makeCard(rawTitle: String, url: String, poster: String?): SearchResponse {
-        val finalPoster = if (useImageProxy && !poster.isNullOrBlank()) proxied(poster) else poster
-        return makeCardInternal(rawTitle, url, finalPoster)
-    }
+    private fun makeCard(rawTitle: String, url: String, poster: String?): SearchResponse =
+        makeCardInternal(rawTitle, url, poster)
 
     private fun makeCardInternal(title: String, url: String, poster: String?): SearchResponse =
         if (isSeries(url) || isEpisode(url)) {
@@ -500,7 +486,7 @@ class DiziDad : MainAPI() {
             val p = runCatching { posterFromPage(item.url) }.getOrNull()
             android.util.Log.d("DiziDad", "FILL ${item.url} -> $p")
             if (!p.isNullOrBlank()) {
-                item.posterUrl = if (useImageProxy) proxied(p) else p
+                item.posterUrl = p
             }
         }
     }
