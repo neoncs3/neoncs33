@@ -10,6 +10,13 @@ import com.lagradost.cloudstream3.ui.player.CSPlayerEvent
 import com.lagradost.cloudstream3.ui.player.PlayerEventSource
 import com.lagradost.cloudstream3.ui.player.ErrorEvent
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.USER_AGENT
+import coil3.SingletonImageLoader
+import coil3.network.NetworkHeaders
+import coil3.network.httpHeaders
+import coil3.request.ErrorResult
+import coil3.request.ImageRequest
+import coil3.request.SuccessResult
 import androidx.media3.common.Player
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -554,7 +561,7 @@ class NeonPlaybackSmokeTest {
             .take(MAX_CANDIDATES_PER_PROVIDER)
     }
 
-    private suspend fun testPosterUrls(api: MainAPI, target: Target): Result {
+    private suspend fun testPosterUrls(context: Context, api: MainAPI, target: Target): Result {
         val page = target.directUrls.firstOrNull()
             ?: return Result(target.name, "FAIL", error = "Afiş testi için dizi URL'si tanımlı değil")
 
@@ -593,21 +600,33 @@ class NeonPlaybackSmokeTest {
                 continue
             }
 
-            val response = runCatching {
-                app.get(
-                    poster,
-                    headers = mapOf("User-Agent" to cloudStreamUserAgent),
-                    timeout = 10_000L,
-                    allowRedirects = true,
-                )
-            }.getOrNull()
-            if (response != null && response.code in 200..299) {
-                downloaded++
-                Log.d("NEON_POSTER", "episode=${episode.name} status=${response.code} url=${safeUrlForLog(poster)}")
-            } else {
-                val detail = response?.let { "HTTP ${it.code}" } ?: "istek başarısız"
-                fetchDetails.add("${episode.name ?: episode.episode}: $detail (${safeUrlForLog(poster)})")
-                Log.w("NEON_POSTER", "episode=${episode.name} result=$detail url=${safeUrlForLog(poster)}")
+            val result = runCatching {
+                val request = ImageRequest.Builder(context)
+                    .data(poster)
+                    .httpHeaders(NetworkHeaders.Builder().also { headerBuilder ->
+                        headerBuilder["User-Agent"] = USER_AGENT
+                    }.build())
+                    .build()
+                SingletonImageLoader.get(context).execute(request)
+            }.getOrElse {
+                fetchDetails.add("${episode.name ?: episode.episode}: Coil hata verdi: ${err(it)} (${safeUrlForLog(poster)})")
+                Log.w("NEON_POSTER", "episode=${episode.name} Coil exception=${err(it)} url=${safeUrlForLog(poster)}")
+                null
+            }
+            when (result) {
+                is SuccessResult -> {
+                    downloaded++
+                    Log.d("NEON_POSTER", "episode=${episode.name} coil=SUCCESS url=${safeUrlForLog(poster)}")
+                }
+                is ErrorResult -> {
+                    val detail = "Coil decode/istek hatası: ${err(result.throwable)}"
+                    fetchDetails.add("${episode.name ?: episode.episode}: $detail (${safeUrlForLog(poster)})")
+                    Log.w("NEON_POSTER", "episode=${episode.name} coil=ERROR error=${err(result.throwable)} url=${safeUrlForLog(poster)}")
+                }
+                null -> Unit
+                else -> {
+                    fetchDetails.add("${episode.name ?: episode.episode}: Beklenmeyen Coil sonucu (${safeUrlForLog(poster)})")
+                }
             }
         }
 
@@ -642,6 +661,12 @@ class NeonPlaybackSmokeTest {
             error = "Provider bulunamadı: $requestedApiName",
         )
 
+        // A poster test should diagnose the selected series page and Coil requests directly.
+        // Do not short-circuit it based on a generic homepage probe.
+        if (target.posterOnly) {
+            return testPosterUrls(context, api, target)
+        }
+
         // Probe the provider origin before attributing an empty video-link list to the
         // plugin. An origin-wide 403/429 or explicit anti-bot interstitial is external
         // blocking, not a Kotlin extraction regression. Keep it visible as BLOCKED.
@@ -671,10 +696,6 @@ class NeonPlaybackSmokeTest {
                 error = "Provider origin erişimi engellendi HTTP ${originProbe.first}" +
                     if (originProbe.second) " (anti-bot challenge)" else "",
             )
-        }
-
-        if (target.posterOnly) {
-            return testPosterUrls(api, target)
         }
 
         val candidates = providerCandidates(api, target)
