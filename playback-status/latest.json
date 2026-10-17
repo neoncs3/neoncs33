@@ -4,7 +4,7 @@
       "provider": "DiziDad • Tyson afişleri",
       "status": "FAIL",
       "query": null,
-      "item": "4 bölüm; bölüm posterUrl=4/4; Coil bölüm=4/4; ana sayfa posterUrl=243/245 (6/6 kategori); arama[Animal] posterUrl=3/3; Coil arama=3/3; filtre AvatarPoster=false; bozukBaşlık=0; Coil katalog=4/4",
+      "item": "4 bölüm; bölüm posterUrl=4/4; Coil bölüm=4/4; ana sayfa posterUrl=251/253 (6/6 kategori); arama[Animal] posterUrl=3/3; Coil arama=3/3; filtre AvatarPoster=false; bozukBaşlık=0; Coil katalog=4/4",
       "links": 11,
       "positionMs": 0,
       "error": "Ana sayfa afiş eksikleri: Dizi Arşivi 9/10, Yabancı Diziler 9/10. Filtre kontrolü başarısız: Avatar: Seven Havens afişi LoadResponse içinde yok."
@@ -78,7 +78,7 @@
       "query": null,
       "item": "TvDiziler • Tuzlu Kahve 7",
       "links": 1,
-      "positionMs": 3195,
+      "positionMs": 3040,
       "error": null
     },
     {
@@ -87,7 +87,7 @@
       "query": null,
       "item": "TvDiziler • Anne Yarısı 4",
       "links": 1,
-      "positionMs": 3160,
+      "positionMs": 3058,
       "error": null
     },
     {
@@ -96,7 +96,7 @@
       "query": null,
       "item": "TvDiziler • Haysiyet 6",
       "links": 1,
-      "positionMs": 3387,
+      "positionMs": 3458,
       "error": null
     }
   ],
