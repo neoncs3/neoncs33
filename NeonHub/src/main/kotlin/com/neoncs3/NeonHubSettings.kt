@@ -102,7 +102,6 @@ object NeonHubSettings {
             setTextColor(green)
             background = pill(Color.parseColor("#102B26"), Color.parseColor("#236A53"), dp(context, 16).toFloat())
             setPadding(dp(context, 11), dp(context, 7), dp(context, 11), dp(context, 7))
-            setPadding(dp(context, 11), dp(context, 7), dp(context, 11), dp(context, 7))
         }
         val rows = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -202,7 +201,6 @@ object NeonHubSettings {
                 setTypeface(null, Typeface.BOLD)
                 setTextColor(textSecondary)
                 minimumHeight = 0
-                minHeight = 0
                 setPadding(dp(context, 4), 0, dp(context, 4), 0)
                 background = rounded(cardColor, dp(context, 10).toFloat(), borderColor)
                 setOnClickListener {
@@ -217,17 +215,18 @@ object NeonHubSettings {
         }
         rows.addView(filterBar)
 
-        lateinit var checkButton: Button
+        val checkButtonRef = arrayOfNulls<Button>(1)
         val checkSummary = TextView(context).apply {
             text = "Kontrol, site adresinin yanıtını ölçer; video oynatmayı garanti etmez."
             textSize = 11f
             setTextColor(textSecondary)
             setPadding(dp(context, 2), dp(context, 5), dp(context, 2), dp(context, 11))
         }
-        checkButton = actionButton(context, "↻  Kaynakları Kontrol Et", cyan, Color.parseColor("#102B3B")) {
+        val checkButton = actionButton(context, "↻  Kaynakları Kontrol Et", cyan, Color.parseColor("#102B3B")) {
+            val activeCheckButton = checkButtonRef[0] ?: return@actionButton
             if (!checkRunning.compareAndSet(false, true)) return@actionButton
-            checkButton.isEnabled = false
-            checkButton.text = "Kontrol ediliyor..."
+            activeCheckButton.isEnabled = false
+            activeCheckButton.text = "Kontrol ediliyor..."
             checkSummary.text = "Site adresleri arka planda kontrol ediliyor. Kaynaklar otomatik kapatılmaz."
             statusLabels.values.forEach {
                 it.text = "● Kontrol ediliyor..."
@@ -254,8 +253,8 @@ object NeonHubSettings {
                         }
                         if (remaining.decrementAndGet() == 0) {
                             checkRunning.set(false)
-                            checkButton.isEnabled = true
-                            checkButton.text = "↻  Kaynakları Yeniden Kontrol Et"
+                            activeCheckButton.isEnabled = true
+                            activeCheckButton.text = "↻  Kaynakları Yeniden Kontrol Et"
                             checkSummary.text = "Tamamlandı: " + goodCount.get() + " erişilebilir · " +
                                 warningCount.get() + " uyarı · " + failedCount.get() +
                                 " yanıt yok. Bu sonuç video oynatmayı doğrulamaz."
@@ -265,6 +264,7 @@ object NeonHubSettings {
             }
             executor.shutdown()
         }
+        checkButtonRef[0] = checkButton
         rows.addView(checkButton, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dp(context, 44)
         ).apply { bottomMargin = dp(context, 2) })
