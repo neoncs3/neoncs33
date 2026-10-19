@@ -352,7 +352,6 @@ object NeonHubSettings {
             setTextColor(textSecondary)
             setPadding(dp(context, 2), dp(context, 7), dp(context, 2), 0)
         }
-        val checkRunning = AtomicBoolean(false)
         val checkButtonRef = arrayOfNulls<Button>(1)
         val healthCard = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
