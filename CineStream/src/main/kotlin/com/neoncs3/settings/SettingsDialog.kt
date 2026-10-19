@@ -66,13 +66,13 @@ internal object SettingsDialog {
         }
         layout.addView(buildCollapsibleCard(
             context,
-            "🌌  NeonHub Sağlayıcıları",
+            "🧩  NeonHub Eklentileri",
             startExpanded = true,
             accentA = Color.parseColor("#00D9FF"),
             accentB = Color.parseColor("#A855F7")
         ) {
             addView(TextView(context).apply {
-                text = "Tek eklentideki kaynakları buradan ayrı ayrı açıp kapatabilirsin."
+                text = "Tek paketteki eklentileri buradan ayrı ayrı açıp kapatabilirsin."
                 textSize = 12f
                 setTextColor(theme.TEXT_SECONDARY)
                 setPadding(20.dp(context), 2.dp(context), 20.dp(context), 10.dp(context))
@@ -1093,7 +1093,7 @@ internal object SettingsDialog {
                 setTextColor(theme.TEXT_PRIMARY); letterSpacing = -0.02f
             })
             addView(TextView(context).apply {
-                text = "Tüm içerik sağlayıcılarını tek panelden yönet"
+                text = "Tüm eklentilerini tek panelden yönet"
                 textSize = 13f; setTextColor(theme.TEXT_SECONDARY); setPadding(0, 6.dp(context), 0, 0)
             })
         }
