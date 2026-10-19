@@ -1,6 +1,7 @@
 package com.neoncs3
 
 import android.app.Dialog
+import android.app.AlertDialog
 import android.content.Context
 import android.content.res.ColorStateList
 import android.content.res.Resources
@@ -587,6 +588,30 @@ object NeonHubSettings {
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT
         )
+    }
+
+    /**
+     * Minimal, dependable settings fallback if the themed full-screen dialog fails
+     * on a particular CloudStream build or Android TV device.
+     */
+    fun showFallbackSettingsDialog(context: Context, onSave: () -> Unit) {
+        val checked = BooleanArray(sources.size) { index -> enabled(sources[index].key) }
+        val labels = sources.map { it.title }.toTypedArray()
+
+        AlertDialog.Builder(context)
+            .setTitle("NEONHUB · Kaynak Ayarları")
+            .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
+                checked[which] = isChecked
+            }
+            .setNegativeButton("Vazgeç", null)
+            .setPositiveButton("Kaydet ve Uygula") { _, _ ->
+                sources.forEachIndexed { index, source ->
+                    setKey(source.key, checked[index])
+                }
+                onSave()
+                Toast.makeText(context, "NeonHub ayarları uygulandı", Toast.LENGTH_SHORT).show()
+            }
+            .show()
     }
 
     private fun probeSource(key: String): SourceProbe {
