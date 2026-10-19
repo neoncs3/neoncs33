@@ -64,7 +64,7 @@ android {
 
             // All providers are registered by NeonHubEntry.kt. Exclude the
             // individual plugin entry points to prevent duplicate loaders.
-            java.exclude("**/*Plugin.kt", "**/CineStream.kt")
+            java { exclude("**/*Plugin.kt", "**/CineStream.kt") }
         }
     }
 }
