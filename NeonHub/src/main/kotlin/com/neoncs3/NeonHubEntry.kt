@@ -4,8 +4,6 @@ import android.content.Context
 import com.lagradost.cloudstream3.MainActivity
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
-import com.neoncs3.settings.Settings
-import kotlinx.coroutines.runBlocking
 
 /**
  * Unified CloudStream entry point.
@@ -18,60 +16,58 @@ class NeonHubPlugin : Plugin() {
     override fun load(context: Context) {
         super.load(context)
 
-        // Keep CineStream's initialization and settings behavior.
-        runBlocking { init() }
-        Settings.initSeenProviders()
+        // NeonHub owns the only user-facing settings screen.
 
         // Only register site providers that are enabled in the NeonHub settings.
-        if (Settings.neonHubSourceEnabled(Settings.HUB_SOURCE_ASYAFILM)) {
+        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_ASYAFILM)) {
             registerMainAPI(AsyaFilmIzle())
         }
-        if (Settings.neonHubSourceEnabled(Settings.HUB_SOURCE_DIZIMAG)) {
+        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_DIZIMAG)) {
             registerMainAPI(AutoDdizimagCom())
         }
-        if (Settings.neonHubSourceEnabled(Settings.HUB_SOURCE_HDFILMDIZI)) {
+        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_HDFILMDIZI)) {
             registerMainAPI(AutoHdfilmdiziizleCom())
         }
-        if (Settings.neonHubSourceEnabled(Settings.HUB_SOURCE_CANLI)) {
+        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_CANLI)) {
             registerMainAPI(CanliProvider())
         }
-        if (Settings.neonHubSourceEnabled(Settings.HUB_SOURCE_TVDIZILER)) {
+        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_TVDIZILER)) {
             registerMainAPI(AutoTvdizilerTv())
         }
-        if (Settings.neonHubSourceEnabled(Settings.HUB_SOURCE_DDIZI)) {
+        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_DDIZI)) {
             registerMainAPI(DDizi())
         }
-        if (Settings.neonHubSourceEnabled(Settings.HUB_SOURCE_DIZIBOXIZLE)) {
+        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_DIZIBOXIZLE)) {
             registerMainAPI(DiziBoxizle())
         }
-        if (Settings.neonHubSourceEnabled(Settings.HUB_SOURCE_DIZIDAD)) {
+        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_DIZIDAD)) {
             registerMainAPI(DiziDad())
         }
-        if (Settings.neonHubSourceEnabled(Settings.HUB_SOURCE_DIZIPAL)) {
+        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_DIZIPAL)) {
             registerMainAPI(DiziPal())
         }
-        if (Settings.neonHubSourceEnabled(Settings.HUB_SOURCE_DIZIGECESI)) {
+        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_DIZIGECESI)) {
             registerMainAPI(Dizigecesi())
         }
-        if (Settings.neonHubSourceEnabled(Settings.HUB_SOURCE_DRAMADIZILERIM)) {
+        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_DRAMADIZILERIM)) {
             registerMainAPI(Dramadizilerim())
         }
-        if (Settings.neonHubSourceEnabled(Settings.HUB_SOURCE_FILMMODU)) {
+        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_FILMMODU)) {
             registerMainAPI(FilmModu())
         }
-        if (Settings.neonHubSourceEnabled(Settings.HUB_SOURCE_JETFILMIZLE)) {
+        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_JETFILMIZLE)) {
             registerMainAPI(JetFilmizle())
         }
-        if (Settings.neonHubSourceEnabled(Settings.HUB_SOURCE_SETFILMIZLE)) {
+        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_SETFILMIZLE)) {
             registerMainAPI(SetFilmIzle())
         }
-        if (Settings.neonHubSourceEnabled(Settings.HUB_SOURCE_SINEMACX)) {
+        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_SINEMACX)) {
             registerMainAPI(SinemaCX())
         }
-        if (Settings.neonHubSourceEnabled(Settings.HUB_SOURCE_TIZAM)) {
+        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_TIZAM)) {
             registerMainAPI(Tizam())
         }
-        if (Settings.neonHubSourceEnabled(Settings.HUB_SOURCE_WEBDRAMATURKEY)) {
+        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_WEBDRAMATURKEY)) {
             registerMainAPI(WebDramaTurkey())
         }
 
@@ -79,18 +75,7 @@ class NeonHubPlugin : Plugin() {
         registerExtractorAPI(PixelDrain())
         registerExtractorAPI(WebDramaTurkeyExtractor())
 
-        // CineStream's provider toggles are retained for its three catalogs.
-        if (Settings.neonHubSourceEnabled(Settings.PROVIDER_CINESTREAM)) {
-            registerMainAPI(CineStreamProvider())
-        }
-        if (Settings.neonHubSourceEnabled(Settings.PROVIDER_SIMKL)) {
-            registerMainAPI(CineSimklProvider())
-        }
-        if (Settings.neonHubSourceEnabled(Settings.PROVIDER_TMDB)) {
-            registerMainAPI(CineTmdbProvider())
-        }
-
-        // Keep the extra host extractors that CineStream depends on.
+        // Register shared host extractors used by bundled website providers.
         registerExtractorAPI(HubCloud())
         registerExtractorAPI(VCloud())
         registerExtractorAPI(GDLink())
@@ -129,7 +114,7 @@ class NeonHubPlugin : Plugin() {
         registerExtractorAPI(Hubstream())
 
         this.openSettings = { ctx: Context ->
-            Settings.showSettingsDialog(ctx) {
+            NeonHubSettings.showSettingsDialog(ctx) {
                 MainActivity.reloadHomeEvent.invoke(true)
             }
         }
