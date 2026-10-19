@@ -16,7 +16,7 @@ private const val SCX_UA =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
         "(KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
 
-data class TmdbVideo(
+data class SinemaCXTmdbVideo(
     @JsonProperty("key") val key: String? = null,
     @JsonProperty("site") val site: String? = null,
     @JsonProperty("type") val type: String? = null,
@@ -24,8 +24,8 @@ data class TmdbVideo(
     @JsonProperty("official") val official: Boolean? = null
 )
 
-data class TmdbVideos(
-    @JsonProperty("results") val results: List<TmdbVideo> = emptyList()
+data class SinemaCXTmdbVideos(
+    @JsonProperty("results") val results: List<SinemaCXTmdbVideo> = emptyList()
 )
 
 data class TmdbSearchMovie(
@@ -41,19 +41,19 @@ data class TmdbSearchResponse(
 )
 
 
-data class TmdbCast(
+data class SinemaCXTmdbCast(
     @JsonProperty("name") val name: String? = null,
     @JsonProperty("profile_path") val profilePath: String? = null,
     @JsonProperty("order") val order: Int? = null
 )
 
-data class TmdbCredits(
-    @JsonProperty("cast") val cast: List<TmdbCast> = emptyList()
+data class SinemaCXTmdbCredits(
+    @JsonProperty("cast") val cast: List<SinemaCXTmdbCast> = emptyList()
 )
 
 data class TmdbDetails(
-    @JsonProperty("videos") val videos: TmdbVideos? = null,
-    @JsonProperty("credits") val credits: TmdbCredits? = null
+    @JsonProperty("videos") val videos: SinemaCXTmdbVideos? = null,
+    @JsonProperty("credits") val credits: SinemaCXTmdbCredits? = null
 )
 
 class SinemaCX : NeonMainAPI() {
@@ -349,7 +349,7 @@ class SinemaCX : NeonMainAPI() {
                     )
             }
             .sortedWith(
-                compareBy<TmdbVideo>(
+                compareBy<SinemaCXTmdbVideo>(
                     { if (it.language == "tr") 0 else 1 },
                     { if (it.type.equals("Trailer", true)) 0 else 1 },
                     { if (it.official == true) 0 else 1 }
