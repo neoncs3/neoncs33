@@ -41,6 +41,10 @@ class NeonHubPlugin : Plugin() {
         registerMainAPI(Tizam())
         registerMainAPI(WebDramaTurkey())
 
+        // Keep provider-specific extractors registered by the standalone plugins.
+        registerExtractorAPI(PixelDrain())
+        registerExtractorAPI(WebDramaTurkeyExtractor())
+
         // CineStream's provider toggles are retained for its three catalogs.
         if (getKey<Boolean>(Settings.PROVIDER_CINESTREAM) ?: true) {
             registerMainAPI(CineStreamProvider())
