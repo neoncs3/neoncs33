@@ -100,8 +100,32 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          EXISTING_ISSUE="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues?state=open&per_page=100" \
-            --jq '.[] | select((has("pull_request") | not) and .title == env.TITLE) | .number' | sed -n '1p')"
+          QUERY_FILE="$RUNNER_TEMP/open-issue-query.txt"
+          QUERY_ERROR="$RUNNER_TEMP/open-issue-query.err"
+          QUERY_OK=0
+
+          # The repo currently fits on one API page. Avoid --paginate here and
+          # retry transient empty/truncated API responses instead of failing the
+          # error reporter itself or accidentally opening duplicate Issues.
+          for attempt in 1 2 3; do
+            if gh api "repos/$GITHUB_REPOSITORY/issues?state=open&per_page=100" \
+              --jq '.[] | select((has("pull_request") | not) and .title == env.TITLE) | .number' \
+              > "$QUERY_FILE" 2> "$QUERY_ERROR"; then
+              QUERY_OK=1
+              break
+            fi
+            echo "::warning::Açık Issue sorgusu başarısız (deneme $attempt/3)." >&2
+            cat "$QUERY_ERROR" >&2 || true
+            sleep "$((attempt * 2))"
+          done
+
+          if [ "$QUERY_OK" -ne 1 ]; then
+            echo "::warning::GitHub Issue API yanıt vermedi; tekrar denemede çift Issue açmamak için bu rapor adımı atlanıyor."
+            echo "issue_action=lookup_failed" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          EXISTING_ISSUE="$(sed -n '1p' "$QUERY_FILE" | tr -d '\r')"
 
           BODY_FILE="$RUNNER_TEMP/issue-body.md"
           {

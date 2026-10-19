@@ -1028,7 +1028,13 @@ class NeonPlaybackSmokeTest {
                 " names=" + autoTargets.joinToString(",") { it.name },
         )
 
-        val expectedPlugins = activeTargets.map { it.pluginInternalName ?: it.name }.toSet()
+        // The repository now publishes a single aggregate package. All site and
+        // generated Auto* providers are registered from NeonHub.cs3, not separate files.
+        val expectedPlugins = if (localPlugins.any { it.equals("NeonHub", true) }) {
+            setOf("NeonHub")
+        } else {
+            activeTargets.map { it.pluginInternalName ?: it.name }.toSet()
+        }
         val missingPlugins = expectedPlugins - localPlugins.toSet()
 
         if (missingPlugins.isNotEmpty()) {

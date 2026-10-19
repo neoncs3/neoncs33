@@ -39,89 +39,57 @@ echo ">>> External storage kontrolü:"
 adb shell mkdir -p "${PLUGIN_DIR}" || true
 adb shell ls -ld "/sdcard" "/sdcard/Cloudstream3" "${PLUGIN_DIR}" || true
 
-echo "=== Plugin klasörü hazırlanıyor ==="
-adb shell mkdir -p "${PLUGIN_DIR}"
-adb shell rm -f "${PLUGIN_DIR}"/*.cs3 || true
-
-plugins=(
-  DiziDad
-  AsyaFilmIzle
-  DiziBoxizle
-  DiziPal
-  Dizigecesi
-  Dramadizilerim
-  FilmModu
-  JetFilmizle
-  SetFilmIzle
-  SinemaCX
-  WebDramaTurkey
-)
-
-for plugin in "${plugins[@]}"; do
-  file="${RUNNER_TEMP}/${plugin}.cs3"
-  echo ">>> ${plugin}.cs3 indiriliyor"
-  curl -fsSL "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/${plugin}.cs3" -o "${file}"
-  test -s "${file}"
-  adb push "${file}" "${PLUGIN_DIR}/${plugin}.cs3"
-done
-
-# Include every generator-created provider, not just the old hard-coded controls.
-# Without this, a newly created Auto*.cs3 would never be loaded by the emulator
-# and the smoke test could falsely appear to validate the automatic generator.
-echo "=== Otomatik oluşturulan eklentiler indiriliyor ==="
+echo "=== Tek NeonHub eklentisi indiriliyor ve doğrulanıyor ==="
 MANIFEST="${RUNNER_TEMP}/neoncs-plugins.json"
 curl -fsSL "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/plugins.json" -o "${MANIFEST}"
-python3 - "${MANIFEST}" > "${RUNNER_TEMP}/neon-auto-plugins.tsv" <<'PY'
+
+python3 - "${MANIFEST}" > "${RUNNER_TEMP}/neonhub-manifest.tsv" <<'PY'
 import json
 import re
 import sys
 
-manifest = json.load(open(sys.argv[1], encoding="utf-8"))
-expected_prefix = "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/"
-for item in manifest:
-    name = str(item.get("internalName") or "")
-    url = str(item.get("url") or "")
-    file_hash = str(item.get("fileHash") or "")
-    file_size = item.get("fileSize")
-    if not re.fullmatch(r"Auto[A-Za-z0-9]+", name):
-        continue
-    if url != expected_prefix + name + ".cs3":
-        continue
-    if not re.fullmatch(r"sha256-[a-fA-F0-9]{64}", file_hash):
-        continue
-    if not isinstance(file_size, int) or file_size < 1:
-        continue
-    print(f"{name}\t{url}\t{file_hash}\t{file_size}")
+manifest_path = sys.argv[1]
+with open(manifest_path, encoding="utf-8") as f:
+    manifest = json.load(f)
+
+expected_url = "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/NeonHub.cs3"
+matches = [item for item in manifest if item.get("internalName") == "NeonHub"]
+if len(matches) != 1:
+    raise SystemExit(f"Beklenen tek NeonHub kaydı bulunamadı: {len(matches)}")
+
+item = matches[0]
+file_hash = str(item.get("fileHash") or "")
+file_size = item.get("fileSize")
+if item.get("url") != expected_url:
+    raise SystemExit("NeonHub URL'si beklenen yayın adresiyle eşleşmiyor")
+if not re.fullmatch(r"sha256-[a-fA-F0-9]{64}", file_hash):
+    raise SystemExit("NeonHub SHA-256 alanı geçersiz")
+if not isinstance(file_size, int) or file_size < 1:
+    raise SystemExit("NeonHub dosya boyutu geçersiz")
+
+print(f"NeonHub\t{expected_url}\t{file_hash}\t{file_size}")
 PY
 
-AUTO_PLUGIN_COUNT=0
-while read -r plugin url expected_hash expected_size; do
-  [[ -n "${plugin}" ]] || continue
-  [[ "${plugin}" =~ ^Auto[A-Za-z0-9]+$ ]] || {
-    echo "::error::Güvenli olmayan otomatik eklenti adı: ${plugin}"
-    exit 1
-  }
-  file="${RUNNER_TEMP}/${plugin}.cs3"
-  echo ">>> Otomatik ${plugin}.cs3 indiriliyor"
-  curl -fsSL "${url}" -o "${file}"
-  test -s "${file}"
+IFS=$'\t' read -r plugin url expected_hash expected_size < "${RUNNER_TEMP}/neonhub-manifest.tsv"
+[[ "${plugin}" == "NeonHub" ]] || {
+  echo "::error::Beklenmeyen eklenti adı: ${plugin}"
+  exit 1
+}
 
-  actual_size="$(stat -c '%s' "${file}")"
-  actual_hash="sha256-$(sha256sum "${file}" | awk '{print $1}')"
-  if [[ "${actual_size}" != "${expected_size}" || "${actual_hash}" != "${expected_hash}" ]]; then
-    echo "::error::${plugin}.cs3 manifest hash/boyut kontrolünden geçemedi."
-    exit 1
-  fi
+file="${RUNNER_TEMP}/NeonHub.cs3"
+echo ">>> NeonHub.cs3 indiriliyor"
+curl -fsSL "${url}" -o "${file}"
+test -s "${file}"
 
-  adb push "${file}" "${PLUGIN_DIR}/${plugin}.cs3"
-  AUTO_PLUGIN_COUNT=$((AUTO_PLUGIN_COUNT + 1))
-done < "${RUNNER_TEMP}/neon-auto-plugins.tsv"
-
-if [[ "${AUTO_PLUGIN_COUNT}" -eq 0 ]]; then
-  echo "::error::plugins.json içinde doğrulanmış Auto*.cs3 eklentisi bulunamadı; otomatik oluşturucu playback testi yapılmayacak."
+actual_size="$(stat -c '%s' "${file}")"
+actual_hash="sha256-$(sha256sum "${file}" | awk '{print $1}')"
+if [[ "${actual_size}" != "${expected_size}" || "${actual_hash}" != "${expected_hash}" ]]; then
+  echo "::error::NeonHub.cs3 manifest hash/boyut kontrolünden geçemedi."
   exit 1
 fi
-echo "Doğrulanmış otomatik eklenti sayısı: ${AUTO_PLUGIN_COUNT}"
+
+adb push "${file}" "${PLUGIN_DIR}/NeonHub.cs3"
+echo "NeonHub.cs3 manifest hash ve boyut kontrolünden geçti."
 
 echo "=== Emulator plugin dosyaları ==="
 adb shell ls -lah "${PLUGIN_DIR}"
