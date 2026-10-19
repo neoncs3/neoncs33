@@ -266,7 +266,7 @@ object NeonHubSettings {
         context: Context,
         label: String,
         foreground: Int,
-        background: Int,
+        backgroundColor: Int,
         action: () -> Unit
     ): Button = Button(context).apply {
         text = label
@@ -274,7 +274,7 @@ object NeonHubSettings {
         setTextColor(foreground)
         isAllCaps = false
         setTypeface(null, Typeface.BOLD)
-        background = rounded(background, dp(context, 12).toFloat(), foreground)
+        background = rounded(backgroundColor, dp(context, 12).toFloat(), foreground)
         setOnClickListener { action() }
     }
 
