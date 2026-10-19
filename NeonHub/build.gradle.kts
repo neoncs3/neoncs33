@@ -1,4 +1,4 @@
-version = 2
+version = 3
 cloudstream {
     description = "NeonHub — neoncs3 sağlayıcılarının tek eklentide birleştirilmiş sürümü"
     authors = listOf("neoncs3")
@@ -6,7 +6,7 @@ cloudstream {
     tvTypes = listOf("Movie", "TvSeries", "AsianDrama", "Anime", "Torrent", "NSFW")
     language = "tr"
     requiresResources = false
-    iconUrl = "https://github.com/neoncs3/neoncs33/raw/master/CineStream/icon.png"
+    iconUrl = "https://github.com/neoncs3/neoncs33/raw/master/NeonHub/icon.png"
 }
 
 // Copy all site providers into one generated source tree while excluding
@@ -38,7 +38,18 @@ val prepareMergedProviderSources by tasks.registering(org.gradle.api.tasks.Copy:
     }
     from(rootProject.file("CineStream/src/main/kotlin")) {
         into("CineStream")
-        exclude("**/*Plugin.kt", "**/CineStream.kt")
+        // Keep only shared parsing/host-extractor helpers required by site providers.
+        // CineStream itself and every part of its catalogs/settings are not bundled.
+        exclude(
+            "**/*Plugin.kt",
+            "**/CineStream.kt",
+            "**/CineStreamProvider.kt",
+            "**/CineSimklProvider.kt",
+            "**/CineTmdbProvider.kt",
+            "**/CineStreamExtractors.kt",
+            "**/ProviderRegistry.kt",
+            "**/settings/**"
+        )
     }
     from(rootProject.file("DDizi/src/main/kotlin")) {
         into("DDizi")
