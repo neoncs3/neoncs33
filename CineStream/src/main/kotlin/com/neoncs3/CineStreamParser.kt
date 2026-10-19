@@ -380,7 +380,7 @@ data class WYZIESubtitle(
     val display: String?,
 )
 
-data class Track(
+data class CineStreamParserTrack(
     val lang: String,
     val code: String,
     val url: String,
