@@ -123,7 +123,7 @@ object NeonHubSettings {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(context, 6), dp(context, 18), dp(context, 6), dp(context, 10))
             addView(TextView(context).apply {
-                text = "EKLENTİLER"
+                text = "KAYNAKLAR"
                 textSize = 11f
                 letterSpacing = 0.12f
                 setTypeface(null, Typeface.BOLD)

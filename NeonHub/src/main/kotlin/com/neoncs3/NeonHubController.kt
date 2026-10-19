@@ -3,26 +3,34 @@ package com.neoncs3
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.plugins.Plugin
+import java.net.URI
+import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Adds/removes the existing website API instances from CloudStream's active
- * registry when a NeonHub switch is saved. This avoids application restarts.
+ * Holds the original site implementations privately. CloudStream registers only
+ * NeonHubAPI; site providers are called internally and never appear as separate APIs.
  */
 object NeonHubController {
-    private var owner: Plugin? = null
     private val sources = linkedMapOf<String, MainAPI>()
-    private val registeredKeys = linkedSetOf<String>()
+    private val urlOwners = ConcurrentHashMap<String, String>()
+    private val dataOwners = ConcurrentHashMap<String, String>()
 
     @Synchronized
     fun install(plugin: Plugin) {
-        // Clean up stale instances if this classloader installs NeonHub again.
-        sources.values.forEach { api ->
-            APIHolder.removePluginMapping(api)
-            APIHolder.allProviders.remove(api)
+        // Remove any leftover APIs previously registered by an older NeonHub build.
+        val pluginFile = plugin.filename
+        if (pluginFile != null) {
+            APIHolder.allProviders.toList()
+                .filter { it.sourcePlugin == pluginFile }
+                .forEach { api ->
+                    APIHolder.removePluginMapping(api)
+                    APIHolder.allProviders.remove(api)
+                }
         }
+
         sources.clear()
-        registeredKeys.clear()
-        owner = plugin
+        urlOwners.clear()
+        dataOwners.clear()
 
         sources[NeonHubSettings.HUB_SOURCE_ASYAFILM] = AsyaFilmIzle()
         sources[NeonHubSettings.HUB_SOURCE_DIZIMAG] = AutoDdizimagCom()
@@ -42,26 +50,51 @@ object NeonHubController {
         sources[NeonHubSettings.HUB_SOURCE_TIZAM] = Tizam()
         sources[NeonHubSettings.HUB_SOURCE_WEBDRAMATURKEY] = WebDramaTurkey()
 
-        applySettings()
+        // Apply CloudStream's provider-override values before routing by URL/name.
+        sources.values.forEach { api -> runCatching { api.init() } }
+
+        // This is the only MainAPI registered by NeonHub.
+        plugin.registerMainAPI(NeonHubAPI())
     }
 
     @Synchronized
+    fun enabledSources(): List<Pair<String, MainAPI>> =
+        sources.entries
+            .filter { NeonHubSettings.enabled(it.key) }
+            .map { it.key to it.value }
+
+    @Synchronized
+    fun source(key: String): MainAPI? = sources[key]
+
+    @Synchronized
+    fun sourceKeyForUrl(url: String): String? {
+        if (url.isBlank()) return null
+        urlOwners[url]?.let { return it }
+
+        val direct = sources.entries
+            .sortedByDescending { it.value.mainUrl.length }
+            .firstOrNull { url.startsWith(it.value.mainUrl, ignoreCase = true) }
+        if (direct != null) return direct.key
+
+        val requestedHost = host(url) ?: return null
+        return sources.entries.firstOrNull { host(it.value.mainUrl) == requestedHost }?.key
+    }
+
+    fun rememberUrl(key: String, url: String) {
+        if (url.isNotBlank()) urlOwners[url] = key
+    }
+
+    fun rememberData(key: String, data: String) {
+        if (data.isNotBlank()) dataOwners[data] = key
+    }
+
+    fun sourceKeyForData(data: String): String? = dataOwners[data]
+
+    private fun host(url: String): String? =
+        runCatching { URI(url).host?.lowercase()?.removePrefix("www.") }.getOrNull()
+
+    /** Switches are read dynamically; no provider registration/restart is needed. */
     fun applySettings() {
-        val plugin = owner ?: return
-        sources.forEach { (key, api) ->
-            val shouldBeRegistered = NeonHubSettings.enabled(key)
-            val currentlyRegistered = key in registeredKeys
-            when {
-                shouldBeRegistered && !currentlyRegistered -> {
-                    plugin.registerMainAPI(api)
-                    registeredKeys += key
-                }
-                !shouldBeRegistered && currentlyRegistered -> {
-                    APIHolder.removePluginMapping(api)
-                    APIHolder.allProviders.remove(api)
-                    registeredKeys -= key
-                }
-            }
-        }
+        // NeonHubAPI reads enabledSources() for every request and homepage refresh.
     }
 }
