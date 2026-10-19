@@ -328,7 +328,7 @@ class CineSimklProvider: MainAPI() {
         val duration = json.runtimeInMinutes?.let { rt -> json.total_episodes?.let { eps -> rt * eps } ?: rt }
 
         if (tvType == "movie" || (tvType == "anime" && json.anime_type?.equals("movie") == true)) {
-            val data = LoadLinksData(
+            val data = CineSimklLoadLinksData(
                 enTitle,
                 originalTitle,
                 tvType,
@@ -373,7 +373,7 @@ class CineSimklProvider: MainAPI() {
             val eps = parseJson<Array<Episodes>>(epsJson)
             val episodes = eps.filter { it.type != "special" }.map {
                 newEpisode(
-                    LoadLinksData(
+                    CineSimklLoadLinksData(
                         enTitle,
                         originalTitle,
                         tvType,
@@ -435,7 +435,7 @@ class CineSimklProvider: MainAPI() {
 
         Log.d("CineSimkl", data)
 
-        val res = parseJson<LoadLinksData>(data)
+        val res = parseJson<CineSimklLoadLinksData>(data)
         if(res.isAnime) {
             val (imdbTitle, imdbYear) = try {
                 extractNameAndYear(res.imdbId) ?: Pair(res.title, res.year)
@@ -604,7 +604,7 @@ class CineSimklProvider: MainAPI() {
         var episode : Int? = null
     )
 
-    data class LoadLinksData(
+    data class CineSimklLoadLinksData(
         val title       : String? = null,
         val original_title    : String? = null,
         val tvtype      : String? = null,
