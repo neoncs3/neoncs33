@@ -50,7 +50,7 @@ object Settings {
         NeonHubSource(HUB_SOURCE_ASYAFILM, "AsyaFilmIzle", "Asya filmleri ve dizileri"),
         NeonHubSource(HUB_SOURCE_DIZIMAG, "DiziMag", "Film ve dizi kataloğu"),
         NeonHubSource(HUB_SOURCE_HDFILMDIZI, "HDFilmDiziİzle", "HD film ve dizi kataloğu"),
-        NeonHubSource(HUB_SOURCE_CANLI, "Canlı Sağlayıcı", "Canlı içerik sağlayıcısı"),
+        NeonHubSource(HUB_SOURCE_CANLI, "Klubnichka Live (18+)", "Canlı yayın sağlayıcısı"),
         NeonHubSource(HUB_SOURCE_TVDIZILER, "TVDiziler", "Yerli ve yabancı diziler"),
         NeonHubSource(HUB_SOURCE_DDIZI, "DDizi", "Dizi kataloğu"),
         NeonHubSource(HUB_SOURCE_DIZIBOXIZLE, "DiziBoxIzle", "Film ve dizi kataloğu"),
