@@ -20,6 +20,56 @@ object Settings {
     const val STREMIO_ADDONS_KEY       = "stremio_addons"
     const val NEW_PROVIDER_DEFAULT_ON  = "new_provider_default_on"
     const val CF_BYPASS_ENABLED        = "cloudflare_webview_bypass_enabled"
+ 
+    // ── NeonHub: individual website-provider switches ─────────
+    const val HUB_SOURCE_ASYAFILM       = "neonhub_source_asyafilm"
+    const val HUB_SOURCE_DIZIMAG         = "neonhub_source_dizimag"
+    const val HUB_SOURCE_HDFILMDIZI      = "neonhub_source_hdfilmdizi"
+    const val HUB_SOURCE_CANLI           = "neonhub_source_canli"
+    const val HUB_SOURCE_TVDIZILER       = "neonhub_source_tvdiziler"
+    const val HUB_SOURCE_DDIZI           = "neonhub_source_ddizi"
+    const val HUB_SOURCE_DIZIBOXIZLE     = "neonhub_source_diziboxizle"
+    const val HUB_SOURCE_DIZIDAD         = "neonhub_source_dizidad"
+    const val HUB_SOURCE_DIZIPAL         = "neonhub_source_dizipal"
+    const val HUB_SOURCE_DIZIGECESI      = "neonhub_source_dizigecesi"
+    const val HUB_SOURCE_DRAMADIZILERIM  = "neonhub_source_dramadizilerim"
+    const val HUB_SOURCE_FILMMODU        = "neonhub_source_filmmodu"
+    const val HUB_SOURCE_JETFILMIZLE     = "neonhub_source_jetfilmizle"
+    const val HUB_SOURCE_SETFILMIZLE     = "neonhub_source_setfilmizle"
+    const val HUB_SOURCE_SINEMACX        = "neonhub_source_sinemacx"
+    const val HUB_SOURCE_TIZAM           = "neonhub_source_tizam"
+    const val HUB_SOURCE_WEBDRAMATURKEY  = "neonhub_source_webdramaturkey"
+
+    data class NeonHubSource(
+        val key: String,
+        val title: String,
+        val description: String
+    )
+
+    val NEONHUB_SOURCES: List<NeonHubSource> = listOf(
+        NeonHubSource(HUB_SOURCE_ASYAFILM, "AsyaFilmIzle", "Asya filmleri ve dizileri"),
+        NeonHubSource(HUB_SOURCE_DIZIMAG, "DiziMag", "Film ve dizi kataloğu"),
+        NeonHubSource(HUB_SOURCE_HDFILMDIZI, "HDFilmDiziİzle", "HD film ve dizi kataloğu"),
+        NeonHubSource(HUB_SOURCE_CANLI, "Canlı Sağlayıcı", "Canlı içerik sağlayıcısı"),
+        NeonHubSource(HUB_SOURCE_TVDIZILER, "TVDiziler", "Yerli ve yabancı diziler"),
+        NeonHubSource(HUB_SOURCE_DDIZI, "DDizi", "Dizi kataloğu"),
+        NeonHubSource(HUB_SOURCE_DIZIBOXIZLE, "DiziBoxIzle", "Film ve dizi kataloğu"),
+        NeonHubSource(HUB_SOURCE_DIZIDAD, "DiziDad", "Film ve dizi kataloğu"),
+        NeonHubSource(HUB_SOURCE_DIZIPAL, "DiziPal", "Film ve dizi kataloğu"),
+        NeonHubSource(HUB_SOURCE_DIZIGECESI, "DiziGecesi", "Dizi kataloğu"),
+        NeonHubSource(HUB_SOURCE_DRAMADIZILERIM, "DramaDizilerim", "Dikey mini diziler"),
+        NeonHubSource(HUB_SOURCE_FILMMODU, "FilmModu", "Film ve dizi kataloğu"),
+        NeonHubSource(HUB_SOURCE_JETFILMIZLE, "JetFilmIzle", "Film ve dizi kataloğu"),
+        NeonHubSource(HUB_SOURCE_SETFILMIZLE, "SetFilmIzle", "Film ve dizi kataloğu"),
+        NeonHubSource(HUB_SOURCE_SINEMACX, "SinemaCX", "Film ve dizi kataloğu"),
+        NeonHubSource(HUB_SOURCE_TIZAM, "TiZam", "Film ve dizi kataloğu"),
+        NeonHubSource(HUB_SOURCE_WEBDRAMATURKEY, "WebDramaTurkey", "Asya dizileri"),
+        NeonHubSource(PROVIDER_CINESTREAM, "CineStream", "Cinemeta içerik kataloğu"),
+        NeonHubSource(PROVIDER_SIMKL, "CineSimkl", "Simkl içerik kataloğu"),
+        NeonHubSource(PROVIDER_TMDB, "CineTMDB", "TMDB içerik kataloğu")
+    )
+
+    fun neonHubSourceEnabled(key: String): Boolean = getKey<Boolean>(key) ?: true
 
     private const val SEEN_PROVIDERS_KEY = "seen_providers"
     private const val PROVIDER_ORDER_KEY = "provider_order"
