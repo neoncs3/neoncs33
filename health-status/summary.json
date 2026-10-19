@@ -111,7 +111,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://tvdiziler.tv",
-        "bytes": 82460,
+        "bytes": 82437,
         "title": "Dizi izle, Yerli ve Full HD Diziler, Dizi Seyret | TvDiziler.tv",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -166,7 +166,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://diziboxizle.com",
-        "bytes": 280037,
+        "bytes": 278876,
         "title": "Dizibox İzle - Güncel Yabancı Dizi izle, HD Diziler izle",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -208,7 +208,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://dizigecesi.com",
-        "bytes": 4918,
+        "bytes": 4916,
         "title": "Attention Required! | Cloudflare",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -237,7 +237,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://dizipal1590.com",
-        "bytes": 4552,
+        "bytes": 4550,
         "title": "Attention Required! | Cloudflare",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -266,7 +266,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://dramadizilerim.com",
-        "bytes": 192779,
+        "bytes": 192912,
         "title": "Drama Dizilerim - Dikey Mini Dizi &amp; Kısa Dizi İzle (Türkçe Dublaj &amp; Altyazılı)",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -341,6 +341,19 @@
         "tmdb_playback_forbidden": true
       },
       "source": "JetFilmizle/src/main/kotlin/com/neoncs3/JetFilmizle.kt"
+    },
+    {
+      "provider": "NeonHub",
+      "status": "yellow",
+      "domain": "",
+      "configured_domain": "",
+      "live_domain": "",
+      "live": {
+        "ok": false,
+        "anti_bot_blocked": false,
+        "error": "NeonMainAPI provider source bulunamadı"
+      },
+      "pipelines": {}
     },
     {
       "provider": "SetFilmIzle",
@@ -424,7 +437,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://webdramaturkey2.com",
-        "bytes": 225423,
+        "bytes": 224570,
         "title": "Web Drama Turkey - Kore, Çin, Japon Dizileri İzle",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -444,6 +457,6 @@
     }
   ],
   "green": 9,
-  "yellow": 9,
+  "yellow": 10,
   "red": 0
 }

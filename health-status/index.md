@@ -18,6 +18,7 @@ Bu rapor tools/provider_health.py tarafından otomatik güncellenir.
 | **Dramadizilerim** | 🟢 | https://dramadizilerim.com | https://dramadizilerim.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **FilmModu** | 🟢 | https://www.filmmodu.one | https://www.filmmodu.one | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **JetFilmizle** | 🟢 | https://jetfilmizle.now | https://jetfilmizle.now | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **NeonHub** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **SetFilmIzle** | 🟢 | https://www.setfilmizle.ltd | https://www.setfilmizle.ltd | ✅ (200) | 1 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **SinemaCX** | 🟢 | https://sinemacc.com | https://sinemacc.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **TiZam** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
