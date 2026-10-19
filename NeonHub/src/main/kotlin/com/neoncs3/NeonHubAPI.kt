@@ -5,6 +5,8 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import okhttp3.Interceptor
@@ -67,8 +69,7 @@ class NeonHubAPI : MainAPI() {
             data = route.sectionData,
             horizontalImages = request.horizontalImages
         )
-        val response = runCatching { source.getMainPage(page, mappedRequest) }.getOrNull()
-            ?: return null
+        val response = sourceRequest { source.getMainPage(page, mappedRequest) } ?: return null
 
         val lists = response.items.map { section ->
             HomePageList(
@@ -81,12 +82,12 @@ class NeonHubAPI : MainAPI() {
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList? {
-        val limiter = Semaphore(4)
+        val limiter = Semaphore(8)
         val results = coroutineScope {
             NeonHubController.enabledSources().map { (key, source) ->
                 async {
                     limiter.withPermit {
-                        val response = runCatching { source.search(query, page) }.getOrNull()
+                        val response = sourceRequest { source.search(query, page) }
                         response?.let { Triple(key, it.items, it.hasNext) }
                     }
                 }
@@ -104,14 +105,14 @@ class NeonHubAPI : MainAPI() {
         search(query, 1)?.items
 
     override suspend fun quickSearch(query: String): List<SearchResponse>? {
-        val limiter = Semaphore(4)
+        val limiter = Semaphore(8)
         val results = coroutineScope {
             NeonHubController.enabledSources()
                 .filter { it.second.hasQuickSearch }
                 .map { (key, source) ->
                     async {
                         limiter.withPermit {
-                            val found = runCatching { source.quickSearch(query) }.getOrNull()
+                            val found = sourceRequest { source.quickSearch(query) }
                             found?.let { key to it }
                         }
                     }
@@ -203,6 +204,21 @@ class NeonHubAPI : MainAPI() {
         runCatching { source.extractorVerifierJob(route?.second ?: extractorData) }
     }
 
+    /**
+     * Prevent a slow or temporarily hung website from holding up the unified search.
+     * Cancellation from the caller is preserved; a single source failure only drops that source.
+     */
+    private suspend fun <T> sourceRequest(block: suspend () -> T): T? =
+        withTimeoutOrNull(SOURCE_REQUEST_TIMEOUT_MS) {
+            try {
+                block()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+        }
+
     @Suppress("DEPRECATION_ERROR")
     private fun rebrandSearchResponse(response: SearchResponse, key: String): SearchResponse {
         NeonHubController.rememberUrl(key, response.url)
@@ -253,6 +269,7 @@ class NeonHubAPI : MainAPI() {
     }
 
     private companion object {
+        const val SOURCE_REQUEST_TIMEOUT_MS = 6500L
         const val PAGE_PREFIX = "__NEONHUB_PAGE__::"
         const val DATA_PREFIX = "__NEONHUB_DATA__::"
     }

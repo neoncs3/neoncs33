@@ -6,9 +6,14 @@ import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.os.Handler
+import android.os.Looper
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Switch
@@ -16,6 +21,11 @@ import android.widget.TextView
 import android.widget.Toast
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.getKey
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.setKey
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * NeonHub's own settings page, with only website-source switches.
@@ -46,9 +56,12 @@ object NeonHubSettings {
     private val cyan = Color.parseColor("#00D9FF")
     private val purple = Color.parseColor("#A855F7")
     private val green = Color.parseColor("#34D399")
+    private val amber = Color.parseColor("#FBBF24")
+    private val red = Color.parseColor("#FB7185")
     private val borderColor = Color.parseColor("#26334D")
 
     data class Source(val key: String, val title: String, val detail: String)
+    private data class SourceProbe(val label: String, val color: Int, val category: Int)
 
     val sources = listOf(
         Source(HUB_SOURCE_ASYAFILM, "AsyaFilmIzle", "Asya filmleri ve dizileri"),
@@ -74,6 +87,23 @@ object NeonHubSettings {
 
     fun showSettingsDialog(context: Context, onSave: () -> Unit) {
         val switches = linkedMapOf<String, Switch>()
+        val sourceRows = linkedMapOf<String, View>()
+        val statusLabels = linkedMapOf<String, TextView>()
+        val dividerViews = linkedMapOf<String, View>()
+        val filterButtons = linkedMapOf<String, Button>()
+        var filterMode = "all"
+        var refreshFilterAction: (() -> Unit)? = null
+        val uiHandler = Handler(Looper.getMainLooper())
+        val checkRunning = AtomicBoolean(false)
+        val enabledSummary = TextView(context).apply {
+            text = "● " + sources.count { enabled(it.key) } + " / " + sources.size + " kaynak açık"
+            textSize = 12f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(green)
+            background = pill(Color.parseColor("#102B26"), Color.parseColor("#236A53"), dp(context, 16).toFloat())
+            setPadding(dp(context, 11), dp(context, 7), dp(context, 11), dp(context, 7))
+            setPadding(dp(context, 11), dp(context, 7), dp(context, 11), dp(context, 7))
+        }
         val rows = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(context, 14), dp(context, 8), dp(context, 14), dp(context, 20))
@@ -108,6 +138,9 @@ object NeonHubSettings {
                 setTextColor(textSecondary)
                 setPadding(0, dp(context, 7), 0, 0)
             })
+            addView(enabledSummary, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(context, 13) })
             addView(View(context).apply {
                 layoutParams = LinearLayout.LayoutParams(dp(context, 48), dp(context, 4)).apply {
                     topMargin = dp(context, 16)
@@ -118,6 +151,13 @@ object NeonHubSettings {
             })
         })
 
+        val sourceCountView = TextView(context).apply {
+            text = sources.size.toString() + " kaynak"
+            textSize = 11f
+            setTextColor(cyan)
+            background = pill(Color.parseColor("#102B3B"), Color.parseColor("#17536A"), dp(context, 30).toFloat())
+            setPadding(dp(context, 10), dp(context, 5), dp(context, 10), dp(context, 5))
+        }
         val heading = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -130,15 +170,105 @@ object NeonHubSettings {
                 setTextColor(textSecondary)
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             })
-            addView(TextView(context).apply {
-                text = "${sources.size} kaynak"
-                textSize = 11f
-                setTextColor(cyan)
-                background = pill(Color.parseColor("#102B3B"), Color.parseColor("#17536A"), dp(context, 30).toFloat())
-                setPadding(dp(context, 10), dp(context, 5), dp(context, 10), dp(context, 5))
-            })
+            addView(sourceCountView)
         }
         rows.addView(heading)
+
+        val searchBox = EditText(context).apply {
+            hint = "Kaynak ara..."
+            textSize = 14f
+            setSingleLine(true)
+            setTextColor(textPrimary)
+            setHintTextColor(textSecondary)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+            background = rounded(Color.parseColor("#111B2E"), dp(context, 13).toFloat(), borderColor)
+            setPadding(dp(context, 15), dp(context, 3), dp(context, 15), dp(context, 3))
+            contentDescription = "Kaynakları ada göre filtrele"
+        }
+        rows.addView(searchBox, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(context, 48)
+        ).apply { bottomMargin = dp(context, 10) })
+
+        val filterBar = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, dp(context, 12))
+        }
+        listOf("all" to "Tümü", "enabled" to "Açık", "disabled" to "Kapalı").forEach { (mode, label) ->
+            val filterButton = Button(context).apply {
+                text = label
+                textSize = 11f
+                isAllCaps = false
+                setTypeface(null, Typeface.BOLD)
+                setTextColor(textSecondary)
+                minimumHeight = 0
+                minHeight = 0
+                setPadding(dp(context, 4), 0, dp(context, 4), 0)
+                background = rounded(cardColor, dp(context, 10).toFloat(), borderColor)
+                setOnClickListener {
+                    filterMode = mode
+                    refreshFilterAction?.invoke()
+                }
+            }
+            filterButtons[mode] = filterButton
+            filterBar.addView(filterButton, LinearLayout.LayoutParams(0, dp(context, 38), 1f).apply {
+                marginEnd = dp(context, 7)
+            })
+        }
+        rows.addView(filterBar)
+
+        lateinit var checkButton: Button
+        val checkSummary = TextView(context).apply {
+            text = "Kontrol, site adresinin yanıtını ölçer; video oynatmayı garanti etmez."
+            textSize = 11f
+            setTextColor(textSecondary)
+            setPadding(dp(context, 2), dp(context, 5), dp(context, 2), dp(context, 11))
+        }
+        checkButton = actionButton(context, "↻  Kaynakları Kontrol Et", cyan, Color.parseColor("#102B3B")) {
+            if (!checkRunning.compareAndSet(false, true)) return@actionButton
+            checkButton.isEnabled = false
+            checkButton.text = "Kontrol ediliyor..."
+            checkSummary.text = "Site adresleri arka planda kontrol ediliyor. Kaynaklar otomatik kapatılmaz."
+            statusLabels.values.forEach {
+                it.text = "● Kontrol ediliyor..."
+                it.setTextColor(textSecondary)
+            }
+
+            val remaining = AtomicInteger(sources.size)
+            val goodCount = AtomicInteger(0)
+            val warningCount = AtomicInteger(0)
+            val failedCount = AtomicInteger(0)
+            val executor = Executors.newFixedThreadPool(4)
+            sources.forEach { source ->
+                executor.execute {
+                    val result = probeSource(source.key)
+                    when (result.category) {
+                        0 -> goodCount.incrementAndGet()
+                        1 -> warningCount.incrementAndGet()
+                        else -> failedCount.incrementAndGet()
+                    }
+                    uiHandler.post {
+                        statusLabels[source.key]?.apply {
+                            text = "● " + result.label
+                            setTextColor(result.color)
+                        }
+                        if (remaining.decrementAndGet() == 0) {
+                            checkRunning.set(false)
+                            checkButton.isEnabled = true
+                            checkButton.text = "↻  Kaynakları Yeniden Kontrol Et"
+                            checkSummary.text = "Tamamlandı: " + goodCount.get() + " erişilebilir · " +
+                                warningCount.get() + " uyarı · " + failedCount.get() +
+                                " yanıt yok. Bu sonuç video oynatmayı doğrulamaz."
+                        }
+                    }
+                }
+            }
+            executor.shutdown()
+        }
+        rows.addView(checkButton, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(context, 44)
+        ).apply { bottomMargin = dp(context, 2) })
+        rows.addView(checkSummary)
 
         val sourceCard = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -171,6 +301,14 @@ object NeonHubSettings {
                 setTextColor(textSecondary)
                 setPadding(0, dp(context, 3), 0, 0)
             })
+            val statusLabel = TextView(context).apply {
+                text = "● Henüz kontrol edilmedi"
+                textSize = 10f
+                setTextColor(textSecondary)
+                setPadding(0, dp(context, 4), 0, 0)
+            }
+            statusLabels[source.key] = statusLabel
+            copy.addView(statusLabel)
             row.addView(copy)
 
             val toggle = Switch(context).apply {
@@ -186,12 +324,14 @@ object NeonHubSettings {
                 )
             }
             switches[source.key] = toggle
+            toggle.setOnCheckedChangeListener { _, _ -> refreshFilterAction?.invoke() }
             row.addView(toggle)
             row.setOnClickListener { toggle.isChecked = !toggle.isChecked }
+            sourceRows[source.key] = row
             sourceCard.addView(row)
 
             if (index != sources.lastIndex) {
-                sourceCard.addView(View(context).apply {
+                val divider = View(context).apply {
                     setBackgroundColor(borderColor)
                     layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT, dp(context, 1)
@@ -199,10 +339,62 @@ object NeonHubSettings {
                         marginStart = dp(context, 16)
                         marginEnd = dp(context, 16)
                     }
-                })
+                }
+                dividerViews[source.key] = divider
+                sourceCard.addView(divider)
             }
         }
         rows.addView(sourceCard)
+
+        fun refreshSourceFilter() {
+            val query = searchBox.text?.toString()?.trim()?.lowercase().orEmpty()
+            var visibleCount = 0
+            sources.forEach { source ->
+                val matchesQuery = query.isBlank() ||
+                    source.title.lowercase().contains(query) ||
+                    source.detail.lowercase().contains(query)
+                val isEnabled = switches[source.key]?.isChecked == true
+                val matchesMode = when (filterMode) {
+                    "enabled" -> isEnabled
+                    "disabled" -> !isEnabled
+                    else -> true
+                }
+                val visible = matchesQuery && matchesMode
+                sourceRows[source.key]?.visibility = if (visible) View.VISIBLE else View.GONE
+                if (visible) visibleCount++
+            }
+
+            sources.forEachIndexed { index, source ->
+                val currentVisible = sourceRows[source.key]?.visibility == View.VISIBLE
+                val laterVisible = sources.drop(index + 1).any {
+                    sourceRows[it.key]?.visibility == View.VISIBLE
+                }
+                dividerViews[source.key]?.visibility =
+                    if (currentVisible && laterVisible) View.VISIBLE else View.GONE
+            }
+
+            sourceCountView.text = visibleCount.toString() + " kaynak"
+            enabledSummary.text = "● " + switches.values.count { it.isChecked } +
+                " / " + sources.size + " kaynak açık"
+            filterButtons.forEach { (mode, button) ->
+                val selected = mode == filterMode
+                button.setTextColor(if (selected) cyan else textSecondary)
+                button.background = rounded(
+                    if (selected) Color.parseColor("#103347") else cardColor,
+                    dp(context, 10).toFloat(),
+                    if (selected) cyan else borderColor
+                )
+            }
+        }
+        refreshFilterAction = { refreshSourceFilter() }
+        searchBox.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                refreshSourceFilter()
+            }
+            override fun afterTextChanged(s: Editable?) = Unit
+        })
+        refreshSourceFilter()
 
         val quickActions = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -233,7 +425,7 @@ object NeonHubSettings {
                 sources.forEach { source ->
                     setKey(source.key, switches[source.key]?.isChecked ?: true)
                 }
-                // Save and apply immediately; the controller adds/removes APIs in-place.
+                // Apply the source switches through the single NeonHub provider without restarting.
                 onSave()
                 Toast.makeText(context, "NeonHub ayarları hemen uygulandı", Toast.LENGTH_SHORT).show()
             }
@@ -254,6 +446,48 @@ object NeonHubSettings {
         dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.apply {
             setTextColor(textSecondary)
             isAllCaps = false
+        }
+    }
+
+    private fun probeSource(key: String): SourceProbe {
+        val address = NeonHubController.source(key)?.mainUrl?.trim()
+            ?: return SourceProbe("Kaynak başlatılamadı", red, 2)
+        if (!address.startsWith("https://", ignoreCase = true) &&
+            !address.startsWith("http://", ignoreCase = true)
+        ) {
+            return SourceProbe("Geçerli web adresi yok", red, 2)
+        }
+
+        var connection: HttpURLConnection? = null
+        return try {
+            val opened = URL(address).openConnection()
+            if (opened !is HttpURLConnection) {
+                return SourceProbe("Desteklenmeyen bağlantı", red, 2)
+            }
+            connection = opened
+            opened.instanceFollowRedirects = true
+            opened.requestMethod = "GET"
+            opened.connectTimeout = 4500
+            opened.readTimeout = 4500
+            opened.useCaches = false
+            opened.setRequestProperty(
+                "User-Agent",
+                "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36"
+            )
+            opened.setRequestProperty("Range", "bytes=0-0")
+
+            val code = opened.responseCode
+            when (code) {
+                in 200..399 -> SourceProbe("Ulaşılabilir · HTTP " + code, green, 0)
+                in 400..499 -> SourceProbe("Erişiyor, kısıtlı · HTTP " + code, amber, 1)
+                else -> SourceProbe("Sunucu hatası · HTTP " + code, red, 2)
+            }
+        } catch (_: java.net.SocketTimeoutException) {
+            SourceProbe("Zaman aşımı", amber, 2)
+        } catch (_: Exception) {
+            SourceProbe("Bağlantı kurulamadı", red, 2)
+        } finally {
+            connection?.disconnect()
         }
     }
 
