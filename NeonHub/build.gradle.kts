@@ -1,11 +1,11 @@
-version = 10
+version = 11
 cloudstream {
     description = "NeonHub — neoncs3 sağlayıcılarının tek eklentide birleştirilmiş sürümü"
     authors = listOf("neoncs3")
     status = 1
     tvTypes = listOf("Movie", "TvSeries", "AsianDrama", "Anime", "Torrent", "NSFW")
     language = "tr"
-    requiresResources = false
+    requiresResources = true
 }
 
 // Copy all site providers into one generated source tree while excluding

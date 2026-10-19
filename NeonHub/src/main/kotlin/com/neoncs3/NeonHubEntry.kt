@@ -62,7 +62,7 @@ class NeonHubPlugin : Plugin() {
         registerExtractorAPI(Hubstream())
 
         this.openSettings = { ctx: Context ->
-            NeonHubSettings.showSettingsDialog(ctx) {
+            NeonHubSettings.showSettingsDialog(ctx, this@NeonHubPlugin.resources) {
                 NeonHubController.applySettings()
                 MainActivity.reloadHomeEvent.invoke(true)
             }

@@ -3,19 +3,18 @@ package com.neoncs3
 import android.app.Dialog
 import android.content.Context
 import android.content.res.ColorStateList
+import android.content.res.Resources
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.ColorDrawable
 import android.os.Handler
 import android.os.Looper
-import android.text.Editable
-import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
-import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Switch
@@ -88,7 +87,7 @@ object NeonHubSettings {
 
     fun enabled(key: String): Boolean = getKey<Boolean>(key) ?: true
 
-    fun showSettingsDialog(context: Context, onSave: () -> Unit) {
+    fun showSettingsDialog(context: Context, pluginResources: Resources?, onSave: () -> Unit) {
         val dialog = Dialog(context, android.R.style.Theme_Material_NoActionBar)
         val switches = linkedMapOf<String, Switch>()
         val sourceRows = linkedMapOf<String, View>()
@@ -98,6 +97,7 @@ object NeonHubSettings {
         var refreshFilterAction: (() -> Unit)? = null
         val uiHandler = Handler(Looper.getMainLooper())
         val checkRunning = AtomicBoolean(false)
+        val logoResourceId = pluginResources?.getIdentifier("neonhub_logo", "drawable", null) ?: 0
 
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -111,16 +111,15 @@ object NeonHubSettings {
             setPadding(dp(context, 20), dp(context, 18), dp(context, 16), dp(context, 15))
             setBackgroundColor(backgroundColor)
         }
-        val logo = TextView(context).apply {
-            text = "N"
-            textSize = 25f
-            setTypeface(null, Typeface.BOLD)
-            gravity = Gravity.CENTER
-            setTextColor(Color.parseColor("#07111E"))
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                intArrayOf(cyan, purple)
-            ).apply { cornerRadius = dp(context, 17).toFloat() }
+        val logo = ImageView(context).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            contentDescription = "NeonHub logosu"
+            background = rounded(raisedCardColor, dp(context, 17).toFloat(), borderColor)
+            clipToOutline = true
+            if (logoResourceId != 0 && pluginResources != null) {
+                runCatching { pluginResources.getDrawable(logoResourceId, context.theme) }
+                    .getOrNull()?.let { setImageDrawable(it) }
+            }
         }
         topBar.addView(logo, LinearLayout.LayoutParams(dp(context, 52), dp(context, 52)))
         val brandCopy = LinearLayout(context).apply {
@@ -292,35 +291,6 @@ object NeonHubSettings {
         sourceHeading.addView(sourceCountView)
         content.addView(sourceHeading)
 
-        val searchWrap = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(context, 14), 0, dp(context, 12), 0)
-            background = rounded(Color.parseColor("#111B2A"), dp(context, 14).toFloat(), borderColor)
-        }
-        searchWrap.addView(TextView(context).apply {
-            text = "⌕"
-            textSize = 25f
-            setTextColor(cyan)
-            gravity = Gravity.CENTER
-        }, LinearLayout.LayoutParams(dp(context, 30), dp(context, 48)))
-        val searchBox = EditText(context).apply {
-            hint = "Film veya kaynak adı ara"
-            textSize = 13f
-            setSingleLine(true)
-            setTextColor(textPrimary)
-            setHintTextColor(Color.parseColor("#65738D"))
-            inputType = android.text.InputType.TYPE_CLASS_TEXT
-            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
-            background = null
-            setPadding(dp(context, 3), 0, dp(context, 3), 0)
-            contentDescription = "Kaynakları ada göre filtrele"
-        }
-        searchWrap.addView(searchBox, LinearLayout.LayoutParams(
-            0, dp(context, 48), 1f
-        ))
-        content.addView(searchWrap)
-
         val filterBar = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, dp(context, 11), 0, dp(context, 13))
@@ -454,13 +424,19 @@ object NeonHubSettings {
                 isClickable = true
                 isFocusable = true
             }
-            val iconTile = TextView(context).apply {
-                text = source.title.firstOrNull()?.uppercaseChar()?.toString() ?: "N"
-                textSize = 18f
-                setTypeface(null, Typeface.BOLD)
-                gravity = Gravity.CENTER
-                setTextColor(accent)
-                background = rounded(Color.argb(24, Color.red(accent), Color.green(accent), Color.blue(accent)), dp(context, 13).toFloat(), Color.argb(95, Color.red(accent), Color.green(accent), Color.blue(accent)))
+            val iconTile = ImageView(context).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                contentDescription = "NeonHub kaynak simgesi"
+                background = rounded(
+                    Color.argb(24, Color.red(accent), Color.green(accent), Color.blue(accent)),
+                    dp(context, 13).toFloat(),
+                    Color.argb(95, Color.red(accent), Color.green(accent), Color.blue(accent))
+                )
+                clipToOutline = true
+                if (logoResourceId != 0 && pluginResources != null) {
+                    runCatching { pluginResources.getDrawable(logoResourceId, context.theme) }
+                        .getOrNull()?.let { setImageDrawable(it) }
+                }
             }
             row.addView(iconTile, LinearLayout.LayoutParams(dp(context, 43), dp(context, 43)).apply {
                 marginEnd = dp(context, 12)
@@ -521,19 +497,15 @@ object NeonHubSettings {
             totalCount.text = sources.size.toString()
             closedCount.text = (sources.size - enabledNow).toString()
 
-            val query = searchBox.text?.toString()?.trim()?.lowercase().orEmpty()
             var visibleCount = 0
             sources.forEach { source ->
-                val matchesQuery = query.isBlank() ||
-                    source.title.lowercase().contains(query) ||
-                    source.detail.lowercase().contains(query)
                 val isEnabled = switches[source.key]?.isChecked == true
                 val matchesMode = when (filterMode) {
                     "enabled" -> isEnabled
                     "disabled" -> !isEnabled
                     else -> true
                 }
-                val visible = matchesQuery && matchesMode
+                val visible = matchesMode
                 sourceRows[source.key]?.visibility = if (visible) View.VISIBLE else View.GONE
                 if (visible) visibleCount++
             }
@@ -549,13 +521,6 @@ object NeonHubSettings {
             }
         }
         refreshFilterAction = { updateMetricsAndFilters() }
-        searchBox.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                updateMetricsAndFilters()
-            }
-            override fun afterTextChanged(s: Editable?) = Unit
-        })
         updateMetricsAndFilters()
 
         // Fixed bottom action shelf stays visible while the source list scrolls.
