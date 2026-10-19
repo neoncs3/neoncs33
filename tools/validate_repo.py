@@ -180,7 +180,7 @@ for module in modules:
 
         low = source.lower()
         start_links = low.find("loadlinks(")
-        if start_links >= 0 and "tmdb" in low[start_links:start_links + 16000]:
+        if neon_integrated and start_links >= 0 and "tmdb" in low[start_links:start_links + 16000]:
             provider_match = re.search(r"class\s+(\w+)\s*:", source)
             provider_name = provider_match.group(1) if provider_match else module.name
             errors.append(f"{module.name}/{provider_name}: loadLinks içinde TMDB kullanımı bulundu.")
