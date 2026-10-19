@@ -601,7 +601,7 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
         return (seasonNumber(value) ?: defaultSeason ?: 1) to number
     }
 
-    private data class EpisodeItem(
+    private data class AutoHdfilmDiziizleEpisodeItem(
         val url: String,
         val title: String,
         val season: Int,
@@ -624,7 +624,7 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
         document: Document,
         baseUrl: String,
         defaultSeason: Int?
-    ): List<EpisodeItem> {
+    ): List<AutoHdfilmDiziizleEpisodeItem> {
         return document.select("a[href]").mapNotNull { anchor ->
             val href = normalize(anchor.attr("href"), baseUrl)
             if (!isDetailUrl(href, baseUrl) || href == baseUrl) return@mapNotNull null
@@ -639,7 +639,7 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
             val combined = title + " " + href + " " + anchor.classNames().joinToString(" ")
             val numbers = episodeInfo(combined, defaultSeason) ?: return@mapNotNull null
             if (numbers.second !in 1..999 || numbers.first !in 1..99) return@mapNotNull null
-            EpisodeItem(
+            AutoHdfilmDiziizleEpisodeItem(
                 url = href,
                 title = title,
                 season = numbers.first,
@@ -675,7 +675,7 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
         val actors = neonExtractActors(document, normalizedUrl)
 
         val linkedSeasons = seasonLinks(document, normalizedUrl)
-        val foundEpisodes = ArrayList<EpisodeItem>()
+        val foundEpisodes = ArrayList<AutoHdfilmDiziizleEpisodeItem>()
         foundEpisodes += episodeItems(document, normalizedUrl, seasonNumber(normalizedUrl))
         for ((seasonUrl, seasonNo) in linkedSeasons) {
             val seasonDocument = runCatching {
@@ -684,7 +684,7 @@ class AutoHdfilmdiziizleCom : NeonMainAPI() {
             foundEpisodes += episodeItems(seasonDocument, seasonUrl, seasonNo ?: seasonNumber(seasonUrl))
         }
         val episodes = foundEpisodes.distinctBy { it.url }
-            .sortedWith(compareBy<EpisodeItem> { it.season }.thenBy { it.episode }.thenBy { it.url })
+            .sortedWith(compareBy<AutoHdfilmDiziizleEpisodeItem> { it.season }.thenBy { it.episode }.thenBy { it.url })
         val types = schemaTypes(document)
         val episodePage = episodeInfo(title + " " + normalizedUrl, seasonNumber(normalizedUrl)) != null
         val series = episodes.isNotEmpty() || linkedSeasons.isNotEmpty() ||
