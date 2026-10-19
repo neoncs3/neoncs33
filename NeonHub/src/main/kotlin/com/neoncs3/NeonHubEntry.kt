@@ -16,60 +16,8 @@ class NeonHubPlugin : Plugin() {
     override fun load(context: Context) {
         super.load(context)
 
-        // NeonHub owns the only user-facing settings screen.
-
-        // Only register site providers that are enabled in the NeonHub settings.
-        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_ASYAFILM)) {
-            registerMainAPI(AsyaFilmIzle())
-        }
-        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_DIZIMAG)) {
-            registerMainAPI(AutoDdizimagCom())
-        }
-        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_HDFILMDIZI)) {
-            registerMainAPI(AutoHdfilmdiziizleCom())
-        }
-        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_CANLI)) {
-            registerMainAPI(CanliProvider())
-        }
-        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_TVDIZILER)) {
-            registerMainAPI(AutoTvdizilerTv())
-        }
-        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_DDIZI)) {
-            registerMainAPI(DDizi())
-        }
-        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_DIZIBOXIZLE)) {
-            registerMainAPI(DiziBoxizle())
-        }
-        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_DIZIDAD)) {
-            registerMainAPI(DiziDad())
-        }
-        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_DIZIPAL)) {
-            registerMainAPI(DiziPal())
-        }
-        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_DIZIGECESI)) {
-            registerMainAPI(Dizigecesi())
-        }
-        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_DRAMADIZILERIM)) {
-            registerMainAPI(Dramadizilerim())
-        }
-        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_FILMMODU)) {
-            registerMainAPI(FilmModu())
-        }
-        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_JETFILMIZLE)) {
-            registerMainAPI(JetFilmizle())
-        }
-        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_SETFILMIZLE)) {
-            registerMainAPI(SetFilmIzle())
-        }
-        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_SINEMACX)) {
-            registerMainAPI(SinemaCX())
-        }
-        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_TIZAM)) {
-            registerMainAPI(Tizam())
-        }
-        if (NeonHubSettings.enabled(NeonHubSettings.HUB_SOURCE_WEBDRAMATURKEY)) {
-            registerMainAPI(WebDramaTurkey())
-        }
+        // Register every source once; NeonHubController changes the live registry.
+        NeonHubController.install(this)
 
         // Keep provider-specific extractors registered by the standalone plugins.
         registerExtractorAPI(PixelDrain())
@@ -115,6 +63,7 @@ class NeonHubPlugin : Plugin() {
 
         this.openSettings = { ctx: Context ->
             NeonHubSettings.showSettingsDialog(ctx) {
+                NeonHubController.applySettings()
                 MainActivity.reloadHomeEvent.invoke(true)
             }
         }

@@ -103,7 +103,7 @@ object NeonHubSettings {
                 setPadding(0, dp(context, 7), 0, 0)
             })
             addView(TextView(context).apply {
-                text = "Kullanmak istediğin kaynakları aç, diğerlerini kapat. Seçimlerin kaydedildikten sonra uygulanır."
+                text = "Kaydet'e bastığında seçimler yeniden başlatma olmadan uygulanır."
                 textSize = 13f
                 setTextColor(textSecondary)
                 setPadding(0, dp(context, 7), 0, 0)
@@ -233,13 +233,9 @@ object NeonHubSettings {
                 sources.forEach { source ->
                     setKey(source.key, switches[source.key]?.isChecked ?: true)
                 }
-                AlertDialog.Builder(context)
-                    .setTitle("NeonHub ayarları kaydedildi")
-                    .setMessage("Seçtiğin kaynakları uygulamak için CloudStream'i tamamen kapatıp yeniden aç.")
-                    .setPositiveButton("Tamam") { _, _ -> onSave() }
-                    .setCancelable(false)
-                    .show()
-                Toast.makeText(context, "NeonHub kaynak ayarları kaydedildi", Toast.LENGTH_SHORT).show()
+                // Save and apply immediately; the controller adds/removes APIs in-place.
+                onSave()
+                Toast.makeText(context, "NeonHub ayarları hemen uygulandı", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Vazgeç", null)
             .create()
