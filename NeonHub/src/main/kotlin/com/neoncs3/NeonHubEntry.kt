@@ -1,6 +1,8 @@
 package com.neoncs3
 
 import android.content.Context
+import android.util.Log
+import android.widget.Toast
 import com.lagradost.cloudstream3.MainActivity
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
@@ -62,9 +64,20 @@ class NeonHubPlugin : Plugin() {
         registerExtractorAPI(Hubstream())
 
         this.openSettings = { ctx: Context ->
-            NeonHubSettings.showSettingsDialog(ctx, this@NeonHubPlugin.resources) {
+            val applyChanges: () -> Unit = {
                 NeonHubController.applySettings()
                 MainActivity.reloadHomeEvent.invoke(true)
+            }
+            try {
+                NeonHubSettings.showSettingsDialog(ctx, this@NeonHubPlugin.resources, applyChanges)
+            } catch (error: Throwable) {
+                Log.e("NeonHub", "Özel ayarlar penceresi açılamadı; basit ayarlar açılıyor.", error)
+                try {
+                    NeonHubSettings.showFallbackSettingsDialog(ctx, applyChanges)
+                } catch (fallbackError: Throwable) {
+                    Log.e("NeonHub", "NeonHub ayar penceresi açılamadı.", fallbackError)
+                    Toast.makeText(ctx, "NeonHub ayarları açılamadı: ${fallbackError.javaClass.simpleName}", Toast.LENGTH_LONG).show()
+                }
             }
         }
     }
