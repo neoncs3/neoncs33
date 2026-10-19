@@ -60,20 +60,35 @@ internal object SettingsDialog {
         // API Tokens card (Febbox + Wyzie Subs)
         layout.addView(buildApiTokensCard(context, pending))
 
-        // Active catalogs card
-        val onCatalogChanged: () -> Unit = {
+        // All standalone site plugins are controlled from the NeonHub card.
+        val onSourceChanged: () -> Unit = {
             requireRestart = true
         }
-        layout.addView(buildCollapsibleCard(context, "📡  Active Catalogs",
-            accentA = Color.parseColor("#10B981"), accentB = Color.parseColor("#059669")) {
-            addView(buildToggleRow(context, "CineStream", "Cinemeta catalog",
-                Settings.PROVIDER_CINESTREAM, true, pending, onCatalogChanged))
-            addView(SettingsWidgets.divider(context))
-            addView(buildToggleRow(context, "CineSimkl", "Simkl catalog",
-                Settings.PROVIDER_SIMKL, true, pending, onCatalogChanged))
-            addView(SettingsWidgets.divider(context))
-            addView(buildToggleRow(context, "CineTmdb", "TMDB catalog",
-                Settings.PROVIDER_TMDB, true, pending, onCatalogChanged))
+        layout.addView(buildCollapsibleCard(
+            context,
+            "🌌  NeonHub Sağlayıcıları",
+            startExpanded = true,
+            accentA = Color.parseColor("#00D9FF"),
+            accentB = Color.parseColor("#A855F7")
+        ) {
+            addView(TextView(context).apply {
+                text = "Tek eklentideki kaynakları buradan ayrı ayrı açıp kapatabilirsin."
+                textSize = 12f
+                setTextColor(theme.TEXT_SECONDARY)
+                setPadding(20.dp(context), 2.dp(context), 20.dp(context), 10.dp(context))
+            })
+            Settings.NEONHUB_SOURCES.forEachIndexed { index, source ->
+                if (index > 0) addView(SettingsWidgets.divider(context))
+                addView(buildToggleRow(
+                    context,
+                    source.title,
+                    source.description,
+                    source.key,
+                    true,
+                    pending,
+                    onSourceChanged
+                ))
+            }
         })
 
         // Providers card (delegated)
@@ -89,7 +104,7 @@ internal object SettingsDialog {
 
         val dialog = AlertDialog.Builder(context, android.R.style.Theme_Material_Dialog)
             .setView(scroll)
-            .setPositiveButton("Save") { _, _ ->
+            .setPositiveButton("Kaydet") { _, _ ->
                 pending.forEach { (key, value) ->
                     when {
                                     key == Settings.SHOWBOX_TOKEN_KEY && value == null   -> Settings.clearShowboxToken()
@@ -106,7 +121,7 @@ internal object SettingsDialog {
                 commitAddons(); commitOrder()
                 if (requireRestart) showRestartWarning(context, onSave) else onSave()
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton("Vazgeç", null)
             .create()
 
         dialog.window?.setBackgroundDrawable(theme.roundRect(theme.BG_DARK, 20f.dp(context)))
@@ -189,7 +204,12 @@ internal object SettingsDialog {
         val checked = pending[databaseKey] as? Boolean
             ?: com.lagradost.cloudstream3.CloudStreamApp.getKey<Boolean>(databaseKey) ?: defaultState
 
-        val sw = SettingsWidgets.styledSwitch(context, checked)
+        val sw = SettingsWidgets.styledSwitch(context, checked).apply {
+            setOnCheckedChangeListener { _, isChecked ->
+                pending[databaseKey] = isChecked
+                onChanged()
+            }
+        }
 
         return LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -214,11 +234,9 @@ internal object SettingsDialog {
 
             setOnClickListener {
                 sw.isChecked = !sw.isChecked
-                pending[databaseKey] = sw.isChecked
                 sw.animate().scaleX(0.92f).scaleY(0.92f).setDuration(80).withEndAction {
                     sw.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
                 }.start()
-                onChanged()
             }
         }
     }
@@ -1070,12 +1088,12 @@ internal object SettingsDialog {
                     intArrayOf(theme.ACCENT_START, theme.ACCENT_END)).apply { cornerRadius = 99f }
             })
             addView(TextView(context).apply {
-                text = "Plugin Settings"; textSize = 22f
+                text = "NeonHub"; textSize = 25f
                 setTypeface(null, android.graphics.Typeface.BOLD)
                 setTextColor(theme.TEXT_PRIMARY); letterSpacing = -0.02f
             })
             addView(TextView(context).apply {
-                text = "Configure sources, catalogs & cookies"
+                text = "Tüm içerik sağlayıcılarını tek panelden yönet"
                 textSize = 13f; setTextColor(theme.TEXT_SECONDARY); setPadding(0, 6.dp(context), 0, 0)
             })
         }
@@ -1083,9 +1101,9 @@ internal object SettingsDialog {
 
     private fun showRestartWarning(context: Context, onSave: () -> Unit) {
         AlertDialog.Builder(context)
-            .setTitle("Restart Required ⚠️")
-            .setMessage("You've changed your Active Catalogs.\n\nPlease fully close and reopen Cloudstream for providers to update.")
-            .setPositiveButton("Got it") { _, _ -> onSave() }
+            .setTitle("Yeniden başlatma gerekli ⚠️")
+            .setMessage("NeonHub sağlayıcı seçimlerini uygulamak için CloudStream'i tamamen kapatıp yeniden açmalısın.")
+            .setPositiveButton("Tamam") { _, _ -> onSave() }
             .setCancelable(false).show()
     }
 
