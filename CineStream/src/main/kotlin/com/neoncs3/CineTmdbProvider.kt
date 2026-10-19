@@ -61,7 +61,7 @@ class CineTmdbProvider: MainAPI() {
         return newHomePageResponse(request.name, home)
     }
 
-     private fun Media.toSearchResponse(type: String? = null): SearchResponse? {
+     private fun CineTmdbMedia.toSearchResponse(type: String? = null): SearchResponse? {
         return newMovieSearchResponse(
             title ?: name ?: originalTitle ?: return null,
             Data(id = id, type = mediaType ?: type).toJson(),
@@ -342,10 +342,10 @@ class CineTmdbProvider: MainAPI() {
     )
 
     data class Results(
-        @param:JsonProperty("results") val results: ArrayList<Media>? = arrayListOf(),
+        @param:JsonProperty("results") val results: ArrayList<CineTmdbMedia>? = arrayListOf(),
     )
 
-    data class Media(
+    data class CineTmdbMedia(
         @param:JsonProperty("id") val id: Int? = null,
         @param:JsonProperty("name") val name: String? = null,
         @param:JsonProperty("title") val title: String? = null,
@@ -382,25 +382,25 @@ class CineTmdbProvider: MainAPI() {
         @param:JsonProperty("air_date") val airDate: String? = null,
     )
 
-    data class Trailers(
+    data class CineTmdbTrailers(
         @param:JsonProperty("key") val key: String? = null,
         @param:JsonProperty("type") val type: String? = null,
     )
 
     data class ResultsTrailer(
-        @param:JsonProperty("results") val results: ArrayList<Trailers>? = arrayListOf(),
+        @param:JsonProperty("results") val results: ArrayList<CineTmdbTrailers>? = arrayListOf(),
     )
 
-    data class ExternalIds(
+    data class CineTmdbExternalIds(
         @param:JsonProperty("imdb_id") val imdb_id: String? = null,
         @param:JsonProperty("tvdb_id") val tvdb_id: Int? = null,
     )
 
     data class Credits(
-        @param:JsonProperty("cast") val cast: ArrayList<Cast>? = arrayListOf(),
+        @param:JsonProperty("cast") val cast: ArrayList<CineTmdbCast>? = arrayListOf(),
     )
 
-    data class Cast(
+    data class CineTmdbCast(
         @param:JsonProperty("id") val id: Int? = null,
         @param:JsonProperty("name") val name: String? = null,
         @param:JsonProperty("original_name") val originalName: String? = null,
@@ -410,7 +410,7 @@ class CineTmdbProvider: MainAPI() {
     )
 
     data class ResultsRecommendations(
-        @param:JsonProperty("results") val results: ArrayList<Media>? = arrayListOf(),
+        @param:JsonProperty("results") val results: ArrayList<CineTmdbMedia>? = arrayListOf(),
     )
 
     data class AltTitles(
@@ -449,7 +449,7 @@ class CineTmdbProvider: MainAPI() {
         @param:JsonProperty("last_episode_to_air") val last_episode_to_air: LastEpisodeToAir? = null,
         @param:JsonProperty("seasons") val seasons: ArrayList<Seasons>? = arrayListOf(),
         @param:JsonProperty("videos") val videos: ResultsTrailer? = null,
-        @param:JsonProperty("external_ids") val external_ids: ExternalIds? = null,
+        @param:JsonProperty("external_ids") val external_ids: CineTmdbExternalIds? = null,
         @param:JsonProperty("credits") val credits: Credits? = null,
         @param:JsonProperty("recommendations") val recommendations: ResultsRecommendations? = null,
         @param:JsonProperty("alternative_titles") val alternative_titles: ResultsAltTitles? = null,
@@ -466,7 +466,7 @@ class CineTmdbProvider: MainAPI() {
             }
     }
 
-    data class Episodes(
+    data class CineTmdbEpisodes(
         @param:JsonProperty("id") val id: Int? = null,
         @param:JsonProperty("name") val name: String? = null,
         @param:JsonProperty("overview") val overview: String? = null,
@@ -479,7 +479,7 @@ class CineTmdbProvider: MainAPI() {
     )
 
      data class MediaDetailEpisodes(
-        @param:JsonProperty("episodes") val episodes: ArrayList<Episodes>? = arrayListOf(),
+        @param:JsonProperty("episodes") val episodes: ArrayList<CineTmdbEpisodes>? = arrayListOf(),
     )
 
     data class ContentRatings(
