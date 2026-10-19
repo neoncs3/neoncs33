@@ -18,8 +18,7 @@ import com.lagradost.cloudstream3.CloudStreamApp.Companion.getKey
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.setKey
 
 /**
- * NeonHub's own settings page. It intentionally contains only website source
- * switches; no CineStream catalogs, tokens, scraping controls, or addon settings.
+ * NeonHub's own settings page, with only website-source switches.
  */
 object NeonHubSettings {
     const val HUB_SOURCE_ASYAFILM = "neonhub_source_asyafilm"
