@@ -71,7 +71,7 @@ class NeonPlaybackSmokeTest {
             directUrls = listOf("https://www.dizidad.com/diziler/tyson-izle/"),
             pluginInternalName = "DiziDad",
             directOnly = true,
-            apiName = "DiziDAD",
+            apiName = "NeonHub",
             posterOnly = true,
         ),
         Target("AsyaFilmIzle", listOf("Squid Game", "Wednesday", "The Last of Us")),
@@ -86,6 +86,7 @@ class NeonPlaybackSmokeTest {
                 "https://diziboxizle.com/the-lowdown-1-sezon-1-bolum/",
                 "https://diziboxizle.com/race-for-the-crown-1-sezon-1-bolum/",
             ),
+            apiName = "NeonHub",
         ),
         Target(
             "HDFilmDiziizle • Tron",
@@ -93,7 +94,7 @@ class NeonPlaybackSmokeTest {
             // Fixed public film page: tests loadLinks independently of catalogue search.
             directUrls = listOf("https://www.hdfilmdiziizle.com/film/tron/"),
             pluginInternalName = "AutoHdfilmdiziizleCom",
-            apiName = "HdFilmDiziizle",
+            apiName = "NeonHub",
         ),
         Target(
             "Dizimag • Below S1E1",
@@ -101,7 +102,7 @@ class NeonPlaybackSmokeTest {
             listOf("https://dizimag.one/below-1-sezon-1-bolum/"),
             pluginInternalName = "AutoDdizimagCom",
             directOnly = true,
-            apiName = "Dizimag",
+            apiName = "NeonHub",
         ),
         Target(
             "Dizimag • Below S1E2",
@@ -109,7 +110,7 @@ class NeonPlaybackSmokeTest {
             listOf("https://dizimag.one/below-1-sezon-2-bolum/"),
             pluginInternalName = "AutoDdizimagCom",
             directOnly = true,
-            apiName = "Dizimag",
+            apiName = "NeonHub",
         ),
         Target(
             "Dizimag • Below S1E3",
@@ -117,7 +118,7 @@ class NeonPlaybackSmokeTest {
             listOf("https://dizimag.one/below-1-sezon-3-bolum/"),
             pluginInternalName = "AutoDdizimagCom",
             directOnly = true,
-            apiName = "Dizimag",
+            apiName = "NeonHub",
         ),
         Target(
             "Dizimag • Below S1E6",
@@ -126,7 +127,7 @@ class NeonPlaybackSmokeTest {
             listOf("https://dizimag.one/below-1-sezon-6-bolum/"),
             pluginInternalName = "AutoDdizimagCom",
             directOnly = true,
-            apiName = "Dizimag",
+            apiName = "NeonHub",
         ),
         Target(
             "TvDiziler • Aşk 101",
@@ -134,7 +135,7 @@ class NeonPlaybackSmokeTest {
             listOf("https://tvdiziler.tv/ask-101-1-bolum-izle"),
             pluginInternalName = "AutoTvdizilerTv",
             directOnly = true,
-            apiName = "TvDiziler",
+            apiName = "NeonHub",
             upstreamUnavailableReason = "Aşk 101 1. bölümün oyuncusu yalnızca Streambox master.txt adresi sunuyor; testte bu adres HTTP 200 ile geçerli #EXTM3U listesi yerine 14 karakterlik HTML döndürdü. Bu bölümün kaynağı erişilebilir değil; diğer TvDiziler bölümleri ayrıca gerçek oynatmayla test ediliyor",
         ),
         Target(
@@ -143,7 +144,7 @@ class NeonPlaybackSmokeTest {
             listOf("https://tvdiziler.tv/medcezir-1-bolum-izle"),
             pluginInternalName = "AutoTvdizilerTv",
             directOnly = true,
-            apiName = "TvDiziler",
+            apiName = "NeonHub",
         ),
         Target(
             "TvDiziler • Tuzlu Kahve 7",
@@ -151,7 +152,7 @@ class NeonPlaybackSmokeTest {
             listOf("https://tvdiziler.tv/tuzlu-kahve-7-bolum-izle"),
             pluginInternalName = "AutoTvdizilerTv",
             directOnly = true,
-            apiName = "TvDiziler",
+            apiName = "NeonHub",
         ),
         Target(
             "TvDiziler • Anne Yarısı 4",
@@ -159,7 +160,7 @@ class NeonPlaybackSmokeTest {
             listOf("https://tvdiziler.tv/anne-yarisi-4-bolum-izle"),
             pluginInternalName = "AutoTvdizilerTv",
             directOnly = true,
-            apiName = "TvDiziler",
+            apiName = "NeonHub",
         ),
         Target(
             "TvDiziler • Haysiyet 6",
@@ -167,7 +168,7 @@ class NeonPlaybackSmokeTest {
             listOf("https://tvdiziler.tv/haysiyet-6-bolum-izle"),
             pluginInternalName = "AutoTvdizilerTv",
             directOnly = true,
-            apiName = "TvDiziler",
+            apiName = "NeonHub",
         ),
         Target("DiziPal", listOf("Wednesday", "The Last of Us", "Stranger Things")),
         Target("Dizigecesi", listOf("Wednesday", "The Last of Us", "The Boys")),
@@ -1002,6 +1003,23 @@ class NeonPlaybackSmokeTest {
                 localPlugins.size +
                 " names=" +
                 localPlugins.joinToString(","),
+        )
+
+        val neonHubOwnedApis = APIHolder.allProviders.filter {
+            it.sourcePlugin?.contains("NeonHub.cs3", ignoreCase = true) == true
+        }
+        val unexpectedNeonHubApis = neonHubOwnedApis.filterNot {
+            it.name.equals("NeonHub", ignoreCase = true)
+        }
+        assertTrue(
+            "NeonHub altında ayrı kaynak sağlayıcıları kayıtlı: " +
+                unexpectedNeonHubApis.joinToString { it.name },
+            unexpectedNeonHubApis.isEmpty(),
+        )
+        assertTrue(
+            "NeonHub.cs3 tam olarak bir NeonHub sağlayıcısı kaydetmeli; bulunan: " +
+                neonHubOwnedApis.joinToString { it.name },
+            neonHubOwnedApis.count { it.name.equals("NeonHub", ignoreCase = true) } == 1,
         )
 
         val allAvailableTargets = allTargets()

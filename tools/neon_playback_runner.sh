@@ -99,7 +99,7 @@ echo "=== Gerçek CloudStream / ExoPlayer testi ==="
 set +e
 ./gradlew :app:connectedPrereleaseDebugAndroidTest \
   -Pandroid.testInstrumentationRunnerArguments.class=com.lagradost.cloudstream3.NeonPlaybackSmokeTest \
-  -Pandroid.testInstrumentationRunnerArguments.providers=DiziDAD,Dizimag,TvDiziler,HdFilmDiziizle \
+  -Pandroid.testInstrumentationRunnerArguments.providers=NeonHub \
   --no-daemon --stacktrace 2>&1 | tee "${RUNNER_TEMP}/instrumentation.log"
 TEST_EXIT="${PIPESTATUS[0]}"
 set -e

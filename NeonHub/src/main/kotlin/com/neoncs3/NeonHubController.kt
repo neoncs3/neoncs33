@@ -77,7 +77,13 @@ object NeonHubController {
         if (direct != null) return direct.key
 
         val requestedHost = host(url) ?: return null
-        return sources.entries.firstOrNull { host(it.value.mainUrl) == requestedHost }?.key
+        sources.entries.firstOrNull { host(it.value.mainUrl) == requestedHost }?.key?.let { return it }
+
+        // Keep support for older, indexed Dizimag URLs as the current provider domain changes.
+        if (requestedHost == "dizimag.one") {
+            return NeonHubSettings.HUB_SOURCE_DIZIMAG
+        }
+        return null
     }
 
     fun rememberUrl(key: String, url: String) {
