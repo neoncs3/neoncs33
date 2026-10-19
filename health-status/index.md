@@ -14,7 +14,7 @@ Bu rapor tools/provider_health.py tarafından otomatik güncellenir.
 | **DiziBoxizle** | 🟢 | https://diziboxizle.com | https://diziboxizle.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **DiziDad** | 🟡 | https://www.dizidad.com | https://www.dizidad.com | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **Dizigecesi** | 🟡 | https://dizigecesi.com | https://dizigecesi.com | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
-| **DiziPal** | 🟡 | https://dizipal1586.com | https://dizipal1590.com | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **DiziPal** | 🟡 | https://dizipal1586.com | https://dizipal1591.com | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **Dramadizilerim** | 🟢 | https://dramadizilerim.com | https://dramadizilerim.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **FilmModu** | 🟢 | https://www.filmmodu.one | https://www.filmmodu.one | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **JetFilmizle** | 🟢 | https://jetfilmizle.now | https://jetfilmizle.now | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
