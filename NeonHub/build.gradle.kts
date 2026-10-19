@@ -6,7 +6,6 @@ cloudstream {
     tvTypes = listOf("Movie", "TvSeries", "AsianDrama", "Anime", "Torrent", "NSFW")
     language = "tr"
     requiresResources = false
-    iconUrl = "https://github.com/neoncs3/neoncs33/raw/master/NeonHub/icon.png"
 }
 
 // Copy all site providers into one generated source tree while excluding
