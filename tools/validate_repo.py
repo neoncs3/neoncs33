@@ -107,7 +107,26 @@ modules = [
 
 for module in modules:
     source_root = module / "src/main/kotlin"
-    kotlin_paths = list(source_root.rglob("*.kt")) if source_root.exists() else []
+    source_dirs = [source_root]
+
+    # Some aggregate extensions compile provider sources from their original
+    # modules. Include those Gradle-declared source roots in repository checks.
+    build_file = module / "build.gradle.kts"
+    if build_file.exists():
+        build_text = build_file.read_text(encoding="utf-8", errors="replace")
+        for source_hint in re.findall(
+            r'java\\.srcDir\\(rootProject\\.file\\("([^"]+)"\\)\\)',
+            build_text,
+        ):
+            source_dir = ROOT / source_hint
+            if source_dir not in source_dirs:
+                source_dirs.append(source_dir)
+
+    kotlin_paths = []
+    for source_dir in source_dirs:
+        if source_dir.exists():
+            kotlin_paths.extend(source_dir.rglob("*.kt"))
+    kotlin_paths = list(dict.fromkeys(kotlin_paths))
     kotlin_texts = [
         path.read_text(encoding="utf-8", errors="replace")
         for path in kotlin_paths
