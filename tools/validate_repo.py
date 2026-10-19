@@ -115,7 +115,7 @@ for module in modules:
     if build_file.exists():
         build_text = build_file.read_text(encoding="utf-8", errors="replace")
         for source_hint in re.findall(
-            r'java\\.srcDir\\(rootProject\\.file\\("([^"]+)"\\)\\)',
+            r'java\.srcDir\(rootProject\.file\("([^"]+)"\)\)',
             build_text,
         ):
             source_dir = ROOT / source_hint
