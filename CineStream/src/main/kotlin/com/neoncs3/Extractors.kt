@@ -1351,14 +1351,14 @@ open class MegaPlay : ExtractorApi() {
 
     data class MegaPlayResponse(
         val sources: Sources? = null,
-        val tracks: List<Track> = emptyList()
+        val tracks: List<CineExtractorTrack> = emptyList()
     )
 
     data class Sources(
         val file: String? = null
     )
 
-    data class Track(
+    data class CineExtractorTrack(
         val file: String? = null,
         val label: String? = null,
         val kind: String? = null
