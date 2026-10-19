@@ -152,17 +152,18 @@ internal object SettingsProviders {
             addView(col)
 
             val sw = SettingsWidgets.styledSwitch(context, newProviderDefaultOnNow(),
-                trackOnColor = Color.parseColor("#4ADE80"))
+                trackOnColor = Color.parseColor("#4ADE80")).apply {
+                setOnCheckedChangeListener { _, isChecked ->
+                    pendingChanges[Settings.NEW_PROVIDER_DEFAULT_ON] = isChecked
+                    rebuild()
+                }
+            }
             addView(LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                 isClickable = true; isFocusable = true; isFocusableInTouchMode = false
                 background = theme.stateDrawable(context)
                 addView(sw)
-                setOnClickListener {
-                    sw.isChecked = !sw.isChecked
-                    pendingChanges[Settings.NEW_PROVIDER_DEFAULT_ON] = sw.isChecked
-                    rebuild()
-                }
+                setOnClickListener { sw.isChecked = !sw.isChecked }
             })
         }
 
@@ -188,7 +189,7 @@ internal object SettingsProviders {
         }
 
         val searchInput = EditText(context).apply {
-            hint = "Search providers..."
+            hint = "Search video extractors..."
             textSize = 13f
             setTextColor(theme.TEXT_PRIMARY)
             setHintTextColor(theme.TEXT_SECONDARY)
@@ -233,7 +234,7 @@ internal object SettingsProviders {
 
             addView(SettingsWidgets.accentBar(context, theme.ACCENT_START, theme.ACCENT_END))
             addView(TextView(context).apply {
-                text = "🎬  Providers"; textSize = 12f
+                text = "🧩  CineStream Video Extractors"; textSize = 12f
                 setTypeface(null, android.graphics.Typeface.BOLD)
                 setTextColor(theme.TEXT_SECONDARY); letterSpacing = 0.08f
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
@@ -314,13 +315,17 @@ internal object SettingsProviders {
 
             val effectiveChecked = pendingChanges[key] as? Boolean ?: Settings.enabled(key)
             val sw = SettingsWidgets.styledSwitch(context, effectiveChecked,
-                trackOnColor = if (isTorrent) Color.parseColor("#8B5E3C") else theme.SWITCH_ON)
+                trackOnColor = if (isTorrent) Color.parseColor("#8B5E3C") else theme.SWITCH_ON).apply {
+                setOnCheckedChangeListener { _, isChecked ->
+                    pendingChanges[key] = isChecked
+                }
+            }
             addView(LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                 isClickable = true; isFocusable = true; isFocusableInTouchMode = false
                 background = theme.stateDrawable(context)
                 addView(sw)
-                setOnClickListener { sw.isChecked = !sw.isChecked; pendingChanges[key] = sw.isChecked }
+                setOnClickListener { sw.isChecked = !sw.isChecked }
             })
         }
     }
