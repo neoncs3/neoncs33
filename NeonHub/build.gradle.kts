@@ -10,6 +10,91 @@ cloudstream {
     iconUrl = "https://github.com/neoncs3/neoncs33/raw/master/CineStream/icon.png"
 }
 
+// Copy all site providers into one generated source tree while excluding
+// their standalone CloudStream plugin entry points. This avoids unsupported
+// source-set exclusion DSL in Android Gradle and preserves the original files.
+val mergedProviderSources = layout.buildDirectory.dir("generated/mergedProviders")
+val prepareMergedProviderSources by tasks.registering(org.gradle.api.tasks.Copy::class) {
+    into(mergedProviderSources)
+
+    from(rootProject.file("AsyaFilmIzle/src/main/kotlin")) {
+        into("AsyaFilmIzle")
+        exclude("**/*Plugin.kt")
+    }
+    from(rootProject.file("AutoDdizimagCom/src/main/kotlin")) {
+        into("AutoDdizimagCom")
+        exclude("**/*Plugin.kt")
+    }
+    from(rootProject.file("AutoHdfilmdiziizleCom/src/main/kotlin")) {
+        into("AutoHdfilmdiziizleCom")
+        exclude("**/*Plugin.kt")
+    }
+    from(rootProject.file("AutoKlubnichkaLive/src/main/kotlin")) {
+        into("AutoKlubnichkaLive")
+        exclude("**/*Plugin.kt")
+    }
+    from(rootProject.file("AutoTvdizilerTv/src/main/kotlin")) {
+        into("AutoTvdizilerTv")
+        exclude("**/*Plugin.kt")
+    }
+    from(rootProject.file("CineStream/src/main/kotlin")) {
+        into("CineStream")
+        exclude("**/*Plugin.kt", "**/CineStream.kt")
+    }
+    from(rootProject.file("DDizi/src/main/kotlin")) {
+        into("DDizi")
+        exclude("**/*Plugin.kt")
+    }
+    from(rootProject.file("DiziBoxizle/src/main/kotlin")) {
+        into("DiziBoxizle")
+        exclude("**/*Plugin.kt")
+    }
+    from(rootProject.file("DiziDad/src/main/kotlin")) {
+        into("DiziDad")
+        exclude("**/*Plugin.kt")
+    }
+    from(rootProject.file("DiziPal/src/main/kotlin")) {
+        into("DiziPal")
+        exclude("**/*Plugin.kt")
+    }
+    from(rootProject.file("Dizigecesi/src/main/kotlin")) {
+        into("Dizigecesi")
+        exclude("**/*Plugin.kt")
+    }
+    from(rootProject.file("Dramadizilerim/src/main/kotlin")) {
+        into("Dramadizilerim")
+        exclude("**/*Plugin.kt")
+    }
+    from(rootProject.file("FilmModu/src/main/kotlin")) {
+        into("FilmModu")
+        exclude("**/*Plugin.kt")
+    }
+    from(rootProject.file("JetFilmizle/src/main/kotlin")) {
+        into("JetFilmizle")
+        exclude("**/*Plugin.kt")
+    }
+    from(rootProject.file("SetFilmIzle/src/main/kotlin")) {
+        into("SetFilmIzle")
+        exclude("**/*Plugin.kt")
+    }
+    from(rootProject.file("SinemaCX/src/main/kotlin")) {
+        into("SinemaCX")
+        exclude("**/*Plugin.kt")
+    }
+    from(rootProject.file("TiZam/src/main/kotlin")) {
+        into("TiZam")
+        exclude("**/*Plugin.kt")
+    }
+    from(rootProject.file("WebDramaTurkey/src/main/kotlin")) {
+        into("WebDramaTurkey")
+        exclude("**/*Plugin.kt")
+    }
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    dependsOn(prepareMergedProviderSources)
+}
+
 android {
     buildFeatures {
         buildConfig = true
@@ -43,28 +128,7 @@ android {
 
     sourceSets {
         getByName("main") {
-            java.srcDir(rootProject.file("AsyaFilmIzle/src/main/kotlin"))
-            java.srcDir(rootProject.file("AutoDdizimagCom/src/main/kotlin"))
-            java.srcDir(rootProject.file("AutoHdfilmdiziizleCom/src/main/kotlin"))
-            java.srcDir(rootProject.file("AutoKlubnichkaLive/src/main/kotlin"))
-            java.srcDir(rootProject.file("AutoTvdizilerTv/src/main/kotlin"))
-            java.srcDir(rootProject.file("CineStream/src/main/kotlin"))
-            java.srcDir(rootProject.file("DDizi/src/main/kotlin"))
-            java.srcDir(rootProject.file("DiziBoxizle/src/main/kotlin"))
-            java.srcDir(rootProject.file("DiziDad/src/main/kotlin"))
-            java.srcDir(rootProject.file("DiziPal/src/main/kotlin"))
-            java.srcDir(rootProject.file("Dizigecesi/src/main/kotlin"))
-            java.srcDir(rootProject.file("Dramadizilerim/src/main/kotlin"))
-            java.srcDir(rootProject.file("FilmModu/src/main/kotlin"))
-            java.srcDir(rootProject.file("JetFilmizle/src/main/kotlin"))
-            java.srcDir(rootProject.file("SetFilmIzle/src/main/kotlin"))
-            java.srcDir(rootProject.file("SinemaCX/src/main/kotlin"))
-            java.srcDir(rootProject.file("TiZam/src/main/kotlin"))
-            java.srcDir(rootProject.file("WebDramaTurkey/src/main/kotlin"))
-
-            // All providers are registered by NeonHubEntry.kt. Exclude the
-            // individual plugin entry points to prevent duplicate loaders.
-            java { exclude("**/*Plugin.kt", "**/CineStream.kt") }
+            java.srcDir(mergedProviderSources)
         }
     }
 }
