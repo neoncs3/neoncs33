@@ -595,23 +595,189 @@ object NeonHubSettings {
      * on a particular CloudStream build or Android TV device.
      */
     fun showFallbackSettingsDialog(context: Context, onSave: () -> Unit) {
-        val checked = BooleanArray(sources.size) { index -> enabled(sources[index].key) }
-        val labels = sources.map { it.title }.toTypedArray()
+        // Keep the branded full-screen NeonHub appearance even when the richer
+        // settings panel fails on a particular CloudStream/Android build.
+        val switches = linkedMapOf<String, Switch>()
+        val dialog = Dialog(context, android.R.style.Theme_Material_NoActionBar)
 
-        AlertDialog.Builder(context)
-            .setTitle("NEONHUB · Kaynak Ayarları")
-            .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
-                checked[which] = isChecked
+        val root = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(backgroundColor)
+        }
+
+        val topBar = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(context, 20), dp(context, 18), dp(context, 16), dp(context, 15))
+            setBackgroundColor(backgroundColor)
+        }
+        val brandCopy = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        brandCopy.addView(TextView(context).apply {
+            text = "NEONHUB"
+            textSize = 21f
+            letterSpacing = 0.035f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(textPrimary)
+        })
+        brandCopy.addView(TextView(context).apply {
+            text = "KAYNAK YÖNETİM PANELİ"
+            textSize = 9f
+            letterSpacing = 0.12f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(cyan)
+            setPadding(0, dp(context, 3), 0, 0)
+        })
+        topBar.addView(brandCopy)
+
+        val closeButton = TextView(context).apply {
+            text = "×"
+            textSize = 28f
+            gravity = Gravity.CENTER
+            setTextColor(textSecondary)
+            background = rounded(raisedCardColor, dp(context, 16).toFloat(), borderColor)
+            isClickable = true
+            isFocusable = true
+            contentDescription = "Ayarları kapat"
+            setOnClickListener { dialog.dismiss() }
+        }
+        topBar.addView(closeButton, LinearLayout.LayoutParams(dp(context, 44), dp(context, 44)))
+        root.addView(topBar)
+        root.addView(View(context).apply {
+            setBackgroundColor(borderColor)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(context, 1)
+            )
+        })
+
+        val content = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(context, 18), dp(context, 18), dp(context, 18), dp(context, 20))
+        }
+        content.addView(TextView(context).apply {
+            text = "Kaynakların"
+            textSize = 19f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(textPrimary)
+        })
+        content.addView(TextView(context).apply {
+            text = "Kullanmak istediğin siteleri etkinleştir. Seçimlerin Kaydet ile uygulanır."
+            textSize = 12f
+            setTextColor(textSecondary)
+            setPadding(0, dp(context, 5), 0, dp(context, 16))
+        })
+
+        sources.forEachIndexed { index, source ->
+            val accent = when (index % 4) {
+                0 -> cyan
+                1 -> purple
+                2 -> green
+                else -> amber
             }
-            .setNegativeButton("Vazgeç", null)
-            .setPositiveButton("Kaydet ve Uygula") { _, _ ->
-                sources.forEachIndexed { index, source ->
-                    setKey(source.key, checked[index])
-                }
-                onSave()
-                Toast.makeText(context, "NeonHub ayarları uygulandı", Toast.LENGTH_SHORT).show()
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(context, 12), dp(context, 12), dp(context, 10), dp(context, 12))
+                background = rounded(cardColor, dp(context, 16).toFloat(), borderColor)
+                isClickable = true
+                isFocusable = true
             }
-            .show()
+            val copy = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            copy.addView(TextView(context).apply {
+                text = source.title
+                textSize = 13f
+                setTypeface(null, Typeface.BOLD)
+                setTextColor(textPrimary)
+            })
+            copy.addView(TextView(context).apply {
+                text = source.detail
+                textSize = 10f
+                setTextColor(textSecondary)
+                setPadding(0, dp(context, 2), 0, 0)
+            })
+            row.addView(copy)
+
+            val toggle = Switch(context).apply {
+                isChecked = enabled(source.key)
+                contentDescription = "Etkinleştir: " + source.title
+                thumbTintList = ColorStateList(
+                    arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+                    intArrayOf(Color.WHITE, Color.parseColor("#CBD5E1"))
+                )
+                trackTintList = ColorStateList(
+                    arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+                    intArrayOf(green, Color.parseColor("#3A455B"))
+                )
+                showText = false
+            }
+            switches[source.key] = toggle
+            row.addView(toggle)
+            row.setOnClickListener { toggle.isChecked = !toggle.isChecked }
+            content.addView(row, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(context, 9) })
+        }
+
+        val scroll = ScrollView(context).apply {
+            isFillViewport = false
+            isScrollbarFadingEnabled = true
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            addView(content)
+        }
+        root.addView(scroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
+
+        root.addView(View(context).apply {
+            setBackgroundColor(borderColor)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(context, 1)
+            )
+        })
+        val footer = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(context, 18), dp(context, 11), dp(context, 18), dp(context, 15))
+            setBackgroundColor(Color.parseColor("#0B111E"))
+        }
+        footer.addView(actionButton(context, "Vazgeç", textSecondary, raisedCardColor) {
+            dialog.dismiss()
+        }, LinearLayout.LayoutParams(0, dp(context, 48), 0.8f).apply {
+            marginEnd = dp(context, 9)
+        })
+        footer.addView(actionButton(context, "Kaydet ve Uygula  →", Color.parseColor("#06131D"), cyan) {
+            sources.forEach { source ->
+                setKey(source.key, switches[source.key]?.isChecked ?: true)
+            }
+            onSave()
+            Toast.makeText(context, "NeonHub ayarları uygulandı", Toast.LENGTH_SHORT).show()
+            dialog.dismiss()
+        }, LinearLayout.LayoutParams(0, dp(context, 48), 1.4f))
+        root.addView(footer)
+
+        dialog.setContentView(root)
+        dialog.setCancelable(true)
+        dialog.setCanceledOnTouchOutside(false)
+        dialog.window?.apply {
+            setBackgroundDrawable(ColorDrawable(backgroundColor))
+            setLayout(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT
+            )
+            addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            attributes = attributes.apply { dimAmount = 0.72f }
+            statusBarColor = backgroundColor
+            navigationBarColor = Color.parseColor("#0B111E")
+        }
+        dialog.show()
+        dialog.window?.setLayout(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT
+        )
     }
 
     private fun probeSource(key: String): SourceProbe {
