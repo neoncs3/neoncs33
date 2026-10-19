@@ -11,7 +11,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://asyafilmizle.com",
-        "bytes": 5656,
+        "bytes": 5698,
         "title": "Just a moment...",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -69,7 +69,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://www.hdfilmdiziizle.com",
-        "bytes": 5662,
+        "bytes": 5704,
         "title": "Just a moment...",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -111,7 +111,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://tvdiziler.tv",
-        "bytes": 82510,
+        "bytes": 82462,
         "title": "Dizi izle, Yerli ve Full HD Diziler, Dizi Seyret | TvDiziler.tv",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -166,7 +166,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://diziboxizle.com",
-        "bytes": 281499,
+        "bytes": 281437,
         "title": "Dizibox İzle - Güncel Yabancı Dizi izle, HD Diziler izle",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -257,17 +257,17 @@
     },
     {
       "provider": "Dramadizilerim",
-      "status": "red",
+      "status": "green",
       "domain": "https://dramadizilerim.com",
       "configured_domain": "https://dramadizilerim.com",
       "live_domain": "https://dramadizilerim.com",
       "live": {
-        "ok": false,
+        "ok": true,
         "anti_bot_blocked": false,
-        "status_code": 522,
+        "status_code": 200,
         "final_url": "https://dramadizilerim.com",
-        "bytes": 7264,
-        "title": "dramadizilerim.com | 522: Connection timed out",
+        "bytes": 193213,
+        "title": "Drama Dizilerim - Dikey Mini Dizi &amp; Kısa Dizi İzle (Türkçe Dublaj &amp; Altyazılı)",
         "media_hints": 0,
         "iframe_hints": 0,
         "error": null
@@ -366,7 +366,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://www.setfilmizle.ltd",
-        "bytes": 110747,
+        "bytes": 110841,
         "title": "Set Film izle | HD Film | Yabancı Dizi",
         "media_hints": 1,
         "iframe_hints": 0,
@@ -456,7 +456,7 @@
       "source": "WebDramaTurkey/src/main/kotlin/com/neoncs3/WebDramaTurkey.kt"
     }
   ],
-  "green": 8,
+  "green": 9,
   "yellow": 10,
-  "red": 1
+  "red": 0
 }
