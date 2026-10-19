@@ -157,7 +157,6 @@ for module in modules:
     if "@CloudstreamPlugin" not in all_kotlin or "registerMainAPI(" not in all_kotlin:
         errors.append(f"{module.name}: CloudStream @CloudstreamPlugin kayıt sınıfı veya registerMainAPI eksik.")
 
-    source = "\n".join(provider_texts)
     checks = {
         "load": r"override\s+suspend\s+fun\s+load\s*\(",
         "search": r"override\s+suspend\s+fun\s+search\s*\(",
@@ -169,14 +168,22 @@ for module in modules:
             "video": r"neonResolve(?:LinkCandidates|Links)\s*\(",
         })
 
-    for label, pattern in checks.items():
-        if not re.search(pattern, source):
-            errors.append(f"{module.name}: {label} pipeline eksik.")
+    # Validate every provider separately. This matters for NeonHub because its
+    # single module contains several providers; adjacent source files must not
+    # affect an individual provider's TMDB/loadLinks checks.
+    for source in provider_texts:
+        for label, pattern in checks.items():
+            if not re.search(pattern, source):
+                provider_match = re.search(r"class\s+(\w+)\s*:", source)
+                provider_name = provider_match.group(1) if provider_match else module.name
+                errors.append(f"{module.name}/{provider_name}: {label} pipeline eksik.")
 
-    low = source.lower()
-    start_links = low.find("loadlinks(")
-    if start_links >= 0 and "tmdb" in low[start_links:start_links + 16000]:
-        errors.append(f"{module.name}: loadLinks içinde TMDB kullanımı bulundu.")
+        low = source.lower()
+        start_links = low.find("loadlinks(")
+        if start_links >= 0 and "tmdb" in low[start_links:start_links + 16000]:
+            provider_match = re.search(r"class\s+(\w+)\s*:", source)
+            provider_name = provider_match.group(1) if provider_match else module.name
+            errors.append(f"{module.name}/{provider_name}: loadLinks içinde TMDB kullanımı bulundu.")
 
 try:
     repo_data = json.loads((ROOT / "repo.json").read_text(encoding="utf-8"))
