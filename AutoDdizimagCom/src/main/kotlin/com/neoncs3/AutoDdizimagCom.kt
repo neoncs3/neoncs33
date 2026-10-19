@@ -835,7 +835,7 @@ class AutoDdizimagCom : NeonMainAPI() {
         return (seasonNumber(value) ?: defaultSeason ?: 1) to number
     }
 
-    private data class EpisodeItem(
+    private data class AutoDdizimagEpisodeItem(
         val url: String,
         val title: String,
         val season: Int,
@@ -862,7 +862,7 @@ class AutoDdizimagCom : NeonMainAPI() {
         document: Document,
         baseUrl: String,
         defaultSeason: Int?
-    ): List<EpisodeItem> {
+    ): List<AutoDdizimagEpisodeItem> {
         return document.select("a[href]").mapNotNull { anchor ->
             val rawHref = anchor.attr("href")
             // Classify using only this link's own text/path before doing URL or poster
@@ -893,7 +893,7 @@ class AutoDdizimagCom : NeonMainAPI() {
                     it.length in 1..180 &&
                         normalizedFilterText(it) !in setOf("izledim", "izlendi", "watched")
                 } ?: return@mapNotNull null
-            EpisodeItem(
+            AutoDdizimagEpisodeItem(
                 url = href,
                 title = title,
                 season = numbers.first,
@@ -928,7 +928,7 @@ class AutoDdizimagCom : NeonMainAPI() {
         val actors = neonExtractActors(document, normalizedUrl)
 
         val linkedSeasons = seasonLinks(document, normalizedUrl)
-        val foundEpisodes = ArrayList<EpisodeItem>()
+        val foundEpisodes = ArrayList<AutoDdizimagEpisodeItem>()
         foundEpisodes += episodeItems(document, normalizedUrl, seasonNumber(normalizedUrl))
 
         // Up to 12 season pages were previously fetched sequentially with 10s timeouts.
@@ -949,7 +949,7 @@ class AutoDdizimagCom : NeonMainAPI() {
                             seasonUrl,
                             normalizedUrl,
                             timeoutMs = 3_500L,
-                        ) ?: return@withPermit emptyList<EpisodeItem>()
+                        ) ?: return@withPermit emptyList<AutoDdizimagEpisodeItem>()
                         episodeItems(seasonDocument, seasonUrl, seasonNo ?: seasonNumber(seasonUrl))
                     }
                 }
@@ -957,7 +957,7 @@ class AutoDdizimagCom : NeonMainAPI() {
         }
         foundEpisodes += seasonEpisodes
         val episodes = foundEpisodes.distinctBy { it.url }
-            .sortedWith(compareBy<EpisodeItem> { it.season }.thenBy { it.episode }.thenBy { it.url })
+            .sortedWith(compareBy<AutoDdizimagEpisodeItem> { it.season }.thenBy { it.episode }.thenBy { it.url })
         val types = schemaTypes(document)
         val episodePage = episodeInfo(title + " " + normalizedUrl, seasonNumber(normalizedUrl)) != null
         val series = episodes.isNotEmpty() || linkedSeasons.isNotEmpty() ||
