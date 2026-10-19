@@ -97,7 +97,7 @@ object NeonHubSettings {
         var refreshFilterAction: (() -> Unit)? = null
         val uiHandler = Handler(Looper.getMainLooper())
         val checkRunning = AtomicBoolean(false)
-        val logoResourceId = pluginResources?.getIdentifier("neonhub_logo", "drawable", null) ?: 0
+        val logoResourceId = R.drawable.neonhub_logo
 
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
