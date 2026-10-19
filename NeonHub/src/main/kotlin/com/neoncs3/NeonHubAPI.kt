@@ -2,13 +2,12 @@ package com.neoncs3
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
+import java.util.concurrent.ConcurrentHashMap
 import okhttp3.Interceptor
 
 /**
@@ -82,43 +81,22 @@ class NeonHubAPI : MainAPI() {
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList? {
-        val limiter = Semaphore(8)
-        val results = coroutineScope {
-            NeonHubController.enabledSources().map { (key, source) ->
-                async {
-                    limiter.withPermit {
-                        val response = sourceRequest { source.search(query, page) }
-                        response?.let { Triple(key, it.items, it.hasNext) }
-                    }
-                }
-            }.awaitAll().filterNotNull()
+        val results = collectSources(NeonHubController.enabledSources()) { source ->
+            source.search(query, page)
         }
-
-        val items = results.flatMap { result ->
-            result.second.map { rebrandSearchResponse(it, result.first) }
+        val items = results.flatMap { (key, response) ->
+            response.items.map { rebrandSearchResponse(it, key) }
         }
         if (items.isEmpty()) return null
-        return newSearchResponseList(items, results.any { it.third })
+        return newSearchResponseList(items, results.any { it.second.hasNext })
     }
 
     override suspend fun search(query: String): List<SearchResponse>? =
         search(query, 1)?.items
 
     override suspend fun quickSearch(query: String): List<SearchResponse>? {
-        val limiter = Semaphore(8)
-        val results = coroutineScope {
-            NeonHubController.enabledSources()
-                .filter { it.second.hasQuickSearch }
-                .map { (key, source) ->
-                    async {
-                        limiter.withPermit {
-                            val found = sourceRequest { source.quickSearch(query) }
-                            found?.let { key to it }
-                        }
-                    }
-                }.awaitAll().filterNotNull()
-        }
-
+        val sources = NeonHubController.enabledSources().filter { it.second.hasQuickSearch }
+        val results = collectSources(sources) { source -> source.quickSearch(query) }
         val items = results.flatMap { (key, entries) ->
             entries.map { rebrandSearchResponse(it, key) }
         }
@@ -205,8 +183,27 @@ class NeonHubAPI : MainAPI() {
     }
 
     /**
-     * Prevent a slow or temporarily hung website from holding up the unified search.
-     * Cancellation from the caller is preserved; a single source failure only drops that source.
+     * Launch each source independently. One slow provider cannot occupy a shared queue
+     * ahead of other sites; finished results are returned in the original source order.
+     */
+    private suspend fun <T : Any> collectSources(
+        sources: List<Pair<String, MainAPI>>,
+        request: suspend (MainAPI) -> T?
+    ): List<Pair<String, T>> = supervisorScope {
+        val completed = ConcurrentHashMap<String, T>()
+        val jobs = sources.map { (key, source) ->
+            launch {
+                val response = sourceRequest { request(source) }
+                if (response != null) completed[key] = response
+            }
+        }
+        jobs.joinAll()
+        sources.mapNotNull { (key, _) -> completed[key]?.let { key to it } }
+    }
+
+    /**
+     * Each request has its own time limit. A timeout or temporary error only drops that source.
+     * Cancellation from the caller is preserved.
      */
     private suspend fun <T> sourceRequest(block: suspend () -> T): T? =
         withTimeoutOrNull(SOURCE_REQUEST_TIMEOUT_MS) {
