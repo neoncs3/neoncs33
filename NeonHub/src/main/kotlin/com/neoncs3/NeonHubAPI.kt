@@ -220,11 +220,12 @@ class NeonHubAPI : MainAPI() {
             }
         }
 
-        return if (NeonHubSettings.isLightModeEnabled()) {
-            LIGHT_MODE_SEMAPHORE.withPermit { runRequest() }
-        } else {
-            runRequest()
+        val semaphore = when (NeonHubSettings.performanceLevel()) {
+            "minimum" -> MINIMUM_SEMAPHORE
+            "fast" -> FAST_SEMAPHORE
+            else -> BALANCED_SEMAPHORE
         }
+        return semaphore.withPermit { runRequest() }
     }
 
     @Suppress("DEPRECATION_ERROR")
@@ -277,7 +278,9 @@ class NeonHubAPI : MainAPI() {
     }
 
     private companion object {
-        private val LIGHT_MODE_SEMAPHORE = Semaphore(2)
+        private val MINIMUM_SEMAPHORE = Semaphore(1)
+        private val BALANCED_SEMAPHORE = Semaphore(2)
+        private val FAST_SEMAPHORE = Semaphore(4)
         const val SOURCE_REQUEST_TIMEOUT_MS = 6500L
         const val PAGE_PREFIX = "__NEONHUB_PAGE__::"
         const val DATA_PREFIX = "__NEONHUB_DATA__::"
