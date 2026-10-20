@@ -14,7 +14,7 @@ class CanliProvider : MainAPI() {
     override var lang = "tr"
     override val hasMainPage = true
     override val hasQuickSearch = false
-    override val supportedTypes = setOf(TvType.NSFW)
+    override val supportedTypes = setOf(TvType.NSFW, TvType.TvSeries)
 
     override val mainPage = mainPageOf(
         mainUrl to "Canlı Kanallar"
@@ -59,7 +59,7 @@ class CanliProvider : MainAPI() {
                 ?: img?.attr("src")
         )
 
-        return newMovieSearchResponse(title, href, TvType.NSFW) {
+        return newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
             this.posterUrl = poster
         }
     }
@@ -106,10 +106,25 @@ class CanliProvider : MainAPI() {
 
         // Posterler /images/<slug>.png düzeninde (logo.png ile karışmasın diye slug'dan üretiyoruz)
         val poster = "$mainUrl/images/$slug.png"
+        val description = doc.selectFirst("meta[name=description]")?.attr("content")
 
-        return newMovieLoadResponse(title, url, TvType.NSFW, url) {
+        // Her canlı kanal CloudStream'de Dizi -> 1. Sezon -> Canlı Yayın bölümü olarak görünür.
+        // Bölüm verisi kanal URL'sidir; loadLinks aynı URL'den yayını çözmeye devam eder.
+        return newTvSeriesLoadResponse(
+            title,
+            url,
+            TvType.TvSeries,
+            listOf(
+                newEpisode(url) {
+                    name = "Canlı Yayın"
+                    season = 1
+                    episode = 1
+                    posterUrl = poster
+                }
+            )
+        ) {
             this.posterUrl = poster
-            this.plot = doc.selectFirst("meta[name=description]")?.attr("content")
+            this.plot = description
         }
     }
 
