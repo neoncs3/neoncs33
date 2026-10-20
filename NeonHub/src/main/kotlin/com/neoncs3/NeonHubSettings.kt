@@ -111,6 +111,12 @@ object NeonHubSettings {
         else -> 2
     }
 
+    private fun maxEnabledSources(level: String): Int = when (level) {
+        "minimum" -> 1
+        "fast" -> 4
+        else -> 2
+    }
+
     fun showSettingsDialog(context: Context, pluginResources: Resources?, onSave: () -> Unit) {
         val dialog = Dialog(context, android.R.style.Theme_Material_NoActionBar)
         val switches = linkedMapOf<String, Switch>()
@@ -119,6 +125,7 @@ object NeonHubSettings {
         val filterButtons = linkedMapOf<String, TextView>()
         var filterMode = "all"
         var refreshFilterAction: (() -> Unit)? = null
+        var adjustingSourceSwitches = false
         val uiHandler = Handler(Looper.getMainLooper())
         val checkRunning = AtomicBoolean(false)
         val root = LinearLayout(context).apply {
@@ -272,7 +279,29 @@ object NeonHubSettings {
         hero.addView(metrics)
         content.addView(hero)
 
-        val performanceSetting = performanceCard(context, performanceLevel())
+        val enforcePerformanceLimit: (String, Boolean) -> Int = { level, showNotice ->
+            val limit = maxEnabledSources(level)
+            val activeSources = sources.filter { switches[it.key]?.isChecked == true }
+            val disableSources = activeSources.drop(limit)
+            if (disableSources.isNotEmpty()) {
+                adjustingSourceSwitches = true
+                disableSources.forEach { switches[it.key]?.isChecked = false }
+                adjustingSourceSwitches = false
+                refreshFilterAction?.invoke()
+                if (showNotice) {
+                    Toast.makeText(
+                        context,
+                        "Seçilen modda en fazla " + limit + " kaynak açık olabilir; " +
+                            disableSources.size + " kaynak kapatıldı.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+            disableSources.size
+        }
+        val performanceSetting = performanceCard(context, performanceLevel()) { level ->
+            enforcePerformanceLimit(level, true)
+        }
         content.addView(performanceSetting.view, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = dp(context, 12); bottomMargin = dp(context, 3) })
@@ -487,7 +516,23 @@ object NeonHubSettings {
                 showText = false
             }
             switches[source.key] = toggle
-            toggle.setOnCheckedChangeListener { _, _ -> refreshFilterAction?.invoke() }
+            toggle.setOnCheckedChangeListener { _, isChecked ->
+                if (adjustingSourceSwitches) return@setOnCheckedChangeListener
+                if (isChecked) {
+                    val limit = maxEnabledSources(performanceSetting.selectedLevel())
+                    if (switches.values.count { it.isChecked } > limit) {
+                        adjustingSourceSwitches = true
+                        toggle.isChecked = false
+                        adjustingSourceSwitches = false
+                        Toast.makeText(
+                            context,
+                            "Bu modda en fazla " + limit + " kaynak açabilirsin.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+                refreshFilterAction?.invoke()
+            }
             row.addView(toggle)
             row.setOnClickListener { toggle.isChecked = !toggle.isChecked }
             sourceRows[source.key] = row
@@ -526,6 +571,7 @@ object NeonHubSettings {
             }
         }
         refreshFilterAction = { updateMetricsAndFilters() }
+        enforcePerformanceLimit(performanceSetting.selectedLevel(), false)
         updateMetricsAndFilters()
 
         // Fixed bottom action shelf stays visible while the source list scrolls.
@@ -543,8 +589,14 @@ object NeonHubSettings {
         val bulkActions = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
         }
-        bulkActions.addView(actionButton(context, "✓  Tümünü Aç", green, Color.parseColor("#18352F")) {
-            switches.values.forEach { it.isChecked = true }
+        bulkActions.addView(actionButton(context, "✓  Limit Kadar Aç", green, Color.parseColor("#18352F")) {
+            val limit = maxEnabledSources(performanceSetting.selectedLevel())
+            adjustingSourceSwitches = true
+            sources.forEachIndexed { index, source ->
+                switches[source.key]?.isChecked = index < limit
+            }
+            adjustingSourceSwitches = false
+            refreshFilterAction?.invoke()
         }, LinearLayout.LayoutParams(0, dp(context, 38), 1f).apply {
             marginEnd = dp(context, 8)
         })
@@ -558,11 +610,17 @@ object NeonHubSettings {
             cyan,
             Color.parseColor("#352A1D")
         ) {
-            switches.values.forEach { it.isChecked = true }
+            val limit = maxEnabledSources(performanceSetting.selectedLevel())
+            adjustingSourceSwitches = true
+            sources.forEachIndexed { index, source ->
+                switches[source.key]?.isChecked = index < limit
+            }
+            adjustingSourceSwitches = false
             refreshFilterAction?.invoke()
             Toast.makeText(
                 context,
-                "Varsayılan seçimler hazır. Kalıcı olması için Kaydet ve Uygula'ya bas.",
+                "Varsayılan seçimler hazır: en fazla " + limit +
+                    " kaynak açık. Kalıcı olması için Kaydet ve Uygula'ya bas.",
                 Toast.LENGTH_LONG
             ).show()
         }, LinearLayout.LayoutParams(
@@ -622,6 +680,7 @@ object NeonHubSettings {
         // Keep the branded full-screen NeonHub appearance even when the richer
         // settings panel fails on a particular CloudStream/Android build.
         val switches = linkedMapOf<String, Switch>()
+        var adjustingSourceSwitches = false
         val dialog = Dialog(context, android.R.style.Theme_Material_NoActionBar)
 
         val root = LinearLayout(context).apply {
@@ -696,7 +755,28 @@ object NeonHubSettings {
             setPadding(0, dp(context, 5), 0, dp(context, 16))
         })
 
-        val performanceSetting = performanceCard(context, performanceLevel())
+        val enforcePerformanceLimit: (String, Boolean) -> Int = { level, showNotice ->
+            val limit = maxEnabledSources(level)
+            val activeSources = sources.filter { switches[it.key]?.isChecked == true }
+            val disableSources = activeSources.drop(limit)
+            if (disableSources.isNotEmpty()) {
+                adjustingSourceSwitches = true
+                disableSources.forEach { switches[it.key]?.isChecked = false }
+                adjustingSourceSwitches = false
+                if (showNotice) {
+                    Toast.makeText(
+                        context,
+                        "Seçilen modda en fazla " + limit + " kaynak açık olabilir; " +
+                            disableSources.size + " kaynak kapatıldı.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+            disableSources.size
+        }
+        val performanceSetting = performanceCard(context, performanceLevel()) { level ->
+            enforcePerformanceLimit(level, true)
+        }
         content.addView(performanceSetting.view, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = dp(context, 14) })
@@ -751,12 +831,30 @@ object NeonHubSettings {
                 showText = false
             }
             switches[source.key] = toggle
+            toggle.setOnCheckedChangeListener { _, isChecked ->
+                if (adjustingSourceSwitches) return@setOnCheckedChangeListener
+                if (isChecked) {
+                    val limit = maxEnabledSources(performanceSetting.selectedLevel())
+                    if (switches.values.count { it.isChecked } > limit) {
+                        adjustingSourceSwitches = true
+                        toggle.isChecked = false
+                        adjustingSourceSwitches = false
+                        Toast.makeText(
+                            context,
+                            "Bu modda en fazla " + limit + " kaynak açabilirsin.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            }
             row.addView(toggle)
             row.setOnClickListener { toggle.isChecked = !toggle.isChecked }
             content.addView(row, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = dp(context, 9) })
         }
+
+        enforcePerformanceLimit(performanceSetting.selectedLevel(), false)
 
         val scroll = ScrollView(context).apply {
             isFillViewport = false
@@ -785,10 +883,16 @@ object NeonHubSettings {
             cyan,
             Color.parseColor("#352A1D")
         ) {
-            switches.values.forEach { it.isChecked = true }
+            val limit = maxEnabledSources(performanceSetting.selectedLevel())
+            adjustingSourceSwitches = true
+            sources.forEachIndexed { index, source ->
+                switches[source.key]?.isChecked = index < limit
+            }
+            adjustingSourceSwitches = false
             Toast.makeText(
                 context,
-                "Varsayılan seçimler hazır. Kalıcı olması için Kaydet ve Uygula'ya bas.",
+                "Varsayılan seçimler hazır: en fazla " + limit +
+                    " kaynak açık. Kalıcı olması için Kaydet ve Uygula'ya bas.",
                 Toast.LENGTH_LONG
             ).show()
         }, LinearLayout.LayoutParams(
@@ -876,7 +980,11 @@ object NeonHubSettings {
         val summary: String
     )
 
-    private fun performanceCard(context: Context, initiallySelected: String): PerformanceSetting {
+    private fun performanceCard(
+        context: Context,
+        initiallySelected: String,
+        onSelectionChanged: (String) -> Unit
+    ): PerformanceSetting {
         var selectedLevel = initiallySelected.takeIf {
             it == "minimum" || it == "balanced" || it == "fast"
         } ?: "balanced"
@@ -933,9 +1041,9 @@ object NeonHubSettings {
             setPadding(0, dp(context, 13), 0, 0)
         }
         val choices = listOf(
-            PerformanceChoice("minimum", "MİNİMUM", "1 kaynak", "En düşük yük · Aynı anda 1 kaynak"),
-            PerformanceChoice("balanced", "DENGELİ", "2 kaynak", "Önerilen ayar · Aynı anda 2 kaynak"),
-            PerformanceChoice("fast", "HIZLI", "4 kaynak", "Daha seri yükleme · Aynı anda 4 kaynak")
+            PerformanceChoice("minimum", "MİNİMUM", "1 açık kaynak", "En fazla 1 kaynak açık · aynı anda 1 istek"),
+            PerformanceChoice("balanced", "DENGELİ", "2 açık kaynak", "En fazla 2 kaynak açık · aynı anda 2 istek"),
+            PerformanceChoice("fast", "HIZLI", "4 açık kaynak", "En fazla 4 kaynak açık · aynı anda 4 istek")
         )
         val optionViews = linkedMapOf<String, TextView>()
 
@@ -967,6 +1075,7 @@ object NeonHubSettings {
                 setOnClickListener {
                     selectedLevel = choice.key
                     updateSelection()
+                    onSelectionChanged(selectedLevel)
                 }
                 setOnFocusChangeListener { v, hasFocus ->
                     val selected = choice.key == selectedLevel
