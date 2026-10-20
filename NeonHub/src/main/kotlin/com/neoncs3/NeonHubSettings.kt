@@ -51,17 +51,17 @@ object NeonHubSettings {
     const val HUB_SOURCE_TIZAM = "neonhub_source_tizam"
     const val HUB_SOURCE_WEBDRAMATURKEY = "neonhub_source_webdramaturkey"
 
-    private val backgroundColor = Color.parseColor("#080C16")
-    private val cardColor = Color.parseColor("#111A2B")
-    private val raisedCardColor = Color.parseColor("#172338")
-    private val textPrimary = Color.parseColor("#F7F9FF")
-    private val textSecondary = Color.parseColor("#98A7C2")
-    private val cyan = Color.parseColor("#50E4FF")
-    private val purple = Color.parseColor("#A78BFA")
-    private val green = Color.parseColor("#42E8B4")
-    private val amber = Color.parseColor("#FFCC75")
-    private val red = Color.parseColor("#FF7189")
-    private val borderColor = Color.parseColor("#283750")
+    private val backgroundColor = Color.parseColor("#100B18")
+    private val cardColor = Color.parseColor("#1A1427")
+    private val raisedCardColor = Color.parseColor("#241B35")
+    private val textPrimary = Color.parseColor("#FFF9FE")
+    private val textSecondary = Color.parseColor("#B8AFC9")
+    private val cyan = Color.parseColor("#FF76C8")
+    private val purple = Color.parseColor("#B39CFF")
+    private val green = Color.parseColor("#D5FF80")
+    private val amber = Color.parseColor("#FFC979")
+    private val red = Color.parseColor("#FF6B8A")
+    private val borderColor = Color.parseColor("#493657")
 
     data class Source(val key: String, val title: String, val detail: String)
     private data class SourceProbe(val label: String, val color: Int, val category: Int)
@@ -98,8 +98,6 @@ object NeonHubSettings {
         var refreshFilterAction: (() -> Unit)? = null
         val uiHandler = Handler(Looper.getMainLooper())
         val checkRunning = AtomicBoolean(false)
-        val logoResourceId = R.drawable.neonhub_logo
-
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(backgroundColor)
@@ -112,20 +110,12 @@ object NeonHubSettings {
             setPadding(dp(context, 20), dp(context, 18), dp(context, 16), dp(context, 15))
             setBackgroundColor(backgroundColor)
         }
-        val logo = ImageView(context).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            contentDescription = "NeonHub logosu"
-            background = rounded(raisedCardColor, dp(context, 17).toFloat(), borderColor)
-            clipToOutline = true
-            if (logoResourceId != 0 && pluginResources != null) {
-                runCatching { pluginResources.getDrawable(logoResourceId, context.theme) }
-                    .getOrNull()?.let { setImageDrawable(it) }
-            }
-        }
-        topBar.addView(logo, LinearLayout.LayoutParams(dp(context, 52), dp(context, 52)))
+        topBar.addView(brandMark(context), LinearLayout.LayoutParams(
+            dp(context, 52), dp(context, 52)
+        ).apply { marginEnd = dp(context, 13) })
         val brandCopy = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(context, 13), 0, 0, 0)
+            setPadding(0, 0, 0, 0)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         brandCopy.addView(TextView(context).apply {
@@ -184,10 +174,10 @@ object NeonHubSettings {
             setPadding(dp(context, 19), dp(context, 20), dp(context, 19), dp(context, 18))
             background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Color.parseColor("#17334A"), Color.parseColor("#292044"), Color.parseColor("#151B2D"))
+                intArrayOf(Color.parseColor("#3D1F48"), Color.parseColor("#2B214D"), Color.parseColor("#1B152B"))
             ).apply {
                 cornerRadius = dp(context, 22).toFloat()
-                setStroke(dp(context, 1), Color.parseColor("#354864"))
+                setStroke(dp(context, 1), Color.parseColor("#594064"))
             }
         }
         val heroEyebrow = TextView(context).apply {
@@ -286,7 +276,7 @@ object NeonHubSettings {
             textSize = 11f
             setTypeface(null, Typeface.BOLD)
             setTextColor(cyan)
-            background = pill(Color.parseColor("#102D3D"), Color.parseColor("#28677E"), dp(context, 22).toFloat())
+            background = pill(Color.parseColor("#321C3D"), Color.parseColor("#89518C"), dp(context, 22).toFloat())
             setPadding(dp(context, 10), dp(context, 7), dp(context, 10), dp(context, 7))
         }
         sourceHeading.addView(sourceCountView)
@@ -328,7 +318,7 @@ object NeonHubSettings {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(context, 13), dp(context, 12), dp(context, 12), dp(context, 12))
-            background = rounded(Color.parseColor("#101B2A"), dp(context, 16).toFloat(), Color.parseColor("#294157"))
+            background = rounded(Color.parseColor("#21172D"), dp(context, 16).toFloat(), Color.parseColor("#594064"))
         }
         val healthCopy = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -347,12 +337,12 @@ object NeonHubSettings {
             setPadding(0, dp(context, 3), 0, 0)
         })
         healthCard.addView(healthCopy)
-        val checkButton = actionButton(context, "Kontrol Et  ↗", cyan, Color.parseColor("#103146")) {
+        val checkButton = actionButton(context, "Kontrol Et  ↗", cyan, Color.parseColor("#372142")) {
             val activeButton = checkButtonRef[0] ?: return@actionButton
             if (!checkRunning.compareAndSet(false, true)) return@actionButton
             activeButton.isEnabled = false
             activeButton.text = "Kontrol..."
-            checkSummary.text = "17 kaynak kontrol ediliyor..."
+            checkSummary.text = "${sources.size} kaynak kontrol ediliyor..."
             statusLabels.values.forEach {
                 it.text = "● Kontrol ediliyor"
                 it.setTextColor(textSecondary)
@@ -425,23 +415,9 @@ object NeonHubSettings {
                 isClickable = true
                 isFocusable = true
             }
-            val iconTile = ImageView(context).apply {
-                scaleType = ImageView.ScaleType.CENTER_CROP
-                contentDescription = "NeonHub kaynak simgesi"
-                background = rounded(
-                    Color.argb(24, Color.red(accent), Color.green(accent), Color.blue(accent)),
-                    dp(context, 13).toFloat(),
-                    Color.argb(95, Color.red(accent), Color.green(accent), Color.blue(accent))
-                )
-                clipToOutline = true
-                if (logoResourceId != 0 && pluginResources != null) {
-                    runCatching { pluginResources.getDrawable(logoResourceId, context.theme) }
-                        .getOrNull()?.let { setImageDrawable(it) }
-                }
-            }
-            row.addView(iconTile, LinearLayout.LayoutParams(dp(context, 43), dp(context, 43)).apply {
-                marginEnd = dp(context, 12)
-            })
+            row.addView(sourceIconTile(context, source, accent), LinearLayout.LayoutParams(
+                dp(context, 43), dp(context, 43)
+            ).apply { marginEnd = dp(context, 12) })
 
             val copy = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
@@ -474,11 +450,11 @@ object NeonHubSettings {
                 contentDescription = "Etkinleştir: " + source.title
                 thumbTintList = ColorStateList(
                     arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
-                    intArrayOf(Color.WHITE, Color.parseColor("#CBD5E1"))
+                    intArrayOf(Color.WHITE, Color.parseColor("#D8D0E2"))
                 )
                 trackTintList = ColorStateList(
                     arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
-                    intArrayOf(green, Color.parseColor("#3A455B"))
+                    intArrayOf(green, Color.parseColor("#55485D"))
                 )
                 showText = false
             }
@@ -513,7 +489,7 @@ object NeonHubSettings {
             sourceCountView.text = visibleCount.toString() + " / " + sources.size
             filterButtons.forEach { (mode, chip) ->
                 val selected = mode == filterMode
-                chip.setTextColor(if (selected) Color.parseColor("#07131E") else textSecondary)
+                chip.setTextColor(if (selected) Color.parseColor("#29152B") else textSecondary)
                 chip.background = rounded(
                     if (selected) cyan else raisedCardColor,
                     dp(context, 18).toFloat(),
@@ -534,17 +510,17 @@ object NeonHubSettings {
         val footer = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(context, 18), dp(context, 11), dp(context, 18), dp(context, 15))
-            setBackgroundColor(Color.parseColor("#0B111E"))
+            setBackgroundColor(Color.parseColor("#0D0914"))
         }
         val bulkActions = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
         }
-        bulkActions.addView(actionButton(context, "✓  Tümünü Aç", green, Color.parseColor("#112B29")) {
+        bulkActions.addView(actionButton(context, "✓  Tümünü Aç", green, Color.parseColor("#26391F")) {
             switches.values.forEach { it.isChecked = true }
         }, LinearLayout.LayoutParams(0, dp(context, 38), 1f).apply {
             marginEnd = dp(context, 8)
         })
-        bulkActions.addView(actionButton(context, "×  Tümünü Kapat", red, Color.parseColor("#301A28")) {
+        bulkActions.addView(actionButton(context, "×  Tümünü Kapat", red, Color.parseColor("#42172F")) {
             switches.values.forEach { it.isChecked = false }
         }, LinearLayout.LayoutParams(0, dp(context, 38), 1f))
         footer.addView(bulkActions)
@@ -557,7 +533,7 @@ object NeonHubSettings {
         }, LinearLayout.LayoutParams(0, dp(context, 48), 0.8f).apply {
             marginEnd = dp(context, 9)
         })
-        bottomButtons.addView(actionButton(context, "Kaydet ve Uygula  →", Color.parseColor("#06131D"), cyan) {
+        bottomButtons.addView(actionButton(context, "Kaydet ve Uygula  →", Color.parseColor("#29152B"), cyan) {
             sources.forEach { source ->
                 setKey(source.key, switches[source.key]?.isChecked ?: true)
             }
@@ -581,7 +557,7 @@ object NeonHubSettings {
             attributes = attributes.apply { dimAmount = 0.72f }
             setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
             statusBarColor = backgroundColor
-            navigationBarColor = Color.parseColor("#0B111E")
+            navigationBarColor = Color.parseColor("#0D0914")
         }
         dialog.show()
         dialog.window?.setLayout(
@@ -611,6 +587,9 @@ object NeonHubSettings {
             setPadding(dp(context, 20), dp(context, 18), dp(context, 16), dp(context, 15))
             setBackgroundColor(backgroundColor)
         }
+        topBar.addView(brandMark(context), LinearLayout.LayoutParams(
+            dp(context, 52), dp(context, 52)
+        ).apply { marginEnd = dp(context, 13) })
         val brandCopy = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
@@ -684,6 +663,9 @@ object NeonHubSettings {
                 isClickable = true
                 isFocusable = true
             }
+            row.addView(sourceIconTile(context, source, accent), LinearLayout.LayoutParams(
+                dp(context, 43), dp(context, 43)
+            ).apply { marginEnd = dp(context, 12) })
             val copy = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
@@ -707,11 +689,11 @@ object NeonHubSettings {
                 contentDescription = "Etkinleştir: " + source.title
                 thumbTintList = ColorStateList(
                     arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
-                    intArrayOf(Color.WHITE, Color.parseColor("#CBD5E1"))
+                    intArrayOf(Color.WHITE, Color.parseColor("#D8D0E2"))
                 )
                 trackTintList = ColorStateList(
                     arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
-                    intArrayOf(green, Color.parseColor("#3A455B"))
+                    intArrayOf(green, Color.parseColor("#55485D"))
                 )
                 showText = false
             }
@@ -742,14 +724,14 @@ object NeonHubSettings {
         val footer = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(context, 18), dp(context, 11), dp(context, 18), dp(context, 15))
-            setBackgroundColor(Color.parseColor("#0B111E"))
+            setBackgroundColor(Color.parseColor("#0D0914"))
         }
         footer.addView(actionButton(context, "Vazgeç", textSecondary, raisedCardColor) {
             dialog.dismiss()
         }, LinearLayout.LayoutParams(0, dp(context, 48), 0.8f).apply {
             marginEnd = dp(context, 9)
         })
-        footer.addView(actionButton(context, "Kaydet ve Uygula  →", Color.parseColor("#06131D"), cyan) {
+        footer.addView(actionButton(context, "Kaydet ve Uygula  →", Color.parseColor("#29152B"), cyan) {
             sources.forEach { source ->
                 setKey(source.key, switches[source.key]?.isChecked ?: true)
             }
@@ -771,13 +753,87 @@ object NeonHubSettings {
             addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             attributes = attributes.apply { dimAmount = 0.72f }
             statusBarColor = backgroundColor
-            navigationBarColor = Color.parseColor("#0B111E")
+            navigationBarColor = Color.parseColor("#0D0914")
         }
         dialog.show()
         dialog.window?.setLayout(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT
         )
+    }
+
+    private fun brandMark(context: Context): LinearLayout =
+        LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            contentDescription = "NeonHub logosu"
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(purple, cyan, red)
+            ).apply {
+                cornerRadius = dp(context, 17).toFloat()
+                setStroke(dp(context, 1), Color.argb(175, 255, 255, 255))
+            }
+            addView(TextView(context).apply {
+                text = "N"
+                textSize = 27f
+                gravity = Gravity.CENTER
+                setTypeface(null, Typeface.BOLD)
+                setTextColor(Color.WHITE)
+                includeFontPadding = false
+            }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.MATCH_PARENT
+            ))
+        }
+
+    private fun sourceIcon(source: Source): String = when (source.key) {
+        HUB_SOURCE_ASYAFILM -> "AS"
+        HUB_SOURCE_DIZIMAG -> "DM"
+        HUB_SOURCE_HDFILMDIZI -> "HD"
+        HUB_SOURCE_CANLI -> "18+"
+        HUB_SOURCE_TVDIZILER -> "TV"
+        HUB_SOURCE_DDIZI -> "DD"
+        HUB_SOURCE_DIZIBOXIZLE -> "DB"
+        HUB_SOURCE_DIZIDAD -> "DAD"
+        HUB_SOURCE_DIZIPAL -> "DP"
+        HUB_SOURCE_DIZIGECESI -> "DG"
+        HUB_SOURCE_DRAMADIZILERIM -> "DR"
+        HUB_SOURCE_FILMMODU -> "FM"
+        HUB_SOURCE_JETFILMIZLE -> "JF"
+        HUB_SOURCE_SETFILMIZLE -> "SF"
+        HUB_SOURCE_SINEMACX -> "SC"
+        HUB_SOURCE_TIZAM -> "TZ"
+        HUB_SOURCE_WEBDRAMATURKEY -> "WD"
+        else -> source.title.take(2).uppercase()
+    }
+
+    private fun sourceIconTile(context: Context, source: Source, accent: Int): TextView {
+        val endColor = when (accent) {
+            cyan -> red
+            purple -> cyan
+            green -> purple
+            amber -> red
+            else -> purple
+        }
+        val glyph = sourceIcon(source)
+        return TextView(context).apply {
+            text = glyph
+            textSize = if (glyph.length > 2) 10f else 12f
+            gravity = Gravity.CENTER
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(Color.WHITE)
+            letterSpacing = 0.015f
+            includeFontPadding = false
+            contentDescription = source.title + " simgesi"
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(accent, endColor)
+            ).apply {
+                cornerRadius = dp(context, 13).toFloat()
+                setStroke(dp(context, 1), Color.argb(170, 255, 255, 255))
+            }
+        }
     }
 
     private fun probeSource(key: String): SourceProbe {
@@ -853,7 +909,7 @@ object NeonHubSettings {
         }
 
     private fun pressable(context: Context) =
-        rounded(Color.parseColor("#182236"), dp(context, 12).toFloat())
+        rounded(Color.parseColor("#2B2038"), dp(context, 12).toFloat())
 
     private fun dp(context: Context, value: Int): Int =
         (value * context.resources.displayMetrics.density).toInt()
