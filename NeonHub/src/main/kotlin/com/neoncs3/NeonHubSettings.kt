@@ -50,7 +50,8 @@ object NeonHubSettings {
     const val HUB_SOURCE_SINEMACX = "neonhub_source_sinemacx"
     const val HUB_SOURCE_TIZAM = "neonhub_source_tizam"
     const val HUB_SOURCE_WEBDRAMATURKEY = "neonhub_source_webdramaturkey"
-    const val HUB_LIGHT_MODE = "neonhub_light_mode"
+    const val HUB_LIGHT_MODE = "neonhub_light_mode" // Compatibility with prior versions.
+    const val HUB_PERFORMANCE_LEVEL = "neonhub_performance_level"
 
     private val backgroundColor = Color.parseColor("#0A0E14")
     private val cardColor = Color.parseColor("#151B24")
@@ -90,7 +91,25 @@ object NeonHubSettings {
     fun enabled(key: String): Boolean = getKey<Boolean>(key) ?: true
 
     /** True when catalog/search requests should be processed with a smaller concurrency limit. */
-    fun isLightModeEnabled(): Boolean = getKey<Boolean>(HUB_LIGHT_MODE) ?: false
+    /**
+     * A saved performance profile, with compatibility for the earlier on/off switch.
+     * New installations start in Balanced mode for Android TV.
+     */
+    fun performanceLevel(): String {
+        val saved = getKey<String>(HUB_PERFORMANCE_LEVEL)
+        if (saved == "minimum" || saved == "balanced" || saved == "fast") return saved
+        return when (getKey<Boolean>(HUB_LIGHT_MODE)) {
+            true -> "balanced"
+            false -> "fast"
+            null -> "balanced"
+        }
+    }
+
+    fun maxConcurrentSourceRequests(): Int = when (performanceLevel()) {
+        "minimum" -> 1
+        "fast" -> 4
+        else -> 2
+    }
 
     fun showSettingsDialog(context: Context, pluginResources: Resources?, onSave: () -> Unit) {
         val dialog = Dialog(context, android.R.style.Theme_Material_NoActionBar)
@@ -253,8 +272,8 @@ object NeonHubSettings {
         hero.addView(metrics)
         content.addView(hero)
 
-        val lightModeSetting = lightModeCard(context, isLightModeEnabled())
-        content.addView(lightModeSetting.first, LinearLayout.LayoutParams(
+        val performanceSetting = performanceCard(context, performanceLevel())
+        content.addView(performanceSetting.view, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = dp(context, 12); bottomMargin = dp(context, 3) })
 
@@ -562,7 +581,10 @@ object NeonHubSettings {
             sources.forEach { source ->
                 setKey(source.key, switches[source.key]?.isChecked ?: true)
             }
-            setKey(HUB_LIGHT_MODE, lightModeSetting.second.isChecked)
+            val selectedPerformanceLevel = performanceSetting.selectedLevel()
+            setKey(HUB_PERFORMANCE_LEVEL, selectedPerformanceLevel)
+            // Preserve the previous boolean for safe downgrade to an older version.
+            setKey(HUB_LIGHT_MODE, selectedPerformanceLevel != "fast")
             onSave()
             Toast.makeText(context, "NeonHub ayarları uygulandı", Toast.LENGTH_SHORT).show()
             dialog.dismiss()
@@ -674,8 +696,8 @@ object NeonHubSettings {
             setPadding(0, dp(context, 5), 0, dp(context, 16))
         })
 
-        val lightModeSetting = lightModeCard(context, isLightModeEnabled())
-        content.addView(lightModeSetting.first, LinearLayout.LayoutParams(
+        val performanceSetting = performanceCard(context, performanceLevel())
+        content.addView(performanceSetting.view, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = dp(context, 14) })
 
@@ -785,7 +807,10 @@ object NeonHubSettings {
             sources.forEach { source ->
                 setKey(source.key, switches[source.key]?.isChecked ?: true)
             }
-            setKey(HUB_LIGHT_MODE, lightModeSetting.second.isChecked)
+            val selectedPerformanceLevel = performanceSetting.selectedLevel()
+            setKey(HUB_PERFORMANCE_LEVEL, selectedPerformanceLevel)
+            // Preserve the previous boolean for safe downgrade to an older version.
+            setKey(HUB_LIGHT_MODE, selectedPerformanceLevel != "fast")
             onSave()
             Toast.makeText(context, "NeonHub ayarları uygulandı", Toast.LENGTH_SHORT).show()
             dialog.dismiss()
@@ -839,28 +864,25 @@ object NeonHubSettings {
             ))
         }
 
-    private fun lightModeCard(context: Context, initiallyChecked: Boolean): Pair<LinearLayout, Switch> {
-        val toggle = Switch(context).apply {
-            isChecked = initiallyChecked
-            contentDescription = "Android TV Hafif Mod"
-            thumbTintList = ColorStateList(
-                arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
-                intArrayOf(Color.WHITE, Color.parseColor("#CBD2DD"))
-            )
-            trackTintList = ColorStateList(
-                arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
-                intArrayOf(green, Color.parseColor("#4B586B"))
-            )
-            showText = false
-        }
+    private data class PerformanceSetting(
+        val view: LinearLayout,
+        val selectedLevel: () -> String
+    )
+
+    private fun performanceCard(context: Context, initiallySelected: String): PerformanceSetting {
+        var selectedLevel = initiallySelected.takeIf {
+            it == "minimum" || it == "balanced" || it == "fast"
+        } ?: "balanced"
 
         val card = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(context, 14), dp(context, 14), dp(context, 14), dp(context, 14))
+            background = rounded(cardColor, dp(context, 17).toFloat(), borderColor)
+        }
+
+        val header = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(context, 14), dp(context, 13), dp(context, 12), dp(context, 13))
-            background = rounded(cardColor, dp(context, 17).toFloat(), borderColor)
-            isClickable = true
-            isFocusable = true
         }
         val tvMark = TextView(context).apply {
             text = "TV"
@@ -876,7 +898,7 @@ object NeonHubSettings {
                 setStroke(dp(context, 1), Color.argb(150, 255, 255, 255))
             }
         }
-        card.addView(tvMark, LinearLayout.LayoutParams(dp(context, 43), dp(context, 43)).apply {
+        header.addView(tvMark, LinearLayout.LayoutParams(dp(context, 43), dp(context, 43)).apply {
             marginEnd = dp(context, 12)
         })
 
@@ -885,21 +907,78 @@ object NeonHubSettings {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         copy.addView(TextView(context).apply {
-            text = "Android TV · Hafif Mod"
-            textSize = 13f
+            text = "Android TV · Performans"
+            textSize = 14f
             setTypeface(null, Typeface.BOLD)
             setTextColor(textPrimary)
         })
-        copy.addView(TextView(context).apply {
-            text = "Arama ve katalog yükünde en fazla 2 kaynak aynı anda çalışır."
+        val detail = TextView(context).apply {
             textSize = 10f
             setTextColor(textSecondary)
             setPadding(0, dp(context, 3), 0, 0)
-        })
-        card.addView(copy)
-        card.addView(toggle)
-        card.setOnClickListener { toggle.isChecked = !toggle.isChecked }
-        return card to toggle
+        }
+        copy.addView(detail)
+        header.addView(copy)
+        card.addView(header)
+
+        val optionsRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, dp(context, 13), 0, 0)
+        }
+        data class Choice(val key: String, val label: String, val subtitle: String, val summary: String)
+        val choices = listOf(
+            Choice("minimum", "MİNİMUM", "1 kaynak", "En düşük yük · Aynı anda 1 kaynak"),
+            Choice("balanced", "DENGELİ", "2 kaynak", "Önerilen ayar · Aynı anda 2 kaynak"),
+            Choice("fast", "HIZLI", "4 kaynak", "Daha seri yükleme · Aynı anda 4 kaynak")
+        )
+        val optionViews = linkedMapOf<String, TextView>()
+
+        fun updateSelection() {
+            detail.text = choices.first { it.key == selectedLevel }.summary
+            choices.forEach { choice ->
+                val view = optionViews[choice.key] ?: return@forEach
+                val selected = choice.key == selectedLevel
+                view.setTextColor(if (selected) Color.parseColor("#10151B") else textPrimary)
+                view.background = rounded(
+                    if (selected) cyan else raisedCardColor,
+                    dp(context, 12).toFloat(),
+                    if (selected) cyan else borderColor
+                )
+            }
+        }
+
+        choices.forEach { choice ->
+            val option = TextView(context).apply {
+                text = choice.label + "\\n" + choice.subtitle
+                textSize = 10f
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+                setLineSpacing(dp(context, 2).toFloat(), 1f)
+                setPadding(dp(context, 3), dp(context, 9), dp(context, 3), dp(context, 9))
+                isClickable = true
+                isFocusable = true
+                contentDescription = choice.label.lowercase() + " performans, " + choice.subtitle
+                setOnClickListener {
+                    selectedLevel = choice.key
+                    updateSelection()
+                }
+                setOnFocusChangeListener { v, hasFocus ->
+                    val selected = choice.key == selectedLevel
+                    v.background = rounded(
+                        if (selected) cyan else raisedCardColor,
+                        dp(context, 12).toFloat(),
+                        if (hasFocus) cyan else if (selected) cyan else borderColor
+                    )
+                }
+            }
+            optionViews[choice.key] = option
+            optionsRow.addView(option, LinearLayout.LayoutParams(0, dp(context, 54), 1f).apply {
+                if (choice.key != "fast") marginEnd = dp(context, 7)
+            })
+        }
+        card.addView(optionsRow)
+        updateSelection()
+        return PerformanceSetting(card) { selectedLevel }
     }
 
     private fun sourceIcon(source: Source): String = when (source.key) {
