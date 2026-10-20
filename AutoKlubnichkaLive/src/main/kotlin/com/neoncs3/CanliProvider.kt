@@ -40,63 +40,109 @@ class CanliProvider : MainAPI() {
             "Sec-Fetch-Site" to site
         )
 
-    // ------------------------------------------------------------------
-    // Kart -> SearchResponse
-    // ------------------------------------------------------------------
-    private fun Element.toSearchResult(): SearchResponse? {
+    // Tek ana kayıt: tüm kanallar bu dizinin 1. sezonundaki bölümlerdir.
+    private data class ChannelEntry(
+        val title: String,
+        val url: String,
+        val poster: String?
+    )
+
+    private fun Element.toChannelEntry(): ChannelEntry? {
         val link = if (tagName() == "a") this else selectFirst("a[href]") ?: return null
         val href = fixUrlNull(link.attr("href")) ?: return null
-        if (href.startsWith("javascript") || href == "$mainUrl/" || href == mainUrl) return null
+        if (href.startsWith("javascript", ignoreCase = true) ||
+            href.trimEnd('/') == mainUrl.trimEnd('/')
+        ) return null
 
-        val title = (selectFirst(".channel-card-title")?.text()
-            ?: link.attr("title")
-            ?: link.text()).trim()
-        if (title.isBlank()) return null
+        val title = selectFirst(".channel-card-title")?.text()?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: link.attr("title").trim().takeIf { it.isNotBlank() }
+            ?: link.text().trim().takeIf { it.isNotBlank() }
+            ?: return null
 
         val img = selectFirst("img")
         val poster = fixUrlNull(
             img?.attr("data-src")?.takeIf { it.isNotBlank() }
-                ?: img?.attr("src")
+                ?: img?.attr("data-lazy-src")?.takeIf { it.isNotBlank() }
+                ?: img?.attr("src")?.takeIf { it.isNotBlank() }
         )
 
-        return newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
-            this.posterUrl = poster
-        }
+        return ChannelEntry(title, href, poster)
     }
 
-    private fun Document.cards(): List<SearchResponse> {
-        // Önce bilinen sınıf, yoksa genel yedek
-        val els = select("a:has(.channel-card-title)").ifEmpty {
+    private fun Document.channelEntries(): List<ChannelEntry> {
+        val elements = select("a:has(.channel-card-title)").ifEmpty {
             select(".channel-card, [class*=channel-card]")
         }
-        return els.mapNotNull { it.toSearchResult() }.distinctBy { it.url }
+        return elements.mapNotNull { it.toChannelEntry() }
+            .distinctBy { it.url }
     }
 
+    private fun collectionSearchResult(): SearchResponse =
+        newTvSeriesSearchResponse("Canlı TV", mainUrl, TvType.TvSeries) {
+            posterUrl = "$mainUrl/favicon.ico"
+        }
+
     // ------------------------------------------------------------------
-    // Ana sayfa
+    // Ana sayfa: yalnızca bir adet Canlı TV kaydı gösterilir.
     // ------------------------------------------------------------------
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val doc = app.get(request.data, headers = headers(mainUrl)).document
-        return newHomePageResponse(request.name, doc.cards(), hasNext = false)
+        return newHomePageResponse(
+            request.name,
+            listOf(collectionSearchResult()),
+            hasNext = false
+        )
     }
 
     // ------------------------------------------------------------------
-    // Arama (site araması bilinmiyor; ana sayfa listesini süzer)
+    // Arama: kanal adı eşleşirse de tek Canlı TV koleksiyonunu açar.
     // ------------------------------------------------------------------
     override suspend fun search(query: String): List<SearchResponse> {
+        val q = query.trim()
+        if (q.isBlank() || "Canlı TV".contains(q, ignoreCase = true) ||
+            "Canlı Kanallar".contains(q, ignoreCase = true)
+        ) return listOf(collectionSearchResult())
+
         val doc = app.get(mainUrl, headers = headers(mainUrl)).document
-        val q = query.trim().lowercase()
-        return doc.cards().filter { it.name.lowercase().contains(q) }
+        return if (doc.channelEntries().any { it.title.contains(q, ignoreCase = true) }) {
+            listOf(collectionSearchResult())
+        } else {
+            emptyList()
+        }
     }
 
     // ------------------------------------------------------------------
-    // Detay
+    // Tek dizi detayında her kanal ayrı bölüm olarak gösterilir.
+    // Bölümün data değeri kanal URL'si olduğundan mevcut loadLinks değişmez.
     // ------------------------------------------------------------------
     override suspend fun load(url: String): LoadResponse {
+        if (url.trimEnd('/') == mainUrl.trimEnd('/')) {
+            val doc = app.get(mainUrl, headers = headers(mainUrl)).document
+            val channels = doc.channelEntries()
+            val episodes = channels.mapIndexed { index, channel ->
+                newEpisode(channel.url) {
+                    name = channel.title
+                    season = 1
+                    episode = index + 1
+                    posterUrl = channel.poster
+                }
+            }
+
+            return newTvSeriesLoadResponse(
+                "Canlı TV",
+                mainUrl,
+                TvType.TvSeries,
+                episodes
+            ) {
+                posterUrl = "$mainUrl/favicon.ico"
+                plot = "Tüm canlı kanallar tek listede. Her kanal 1. sezonun bir bölümü olarak gösterilir."
+            }
+        }
+
+        // Önceden kaydedilmiş doğrudan kanal adresleri için geriye dönük uyumluluk.
         val doc = app.get(url, headers = headers(mainUrl)).document
         val slug = url.trimEnd('/').substringAfterLast("/")
 
-        // Sayfada og:title yok; <h1 class="channel-title"> "X смотреть онлайн" biçiminde
         val title = doc.selectFirst(".channel-title")?.text()
             ?.replace(Regex("""\s*смотреть онлайн.*$""", RegexOption.IGNORE_CASE), "")
             ?.trim()
@@ -104,12 +150,9 @@ class CanliProvider : MainAPI() {
             ?: doc.selectFirst(".channel-player iframe[title]")?.attr("title")?.takeIf { it.isNotBlank() }
             ?: slug.replace('-', ' ')
 
-        // Posterler /images/<slug>.png düzeninde (logo.png ile karışmasın diye slug'dan üretiyoruz)
         val poster = "$mainUrl/images/$slug.png"
         val description = doc.selectFirst("meta[name=description]")?.attr("content")
 
-        // Her canlı kanal CloudStream'de Dizi -> 1. Sezon -> Canlı Yayın bölümü olarak görünür.
-        // Bölüm verisi kanal URL'sidir; loadLinks aynı URL'den yayını çözmeye devam eder.
         return newTvSeriesLoadResponse(
             title,
             url,
