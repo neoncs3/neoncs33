@@ -524,6 +524,22 @@ object NeonHubSettings {
             switches.values.forEach { it.isChecked = false }
         }, LinearLayout.LayoutParams(0, dp(context, 38), 1f))
         footer.addView(bulkActions)
+        footer.addView(actionButton(
+            context,
+            "↺  Varsayılanları Yükle · Tüm Kaynakları Aç",
+            cyan,
+            Color.parseColor("#321C3D")
+        ) {
+            switches.values.forEach { it.isChecked = true }
+            refreshFilterAction?.invoke()
+            Toast.makeText(
+                context,
+                "Varsayılan seçimler hazır. Kalıcı olması için Kaydet ve Uygula'ya bas.",
+                Toast.LENGTH_LONG
+            ).show()
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(context, 38)
+        ).apply { topMargin = dp(context, 8) })
         val bottomButtons = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, dp(context, 9), 0, 0)
@@ -722,16 +738,35 @@ object NeonHubSettings {
             )
         })
         val footer = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
+            orientation = LinearLayout.VERTICAL
             setPadding(dp(context, 18), dp(context, 11), dp(context, 18), dp(context, 15))
             setBackgroundColor(Color.parseColor("#0D0914"))
         }
-        footer.addView(actionButton(context, "Vazgeç", textSecondary, raisedCardColor) {
+        footer.addView(actionButton(
+            context,
+            "↺  Varsayılanları Yükle · Tüm Kaynakları Aç",
+            cyan,
+            Color.parseColor("#321C3D")
+        ) {
+            switches.values.forEach { it.isChecked = true }
+            Toast.makeText(
+                context,
+                "Varsayılan seçimler hazır. Kalıcı olması için Kaydet ve Uygula'ya bas.",
+                Toast.LENGTH_LONG
+            ).show()
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(context, 38)
+        ).apply { bottomMargin = dp(context, 9) })
+
+        val footerButtons = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        footerButtons.addView(actionButton(context, "Vazgeç", textSecondary, raisedCardColor) {
             dialog.dismiss()
         }, LinearLayout.LayoutParams(0, dp(context, 48), 0.8f).apply {
             marginEnd = dp(context, 9)
         })
-        footer.addView(actionButton(context, "Kaydet ve Uygula  →", Color.parseColor("#29152B"), cyan) {
+        footerButtons.addView(actionButton(context, "Kaydet ve Uygula  →", Color.parseColor("#29152B"), cyan) {
             sources.forEach { source ->
                 setKey(source.key, switches[source.key]?.isChecked ?: true)
             }
@@ -739,6 +774,7 @@ object NeonHubSettings {
             Toast.makeText(context, "NeonHub ayarları uygulandı", Toast.LENGTH_SHORT).show()
             dialog.dismiss()
         }, LinearLayout.LayoutParams(0, dp(context, 48), 1.4f))
+        footer.addView(footerButtons)
         root.addView(footer)
 
         dialog.setContentView(root)
