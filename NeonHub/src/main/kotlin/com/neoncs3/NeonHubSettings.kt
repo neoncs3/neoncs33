@@ -869,6 +869,13 @@ object NeonHubSettings {
         val selectedLevel: () -> String
     )
 
+    private data class PerformanceChoice(
+        val key: String,
+        val label: String,
+        val subtitle: String,
+        val summary: String
+    )
+
     private fun performanceCard(context: Context, initiallySelected: String): PerformanceSetting {
         var selectedLevel = initiallySelected.takeIf {
             it == "minimum" || it == "balanced" || it == "fast"
@@ -925,11 +932,10 @@ object NeonHubSettings {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, dp(context, 13), 0, 0)
         }
-        data class Choice(val key: String, val label: String, val subtitle: String, val summary: String)
         val choices = listOf(
-            Choice("minimum", "MİNİMUM", "1 kaynak", "En düşük yük · Aynı anda 1 kaynak"),
-            Choice("balanced", "DENGELİ", "2 kaynak", "Önerilen ayar · Aynı anda 2 kaynak"),
-            Choice("fast", "HIZLI", "4 kaynak", "Daha seri yükleme · Aynı anda 4 kaynak")
+            PerformanceChoice("minimum", "MİNİMUM", "1 kaynak", "En düşük yük · Aynı anda 1 kaynak"),
+            PerformanceChoice("balanced", "DENGELİ", "2 kaynak", "Önerilen ayar · Aynı anda 2 kaynak"),
+            PerformanceChoice("fast", "HIZLI", "4 kaynak", "Daha seri yükleme · Aynı anda 4 kaynak")
         )
         val optionViews = linkedMapOf<String, TextView>()
 
