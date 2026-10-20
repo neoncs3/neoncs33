@@ -10,7 +10,7 @@ import org.jsoup.nodes.Element
 class CanliProvider : MainAPI() {
 
     override var mainUrl = "https://klubnichka.live"
-    override var name = "XXXCanli"
+    override var name = "Canlı TV"
     override var lang = "tr"
     override val hasMainPage = true
     override val hasQuickSearch = false
