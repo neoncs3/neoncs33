@@ -127,8 +127,11 @@ object NeonHubSettings {
         val normalized = normalizeSectionText("$title $data")
         if (isEpisodeSection(normalized)) return contentEnabled(HUB_CONTENT_EPISODES)
 
+        val padded = " $normalized "
         val genre = genreOptions.firstOrNull { option ->
-            option.aliases.any { alias -> normalized.contains(normalizeSectionText(alias)) }
+            option.aliases.any { alias ->
+                padded.contains(" ${normalizeSectionText(alias)} ")
+            }
         }
         if (genre != null && !genreEnabled(genre.key)) return false
 
@@ -170,15 +173,24 @@ object NeonHubSettings {
             .replace(Regex("""[^a-z0-9]+"""), " ")
             .trim()
 
+    private fun containsSectionTerm(text: String, terms: List<String>): Boolean {
+        val padded = " $text "
+        return terms.any { term ->
+            padded.contains(" ${normalizeSectionText(term)} ")
+        }
+    }
+
     private fun isEpisodeSection(text: String): Boolean =
-        listOf("son bolum", "tum bolum", "bolumler", "bolum listesi", "latest episode", "episodes", "episode list")
-            .any(text::contains)
+        containsSectionTerm(
+            text,
+            listOf("son bolum", "tum bolum", "bolumler", "bolum", "bolum listesi", "latest episode", "episodes", "episode")
+        )
 
     private fun isMovieSection(text: String): Boolean =
-        listOf("filmler", "film ", " film", "movies", "movie", "sinema").any(text::contains)
+        containsSectionTerm(text, listOf("film", "filmler", "movies", "movie", "sinema"))
 
     private fun isSeriesSection(text: String): Boolean =
-        listOf("diziler", "dizi ", " dizi", "series", "tv shows", "anime").any(text::contains)
+        containsSectionTerm(text, listOf("dizi", "diziler", "series", "tv shows", "anime"))
 
     fun showSettingsDialog(context: Context, pluginResources: Resources?, onSave: () -> Unit) {
         val dialog = Dialog(context, android.R.style.Theme_Material_NoActionBar)
