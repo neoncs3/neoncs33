@@ -4,7 +4,7 @@
       "provider": "DiziDad • Tyson afişleri",
       "status": "FAIL",
       "query": null,
-      "item": "4 bölüm; bölüm posterUrl=4/4; Coil bölüm=4/4; ana sayfa posterUrl=0/0 (0/6 kategori); arama[Animal] posterUrl=17/17; Coil arama=4/4; filtre AvatarPoster=false; bozukBaşlık=0; Coil katalog=0/0",
+      "item": "4 bölüm; bölüm posterUrl=4/4; Coil bölüm=4/4; ana sayfa posterUrl=0/0 (0/6 kategori); arama[Animal] posterUrl=27/27; Coil arama=4/4; filtre AvatarPoster=false; bozukBaşlık=0; Coil katalog=0/0",
       "links": 8,
       "positionMs": 0,
       "error": "Filtre kontrolü başarısız: Avatar: Seven Havens afişi LoadResponse içinde yok. Yeterli ana sayfa kategorisi yüklenemedi: AsyaFilmİzle • Yeni Diziler: kart yok; AsyaFilmİzle • Kore Dizileri: kart yok; AsyaFilmİzle • Aksiyon: kart yok; AsyaFilmİzle • Bilim Kurgu: kart yok; AsyaFilmİzle • Fantastik: kart yok; AsyaFilmİzle • Gerilim: kart yok."
@@ -15,7 +15,7 @@
       "query": null,
       "item": "DiziBoxizle",
       "links": 7,
-      "positionMs": 2880,
+      "positionMs": 2973,
       "error": null
     },
     {
@@ -33,7 +33,7 @@
       "query": null,
       "item": "Dizimag • Below S1E1",
       "links": 1,
-      "positionMs": 3128,
+      "positionMs": 3083,
       "error": null
     },
     {
@@ -42,7 +42,7 @@
       "query": null,
       "item": "Dizimag • Below S1E2",
       "links": 1,
-      "positionMs": 3105,
+      "positionMs": 3404,
       "error": null
     },
     {
@@ -51,7 +51,7 @@
       "query": null,
       "item": "Dizimag • Below S1E3",
       "links": 1,
-      "positionMs": 3140,
+      "positionMs": 2943,
       "error": null
     },
     {
@@ -60,7 +60,7 @@
       "query": null,
       "item": "Dizimag • Below S1E6",
       "links": 1,
-      "positionMs": 3295,
+      "positionMs": 3271,
       "error": null
     },
     {
@@ -87,7 +87,7 @@
       "query": null,
       "item": "TvDiziler • Tuzlu Kahve 7",
       "links": 1,
-      "positionMs": 2919,
+      "positionMs": 3150,
       "error": null
     },
     {
@@ -96,20 +96,20 @@
       "query": null,
       "item": "TvDiziler • Anne Yarısı 4",
       "links": 1,
-      "positionMs": 3189,
+      "positionMs": 3326,
       "error": null
     },
     {
       "provider": "TvDiziler • Haysiyet 6",
-      "status": "PASS",
+      "status": "FAIL",
       "query": null,
       "item": "TvDiziler • Haysiyet 6",
-      "links": 1,
-      "positionMs": 3254,
-      "error": null
+      "links": 0,
+      "positionMs": 0,
+      "error": "Gerçek video bağlantısı bulunamadı. Aday denemeleri: doğrudan: TvDiziler • Haysiyet 6 -> bağlantı yok (Gerçek video bağlantısı bulunamadı)"
     }
   ],
-  "pass": 8,
+  "pass": 7,
   "blocked": 3,
-  "fail": 1
+  "fail": 2
 }
