@@ -7,6 +7,8 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.ConcurrentHashMap
 import okhttp3.Interceptor
 
@@ -205,8 +207,10 @@ class NeonHubAPI : MainAPI() {
      * Each request has its own time limit. A timeout or temporary error only drops that source.
      * Cancellation from the caller is preserved.
      */
-    private suspend fun <T> sourceRequest(block: suspend () -> T): T? =
-        withTimeoutOrNull(SOURCE_REQUEST_TIMEOUT_MS) {
+    private suspend fun <T> sourceRequest(block: suspend () -> T): T? {
+        // In TV light mode, queue homepage/search calls so no more than two
+        // provider requests run at once. The timeout starts after a permit is acquired.
+        suspend fun runRequest(): T? = withTimeoutOrNull(SOURCE_REQUEST_TIMEOUT_MS) {
             try {
                 block()
             } catch (cancelled: CancellationException) {
@@ -215,6 +219,13 @@ class NeonHubAPI : MainAPI() {
                 null
             }
         }
+
+        return if (NeonHubSettings.isLightModeEnabled()) {
+            LIGHT_MODE_SEMAPHORE.withPermit { runRequest() }
+        } else {
+            runRequest()
+        }
+    }
 
     @Suppress("DEPRECATION_ERROR")
     private fun rebrandSearchResponse(response: SearchResponse, key: String): SearchResponse {
@@ -266,6 +277,7 @@ class NeonHubAPI : MainAPI() {
     }
 
     private companion object {
+        private val LIGHT_MODE_SEMAPHORE = Semaphore(2)
         const val SOURCE_REQUEST_TIMEOUT_MS = 6500L
         const val PAGE_PREFIX = "__NEONHUB_PAGE__::"
         const val DATA_PREFIX = "__NEONHUB_DATA__::"
