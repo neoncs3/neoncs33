@@ -1,14 +1,14 @@
-# 🟢 JetFilmizle
+# 🟡 JetFilmizle
 
 Kodda kayıtlı domain: https://jetfilmizle.now
 
 Son HTTP URL: https://jetfilmizle.now
 
-HTTP: ✅ 200
+HTTP: ❌ 403
 
-Anti-bot engeli: hayır
+Anti-bot engeli: evet
 
-Sayfa başlığı: JetFilmizle - Film İzle, Türkçe Dublaj, Altyazılı ve Yerli Filmler
+Sayfa başlığı: Just a moment...
 
 Canlı medya ipucu: 0 media URL, 0 iframe
 
