@@ -4,10 +4,10 @@
       "provider": "DiziDad • Tyson afişleri",
       "status": "FAIL",
       "query": null,
-      "item": "4 bölüm; bölüm posterUrl=4/4; Coil bölüm=4/4; ana sayfa posterUrl=54/54 (3/6 kategori); arama[Animal] posterUrl=27/27; Coil arama=4/4; filtre AvatarPoster=false; bozukBaşlık=0; Coil katalog=3/3",
-      "links": 11,
+      "item": "4 bölüm; bölüm posterUrl=4/4; Coil bölüm=4/4; ana sayfa posterUrl=0/0 (0/6 kategori); arama[Animal] posterUrl=25/25; Coil arama=4/4; filtre AvatarPoster=false; bozukBaşlık=0; Coil katalog=0/0",
+      "links": 8,
       "positionMs": 0,
-      "error": "Filtre kontrolü başarısız: Avatar: Seven Havens afişi LoadResponse içinde yok."
+      "error": "Filtre kontrolü başarısız: Avatar: Seven Havens afişi LoadResponse içinde yok. Yeterli ana sayfa kategorisi yüklenemedi: AsyaFilmİzle • Yeni Diziler: kart yok; AsyaFilmİzle • Kore Dizileri: kart yok; AsyaFilmİzle • Aksiyon: kart yok; AsyaFilmİzle • Bilim Kurgu: kart yok; AsyaFilmİzle • Fantastik: kart yok; AsyaFilmİzle • Gerilim: kart yok."
     },
     {
       "provider": "DiziBoxizle",
@@ -15,7 +15,7 @@
       "query": null,
       "item": "DiziBoxizle",
       "links": 7,
-      "positionMs": 3327,
+      "positionMs": 3210,
       "error": null
     },
     {
@@ -33,7 +33,7 @@
       "query": null,
       "item": "Dizimag • Below S1E1",
       "links": 1,
-      "positionMs": 3331,
+      "positionMs": 2916,
       "error": null
     },
     {
@@ -42,7 +42,7 @@
       "query": null,
       "item": "Dizimag • Below S1E2",
       "links": 1,
-      "positionMs": 3144,
+      "positionMs": 2774,
       "error": null
     },
     {
@@ -51,7 +51,7 @@
       "query": null,
       "item": "Dizimag • Below S1E3",
       "links": 1,
-      "positionMs": 3007,
+      "positionMs": 3003,
       "error": null
     },
     {
@@ -60,7 +60,7 @@
       "query": null,
       "item": "Dizimag • Below S1E6",
       "links": 1,
-      "positionMs": 3090,
+      "positionMs": 3001,
       "error": null
     },
     {
@@ -87,7 +87,7 @@
       "query": null,
       "item": "TvDiziler • Tuzlu Kahve 7",
       "links": 1,
-      "positionMs": 3270,
+      "positionMs": 3310,
       "error": null
     },
     {
@@ -96,7 +96,7 @@
       "query": null,
       "item": "TvDiziler • Anne Yarısı 4",
       "links": 1,
-      "positionMs": 3514,
+      "positionMs": 3247,
       "error": null
     },
     {
