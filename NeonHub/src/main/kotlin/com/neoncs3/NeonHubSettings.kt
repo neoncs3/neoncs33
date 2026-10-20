@@ -51,6 +51,11 @@ object NeonHubSettings {
     const val HUB_SOURCE_TIZAM = "neonhub_source_tizam"
     const val HUB_SOURCE_WEBDRAMATURKEY = "neonhub_source_webdramaturkey"
 
+    const val HUB_CONTENT_MOVIES = "neonhub_content_movies"
+    const val HUB_CONTENT_SERIES = "neonhub_content_series"
+    const val HUB_CONTENT_EPISODES = "neonhub_content_episodes"
+    private const val HUB_GENRE_PREFIX = "neonhub_genre_"
+
     private val backgroundColor = Color.parseColor("#100B18")
     private val cardColor = Color.parseColor("#1A1427")
     private val raisedCardColor = Color.parseColor("#241B35")
@@ -64,7 +69,35 @@ object NeonHubSettings {
     private val borderColor = Color.parseColor("#493657")
 
     data class Source(val key: String, val title: String, val detail: String)
+    data class ContentOption(val key: String, val title: String, val detail: String)
+    data class GenreOption(val key: String, val title: String, val aliases: List<String>)
     private data class SourceProbe(val label: String, val color: Int, val category: Int)
+
+    val contentOptions = listOf(
+        ContentOption(HUB_CONTENT_MOVIES, "Filmler", "Film listelerini ve film sonuçlarını göster"),
+        ContentOption(HUB_CONTENT_SERIES, "Diziler", "Dizi ve anime listelerini göster"),
+        ContentOption(HUB_CONTENT_EPISODES, "Son Bölümler", "Bölüm odaklı listeleri ayrı göster")
+    )
+
+    val genreOptions = listOf(
+        GenreOption("action", "Aksiyon", listOf("aksiyon", "action")),
+        GenreOption("scifi", "Bilim Kurgu", listOf("bilim kurgu", "bilimkurgu", "science fiction", "sci fi", "scifi")),
+        GenreOption("romance", "Romantik", listOf("romantik", "romance", "romantic")),
+        GenreOption("comedy", "Komedi", listOf("komedi", "comedy")),
+        GenreOption("drama", "Dram", listOf("dram", "drama")),
+        GenreOption("thriller", "Gerilim", listOf("gerilim", "thriller", "suspense")),
+        GenreOption("horror", "Korku", listOf("korku", "horror")),
+        GenreOption("fantasy", "Fantastik", listOf("fantastik", "fantasy")),
+        GenreOption("adventure", "Macera", listOf("macera", "adventure")),
+        GenreOption("crime", "Suç / Polisiye", listOf("suc", "polisiye", "crime", "detective")),
+        GenreOption("animation", "Animasyon", listOf("animasyon", "animation", "cartoon")),
+        GenreOption("mystery", "Gizem", listOf("gizem", "mystery")),
+        GenreOption("family", "Aile", listOf("aile", "family")),
+        GenreOption("history", "Tarih", listOf("tarih", "history", "historical")),
+        GenreOption("war", "Savaş", listOf("savas", "war")),
+        GenreOption("documentary", "Belgesel", listOf("belgesel", "documentary")),
+        GenreOption("western", "Western", listOf("western", "kovboy"))
+    )
 
     val sources = listOf(
         Source(HUB_SOURCE_ASYAFILM, "AsyaFilmIzle", "Asya filmleri ve dizileri"),
@@ -87,10 +120,72 @@ object NeonHubSettings {
     )
 
     fun enabled(key: String): Boolean = getKey<Boolean>(key) ?: true
+    fun contentEnabled(key: String): Boolean = getKey<Boolean>(key) ?: true
+    fun genreEnabled(key: String): Boolean = getKey<Boolean>(HUB_GENRE_PREFIX + key) ?: false
+
+    fun shouldShowMainPageSection(title: String, data: String = ""): Boolean {
+        val normalized = normalizeSectionText("$title $data")
+        if (isEpisodeSection(normalized)) return contentEnabled(HUB_CONTENT_EPISODES)
+
+        val genre = genreOptions.firstOrNull { option ->
+            option.aliases.any { alias -> normalized.contains(normalizeSectionText(alias)) }
+        }
+        if (genre != null && !genreEnabled(genre.key)) return false
+
+        return when {
+            isMovieSection(normalized) -> contentEnabled(HUB_CONTENT_MOVIES)
+            isSeriesSection(normalized) -> contentEnabled(HUB_CONTENT_SERIES)
+            else -> true
+        }
+    }
+
+    fun shouldShowSearchItem(item: com.lagradost.cloudstream3.SearchResponse): Boolean =
+        when (item) {
+            is com.lagradost.cloudstream3.MovieSearchResponse -> contentEnabled(HUB_CONTENT_MOVIES)
+            is com.lagradost.cloudstream3.TvSeriesSearchResponse,
+            is com.lagradost.cloudstream3.AnimeSearchResponse -> contentEnabled(HUB_CONTENT_SERIES)
+            else -> true
+        }
+
+    fun shouldShowItemInSection(
+        sectionTitle: String,
+        item: com.lagradost.cloudstream3.SearchResponse
+    ): Boolean {
+        val normalized = normalizeSectionText(sectionTitle)
+        if (isEpisodeSection(normalized)) return contentEnabled(HUB_CONTENT_EPISODES)
+        if (!shouldShowMainPageSection(sectionTitle)) return false
+
+        return when (item) {
+            is com.lagradost.cloudstream3.MovieSearchResponse -> contentEnabled(HUB_CONTENT_MOVIES)
+            is com.lagradost.cloudstream3.TvSeriesSearchResponse,
+            is com.lagradost.cloudstream3.AnimeSearchResponse -> contentEnabled(HUB_CONTENT_SERIES)
+            else -> true
+        }
+    }
+
+    private fun normalizeSectionText(value: String): String =
+        value.lowercase()
+            .replace("ı", "i").replace("ş", "s").replace("ğ", "g")
+            .replace("ü", "u").replace("ö", "o").replace("ç", "c")
+            .replace(Regex("""[^a-z0-9]+"""), " ")
+            .trim()
+
+    private fun isEpisodeSection(text: String): Boolean =
+        listOf("son bolum", "tum bolum", "bolumler", "bolum listesi", "latest episode", "episodes", "episode list")
+            .any(text::contains)
+
+    private fun isMovieSection(text: String): Boolean =
+        listOf("filmler", "film ", " film", "movies", "movie", "sinema").any(text::contains)
+
+    private fun isSeriesSection(text: String): Boolean =
+        listOf("diziler", "dizi ", " dizi", "series", "tv shows", "anime").any(text::contains)
 
     fun showSettingsDialog(context: Context, pluginResources: Resources?, onSave: () -> Unit) {
         val dialog = Dialog(context, android.R.style.Theme_Material_NoActionBar)
         val switches = linkedMapOf<String, Switch>()
+        val contentTypeSwitches = linkedMapOf<String, Switch>()
+        val genreStates = genreOptions.associate { it.key to genreEnabled(it.key) }.toMutableMap()
+        var refreshGenreAction: (() -> Unit)? = null
         val sourceRows = linkedMapOf<String, View>()
         val statusLabels = linkedMapOf<String, TextView>()
         val filterButtons = linkedMapOf<String, TextView>()
@@ -248,6 +343,9 @@ object NeonHubSettings {
         metrics.addView(metric("KAPALI", closedCount, amber), LinearLayout.LayoutParams(0, dp(context, 66), 1f))
         hero.addView(metrics)
         content.addView(hero)
+
+        addContentOptions(context, content, contentTypeSwitches)
+        refreshGenreAction = addGenreOptions(context, content, genreStates)
 
         val sourceHeading = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -526,12 +624,15 @@ object NeonHubSettings {
         footer.addView(bulkActions)
         footer.addView(actionButton(
             context,
-            "↺  Varsayılanları Yükle · Tüm Kaynakları Aç",
+            "↺  Varsayılanları Yükle · Ayarları Sıfırla",
             cyan,
             Color.parseColor("#321C3D")
         ) {
             switches.values.forEach { it.isChecked = true }
+            contentTypeSwitches.values.forEach { it.isChecked = true }
+            genreStates.keys.forEach { genreStates[it] = false }
             refreshFilterAction?.invoke()
+            refreshGenreAction?.invoke()
             Toast.makeText(
                 context,
                 "Varsayılan seçimler hazır. Kalıcı olması için Kaydet ve Uygula'ya bas.",
@@ -552,6 +653,12 @@ object NeonHubSettings {
         bottomButtons.addView(actionButton(context, "Kaydet ve Uygula  →", Color.parseColor("#29152B"), cyan) {
             sources.forEach { source ->
                 setKey(source.key, switches[source.key]?.isChecked ?: true)
+            }
+            contentOptions.forEach { option ->
+                setKey(option.key, contentTypeSwitches[option.key]?.isChecked ?: true)
+            }
+            genreOptions.forEach { option ->
+                setKey(HUB_GENRE_PREFIX + option.key, genreStates[option.key] == true)
             }
             onSave()
             Toast.makeText(context, "NeonHub ayarları uygulandı", Toast.LENGTH_SHORT).show()
@@ -590,6 +697,9 @@ object NeonHubSettings {
         // Keep the branded full-screen NeonHub appearance even when the richer
         // settings panel fails on a particular CloudStream/Android build.
         val switches = linkedMapOf<String, Switch>()
+        val contentTypeSwitches = linkedMapOf<String, Switch>()
+        val genreStates = genreOptions.associate { it.key to genreEnabled(it.key) }.toMutableMap()
+        var refreshGenreAction: (() -> Unit)? = null
         val dialog = Dialog(context, android.R.style.Theme_Material_NoActionBar)
 
         val root = LinearLayout(context).apply {
@@ -663,6 +773,9 @@ object NeonHubSettings {
             setTextColor(textSecondary)
             setPadding(0, dp(context, 5), 0, dp(context, 16))
         })
+
+        addContentOptions(context, content, contentTypeSwitches)
+        refreshGenreAction = addGenreOptions(context, content, genreStates)
 
         sources.forEachIndexed { index, source ->
             val accent = when (index % 4) {
@@ -744,11 +857,14 @@ object NeonHubSettings {
         }
         footer.addView(actionButton(
             context,
-            "↺  Varsayılanları Yükle · Tüm Kaynakları Aç",
+            "↺  Varsayılanları Yükle · Ayarları Sıfırla",
             cyan,
             Color.parseColor("#321C3D")
         ) {
             switches.values.forEach { it.isChecked = true }
+            contentTypeSwitches.values.forEach { it.isChecked = true }
+            genreStates.keys.forEach { genreStates[it] = false }
+            refreshGenreAction?.invoke()
             Toast.makeText(
                 context,
                 "Varsayılan seçimler hazır. Kalıcı olması için Kaydet ve Uygula'ya bas.",
@@ -769,6 +885,12 @@ object NeonHubSettings {
         footerButtons.addView(actionButton(context, "Kaydet ve Uygula  →", Color.parseColor("#29152B"), cyan) {
             sources.forEach { source ->
                 setKey(source.key, switches[source.key]?.isChecked ?: true)
+            }
+            contentOptions.forEach { option ->
+                setKey(option.key, contentTypeSwitches[option.key]?.isChecked ?: true)
+            }
+            genreOptions.forEach { option ->
+                setKey(HUB_GENRE_PREFIX + option.key, genreStates[option.key] == true)
             }
             onSave()
             Toast.makeText(context, "NeonHub ayarları uygulandı", Toast.LENGTH_SHORT).show()
@@ -796,6 +918,148 @@ object NeonHubSettings {
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT
         )
+    }
+
+    private fun addContentOptions(
+        context: Context,
+        parent: LinearLayout,
+        switches: MutableMap<String, Switch>
+    ) {
+        val heading = TextView(context).apply {
+            text = "İÇERİK TÜRLERİ"
+            textSize = 10f
+            letterSpacing = 0.12f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(cyan)
+            setPadding(dp(context, 2), dp(context, 20), dp(context, 2), dp(context, 7))
+        }
+        parent.addView(heading)
+        val panel = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(cardColor, dp(context, 16).toFloat(), borderColor)
+            setPadding(dp(context, 12), dp(context, 2), dp(context, 12), dp(context, 2))
+        }
+        contentOptions.forEachIndexed { index, option ->
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(context, 3), dp(context, 10), dp(context, 2), dp(context, 10))
+            }
+            val copy = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            copy.addView(TextView(context).apply {
+                text = option.title
+                textSize = 13f
+                setTypeface(null, Typeface.BOLD)
+                setTextColor(textPrimary)
+            })
+            copy.addView(TextView(context).apply {
+                text = option.detail
+                textSize = 10f
+                setTextColor(textSecondary)
+                setPadding(0, dp(context, 2), 0, 0)
+            })
+            row.addView(copy)
+            val toggle = Switch(context).apply {
+                isChecked = contentEnabled(option.key)
+                contentDescription = "Göster: " + option.title
+                thumbTintList = ColorStateList(
+                    arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+                    intArrayOf(Color.WHITE, Color.parseColor("#D8D0E2"))
+                )
+                trackTintList = ColorStateList(
+                    arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+                    intArrayOf(green, Color.parseColor("#55485D"))
+                )
+                showText = false
+            }
+            switches[option.key] = toggle
+            row.addView(toggle)
+            panel.addView(row)
+            if (index < contentOptions.lastIndex) {
+                panel.addView(View(context).apply {
+                    setBackgroundColor(borderColor)
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, dp(context, 1)
+                    )
+                })
+            }
+        }
+        parent.addView(panel)
+    }
+
+    private fun addGenreOptions(
+        context: Context,
+        parent: LinearLayout,
+        states: MutableMap<String, Boolean>
+    ): () -> Unit {
+        val heading = TextView(context).apply {
+            text = "TÜR KATEGORİLERİ"
+            textSize = 10f
+            letterSpacing = 0.12f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(cyan)
+            setPadding(dp(context, 2), dp(context, 18), dp(context, 2), dp(context, 4))
+        }
+        parent.addView(heading)
+        parent.addView(TextView(context).apply {
+            text = "Yalnızca seçtiğin türler, sağlayıcıların desteklediği ölçüde ana sayfada gösterilir."
+            textSize = 10f
+            setTextColor(textSecondary)
+            setPadding(dp(context, 2), 0, dp(context, 2), dp(context, 9))
+        })
+
+        val buttons = linkedMapOf<String, TextView>()
+        fun refresh() {
+            buttons.forEach { (key, button) ->
+                val active = states[key] == true
+                val option = genreOptions.first { it.key == key }
+                button.text = (if (active) "✓  " else "+  ") + option.title
+                button.setTextColor(if (active) Color.WHITE else textSecondary)
+                button.background = rounded(
+                    if (active) Color.parseColor("#65305C") else raisedCardColor,
+                    dp(context, 12).toFloat(),
+                    if (active) cyan else borderColor
+                )
+            }
+        }
+
+        genreOptions.chunked(2).forEach { pair ->
+            val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+            pair.forEachIndexed { index, option ->
+                val chip = TextView(context).apply {
+                    textSize = 11f
+                    setTypeface(null, Typeface.BOLD)
+                    gravity = Gravity.CENTER
+                    isClickable = true
+                    isFocusable = true
+                    setPadding(dp(context, 5), 0, dp(context, 5), 0)
+                    minHeight = dp(context, 39)
+                    setOnClickListener {
+                        states[option.key] = states[option.key] != true
+                        refresh()
+                    }
+                }
+                buttons[option.key] = chip
+                row.addView(chip, LinearLayout.LayoutParams(
+                    0, dp(context, 39), 1f
+                ).apply {
+                    if (index == 0) marginEnd = dp(context, 7)
+                    else marginStart = dp(context, 7)
+                })
+            }
+            if (pair.size == 1) {
+                row.addView(View(context), LinearLayout.LayoutParams(0, dp(context, 39), 1f)
+                    .apply { marginStart = dp(context, 7) })
+            }
+            parent.addView(row, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(context, 7) })
+        }
+        refresh()
+        return ::refresh
     }
 
     private fun brandMark(context: Context): LinearLayout =
