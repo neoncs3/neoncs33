@@ -949,7 +949,7 @@ object NeonHubSettings {
 
         choices.forEach { choice ->
             val option = TextView(context).apply {
-                text = choice.label + "\\n" + choice.subtitle
+                text = choice.label + "\n" + choice.subtitle
                 textSize = 10f
                 gravity = Gravity.CENTER
                 includeFontPadding = false
