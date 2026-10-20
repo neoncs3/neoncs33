@@ -16,6 +16,12 @@ EXCLUDED = {
     "YouTube", "NetflixMirror", "HQPorner",
 }
 
+# Some sites have a very slow front page while their actual catalogue routes respond.
+# Probe these known catalogue routes only after the main URL fails.
+HEALTH_FALLBACK_PATHS = {
+    "AutoDdizimagCom": "/diziler/",
+}
+
 MEDIA_RE = re.compile(
     r"""(?i)(?:https?:)?//[^"'<>\s]+?(?:\.m3u8|\.mpd|\.mp4|\.m4v|\.webm|\.mov)"""
 )
@@ -96,16 +102,34 @@ def analyse(module: Path, domains: dict[str, str], scraper):
 
     source = provider_file.read_text(encoding="utf-8", errors="replace")
     configured = extract_main_url(source) or domains.get(module.name, "")
-    live = live_check(scraper, configured) if configured else {
-        "ok": False,
-        "status_code": None,
-        "final_url": "",
-        "bytes": 0,
-        "title": "",
-        "media_hints": 0,
-        "iframe_hints": 0,
-        "error": "mainUrl bulunamadı",
-    }
+    if configured:
+        live = live_check(scraper, configured)
+        # If the homepage times out, check the provider's actual TV catalogue
+        # once before marking the whole provider red. A successful fallback is yellow because
+        # the homepage itself remains slow, but the provider is not completely unreachable.
+        fallback_path = HEALTH_FALLBACK_PATHS.get(module.name)
+        if not live.get("ok") and fallback_path:
+            fallback_url = configured.rstrip("/") + fallback_path
+            fallback_live = live_check(scraper, fallback_url)
+            if fallback_live.get("ok") or fallback_live.get("anti_bot_blocked"):
+                fallback_live["fallback_used"] = True
+                fallback_live["primary_probe_url"] = configured
+                fallback_live["primary_probe_error"] = (
+                    live.get("error")
+                    or (f"HTTP {live.get('status_code')}" if live.get("status_code") else "Ana sayfa yanıt vermedi")
+                )
+                live = fallback_live
+    else:
+        live = {
+            "ok": False,
+            "status_code": None,
+            "final_url": "",
+            "bytes": 0,
+            "title": "",
+            "media_hints": 0,
+            "iframe_hints": 0,
+            "error": "mainUrl bulunamadı",
+        }
 
     low = source.lower()
     pos = low.find("loadlinks(")
@@ -130,7 +154,7 @@ def analyse(module: Path, domains: dict[str, str], scraper):
         )
     )
 
-    if live.get("anti_bot_blocked"):
+    if live.get("fallback_used") or live.get("anti_bot_blocked"):
         status = "yellow"
     elif not live["ok"]:
         status = "red"
@@ -216,7 +240,7 @@ def main():
 
     rows.extend([
         "",
-        "🟢 HTTP erişimi + yapısal kaynak kontrolleri geçti · 🟡 Anti-bot veya yapısal uyarı · 🔴 HTTP erişimi başarısız.",
+        "🟢 HTTP erişimi + yapısal kaynak kontrolleri geçti · 🟡 Anti-bot, yapısal uyarı veya ana sayfa yavaşken katalog yolu erişilebilir · 🔴 HTTP erişimi doğrulanamadı.",
         "",
         "Önemli: Resolver/altyazı/metadata sütunları kaynak kodunda beklenen işlevlerin bulunduğunu denetler; gerçek video bağlantısının çalıştığını kanıtlamaz. Gerçek link çözümleme ve ExoPlayer testi için playback-status/latest.md raporuna bakın.",
         "",
@@ -258,6 +282,12 @@ def main():
             "",
             f"Kaynak: {item.get('source', '-')}",
         ]
+        if live.get("primary_probe_error"):
+            lines.extend([
+                "",
+                f"Ana sayfa yavaş/yanıtsız: {live['primary_probe_error']}",
+                f"Yedek katalog kontrolü: {live.get('final_url', '-')}",
+            ])
         if live.get("error"):
             lines.extend(["", f"Hata: {live['error']}"])
         write_if_changed(OUT_DIR / f"{item['provider']}.md", "\n".join(lines) + "\n")
