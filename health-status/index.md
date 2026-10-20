@@ -24,7 +24,7 @@ Bu rapor tools/provider_health.py tarafından otomatik güncellenir.
 | **TiZam** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **WebDramaTurkey** | 🟢 | https://webdramaturkey2.com | https://webdramaturkey2.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 
-🟢 HTTP erişimi + yapısal kaynak kontrolleri geçti · 🟡 Anti-bot veya yapısal uyarı · 🔴 HTTP erişimi başarısız.
+🟢 HTTP erişimi + yapısal kaynak kontrolleri geçti · 🟡 Anti-bot, yapısal uyarı veya ana sayfa yavaşken katalog yolu erişilebilir · 🔴 HTTP erişimi doğrulanamadı.
 
 Önemli: Resolver/altyazı/metadata sütunları kaynak kodunda beklenen işlevlerin bulunduğunu denetler; gerçek video bağlantısının çalıştığını kanıtlamaz. Gerçek link çözümleme ve ExoPlayer testi için playback-status/latest.md raporuna bakın.
 
