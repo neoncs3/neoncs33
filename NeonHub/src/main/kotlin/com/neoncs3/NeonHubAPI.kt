@@ -33,6 +33,9 @@ class NeonHubAPI : MainAPI() {
             if (!source.hasMainPage) emptyList()
             else source.mainPage
                 .filter { it.data.isNotBlank() }
+                .filter { section ->
+                    NeonHubSettings.shouldShowMainPageSection(section.name, section.data)
+                }
                 .map { section ->
                     MainPageData(
                         name = source.name + " • " + section.name,
@@ -70,10 +73,19 @@ class NeonHubAPI : MainAPI() {
         )
         val response = sourceRequest { source.getMainPage(page, mappedRequest) } ?: return null
 
-        val lists = response.items.map { section ->
+        val lists = response.items.mapNotNull { section ->
+            if (!NeonHubSettings.shouldShowMainPageSection(section.name)) {
+                return@mapNotNull null
+            }
+            val filteredItems = section.list.filter { item ->
+                NeonHubSettings.shouldShowItemInSection(section.name, item)
+            }
+            if (section.list.isNotEmpty() && filteredItems.isEmpty()) {
+                return@mapNotNull null
+            }
             HomePageList(
                 name = source.name + " • " + section.name,
-                list = section.list.map { rebrandSearchResponse(it, route.key) },
+                list = filteredItems.map { rebrandSearchResponse(it, route.key) },
                 isHorizontalImages = section.isHorizontalImages
             )
         }
@@ -86,7 +98,7 @@ class NeonHubAPI : MainAPI() {
         }
         val items = results.flatMap { (key, response) ->
             response.items.map { rebrandSearchResponse(it, key) }
-        }
+        }.filter(NeonHubSettings::shouldShowSearchItem)
         if (items.isEmpty()) return null
         return newSearchResponseList(items, results.any { it.second.hasNext })
     }
@@ -99,7 +111,7 @@ class NeonHubAPI : MainAPI() {
         val results = collectSources(sources) { source -> source.quickSearch(query) }
         val items = results.flatMap { (key, entries) ->
             entries.map { rebrandSearchResponse(it, key) }
-        }
+        }.filter(NeonHubSettings::shouldShowSearchItem)
         return items.ifEmpty { null }
     }
 
