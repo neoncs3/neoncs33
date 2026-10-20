@@ -208,8 +208,8 @@ class NeonHubAPI : MainAPI() {
      * Cancellation from the caller is preserved.
      */
     private suspend fun <T> sourceRequest(block: suspend () -> T): T? {
-        // In TV light mode, queue homepage/search calls so no more than two
-        // provider requests run at once. The timeout starts after a permit is acquired.
+        // Limit concurrent homepage/search/catalogue requests according to the
+        // selected TV profile. Each source gets its own timeout after acquiring a permit.
         suspend fun runRequest(): T? = withTimeoutOrNull(SOURCE_REQUEST_TIMEOUT_MS) {
             try {
                 block()
