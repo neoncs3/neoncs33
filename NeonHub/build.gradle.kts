@@ -1,11 +1,11 @@
-version = 17
+version = 18
 cloudstream {
     description = "NeonHub — neoncs3 sağlayıcılarının tek eklentide birleştirilmiş sürümü"
     authors = listOf("neoncs3")
     status = 1
     tvTypes = listOf("Movie", "TvSeries", "AsianDrama", "Anime", "Torrent", "NSFW")
     language = "tr"
-    iconUrl = "https://raw.githubusercontent.com/neoncs3/neoncs33/master/1792415151509.jpg?v=17"
+    iconUrl = "https://raw.githubusercontent.com/neoncs3/neoncs33/master/1792415151509.jpg?v=18"
     requiresResources = true
 }
 
