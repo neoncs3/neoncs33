@@ -154,6 +154,9 @@ def describe(name, url, response):
 
 def main():
     probes = [
+        # General internet/DNS controls separate runner networking from provider-domain failure.
+        ("control_example", "https://example.com/"),
+        ("control_github_api", "https://api.github.com/"),
         ("config", CONFIG),
         ("films", MAIN + "/filmapi.php"),
         ("series", MAIN + "/diziapi.php"),
