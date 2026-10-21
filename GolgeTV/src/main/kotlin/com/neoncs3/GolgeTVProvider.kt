@@ -24,9 +24,11 @@ class GolgeTVProvider : MainAPI() {
     override val hasQuickSearch = false
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
-    private val liveCollectionData = "golgetv:live"
-    private val sportCollectionData = "golgetv:sport"
+    // Real URLs are used as page data so CloudStream does not discard custom schemes.
+    private val liveCollectionData = mainUrl + "/#neon-live"
+    private val sportCollectionData = mainUrl + "/#neon-sport"
     private val liveEpisodePrefix = "golgetv-live:"
+    private val liveChannelPrefix = "golgetv-channel:"
     private val liveChannelFeed = "https://imgcom.site/panel/rec/recjson.php"
 
     override val mainPage = mainPageOf(
@@ -167,9 +169,10 @@ class GolgeTVProvider : MainAPI() {
 
             val posterRaw = obj.string(
                 "poster", "image", "imageUrl", "image_url", "posterUrl", "poster_url",
-                "filmImage", "film_img", "film_image", "diziPoster", "dizi_poster",
-                "thumbnail", "thumbnailUrl", "thumbnail_url", "thumb_square",
-                "cover", "resim", "logo", "icon"
+                "filmImg", "filmImage", "film_img", "film_image", "filmPoster", "film_poster",
+                "diziImg", "diziPoster", "dizi_poster", "thumbnail", "thumbnailUrl",
+                "thumbnail_url", "thumb_square", "thumbSquare", "cover", "coverUrl",
+                "cover_url", "resim", "resimUrl", "image_path", "logo", "icon"
             )
             val desc = obj.string(
                 "description", "filmDescription", "film_description",
@@ -211,7 +214,7 @@ class GolgeTVProvider : MainAPI() {
 
         // Some API revisions only provide detailUrl/title in the catalogue response.
         // For those few missing covers, read the page's standard OpenGraph/image metadata.
-        val needsPoster = items.filter { it.poster.isNullOrBlank() }.take(12)
+        val needsPoster = items.filter { it.poster.isNullOrBlank() }.take(8)
             .associateBy { it.detailUrl }
         if (needsPoster.isEmpty()) return items
 
@@ -228,9 +231,19 @@ class GolgeTVProvider : MainAPI() {
 
     private fun posterFromHtml(html: String, pageUrl: String): String? {
         if (html.isBlank()) return null
+
+        // Some detail endpoints return JSON instead of a rendered HTML document.
+        val jsonPoster = allObjects(parseJson(html)).firstNotNullOfOrNull { obj ->
+            obj.string(
+                "poster", "image", "imageUrl", "image_url", "posterUrl", "poster_url",
+                "filmImg", "filmImage", "diziImg", "diziPoster", "thumb_square", "thumbnail"
+            )?.let { absolute(it, pageUrl) }
+        }
+        if (jsonPoster != null) return jsonPoster
+
         val doc = runCatching { org.jsoup.Jsoup.parse(html, pageUrl) }.getOrNull() ?: return null
         val metaImage = doc.selectFirst(
-            "meta[property=og:image], meta[name=twitter:image], meta[property=og:image:secure_url]"
+            "meta[property='og:image'], meta[name='twitter:image'], meta[property='og:image:secure_url']"
         )?.attr("content")?.takeIf { it.isNotBlank() }
         if (metaImage != null) return absolute(metaImage, pageUrl)
 
@@ -315,11 +328,37 @@ class GolgeTVProvider : MainAPI() {
 
     private fun collectionSearchResult(isSport: Boolean): SearchResponse =
         newTvSeriesSearchResponse(
-            if (isSport) "GölgeTV Spor" else "GölgeTV Canlı",
+            if (isSport) "Tüm Spor Kanalları" else "Tüm Canlı Kanallar",
             if (isSport) sportCollectionData else liveCollectionData,
             TvType.TvSeries
         ) {
             posterUrl = mainUrl + "/favicon.ico"
+        }
+
+    private fun encodeLivePayload(channel: LiveChannel): String {
+        val json = JSONObject()
+            .put("title", channel.title)
+            .put("sources", JSONArray(channel.urls))
+            .put("poster", channel.poster ?: "")
+            .put("category", channel.category)
+            .put("type", channel.type)
+            .toString()
+        return Base64.encodeToString(
+            json.toByteArray(Charsets.UTF_8),
+            Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+        )
+    }
+
+    private fun encodeLiveChannelRoute(channel: LiveChannel): String =
+        liveChannelPrefix + encodeLivePayload(channel)
+
+    private fun liveChannelSearchResult(channel: LiveChannel): SearchResponse =
+        newTvSeriesSearchResponse(
+            channel.title,
+            encodeLiveChannelRoute(channel),
+            TvType.TvSeries
+        ) {
+            posterUrl = channel.poster
         }
 
     override suspend fun getMainPage(
@@ -327,10 +366,15 @@ class GolgeTVProvider : MainAPI() {
         request: MainPageRequest
     ): HomePageResponse {
         if (request.data == liveCollectionData) {
-            return newHomePageResponse(request.name, listOf(collectionSearchResult(false)), hasNext = false)
+            val channels = liveChannels()
+            val items = listOf(collectionSearchResult(false)) + channels.map { liveChannelSearchResult(it) }
+            return newHomePageResponse(request.name, items, hasNext = false)
         }
         if (request.data == sportCollectionData) {
-            return newHomePageResponse(request.name, listOf(collectionSearchResult(true)), hasNext = false)
+            val all = liveChannels()
+            val sports = all.filter { isSportsChannel(it) }
+            val items = listOf(collectionSearchResult(true)) + sports.map { liveChannelSearchResult(it) }
+            return newHomePageResponse(request.name, items, hasNext = false)
         }
 
         val kind = if (request.data.contains("diziapi.php", true)) Kind.SERIES else Kind.MOVIE
@@ -496,17 +540,32 @@ class GolgeTVProvider : MainAPI() {
         ).any { value.contains(it) }
     }
 
-    private fun encodeLiveEpisode(channel: LiveChannel): String {
-        val json = JSONObject()
-            .put("title", channel.title)
-            .put("sources", JSONArray(channel.urls))
-            .put("poster", channel.poster ?: "")
-            .toString()
-        val encoded = Base64.encodeToString(
-            json.toByteArray(Charsets.UTF_8),
-            Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+    private fun encodeLiveEpisode(channel: LiveChannel): String =
+        liveEpisodePrefix + encodeLivePayload(channel)
+
+    private fun decodeLiveChannelRoute(value: String): LiveChannel? {
+        if (!value.startsWith(liveChannelPrefix)) return null
+        val decoded = runCatching {
+            String(
+                Base64.decode(
+                    value.removePrefix(liveChannelPrefix),
+                    Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+                ),
+                Charsets.UTF_8
+            )
+        }.getOrNull() ?: return null
+        val json = runCatching { JSONObject(decoded) }.getOrNull() ?: return null
+        val urls = collectSourceUrls(json.opt("sources"), liveChannelFeed)
+            .filterNot { isRestrictedControlEndpoint(it) }
+            .distinct()
+        if (urls.isEmpty()) return null
+        return LiveChannel(
+            title = json.optString("title", "Canlı Kanal"),
+            urls = urls,
+            poster = absolute(json.optString("poster").takeIf { it.isNotBlank() }, liveChannelFeed),
+            category = json.optString("category"),
+            type = json.optString("type")
         )
-        return liveEpisodePrefix + encoded
     }
 
     private fun decodeLiveEpisode(value: String): List<String>? {
@@ -542,6 +601,27 @@ class GolgeTVProvider : MainAPI() {
         ).firstOrNull()
 
     override suspend fun load(url: String): LoadResponse {
+        val singleChannel = decodeLiveChannelRoute(url)
+        if (singleChannel != null) {
+            return newTvSeriesLoadResponse(
+                singleChannel.title,
+                mainUrl + "/#live-channel",
+                TvType.TvSeries,
+                listOf(
+                    newEpisode(encodeLiveEpisode(singleChannel)) {
+                        name = singleChannel.title
+                        season = 1
+                        this.episode = 1
+                        posterUrl = singleChannel.poster
+                    }
+                )
+            ) {
+                posterUrl = singleChannel.poster
+                plot = listOf(singleChannel.category, singleChannel.type)
+                    .filter { it.isNotBlank() }.joinToString(" • ").ifBlank { "Canlı yayın" }
+            }
+        }
+
         if (url == liveCollectionData || url == sportCollectionData) {
             val all = liveChannels()
             val isSport = url == sportCollectionData
