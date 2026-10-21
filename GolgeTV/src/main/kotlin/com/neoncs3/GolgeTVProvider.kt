@@ -78,7 +78,7 @@ class GolgeTVProvider : MainAPI() {
             when {
                 value.startsWith("https://", true) || value.startsWith("http://", true) -> URL(value).toString()
                 value.startsWith("//") -> "https:" + value
-                else -> URL(URL(if (base.endsWith("/")) base else "$base/"), value).toString()
+                else -> URL(URL(base), value).toString()
             }
         }.getOrNull()
     }
@@ -403,7 +403,7 @@ class GolgeTVProvider : MainAPI() {
 
     private suspend fun liveChannels(): List<LiveChannel> {
         val feed = runCatching {
-            app.get(liveChannelFeed, headers = headers(liveChannelFeed)).text
+            app.get(liveChannelFeed, headers = headers(mainUrl)).text
         }.getOrNull().orEmpty()
         val root = parseJson(feed)
         val channels = allObjects(root).mapNotNull { obj ->
