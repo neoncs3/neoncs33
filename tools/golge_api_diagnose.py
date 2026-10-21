@@ -259,7 +259,7 @@ def main():
 
     lines += [
         "", "## Yorumlama", "",
-        "- DNS NXDOMAIN: alan adı kayıtlı değil; NOERROR ve yanıt adresi varsa DNS kaydı var fakat web servisi yine de ayrıca kontrol edilmelidir.",
+        "- DNS NXDOMAIN: sorgulanan ad için DNS yanıtı bulunamadı; bu tek başına alan adının kayıt/ownership durumunu kanıtlamaz. NOERROR ve yanıt adresi ise DNS kaydının bulunduğunu gösterir, web servisi ayrıca kontrol edilmelidir.",
         "- HTTP 401/403 veya ağ hatası: normal katalog isteği erişilemiyor; bu test giriş yapmayı veya korumalı nonce/doğrulama uç noktalarını denemez.",
         "- HTTP 200 ve 0 kayıt: yanıt gövdesi beklenen katalog şemasında değil veya katalog içermiyor.",
         "- Rapor alan adlarını ve sayılarını gösterir; içerik başlıkları, afiş URL'leri, stream URL'leri veya kişisel bilgiler yazılmaz.", ""
