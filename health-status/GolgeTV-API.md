@@ -14,8 +14,20 @@ Bu rapor otomatik oluşturulur. Şifre, cookie, bearer token, tam yanıt gövdes
 | homepage | https://golgetv.com/ | ERR:gaierror | - | 0 | 0 | - | 0/0/0 |
 | configured_channel_json | - | SKIP | - | 0 | 0 | public jsonurl yok | - |
 
+## Bağımsız DNS-over-HTTPS kontrolü
+
+| Ad | Kayıt türü | DNS sonucu | Yanıt |
+|---|---|---|---|
+| golgetv.com | A | NXDOMAIN | - |
+| golgetv.com | NS | NXDOMAIN | - |
+| www.golgetv.com | A | NXDOMAIN | - |
+| imgcom.site | A | NXDOMAIN | - |
+| imgcom.site | NS | NXDOMAIN | - |
+| www.imgcom.site | A | NXDOMAIN | - |
+
 ## Yorumlama
 
+- DNS NXDOMAIN: alan adı kayıtlı değil; NOERROR ve yanıt adresi varsa DNS kaydı var fakat web servisi yine de ayrıca kontrol edilmelidir.
 - HTTP 401/403 veya ağ hatası: normal katalog isteği erişilemiyor; bu test giriş yapmayı veya korumalı nonce/doğrulama uç noktalarını denemez.
 - HTTP 200 ve 0 kayıt: yanıt gövdesi beklenen katalog şemasında değil veya katalog içermiyor.
 - Rapor alan adlarını ve sayılarını gösterir; içerik başlıkları, afiş URL'leri, stream URL'leri veya kişisel bilgiler yazılmaz.
