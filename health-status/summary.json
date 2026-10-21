@@ -313,19 +313,6 @@
       "source": "FilmModu/src/main/kotlin/com/neoncs3/FilmModu.kt"
     },
     {
-      "provider": "GolgeTV",
-      "status": "yellow",
-      "domain": "",
-      "configured_domain": "",
-      "live_domain": "",
-      "live": {
-        "ok": false,
-        "anti_bot_blocked": false,
-        "error": "NeonMainAPI provider source bulunamadı"
-      },
-      "pipelines": {}
-    },
-    {
       "provider": "JetFilmizle",
       "status": "yellow",
       "domain": "https://jetfilmizle.now",
@@ -469,6 +456,6 @@
     }
   ],
   "green": 7,
-  "yellow": 12,
+  "yellow": 11,
   "red": 1
 }
