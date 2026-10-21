@@ -238,13 +238,11 @@ class GolgeTVProvider : MainAPI() {
             newMovieSearchResponse(item.title, data, TvType.Movie) {
                 posterUrl = item.poster
                 year = item.year
-                plot = item.description
             }
         } else {
             newTvSeriesSearchResponse(item.title, data, TvType.TvSeries) {
                 posterUrl = item.poster
                 year = item.year
-                plot = item.description
             }
         }
     }
@@ -353,7 +351,7 @@ class GolgeTVProvider : MainAPI() {
                 newEpisode(episode.url) {
                     name = episode.title
                     season = 1
-                    episode = index + 1
+                    this.episode = index + 1
                     posterUrl = absolute(detail.string("diziPoster", "poster", "image"), item.detailUrl) ?: item.poster
                 }
             }
