@@ -74,7 +74,7 @@ object NeonHubSettings {
         Source(HUB_SOURCE_DIZIMAG, "DiziMag", "Film ve dizi kataloğu"),
         Source(HUB_SOURCE_HDFILMDIZI, "HDFilmDiziİzle", "HD film ve dizi kataloğu"),
         Source(HUB_SOURCE_CANLI, "Klubnichka Live (18+)", "Canlı yayın sağlayıcısı"),
-        Source(HUB_SOURCE_GOLGETV, "GölgeTV - Açık Kanallar", "Resmî TRT herkese açık canlı yayınları"),
+        Source(HUB_SOURCE_GOLGETV, "GölgeTV", "Film ve dizi kataloğu"),
         Source(HUB_SOURCE_TVDIZILER, "TVDiziler", "Yerli ve yabancı diziler"),
         Source(HUB_SOURCE_DDIZI, "DDizi", "Dizi kataloğu"),
         Source(HUB_SOURCE_DIZIBOXIZLE, "DiziBoxIzle", "Film ve dizi kataloğu"),

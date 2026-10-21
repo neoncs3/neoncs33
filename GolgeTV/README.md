@@ -1,5 +1,9 @@
-# GölgeTV - Açık Kanallar
+# GölgeTV
 
-Bu kaynak NeonHub'a entegre edilmiştir. Tek bir dizi kaydı açılır ve resmî TRT canlı yayınları bölüm listesinde kanal adıyla görünür.
+GölgeTV, CloudStream içindeki NeonHub sağlayıcısına film/dizi kataloğu olarak entegre edilmiştir.
 
-Kaynaklar, TRT'nin herkese açık HLS uç noktalarıdır. APK'da bulunan Digiturk, TOD ve TV+ gibi oturum veya DRM lisansı isteyen servislerin uç noktaları, token'ları ve lisans akışları kopyalanmaz. Yayın erişimi, bölgesel kullanılabilirlik ve kanal URL'leri yayıncı tarafından değiştirilebilir.
+Sağlayıcı, APK'da görülen katalog yollarını (filmapi.php, diziapi.php, search.php, dizisearch.php) kullanarak film ve dizi listelerini okumayı dener. Ayrıntı verilerindeki herkese açık, standart HLS/MP4 bağlantıları oynatılabilir bağlantı olarak sunulur.
+
+Digiturk, TOD ve TV+ servislerinin adının görünmesi içeriğin yasa dışı olduğu anlamına gelmez. Bununla birlikte APK'daki bu servisler için görülen kimlik doğrulama/ticket ve Widevine lisans uç noktaları burada taklit edilmez; kullanıcı oturumu, token veya DRM lisansı çıkarılmaz. Bu servislerdeki ücretli/DRM korumalı içerikler için resmî uygulama veya web sitesi kullanılmalıdır.
+
+Katalog API'si ve dış kaynak sayfaları değişebileceği için gerçek başlık, afiş ve oynatma erişimi canlı ortamda ayrıca doğrulanmalıdır.
