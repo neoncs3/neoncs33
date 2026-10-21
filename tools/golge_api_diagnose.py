@@ -63,6 +63,36 @@ def fetch(url, referer=None):
         return {"status": 0, "content_type": "", "text": "NETWORK_ERROR:" + error_name, "network_error": error_name}
 
 
+def dns_query(name, rrtype):
+    """Query Google Public DNS over HTTPS; public DNS metadata only, no credentials."""
+    query = urllib.parse.urlencode({"name": name, "type": rrtype})
+    request = urllib.request.Request(
+        "https://dns.google/resolve?" + query,
+        headers={"Accept": "application/dns-json", "User-Agent": UA},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=6) as response:
+            payload = json.loads(response.read(128_000).decode("utf-8", "replace"))
+        status = payload.get("Status")
+        status_names = {0: "NOERROR", 1: "FORMERR", 2: "SERVFAIL", 3: "NXDOMAIN", 4: "NOTIMP", 5: "REFUSED"}
+        answers = sorted({
+            str(item.get("data", "")).rstrip(".")
+            for item in payload.get("Answer", [])
+            if item.get("data")
+        })
+        return {
+            "name": name,
+            "type": rrtype,
+            "status": status_names.get(status, "UNKNOWN"),
+            "answer": answers[:8],
+            "error": "",
+        }
+    except Exception as exc:
+        reason = getattr(exc, "reason", None)
+        error_name = type(reason).__name__ if reason is not None else type(exc).__name__
+        return {"name": name, "type": rrtype, "status": "QUERY_ERROR", "answer": [], "error": error_name}
+
+
 def parse_json(text):
     value = text.strip().lstrip("\ufeff")
     value = re.sub(r"^\)\]\}',?\s*", "", value)
@@ -197,8 +227,39 @@ def main():
     else:
         lines.append("| configured_channel_json | - | SKIP | - | 0 | 0 | public jsonurl yok | - |")
 
+    # Independent DNS-over-HTTPS checks distinguish NXDOMAIN and active DNS records
+    # from failures in the runner's normal resolver. These checks are anonymous.
+    dns_queries = [
+        ("golgetv.com", "A"),
+        ("golgetv.com", "NS"),
+        ("www.golgetv.com", "A"),
+        ("imgcom.site", "A"),
+        ("imgcom.site", "NS"),
+        ("www.imgcom.site", "A"),
+    ]
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        dns_results = list(pool.map(lambda pair: dns_query(pair[0], pair[1]), dns_queries))
+
+    lines += [
+        "",
+        "## Bağımsız DNS-over-HTTPS kontrolü",
+        "",
+        "| Ad | Kayıt türü | DNS sonucu | Yanıt |",
+        "|---|---|---|---|",
+    ]
+    for item in dns_results:
+        answer = ", ".join(item["answer"]) if item["answer"] else "-"
+        if item["error"]:
+            answer = "sorgu hatası: " + item["error"]
+        lines.append("| {} | {} | {} | {} |".format(
+            item["name"], item["type"], item["status"], answer
+        ))
+    records.append({"name": "dns_over_https", "results": dns_results})
+
     lines += [
         "", "## Yorumlama", "",
+        "- DNS NXDOMAIN: alan adı kayıtlı değil; NOERROR ve yanıt adresi varsa DNS kaydı var fakat web servisi yine de ayrıca kontrol edilmelidir.",
         "- HTTP 401/403 veya ağ hatası: normal katalog isteği erişilemiyor; bu test giriş yapmayı veya korumalı nonce/doğrulama uç noktalarını denemez.",
         "- HTTP 200 ve 0 kayıt: yanıt gövdesi beklenen katalog şemasında değil veya katalog içermiyor.",
         "- Rapor alan adlarını ve sayılarını gösterir; içerik başlıkları, afiş URL'leri, stream URL'leri veya kişisel bilgiler yazılmaz.", ""
