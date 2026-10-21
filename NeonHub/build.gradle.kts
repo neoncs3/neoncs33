@@ -1,4 +1,4 @@
-version = 24
+version = 25
 cloudstream {
     description = "NeonHub — neoncs3 sağlayıcılarının tek eklentide birleştirilmiş sürümü"
     authors = listOf("neoncs3")
@@ -30,10 +30,6 @@ val prepareMergedProviderSources by tasks.registering(org.gradle.api.tasks.Copy:
     }
     from(rootProject.file("AutoKlubnichkaLive/src/main/kotlin")) {
         into("AutoKlubnichkaLive")
-        exclude("**/*Plugin.kt")
-    }
-    from(rootProject.file("GolgeTV/src/main/kotlin")) {
-        into("GolgeTV")
         exclude("**/*Plugin.kt")
     }
     from(rootProject.file("AutoTvdizilerTv/src/main/kotlin")) {
