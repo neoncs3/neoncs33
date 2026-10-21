@@ -25,6 +25,7 @@ val disabled = listOf(
     "Dizigecesi",
     "Dramadizilerim",
     "FilmModu",
+    "GolgeTV",
     "JetFilmizle",
     "SetFilmIzle",
     "SinemaCX",

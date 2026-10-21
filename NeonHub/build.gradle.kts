@@ -32,6 +32,10 @@ val prepareMergedProviderSources by tasks.registering(org.gradle.api.tasks.Copy:
         into("AutoKlubnichkaLive")
         exclude("**/*Plugin.kt")
     }
+    from(rootProject.file("GolgeTV/src/main/kotlin")) {
+        into("GolgeTV")
+        exclude("**/*Plugin.kt")
+    }
     from(rootProject.file("AutoTvdizilerTv/src/main/kotlin")) {
         into("AutoTvdizilerTv")
         exclude("**/*Plugin.kt")

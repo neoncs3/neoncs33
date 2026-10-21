@@ -36,6 +36,7 @@ object NeonHubController {
         sources[NeonHubSettings.HUB_SOURCE_DIZIMAG] = AutoDdizimagCom()
         sources[NeonHubSettings.HUB_SOURCE_HDFILMDIZI] = AutoHdfilmdiziizleCom()
         sources[NeonHubSettings.HUB_SOURCE_CANLI] = CanliProvider()
+        sources[NeonHubSettings.HUB_SOURCE_GOLGETV] = GolgeTVProvider()
         sources[NeonHubSettings.HUB_SOURCE_TVDIZILER] = AutoTvdizilerTv()
         sources[NeonHubSettings.HUB_SOURCE_DDIZI] = DDizi()
         sources[NeonHubSettings.HUB_SOURCE_DIZIBOXIZLE] = DiziBoxizle()
