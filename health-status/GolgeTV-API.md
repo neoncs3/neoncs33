@@ -4,6 +4,8 @@ Bu rapor otomatik oluşturulur. Şifre, cookie, bearer token, tam yanıt gövdes
 
 | Test | Uç nokta | HTTP | İçerik türü | Kayıt | Afişli kayıt | Tanınan alanlar | HTML bağlantı/görsel/afiş |
 |---|---|---:|---|---:|---:|---|---:|
+| control_example | https://example.com/ | 200 | text/html | 0 | 0 | - | 0/0/0 |
+| control_github_api | https://api.github.com/ | 200 | application/json | 0 | 0 | - | 0/0/0 |
 | config | https://imgcom.site/panel/rec/recjson.php | ERR:gaierror | - | 0 | 0 | - | 0/0/0 |
 | films | https://golgetv.com/filmapi.php | ERR:gaierror | - | 0 | 0 | - | 0/0/0 |
 | series | https://golgetv.com/diziapi.php | ERR:gaierror | - | 0 | 0 | - | 0/0/0 |
