@@ -370,15 +370,18 @@ class GolgeTVProvider : MainAPI() {
         }
     }
 
-    private fun isOfficialAccountOrDrmUrl(url: String): Boolean {
-        val host = runCatching { URL(url).host.lowercase() }.getOrNull() ?: return true
-        return listOf(
-            "digiturkplay.com",
-            "digiturk.com.tr",
-            "todtv.com.tr",
-            "tvplus.com.tr",
-            "beinconnect.com.tr"
-        ).any { host == it || host.endsWith("." + it) }
+    // Do not judge a channel by its display name or the domain serving it.
+    // Only reject URLs that are clearly authentication or licence-control calls.
+    private fun isRestrictedControlEndpoint(url: String): Boolean {
+        val parsed = runCatching { URL(url) }.getOrNull() ?: return true
+        val path = (parsed.path + "?" + (parsed.query ?: "")).lowercase()
+        return path.contains("/api/attest/") ||
+            path.contains("/api/auth/token") ||
+            path.contains("/licenseraw") ||
+            path.contains("/widevine/license") ||
+            path.contains("/channels/ticket") ||
+            path.contains("/epg/json/authenticate") ||
+            path.contains("/epg/json/play")
     }
 
     private fun isDirectMedia(url: String): Boolean {
@@ -420,7 +423,7 @@ class GolgeTVProvider : MainAPI() {
         referer: String,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        if (!isDirectMedia(url) || isOfficialAccountOrDrmUrl(url)) return false
+        if (!isDirectMedia(url) || isRestrictedControlEndpoint(url)) return false
         val isHls = url.substringBefore('?').substringBefore('#').endsWith(".m3u8", true)
 
         if (isHls) {
@@ -452,13 +455,13 @@ class GolgeTVProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val start = absolute(data, mainUrl) ?: return false
-        if (isOfficialAccountOrDrmUrl(start)) return false
+        if (isRestrictedControlEndpoint(start)) return false
 
         var emitted = false
         val visited = linkedSetOf<String>()
 
         suspend fun walk(url: String, referer: String, depth: Int) {
-            if (depth > 2 || url in visited || isOfficialAccountOrDrmUrl(url)) return
+            if (depth > 2 || url in visited || isRestrictedControlEndpoint(url)) return
             visited.add(url)
 
             if (emitPublicLink(url, referer, callback)) {
@@ -483,7 +486,7 @@ class GolgeTVProvider : MainAPI() {
             candidates.addAll(pageCandidates(body, url))
 
             for (candidate in candidates.distinct()) {
-                if (candidate == url || isOfficialAccountOrDrmUrl(candidate)) continue
+                if (candidate == url || isRestrictedControlEndpoint(candidate)) continue
                 if (emitPublicLink(candidate, url, callback)) {
                     emitted = true
                 } else if (!isDirectMedia(candidate) && depth < 2) {
