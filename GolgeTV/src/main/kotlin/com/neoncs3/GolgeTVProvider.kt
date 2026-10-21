@@ -133,9 +133,14 @@ class GolgeTVProvider : MainAPI() {
     }
 
     private fun parseJson(text: String): Any? {
-        val first = runCatching { JSONTokener(text.trim()).nextValue() }.getOrNull()
+        // Some endpoints prepend a UTF-8 BOM or an anti-XSSI marker before JSON.
+        val cleaned = text.trim()
+            .removePrefix("\uFEFF")
+            .replace(Regex("""^\)\]\}',?\s*"""), "")
+            .trim()
+        val first = runCatching { JSONTokener(cleaned).nextValue() }.getOrNull()
         if (first is String) {
-            val nested = first.trim()
+            val nested = first.trim().removePrefix("\uFEFF")
             if (nested.startsWith("{") || nested.startsWith("[")) {
                 return runCatching { JSONTokener(nested).nextValue() }.getOrNull() ?: first
             }
@@ -202,6 +207,9 @@ class GolgeTVProvider : MainAPI() {
                 "name",
                 "film_title",
                 "dizi_title",
+                "isim",
+                "film",
+                "dizi",
                 "baslik",
                 "başlık"
             ) ?: return@mapNotNull null
@@ -210,7 +218,9 @@ class GolgeTVProvider : MainAPI() {
                 "detailUrl", "detail_url", "detail", "detailLink",
                 if (kind == Kind.MOVIE) "filmUrl" else "diziUrl",
                 if (kind == Kind.MOVIE) "film_url" else "dizi_url",
-                "pageUrl", "page_url", "permalink",
+                if (kind == Kind.MOVIE) "filmLink" else "diziLink",
+                if (kind == Kind.MOVIE) "film_link" else "dizi_link",
+                "pageUrl", "page_url", "detailPage", "detail_page", "permalink",
                 "url", "link", "href"
             ) ?: return@mapNotNull null
             val detailUrl = absolute(detail, base) ?: return@mapNotNull null
@@ -259,7 +269,7 @@ class GolgeTVProvider : MainAPI() {
             else -> "diziapi.php"
         }
         val url = mainUrl + "/" + path
-        val responseText = requestText(url, url, 3300L).orEmpty()
+        val responseText = requestText(url, url, 4200L).orEmpty()
         var items = parseCatalogue(responseText, kind, url)
         var usedHtmlFallback = false
 
@@ -270,7 +280,7 @@ class GolgeTVProvider : MainAPI() {
             usedHtmlFallback = items.isNotEmpty()
         }
         if (items.isEmpty()) {
-            val homepage = requestText(mainUrl, mainUrl, 1800L).orEmpty()
+            val homepage = requestText(mainUrl, mainUrl, 1300L).orEmpty()
             items = parseCatalogueHtml(homepage, kind, mainUrl)
             usedHtmlFallback = items.isNotEmpty()
         }
@@ -287,7 +297,7 @@ class GolgeTVProvider : MainAPI() {
             supervisorScope {
                 needsPoster.map { item ->
                     async {
-                        val html = requestText(item.detailUrl, item.detailUrl, 1600L).orEmpty()
+                        val html = requestText(item.detailUrl, item.detailUrl, 1400L).orEmpty()
                         item.detailUrl to posterFromHtml(html, item.detailUrl)
                     }
                 }.awaitAll().toMap()
@@ -309,7 +319,8 @@ class GolgeTVProvider : MainAPI() {
         return document.select("a[href]").mapNotNull { anchor ->
             val detailUrl = absolute(anchor.attr("href"), base) ?: return@mapNotNull null
             val target = runCatching { URL(detailUrl) }.getOrNull() ?: return@mapNotNull null
-            if (siteHost == null || target.host.lowercase() != siteHost) return@mapNotNull null
+            val targetHost = target.host.lowercase().removePrefix("www.")
+            if (siteHost == null || targetHost != siteHost.removePrefix("www.")) return@mapNotNull null
 
             val path = target.path.lowercase()
             if (path.isBlank() || path == "/" || path.contains("api.php") ||
@@ -327,8 +338,14 @@ class GolgeTVProvider : MainAPI() {
             val context = "${path} ${anchor.className()} ${parentClass}".lowercase()
             val movieLike = listOf("film", "filmler", "movie", "movies").any(context::contains)
             val seriesLike = listOf("dizi", "diziler", "series", "tv-show", "episode").any(context::contains)
-            if (kind == Kind.MOVIE && !movieLike) return@mapNotNull null
-            if (kind == Kind.SERIES && !seriesLike) return@mapNotNull null
+            // The endpoint itself identifies movie vs series. Card markup often has
+            // generic CSS classes, so reject only entries explicitly marked as the
+            // opposite type instead of requiring a type-specific class on every card.
+            if (kind == Kind.MOVIE && seriesLike && !movieLike) return@mapNotNull null
+            if (kind == Kind.SERIES && movieLike && !seriesLike) return@mapNotNull null
+            if (image == null && anchor.attr("title").isBlank() && anchor.text().isBlank()) {
+                return@mapNotNull null
+            }
 
             val title = sequenceOf(
                 anchor.selectFirst("h1,h2,h3,h4,.title,.name,.film-title,.dizi-title,.movie-title,.series-title,.entry-title")?.text(),
@@ -602,21 +619,31 @@ class GolgeTVProvider : MainAPI() {
         val root = parseJson(channelText)
         val channels = allObjects(root).mapNotNull { obj ->
             // Actual fields used by the app's live-channel parser: title/image/sources/type/url.
-            val title = obj.string("title", "name", "channelName", "channel_name")
-                ?.trim()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            // The APK's live-player JSON also uses the Turkish keys "isim" and "link".
+            val title = obj.string(
+                "title", "name", "isim", "channelName", "channel_name",
+                "channelTitle", "channel_title", "kanalAdi", "kanal_adi", "kanal"
+            )?.trim()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
 
-            val type = obj.string("type", "channelType", "channel_type").orEmpty()
+            val type = obj.string("type", "channelType", "channel_type", "tur", "yayinTipi").orEmpty()
             val category = obj.string(
-                "category", "kategori", "group", "groupName", "group_name",
-                "categoryName", "category_name", "genre"
+                "category", "kategori", "group", "grup", "groupName", "group_name",
+                "categoryName", "category_name", "kategoriAdi", "kategori_adi", "genre"
             ).orEmpty()
 
             val sources = linkedSetOf<String>()
             sources.addAll(collectSourceUrls(obj.opt("sources"), channelBase))
-            // Some feed variants put the source array or object under "url" itself.
-            sources.addAll(collectSourceUrls(obj.opt("url"), channelBase))
+            // Channel data may wrap its playable URL in different fields or in a JSON string.
+            listOf("url", "link", "streamUrl", "stream_url", "playlist_json", "playlistJson")
+                .forEach { key ->
+                    val child = obj.opt(key)
+                    if (child != null && child != JSONObject.NULL) {
+                        sources.addAll(collectSourceUrls(child, channelBase))
+                    }
+                }
             val direct = obj.string(
-                "url", "streamUrl", "stream_url", "link", "stream", "sourceUrl", "source_url"
+                "url", "streamUrl", "stream_url", "link", "stream", "sourceUrl", "source_url",
+                "playlist", "playlistUrl", "playlist_url"
             )?.let { absolute(it, channelBase) }
             if (direct != null && !isRestrictedControlEndpoint(direct)) sources.add(direct)
 
@@ -626,7 +653,8 @@ class GolgeTVProvider : MainAPI() {
             val rawPoster = obj.string(
                 "image", "imageUrl", "image_url", "poster", "posterUrl", "poster_url",
                 "logo", "logoUrl", "channelLogo", "channel_logo", "icon", "iconUrl",
-                "img", "thumbnailUrl", "thumbnail_url", "resim", "thumb_square"
+                "img", "thumbnailUrl", "thumbnail_url", "resim", "resimUrl",
+                "logo_path", "channelImage", "channel_image", "thumb_square"
             )
             LiveChannel(
                 title = title,
@@ -645,7 +673,11 @@ class GolgeTVProvider : MainAPI() {
         val doc = runCatching { org.jsoup.Jsoup.parse(html, mainUrl) }.getOrNull() ?: return emptyList()
         return doc.select("a[href]").mapNotNull { anchor ->
             val target = absolute(anchor.attr("href"), mainUrl) ?: return@mapNotNull null
-            if (!target.contains("/channel/", true) && !target.contains("live", true)) return@mapNotNull null
+            val linkClass = "${anchor.className()} ${anchor.parent()?.className().orEmpty()}".lowercase()
+            if (!target.contains("/channel/", true) && !target.contains("live", true) &&
+                !target.contains("kanal", true) && !linkClass.contains("channel") &&
+                !linkClass.contains("kanal")
+            ) return@mapNotNull null
             val image = anchor.selectFirst("img")
             val title = anchor.attr("title").ifBlank {
                 image?.attr("alt").orEmpty().ifBlank { anchor.text() }
