@@ -120,6 +120,14 @@ class GolgeTVProvider : MainAPI() {
             is JSONArray -> {
                 for (i in 0 until value.length()) collectObjects(value.opt(i), out, depth + 1)
             }
+            is String -> {
+                // Some versions encode the channel array as a JSON string inside a config object.
+                val nestedText = value.trim()
+                if (nestedText.startsWith("{") || nestedText.startsWith("[")) {
+                    val nested = parseJson(nestedText)
+                    if (nested != null && nested !is String) collectObjects(nested, out, depth + 1)
+                }
+            }
         }
     }
 
@@ -372,7 +380,9 @@ class GolgeTVProvider : MainAPI() {
         }
         if (request.data == sportCollectionData) {
             val all = liveChannels()
-            val sports = all.filter { isSportsChannel(it) }
+            val matchedSports = all.filter { isSportsChannel(it) }
+            // If the feed has no category metadata, keep this row usable rather than empty.
+            val sports = matchedSports.ifEmpty { all }
             val items = listOf(collectionSearchResult(true)) + sports.map { liveChannelSearchResult(it) }
             return newHomePageResponse(request.name, items, hasNext = false)
         }
@@ -467,6 +477,7 @@ class GolgeTVProvider : MainAPI() {
         } else {
             feed
         }
+        val channelBase = configuredList ?: liveChannelFeed
         val root = parseJson(channelText)
         val channels = allObjects(root).mapNotNull { obj ->
             // Actual fields used by the app's live-channel parser: title/image/sources/type/url.
@@ -480,10 +491,10 @@ class GolgeTVProvider : MainAPI() {
             ).orEmpty()
 
             val sources = linkedSetOf<String>()
-            sources.addAll(collectSourceUrls(obj.opt("sources"), liveChannelFeed))
+            sources.addAll(collectSourceUrls(obj.opt("sources"), channelBase))
             val direct = obj.string(
                 "url", "streamUrl", "stream_url", "link", "stream", "sourceUrl", "source_url"
-            )?.let { absolute(it, liveChannelFeed) }
+            )?.let { absolute(it, channelBase) }
             if (direct != null && !isRestrictedControlEndpoint(direct)) sources.add(direct)
 
             val usable = sources.filter { it.startsWith("http", true) && !isRestrictedControlEndpoint(it) }
@@ -496,7 +507,7 @@ class GolgeTVProvider : MainAPI() {
             LiveChannel(
                 title = title,
                 urls = usable.distinct(),
-                poster = absolute(rawPoster, liveChannelFeed),
+                poster = absolute(rawPoster, channelBase),
                 category = category,
                 type = type
             )
@@ -532,7 +543,7 @@ class GolgeTVProvider : MainAPI() {
     }
 
     private fun isSportsChannel(channel: LiveChannel): Boolean {
-        val value = "${channel.title} ${channel.category} ${channel.type}".lowercase()
+        val value = "${channel.title} ${channel.category} ${channel.type} ${channel.urls.joinToString(" ")}".lowercase()
         return listOf(
             "spor", "sport", "futbol", "football", "basket", "tenis", "motor",
             "formula", "eurosport", "beinsport", "bein sports", "s sport",
@@ -625,7 +636,12 @@ class GolgeTVProvider : MainAPI() {
         if (url == liveCollectionData || url == sportCollectionData) {
             val all = liveChannels()
             val isSport = url == sportCollectionData
-            val channels = if (isSport) all.filter { isSportsChannel(it) } else all
+            val matchedSports = if (isSport) all.filter { isSportsChannel(it) } else emptyList()
+            val channels = when {
+                !isSport -> all
+                matchedSports.isNotEmpty() -> matchedSports
+                else -> all
+            }
             val episodes = channels.mapIndexed { index, channel ->
                 newEpisode(encodeLiveEpisode(channel)) {
                     name = channel.title
