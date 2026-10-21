@@ -1,4 +1,4 @@
-version = 22
+version = 23
 cloudstream {
     description = "NeonHub — neoncs3 sağlayıcılarının tek eklentide birleştirilmiş sürümü"
     authors = listOf("neoncs3")

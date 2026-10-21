@@ -72,6 +72,14 @@ object NeonHubController {
         if (url.isBlank()) return null
         urlOwners[url]?.let { return it }
 
+        // CloudStream can restore a result without the in-memory URL-owner map.
+        // These internal GölgeTV routes are self-identifying and must still reach
+        // the provider so channel lists and episode payloads can be loaded.
+        if (url.startsWith("golgetv:", ignoreCase = true) ||
+            url.startsWith("golgetv-channel:", ignoreCase = true) ||
+            url.startsWith("golgetv-live:", ignoreCase = true)
+        ) return NeonHubSettings.HUB_SOURCE_GOLGETV
+
         val direct = sources.entries
             .sortedByDescending { it.value.mainUrl.length }
             .firstOrNull { url.startsWith(it.value.mainUrl, ignoreCase = true) }

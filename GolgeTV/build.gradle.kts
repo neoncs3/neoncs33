@@ -1,4 +1,4 @@
-version = 4
+version = 5
 
 cloudstream {
     description = "GölgeTV film ve dizi kataloğu; açıkça yayınlanan, DRM'siz medya bağlantıları"
