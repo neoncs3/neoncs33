@@ -49,15 +49,18 @@ def fetch(url, referer=None):
     try:
         with urllib.request.urlopen(req, timeout=12) as response:
             body = response.read(MAX_BYTES + 1).decode("utf-8", "replace")[:MAX_BYTES]
-            return {"status": response.status, "content_type": response.headers.get("Content-Type", "").split(";", 1)[0], "text": body}
+            return {"status": response.status, "content_type": response.headers.get("Content-Type", "").split(";", 1)[0], "text": body, "network_error": ""}
     except urllib.error.HTTPError as e:
         try:
             body = e.read(64_000).decode("utf-8", "replace")
         except Exception:
             body = ""
-        return {"status": e.code, "content_type": e.headers.get("Content-Type", "").split(";", 1)[0] if e.headers else "", "text": body}
+        return {"status": e.code, "content_type": e.headers.get("Content-Type", "").split(";", 1)[0] if e.headers else "", "text": body, "network_error": ""}
     except Exception as e:
-        return {"status": 0, "content_type": "", "text": "NETWORK_ERROR:" + type(e).__name__}
+        reason = getattr(e, "reason", None)
+        error_name = type(reason).__name__ if reason is not None else type(e).__name__
+        # Report exception class only; never include potentially sensitive request details.
+        return {"status": 0, "content_type": "", "text": "NETWORK_ERROR:" + error_name, "network_error": error_name}
 
 
 def parse_json(text):
@@ -136,13 +139,13 @@ def describe(name, url, response):
             pass
     endpoint = safe_url(url) or "(URL hidden)"
     line = "| {} | {} | {} | {} | {} | {} | {} | {}/{}/{} |".format(
-        name, endpoint, response["status"] or "ERR", response["content_type"] or "-",
+        name, endpoint, response["status"] or ("ERR:" + (response.get("network_error") or "unknown")), response["content_type"] or "-",
         sh["records"], sh["records_with_poster"], ", ".join(sh["fields"]) or "-",
         cards.anchors, cards.images, cards.posterish)
     detail = {
         "name": name, "url": endpoint, "status": response["status"],
-        "content_type": response["content_type"], "objects": sh["objects"],
-        "records": sh["records"], "records_with_poster": sh["records_with_poster"],
+        "content_type": response["content_type"], "network_error": response.get("network_error", ""),
+        "objects": sh["objects"], "records": sh["records"], "records_with_poster": sh["records_with_poster"],
         "fields": sh["fields"], "html_anchors": cards.anchors,
         "html_images": cards.images, "html_posterish": cards.posterish,
     }
