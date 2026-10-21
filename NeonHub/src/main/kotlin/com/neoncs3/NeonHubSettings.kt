@@ -37,7 +37,6 @@ object NeonHubSettings {
     const val HUB_SOURCE_DIZIMAG = "neonhub_source_dizimag"
     const val HUB_SOURCE_HDFILMDIZI = "neonhub_source_hdfilmdizi"
     const val HUB_SOURCE_CANLI = "neonhub_source_canli"
-    const val HUB_SOURCE_GOLGETV = "neonhub_source_golgetv"
     const val HUB_SOURCE_TVDIZILER = "neonhub_source_tvdiziler"
     const val HUB_SOURCE_DDIZI = "neonhub_source_ddizi"
     const val HUB_SOURCE_DIZIBOXIZLE = "neonhub_source_diziboxizle"
@@ -74,7 +73,6 @@ object NeonHubSettings {
         Source(HUB_SOURCE_DIZIMAG, "DiziMag", "Film ve dizi kataloğu"),
         Source(HUB_SOURCE_HDFILMDIZI, "HDFilmDiziİzle", "HD film ve dizi kataloğu"),
         Source(HUB_SOURCE_CANLI, "Klubnichka Live (18+)", "Canlı yayın sağlayıcısı"),
-        Source(HUB_SOURCE_GOLGETV, "GölgeTV", "Film ve dizi kataloğu"),
         Source(HUB_SOURCE_TVDIZILER, "TVDiziler", "Yerli ve yabancı diziler"),
         Source(HUB_SOURCE_DDIZI, "DDizi", "Dizi kataloğu"),
         Source(HUB_SOURCE_DIZIBOXIZLE, "DiziBoxIzle", "Film ve dizi kataloğu"),
