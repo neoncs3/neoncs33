@@ -405,7 +405,25 @@ class GolgeTVProvider : MainAPI() {
         val feed = runCatching {
             app.get(liveChannelFeed, headers = headers(mainUrl)).text
         }.getOrNull().orEmpty()
-        val root = parseJson(feed)
+        val configRoot = parseJson(feed)
+
+        // The APK's config response can contain jsonurl pointing to the public
+        // channel-list JSON instead of containing channel records itself. Fetch
+        // that declared data URL directly; nonce/verify anti-bot flows are not used.
+        val configuredList = allObjects(configRoot)
+            .firstNotNullOfOrNull { it.string("jsonurl", "jsonUrl", "json_url", "channelsUrl", "channels_url") }
+            ?.let { absolute(it, liveChannelFeed) }
+            ?.takeUnless { isRestrictedControlEndpoint(it) }
+
+        val channelText = if (configuredList != null) {
+            runCatching { app.get(configuredList, headers = headers(mainUrl)).text }
+                .getOrNull()
+                ?.takeIf { it.isNotBlank() }
+                ?: feed
+        } else {
+            feed
+        }
+        val root = parseJson(channelText)
         val channels = allObjects(root).mapNotNull { obj ->
             // Actual fields used by the app's live-channel parser: title/image/sources/type/url.
             val title = obj.string("title", "name", "channelName", "channel_name")
