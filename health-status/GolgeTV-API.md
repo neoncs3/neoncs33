@@ -4,12 +4,12 @@ Bu rapor otomatik oluşturulur. Şifre, cookie, bearer token, tam yanıt gövdes
 
 | Test | Uç nokta | HTTP | İçerik türü | Kayıt | Afişli kayıt | Tanınan alanlar | HTML bağlantı/görsel/afiş |
 |---|---|---:|---|---:|---:|---|---:|
-| config | https://imgcom.site/panel/rec/recjson.php | ERR | - | 0 | 0 | - | 0/0/0 |
-| films | https://golgetv.com/filmapi.php | ERR | - | 0 | 0 | - | 0/0/0 |
-| series | https://golgetv.com/diziapi.php | ERR | - | 0 | 0 | - | 0/0/0 |
-| movie_search | https://golgetv.com/search.php | ERR | - | 0 | 0 | - | 0/0/0 |
-| series_search | https://golgetv.com/dizisearch.php | ERR | - | 0 | 0 | - | 0/0/0 |
-| homepage | https://golgetv.com/ | ERR | - | 0 | 0 | - | 0/0/0 |
+| config | https://imgcom.site/panel/rec/recjson.php | ERR:gaierror | - | 0 | 0 | - | 0/0/0 |
+| films | https://golgetv.com/filmapi.php | ERR:gaierror | - | 0 | 0 | - | 0/0/0 |
+| series | https://golgetv.com/diziapi.php | ERR:gaierror | - | 0 | 0 | - | 0/0/0 |
+| movie_search | https://golgetv.com/search.php | ERR:gaierror | - | 0 | 0 | - | 0/0/0 |
+| series_search | https://golgetv.com/dizisearch.php | ERR:gaierror | - | 0 | 0 | - | 0/0/0 |
+| homepage | https://golgetv.com/ | ERR:gaierror | - | 0 | 0 | - | 0/0/0 |
 | configured_channel_json | - | SKIP | - | 0 | 0 | public jsonurl yok | - |
 
 ## Yorumlama
