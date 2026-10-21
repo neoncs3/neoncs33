@@ -2,6 +2,9 @@ name: GölgeTV API Tanılama
 
 on:
   workflow_dispatch:
+  # Upstream yeniden açılırsa otomatik fark edebilmek için 6 saatte bir kontrol et.
+  schedule:
+    - cron: "23 */6 * * *"
   push:
     branches:
       - master
