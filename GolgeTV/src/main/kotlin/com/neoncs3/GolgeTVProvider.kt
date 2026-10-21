@@ -24,9 +24,16 @@ class GolgeTVProvider : MainAPI() {
     override val hasQuickSearch = false
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
+    private val liveCollectionData = "golgetv:live"
+    private val sportCollectionData = "golgetv:sport"
+    private val liveEpisodePrefix = "golgetv-live:"
+    private val liveChannelFeed = "https://imgcom.site/panel/rec/recjson.php"
+
     override val mainPage = mainPageOf(
         (mainUrl + "/filmapi.php") to "Filmler",
-        (mainUrl + "/diziapi.php") to "Diziler"
+        (mainUrl + "/diziapi.php") to "Diziler",
+        liveCollectionData to "Canlı Kanallar",
+        sportCollectionData to "Spor"
     )
 
     private enum class Kind { MOVIE, SERIES }
@@ -43,6 +50,14 @@ class GolgeTVProvider : MainAPI() {
     )
 
     private data class EpisodeItem(val title: String, val url: String)
+
+    private data class LiveChannel(
+        val title: String,
+        val urls: List<String>,
+        val poster: String?,
+        val category: String,
+        val type: String
+    )
 
     private val userAgent =
         "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 " +
@@ -78,8 +93,16 @@ class GolgeTVProvider : MainAPI() {
         return null
     }
 
-    private fun parseJson(text: String): Any? =
-        runCatching { JSONTokener(text.trim()).nextValue() }.getOrNull()
+    private fun parseJson(text: String): Any? {
+        val first = runCatching { JSONTokener(text.trim()).nextValue() }.getOrNull()
+        if (first is String) {
+            val nested = first.trim()
+            if (nested.startsWith("{") || nested.startsWith("[")) {
+                return runCatching { JSONTokener(nested).nextValue() }.getOrNull() ?: first
+            }
+        }
+        return first
+    }
 
     private fun collectObjects(value: Any?, out: MutableList<JSONObject>, depth: Int = 0) {
         if (depth > 9) return
@@ -143,8 +166,10 @@ class GolgeTVProvider : MainAPI() {
             ) return@mapNotNull null
 
             val posterRaw = obj.string(
-                "poster", "image", "filmImage", "film_img", "film_image",
-                "diziPoster", "dizi_poster", "thumbnail", "cover", "resim"
+                "poster", "image", "imageUrl", "image_url", "posterUrl", "poster_url",
+                "filmImage", "film_img", "film_image", "diziPoster", "dizi_poster",
+                "thumbnail", "thumbnailUrl", "thumbnail_url", "thumb_square",
+                "cover", "resim", "logo", "icon"
             )
             val desc = obj.string(
                 "description", "filmDescription", "film_description",
@@ -181,7 +206,48 @@ class GolgeTVProvider : MainAPI() {
         val url = mainUrl + "/" + path
         val responseText = runCatching { app.get(url, headers = headers(url)).text }.getOrNull()
             ?: return emptyList()
-        return parseCatalogue(responseText, kind, url)
+        val items = parseCatalogue(responseText, kind, url)
+        if (items.isEmpty()) return emptyList()
+
+        // Some API revisions only provide detailUrl/title in the catalogue response.
+        // For those few missing covers, read the page's standard OpenGraph/image metadata.
+        val needsPoster = items.filter { it.poster.isNullOrBlank() }.take(12)
+            .associateBy { it.detailUrl }
+        if (needsPoster.isEmpty()) return items
+
+        val resolved = needsPoster.mapValues { (_, item) ->
+            val html = runCatching {
+                app.get(item.detailUrl, headers = headers(item.detailUrl)).text
+            }.getOrNull().orEmpty()
+            posterFromHtml(html, item.detailUrl)
+        }
+        return items.map { item ->
+            if (item.poster.isNullOrBlank()) item.copy(poster = resolved[item.detailUrl]) else item
+        }
+    }
+
+    private fun posterFromHtml(html: String, pageUrl: String): String? {
+        if (html.isBlank()) return null
+        val doc = runCatching { org.jsoup.Jsoup.parse(html, pageUrl) }.getOrNull() ?: return null
+        val metaImage = doc.selectFirst(
+            "meta[property=og:image], meta[name=twitter:image], meta[property=og:image:secure_url]"
+        )?.attr("content")?.takeIf { it.isNotBlank() }
+        if (metaImage != null) return absolute(metaImage, pageUrl)
+
+        val image = doc.select("img").firstOrNull { element ->
+            val raw = element.attr("data-src").ifBlank {
+                element.attr("data-lazy-src").ifBlank { element.attr("src") }
+            }
+            raw.isNotBlank() && !raw.contains("avatar", true) &&
+                !raw.contains("sprite", true) && !raw.contains("placeholder", true)
+        } ?: return null
+
+        val raw = image.attr("data-src").ifBlank {
+            image.attr("data-lazy-src").ifBlank {
+                image.attr("data-original").ifBlank { image.attr("src") }
+            }
+        }
+        return absolute(raw, pageUrl)
     }
 
     private fun route(item: CatalogueItem): String {
@@ -247,10 +313,26 @@ class GolgeTVProvider : MainAPI() {
         }
     }
 
+    private fun collectionSearchResult(isSport: Boolean): SearchResponse =
+        newTvSeriesSearchResponse(
+            if (isSport) "GölgeTV Spor" else "GölgeTV Canlı",
+            if (isSport) sportCollectionData else liveCollectionData,
+            TvType.TvSeries
+        ) {
+            posterUrl = mainUrl + "/favicon.ico"
+        }
+
     override suspend fun getMainPage(
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
+        if (request.data == liveCollectionData) {
+            return newHomePageResponse(request.name, listOf(collectionSearchResult(false)), hasNext = false)
+        }
+        if (request.data == sportCollectionData) {
+            return newHomePageResponse(request.name, listOf(collectionSearchResult(true)), hasNext = false)
+        }
+
         val kind = if (request.data.contains("diziapi.php", true)) Kind.SERIES else Kind.MOVIE
         val items = catalogue(kind).map { searchResponse(it) }
         return newHomePageResponse(request.name, items, hasNext = false)
@@ -259,6 +341,12 @@ class GolgeTVProvider : MainAPI() {
     override suspend fun search(query: String): List<SearchResponse> {
         val value = query.trim()
         if (value.isBlank()) return emptyList()
+        if (value.contains("canlı", true) || value.contains("canli", true) ||
+            value.contains("kanal", true) || value.contains("live", true)
+        ) return listOf(collectionSearchResult(false))
+        if (value.contains("spor", true) || value.contains("sport", true) ||
+            value.contains("futbol", true) || value.contains("basket", true)
+        ) return listOf(collectionSearchResult(true))
 
         val remoteMovies = catalogue(Kind.MOVIE, value)
         val remoteSeries = catalogue(Kind.SERIES, value)
@@ -270,6 +358,154 @@ class GolgeTVProvider : MainAPI() {
         return allItems.filter { it.title.contains(value, ignoreCase = true) }
             .distinctBy { it.detailUrl }
             .map { searchResponse(it) }
+    }
+
+    private fun collectSourceUrls(value: Any?, base: String, depth: Int = 0): List<String> {
+        if (depth > 8 || value == null || value == JSONObject.NULL) return emptyList()
+        val found = linkedSetOf<String>()
+
+        when (value) {
+            is String -> {
+                val text = value.trim()
+                if (text.startsWith("[") || text.startsWith("{")) {
+                    val nested = parseJson(text)
+                    if (nested != null && nested !is String) found.addAll(collectSourceUrls(nested, base, depth + 1))
+                } else {
+                    absolute(text, base)?.let { if (!isRestrictedControlEndpoint(it)) found.add(it) }
+                }
+            }
+            is JSONArray -> {
+                for (i in 0 until value.length()) {
+                    found.addAll(collectSourceUrls(value.opt(i), base, depth + 1))
+                }
+            }
+            is JSONObject -> {
+                val directKeys = listOf(
+                    "url", "streamUrl", "stream_url", "link", "src", "file",
+                    "sourceUrl", "source_url", "playlistUrl", "playlist_url"
+                )
+                directKeys.forEach { key ->
+                    val child = value.opt(key)
+                    if (child != null && child != JSONObject.NULL) {
+                        found.addAll(collectSourceUrls(child, base, depth + 1))
+                    }
+                }
+                listOf("sources", "streams", "links", "urls", "items", "data").forEach { key ->
+                    val child = value.opt(key)
+                    if (child != null && child != JSONObject.NULL) {
+                        found.addAll(collectSourceUrls(child, base, depth + 1))
+                    }
+                }
+            }
+        }
+        return found.toList()
+    }
+
+    private suspend fun liveChannels(): List<LiveChannel> {
+        val feed = runCatching {
+            app.get(liveChannelFeed, headers = headers(liveChannelFeed)).text
+        }.getOrNull().orEmpty()
+        val root = parseJson(feed)
+        val channels = allObjects(root).mapNotNull { obj ->
+            // Actual fields used by the app's live-channel parser: title/image/sources/type/url.
+            val title = obj.string("title", "name", "channelName", "channel_name")
+                ?.trim()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+
+            val type = obj.string("type", "channelType", "channel_type").orEmpty()
+            val category = obj.string(
+                "category", "kategori", "group", "groupName", "group_name",
+                "categoryName", "category_name", "genre"
+            ).orEmpty()
+
+            val sources = linkedSetOf<String>()
+            sources.addAll(collectSourceUrls(obj.opt("sources"), liveChannelFeed))
+            val direct = obj.string(
+                "url", "streamUrl", "stream_url", "link", "stream", "sourceUrl", "source_url"
+            )?.let { absolute(it, liveChannelFeed) }
+            if (direct != null && !isRestrictedControlEndpoint(direct)) sources.add(direct)
+
+            val usable = sources.filter { it.startsWith("http", true) && !isRestrictedControlEndpoint(it) }
+            if (usable.isEmpty()) return@mapNotNull null
+
+            val rawPoster = obj.string(
+                "image", "imageUrl", "image_url", "poster", "posterUrl", "poster_url",
+                "logo", "icon", "resim", "thumb_square"
+            )
+            LiveChannel(
+                title = title,
+                urls = usable.distinct(),
+                poster = absolute(rawPoster, liveChannelFeed),
+                category = category,
+                type = type
+            )
+        }.distinctBy { it.title.lowercase() + "|" + it.urls.firstOrNull().orEmpty() }
+
+        if (channels.isNotEmpty()) return channels
+
+        // Fallback to visible channel cards, if a site revision moves the list to HTML.
+        val html = runCatching { app.get(mainUrl, headers = headers(mainUrl)).text }
+            .getOrNull().orEmpty()
+        if (html.isBlank()) return emptyList()
+        val doc = runCatching { org.jsoup.Jsoup.parse(html, mainUrl) }.getOrNull() ?: return emptyList()
+        return doc.select("a[href]").mapNotNull { anchor ->
+            val target = absolute(anchor.attr("href"), mainUrl) ?: return@mapNotNull null
+            if (!target.contains("/channel/", true) && !target.contains("live", true)) return@mapNotNull null
+            val image = anchor.selectFirst("img")
+            val title = anchor.attr("title").ifBlank {
+                image?.attr("alt").orEmpty().ifBlank { anchor.text() }
+            }.trim().ifBlank { return@mapNotNull null }
+            LiveChannel(
+                title = title,
+                urls = listOf(target),
+                poster = absolute(
+                    image?.attr("data-src")?.takeIf { it.isNotBlank() }
+                        ?: image?.attr("data-lazy-src")?.takeIf { it.isNotBlank() }
+                        ?: image?.attr("src"),
+                    mainUrl
+                ),
+                category = anchor.attr("data-category"),
+                type = anchor.attr("data-type")
+            )
+        }.distinctBy { it.title.lowercase() }
+    }
+
+    private fun isSportsChannel(channel: LiveChannel): Boolean {
+        val value = "${channel.title} ${channel.category} ${channel.type}".lowercase()
+        return listOf(
+            "spor", "sport", "futbol", "football", "basket", "tenis", "motor",
+            "formula", "eurosport", "beinsport", "bein sports", "s sport",
+            "aspor", "a spor", "trt spor", "maç", "mac ", "league", "liga"
+        ).any { value.contains(it) }
+    }
+
+    private fun encodeLiveEpisode(channel: LiveChannel): String {
+        val json = JSONObject()
+            .put("title", channel.title)
+            .put("sources", JSONArray(channel.urls))
+            .put("poster", channel.poster ?: "")
+            .toString()
+        val encoded = Base64.encodeToString(
+            json.toByteArray(Charsets.UTF_8),
+            Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+        )
+        return liveEpisodePrefix + encoded
+    }
+
+    private fun decodeLiveEpisode(value: String): List<String>? {
+        if (!value.startsWith(liveEpisodePrefix)) return null
+        val decoded = runCatching {
+            String(
+                Base64.decode(
+                    value.removePrefix(liveEpisodePrefix),
+                    Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+                ),
+                Charsets.UTF_8
+            )
+        }.getOrNull() ?: return emptyList()
+        val json = runCatching { JSONObject(decoded) }.getOrNull() ?: return emptyList()
+        return collectSourceUrls(json.opt("sources"), liveChannelFeed)
+            .filterNot { isRestrictedControlEndpoint(it) }
+            .distinct()
     }
 
     private fun allObjects(root: Any?): List<JSONObject> {
@@ -288,6 +524,29 @@ class GolgeTVProvider : MainAPI() {
         ).firstOrNull()
 
     override suspend fun load(url: String): LoadResponse {
+        if (url == liveCollectionData || url == sportCollectionData) {
+            val all = liveChannels()
+            val isSport = url == sportCollectionData
+            val channels = if (isSport) all.filter { isSportsChannel(it) } else all
+            val episodes = channels.mapIndexed { index, channel ->
+                newEpisode(encodeLiveEpisode(channel)) {
+                    name = channel.title
+                    season = 1
+                    this.episode = index + 1
+                    posterUrl = channel.poster
+                }
+            }
+            return newTvSeriesLoadResponse(
+                if (isSport) "GölgeTV Spor" else "GölgeTV Canlı",
+                if (isSport) mainUrl + "/#spor" else mainUrl + "/#canli",
+                TvType.TvSeries,
+                episodes
+            ) {
+                posterUrl = channels.firstOrNull()?.poster ?: mainUrl + "/favicon.ico"
+                plot = if (isSport) "Spor kategorisindeki yayınlar." else "Tüm canlı yayınlar tek bölüm listesinde."
+            }
+        }
+
         val item = routeItem(url)
             ?: CatalogueItem(Kind.MOVIE, "GölgeTV", absolute(url) ?: mainUrl)
 
@@ -315,7 +574,7 @@ class GolgeTVProvider : MainAPI() {
                 TvType.Movie,
                 streamOrPage
             ) {
-                posterUrl = absolute(detail.string("filmImg", "poster", "image"), item.detailUrl) ?: item.poster
+                posterUrl = absolute(detail.string("filmImg", "poster", "image", "imageUrl", "posterUrl", "thumb_square"), item.detailUrl) ?: item.poster
                 year = item.year
                 plot = detail.string("filmDescription", "description", "plot") ?: item.description
             }
@@ -352,7 +611,7 @@ class GolgeTVProvider : MainAPI() {
                     name = episode.title
                     season = 1
                     this.episode = index + 1
-                    posterUrl = absolute(detail.string("diziPoster", "poster", "image"), item.detailUrl) ?: item.poster
+                    posterUrl = absolute(detail.string("diziPoster", "poster", "image", "imageUrl", "posterUrl", "thumb_square"), item.detailUrl) ?: item.poster
                 }
             }
 
@@ -452,8 +711,9 @@ class GolgeTVProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val start = absolute(data, mainUrl) ?: return false
-        if (isRestrictedControlEndpoint(start)) return false
+        val starts = decodeLiveEpisode(data)
+            ?: listOfNotNull(absolute(data, mainUrl))
+        if (starts.isEmpty()) return false
 
         var emitted = false
         val visited = linkedSetOf<String>()
@@ -493,7 +753,11 @@ class GolgeTVProvider : MainAPI() {
             }
         }
 
-        walk(start, mainUrl, 0)
+        starts.forEach { start ->
+            if (!isRestrictedControlEndpoint(start)) {
+                walk(start, mainUrl, 0)
+            }
+        }
         return emitted
     }
 }
