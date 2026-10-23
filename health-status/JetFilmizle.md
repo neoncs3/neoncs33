@@ -2,13 +2,13 @@
 
 Kodda kayıtlı domain: https://jetfilmizle.now
 
-Son HTTP URL: https://jetfilmizle.now
+Son HTTP URL: https://jetfilmizle.app
 
 HTTP: ❌ 403
 
 Anti-bot engeli: evet
 
-Sayfa başlığı: Just a moment...
+Sayfa başlığı: Erişim engellendi
 
 Canlı medya ipucu: 0 media URL, 0 iframe
 
