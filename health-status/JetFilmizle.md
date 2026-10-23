@@ -2,13 +2,13 @@
 
 Kodda kayıtlı domain: https://jetfilmizle.now
 
-Son HTTP URL: https://jetfilmizle.now
+Son HTTP URL: https://jetfilmizle.app
 
-HTTP: ❌ 
+HTTP: ❌ 404
 
 Anti-bot engeli: hayır
 
-Sayfa başlığı: -
+Sayfa başlığı: 404 Not Found
 
 Canlı medya ipucu: 0 media URL, 0 iframe
 
@@ -26,5 +26,3 @@ Not: Bu rapor kaynak kodunun yapısını ve site HTTP erişimini ölçer; gerçe
 - TMDB playback yasağı: ✅
 
 Kaynak: JetFilmizle/src/main/kotlin/com/neoncs3/JetFilmizle.kt
-
-Hata: ConnectionError: ('Connection aborted.', ConnectionResetError(104, 'Connection reset by peer'))
