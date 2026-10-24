@@ -4,7 +4,7 @@
       "provider": "DiziDad • Tyson afişleri",
       "status": "FAIL",
       "query": null,
-      "item": "4 bölüm; bölüm posterUrl=4/4; Coil bölüm=4/4; ana sayfa posterUrl=0/0 (0/6 kategori); arama[Animal] posterUrl=27/27; Coil arama=4/4; filtre AvatarPoster=false; bozukBaşlık=0; Coil katalog=0/0",
+      "item": "4 bölüm; bölüm posterUrl=4/4; Coil bölüm=4/4; ana sayfa posterUrl=0/0 (0/6 kategori); arama[Animal] posterUrl=15/15; Coil arama=4/4; filtre AvatarPoster=false; bozukBaşlık=0; Coil katalog=0/0",
       "links": 8,
       "positionMs": 0,
       "error": "Filtre kontrolü başarısız: Avatar: Seven Havens afişi LoadResponse içinde yok. Yeterli ana sayfa kategorisi yüklenemedi: AsyaFilmİzle • Yeni Diziler: kart yok; AsyaFilmİzle • Kore Dizileri: kart yok; AsyaFilmİzle • Aksiyon: kart yok; AsyaFilmİzle • Bilim Kurgu: kart yok; AsyaFilmİzle • Fantastik: kart yok; AsyaFilmİzle • Gerilim: kart yok."
@@ -15,7 +15,7 @@
       "query": null,
       "item": "DiziBoxizle",
       "links": 7,
-      "positionMs": 3499,
+      "positionMs": 2980,
       "error": null
     },
     {
@@ -33,7 +33,7 @@
       "query": null,
       "item": "Dizimag • Below S1E1",
       "links": 1,
-      "positionMs": 3088,
+      "positionMs": 3150,
       "error": null
     },
     {
@@ -42,7 +42,7 @@
       "query": null,
       "item": "Dizimag • Below S1E2",
       "links": 1,
-      "positionMs": 3048,
+      "positionMs": 2909,
       "error": null
     },
     {
@@ -51,7 +51,7 @@
       "query": null,
       "item": "Dizimag • Below S1E3",
       "links": 1,
-      "positionMs": 3099,
+      "positionMs": 3036,
       "error": null
     },
     {
@@ -60,7 +60,7 @@
       "query": null,
       "item": "Dizimag • Below S1E6",
       "links": 1,
-      "positionMs": 2886,
+      "positionMs": 3111,
       "error": null
     },
     {
@@ -87,7 +87,7 @@
       "query": null,
       "item": "TvDiziler • Tuzlu Kahve 7",
       "links": 1,
-      "positionMs": 3324,
+      "positionMs": 2972,
       "error": null
     },
     {
