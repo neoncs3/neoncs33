@@ -4,28 +4,28 @@
       "provider": "DiziDad • Tyson afişleri",
       "status": "FAIL",
       "query": null,
-      "item": "4 bölüm; bölüm posterUrl=4/4; Coil bölüm=4/4; ana sayfa posterUrl=0/0 (0/6 kategori); arama[Animal] posterUrl=27/27; Coil arama=4/4; filtre AvatarPoster=false; bozukBaşlık=0; Coil katalog=0/0",
-      "links": 8,
+      "item": "0 bölüm",
+      "links": 0,
       "positionMs": 0,
-      "error": "Filtre kontrolü başarısız: Avatar: Seven Havens afişi LoadResponse içinde yok. Yeterli ana sayfa kategorisi yüklenemedi: AsyaFilmİzle • Yeni Diziler: kart yok; AsyaFilmİzle • Kore Dizileri: kart yok; AsyaFilmİzle • Aksiyon: kart yok; AsyaFilmİzle • Bilim Kurgu: kart yok; AsyaFilmİzle • Fantastik: kart yok; AsyaFilmİzle • Gerilim: kart yok."
+      "error": "Dizi yükleniyor ama bölüm listesi boş"
     },
     {
       "provider": "DiziBoxizle",
-      "status": "PASS",
-      "query": null,
-      "item": "DiziBoxizle",
-      "links": 7,
-      "positionMs": 2844,
-      "error": null
+      "status": "BLOCKED",
+      "query": "Breaking Bad",
+      "item": "El Camino: A Breaking Bad Movie",
+      "links": 6,
+      "positionMs": 0,
+      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403. Aday denemeleri: Breaking Bad: El Camino: A Breaking Bad Movie -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403); Breaking Bad: El Camino: A Breaking Bad Movie -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403); Breaking Bad: El Camino: A Breaking Bad Movie -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403); Breaking Bad: El Camino: A Breaking Bad Movie -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403); Breaking Bad: El Camino: A Breaking Bad Movie -> oynatma başarısız (ExoP"
     },
     {
       "provider": "HDFilmDiziizle • Tron",
-      "status": "BLOCKED",
+      "status": "PASS",
       "query": "Tron",
-      "item": "I've Somehow Gotten Stronger When I Improved My Farm-Related Skills.",
+      "item": "Tron: Ares",
       "links": 1,
-      "positionMs": 0,
-      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403. Aday denemeleri: doğrudan: HDFilmDiziizle • Tron -> bağlantı yok (loadLinks=false); Tron: A Girl and an Astronaut -> bağlantı yok (loadLinks=false); Tron: Elektronik Sigara Efsanesi: Juul'un Yükselişi ve Düşüşü -> bağlantı yok (loadLinks=false); Tron: I've Somehow Gotten Stronger When I Improved My Farm-Related Skills. -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403)"
+      "positionMs": 3050,
+      "error": null
     },
     {
       "provider": "Dizimag • Below S1E1",
@@ -33,7 +33,7 @@
       "query": null,
       "item": "Dizimag • Below S1E1",
       "links": 1,
-      "positionMs": 3299,
+      "positionMs": 2970,
       "error": null
     },
     {
@@ -42,7 +42,7 @@
       "query": null,
       "item": "Dizimag • Below S1E2",
       "links": 1,
-      "positionMs": 3299,
+      "positionMs": 2862,
       "error": null
     },
     {
@@ -51,7 +51,7 @@
       "query": null,
       "item": "Dizimag • Below S1E3",
       "links": 1,
-      "positionMs": 2947,
+      "positionMs": 2696,
       "error": null
     },
     {
@@ -60,7 +60,7 @@
       "query": null,
       "item": "Dizimag • Below S1E6",
       "links": 1,
-      "positionMs": 3093,
+      "positionMs": 2799,
       "error": null
     },
     {
@@ -87,7 +87,7 @@
       "query": null,
       "item": "TvDiziler • Tuzlu Kahve 7",
       "links": 1,
-      "positionMs": 3282,
+      "positionMs": 2956,
       "error": null
     },
     {
