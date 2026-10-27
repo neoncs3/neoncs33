@@ -4,19 +4,19 @@
       "provider": "DiziDad • Tyson afişleri",
       "status": "FAIL",
       "query": null,
-      "item": "0 bölüm",
+      "item": "https://www.dizidad.com/diziler/tyson-izle/",
       "links": 0,
       "positionMs": 0,
-      "error": "Dizi yükleniyor ama bölüm listesi boş"
+      "error": "Dizi sayfası TvSeriesLoadResponse döndürmedi; tür=null"
     },
     {
       "provider": "DiziBoxizle",
-      "status": "BLOCKED",
-      "query": "Breaking Bad",
-      "item": "El Camino: A Breaking Bad Movie",
-      "links": 6,
-      "positionMs": 0,
-      "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403. Aday denemeleri: Breaking Bad: El Camino: A Breaking Bad Movie -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403); Breaking Bad: El Camino: A Breaking Bad Movie -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403); Breaking Bad: El Camino: A Breaking Bad Movie -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403); Breaking Bad: El Camino: A Breaking Bad Movie -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403); Breaking Bad: El Camino: A Breaking Bad Movie -> oynatma başarısız (ExoP"
+      "status": "PASS",
+      "query": null,
+      "item": "DiziBoxizle",
+      "links": 7,
+      "positionMs": 3183,
+      "error": null
     },
     {
       "provider": "HDFilmDiziizle • Tron",
@@ -24,7 +24,7 @@
       "query": "Tron",
       "item": "Tron: Ares",
       "links": 1,
-      "positionMs": 3050,
+      "positionMs": 3248,
       "error": null
     },
     {
@@ -33,7 +33,7 @@
       "query": null,
       "item": "Dizimag • Below S1E1",
       "links": 1,
-      "positionMs": 2970,
+      "positionMs": 3201,
       "error": null
     },
     {
@@ -42,7 +42,7 @@
       "query": null,
       "item": "Dizimag • Below S1E2",
       "links": 1,
-      "positionMs": 2862,
+      "positionMs": 2617,
       "error": null
     },
     {
@@ -51,7 +51,7 @@
       "query": null,
       "item": "Dizimag • Below S1E3",
       "links": 1,
-      "positionMs": 2696,
+      "positionMs": 3095,
       "error": null
     },
     {
@@ -60,7 +60,7 @@
       "query": null,
       "item": "Dizimag • Below S1E6",
       "links": 1,
-      "positionMs": 2799,
+      "positionMs": 3062,
       "error": null
     },
     {
@@ -87,7 +87,7 @@
       "query": null,
       "item": "TvDiziler • Tuzlu Kahve 7",
       "links": 1,
-      "positionMs": 2956,
+      "positionMs": 3409,
       "error": null
     },
     {
@@ -109,7 +109,7 @@
       "error": "Gerçek video bağlantısı bulunamadı. Aday denemeleri: doğrudan: TvDiziler • Haysiyet 6 -> bağlantı yok (Gerçek video bağlantısı bulunamadı)"
     }
   ],
-  "pass": 6,
-  "blocked": 3,
+  "pass": 7,
+  "blocked": 2,
   "fail": 3
 }
