@@ -50,6 +50,118 @@ class AutoDaddyliveApp : NeonMainAPI() {
                 !uri.host.isNullOrBlank()
         }.getOrDefault(false)
 
+
+    private fun liveEmbedUrl(raw: String, baseUrl: String = mainUrl): String? {
+        val normalized = normalize(raw, baseUrl)
+        val uri = runCatching { URI(normalized) }.getOrNull() ?: return null
+        if (!uri.scheme.equals("https", true) && !uri.scheme.equals("http", true)) return null
+        if (siteHost(normalized) != siteHost(mainUrl)) return null
+        if (!uri.path.equals("/player/embed.php", ignoreCase = true)) return null
+        if (uri.rawQuery.isNullOrBlank()) return null
+        return normalized
+    }
+
+    private fun withLiveTitle(url: String, title: String): String {
+        val separator = if (url.contains("?")) "&" else "?"
+        return url + separator + "neon_title=" + URLEncoder.encode(title, "UTF-8")
+    }
+
+    private fun liveTitleFromUrl(raw: String): String? {
+        val query = runCatching { URI(raw).rawQuery }.getOrNull() ?: return null
+        val encoded = query.split("&").firstOrNull { it.substringBefore("=").equals("neon_title", true) }
+            ?.substringAfter("=", "") ?: return null
+        return runCatching { java.net.URLDecoder.decode(encoded, "UTF-8") }
+            .getOrNull()?.takeIf { it.isNotBlank() }
+    }
+
+    private fun cleanLiveDataUrl(raw: String): String {
+        val uri = runCatching { URI(raw) }.getOrNull() ?: return raw
+        val query = uri.rawQuery.orEmpty().split("&")
+            .filter { it.isNotBlank() && !it.substringBefore("=").equals("neon_title", true) }
+            .joinToString("&").ifBlank { null }
+        return runCatching {
+            URI(uri.scheme, uri.rawAuthority, uri.path, query, uri.rawFragment).toString()
+        }.getOrDefault(raw)
+    }
+
+    private suspend fun liveEventHomePages(): List<HomePageList> {
+        val endpoint = mainUrl.trimEnd('/') + "/api/events"
+        val body = runCatching {
+            app.get(endpoint, headers = headers(endpoint), timeout = 12_000L)
+                .takeIf { it.isSuccessful }?.text
+        }.getOrNull().orEmpty()
+        if (body.isBlank()) {
+            Log.w(name.uppercase().take(23), "live events API returned an empty response")
+            return emptyList()
+        }
+
+        val categories = runCatching { JSONObject(body).optJSONObject("categories") }.getOrNull()
+            ?: run {
+                Log.w(name.uppercase().take(23), "live events API has no categories object")
+                return emptyList()
+            }
+
+        val pages = ArrayList<HomePageList>()
+        val categoryKeys = categories.keys()
+        while (categoryKeys.hasNext()) {
+            val categoryName = categoryKeys.next().trim()
+            if (categoryName.isBlank()) continue
+            val events = categories.optJSONArray(categoryName) ?: continue
+            val items = ArrayList<SearchResponse>()
+            val seenUrls = HashSet<String>()
+
+            for (eventIndex in 0 until events.length()) {
+                val event = events.optJSONObject(eventIndex) ?: continue
+                val eventName = event.optString("event").trim()
+                if (eventName.isBlank() || eventName.equals("null", true)) continue
+                val time = event.optString("time").trim()
+                val channels = event.optJSONArray("channels") ?: continue
+
+                for (channelIndex in 0 until channels.length()) {
+                    val channel = channels.optJSONObject(channelIndex) ?: continue
+                    val rawUrl = channel.optString("url").trim()
+                    val embedUrl = liveEmbedUrl(rawUrl) ?: continue
+                    val displayChannel = channel.optString("channel_name").trim()
+                        .takeIf { it.isNotBlank() && !it.equals("null", true) }
+                        ?: "Yayın ${channelIndex + 1}"
+                    val displayTitle = buildString {
+                        if (time.isNotBlank() && !time.equals("null", true)) {
+                            append(time).append(" · ")
+                        }
+                        append(eventName)
+                        if (channels.length() > 1) append(" · ").append(displayChannel)
+                    }
+                    val taggedUrl = withLiveTitle(embedUrl, displayTitle)
+                    if (!seenUrls.add(taggedUrl)) continue
+
+                    val poster = sequenceOf("logo_url", "logo", "poster", "image")
+                        .map { channel.optString(it).trim() }
+                        .firstOrNull { it.isNotBlank() && !it.equals("null", true) }
+                        ?.let { normalize(it, mainUrl) }
+                        ?.takeIf { isValidHttpUrl(it) }
+
+                    items += newLiveSearchResponse(
+                        name = displayTitle,
+                        url = taggedUrl,
+                        type = TvType.Live,
+                        fix = false,
+                    ) {
+                        posterUrl = poster
+                        posterHeaders = poster?.let { headers(mainUrl + "/") }
+                    }
+                }
+            }
+
+            if (items.isNotEmpty()) {
+                pages += HomePageList(categoryName, items)
+                Log.d(name.uppercase().take(23), "live category '$categoryName' items=${items.size}")
+            }
+        }
+
+        Log.d(name.uppercase().take(23), "live events API categories=${pages.size}; items=${pages.sumOf { it.list.size }}")
+        return pages
+    }
+
     private fun isSiteUrl(url: String): Boolean =
         (url.startsWith("http://", true) || url.startsWith("https://", true)) &&
             siteHost(url) == siteHost(mainUrl)
@@ -518,6 +630,13 @@ class AutoDaddyliveApp : NeonMainAPI() {
         page: Int,
         request: MainPageRequest,
     ): HomePageResponse {
+        if (page <= 1) {
+            val livePages = liveEventHomePages()
+            if (livePages.isNotEmpty()) {
+                return newHomePageResponse(livePages, hasNext = false)
+            }
+        }
+
         val base = request.data
         val candidates = if (page <= 1) listOf(base) else listOf(
             base.trimEnd('/') + "/page/" + page + "/",
@@ -776,6 +895,13 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
     override suspend fun load(url: String): LoadResponse? {
         val normalizedUrl = normalize(url)
+        val embedUrl = liveEmbedUrl(cleanLiveDataUrl(normalizedUrl))
+        val liveTitle = liveTitleFromUrl(normalizedUrl)
+        if (embedUrl != null && liveTitle != null) {
+            val cleanUrl = cleanLiveDataUrl(embedUrl)
+            return newLiveStreamLoadResponse(liveTitle, cleanUrl, cleanUrl)
+        }
+
         val document = runCatching {
             app.get(normalizedUrl, headers = headers(normalizedUrl), timeout = 15_000L).document
         }.getOrNull() ?: return null
