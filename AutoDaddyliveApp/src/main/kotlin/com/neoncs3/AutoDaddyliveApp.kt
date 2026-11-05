@@ -20,13 +20,11 @@ class AutoDaddyliveApp : NeonMainAPI() {
     override var sequentialMainPage = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Live)
 
-    // Kanal listesi kaynakları
     private val channelApiUrls = listOf(
         "https://daddylive.app/player/player5.json",
         "https://daddylive.app/player/player10.json",
     )
 
-    // Her grupta kaç kanal gösterilsin
     private val channelsPerPage = 50
 
     private val playerUserAgent =
@@ -53,9 +51,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
                 !uri.host.isNullOrBlank()
         }.getOrDefault(false)
 
-    // ------------------------------------------------------------------
-    // Tek bir JSON URL'sini indirip kanal listesine çeviren yardımcı
-    // ------------------------------------------------------------------
     private suspend fun parseChannelsFromUrl(apiUrl: String): List<SearchResponse> {
         val body = runCatching {
             app.get(
@@ -120,9 +115,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
         return items
     }
 
-    // ------------------------------------------------------------------
-    // İki API'yi birleştirip kanal listesi döndüren fonksiyon
-    // ------------------------------------------------------------------
     private suspend fun loadChannelsFromApis(): List<SearchResponse> {
         val combined = ArrayList<SearchResponse>()
         val seenKeys = HashSet<String>()
@@ -138,9 +130,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
         return combined
     }
 
-    // ------------------------------------------------------------------
-    // Oynatma linkini doğrudan döndüren yardımcı (dinamik Referer/Origin)
-    // ------------------------------------------------------------------
     private fun emitDirectLiveLink(
         streamUrl: String,
         callback: (ExtractorLink) -> Unit,
@@ -172,7 +161,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
     // ------------------------------------------------------------------
     // tvnow247.top embed sayfalarını çözen fonksiyon
-    // Yeni API yanıtı doğrudan m3u8 ve referer döndürüyor.
+    // KRİTİK DÜZELTME: Origin -> https://dembed.st
     // ------------------------------------------------------------------
     private suspend fun resolveTvNow247(
         embedUrl: String,
@@ -180,7 +169,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
     ): Boolean {
         Log.d(name.uppercase().take(23), "tvnow247 çözümleniyor: $embedUrl")
 
-        // 1. Embed sayfasını çek
         val embedResponse = runCatching {
             app.get(
                 embedUrl,
@@ -199,7 +187,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
             return false
         }
 
-        // 2. channelId'yi bul
         val channelId = sequenceOf(
             Regex("""channelId\s*[:=]\s*["']?(\d+)["']?""").find(pageHtml)?.groupValues?.getOrNull(1),
             Regex("""channel_id\s*[:=]\s*["']?(\d+)["']?""").find(pageHtml)?.groupValues?.getOrNull(1),
@@ -215,7 +202,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
             return false
         }
 
-        // 3. src değerini bul
         val src = sequenceOf(
             Regex("""src\s*[:=]\s*["'](plus|tv\d*|dl|main|alt)["']""").find(pageHtml)?.groupValues?.getOrNull(1),
             Regex("""[?&]src=(\w+)""").find(pageHtml)?.groupValues?.getOrNull(1),
@@ -224,7 +210,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
             ) "plus" else null,
         ).filterNotNull().firstOrNull() ?: "plus"
 
-        // 4. API host'unu bul
         val apiHost = sequenceOf(
             Regex("""["'](https?://chat\.[a-z0-9.-]+)["']""")
                 .find(pageHtml)?.groupValues?.getOrNull(1),
@@ -237,7 +222,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
             "tvnow247: channelId=$channelId src=$src apiHost=$apiHost"
         )
 
-        // 5. resolve-dlstream API'sini çağır
         val resolveUrl = "${apiHost.trimEnd('/')}/api/resolve-dlstream/$channelId?src=$src"
         val resolveBody = runCatching {
             app.get(
@@ -257,7 +241,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
             return false
         }
 
-        // 6. Yanıttan m3u8 ve referer'ı al
         val json = runCatching { JSONObject(resolveBody) }.getOrNull()
         val m3u8Url = json?.optString("m3u8")?.trim()
             ?.takeIf { it.isNotBlank() && it != "null" }
@@ -277,10 +260,11 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
         Log.d(name.uppercase().take(23), "tvnow247: m3u8=$m3u8Url referer=$streamReferer")
 
-        // 7. Genişletilmiş başlıklarla oynatıcıya ilet
+        // KRİTİK: Origin -> https://dembed.st
+        // Segment istekleri bu değeri bekliyor; aksi halde 403 alınır ve 3001 hatası oluşur.
         val outHeaders = mapOf(
             "Referer" to streamReferer,
-            "Origin" to "https://tvnow247.top",
+            "Origin" to "https://dembed.st",
             "User-Agent" to playerUserAgent,
             "Accept" to "*/*",
             "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
@@ -322,7 +306,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
         return newHomePageResponse(request.name, results, hasNext = false)
     }
 
-    // ---- Aşağıdaki fonksiyonlar önceki sürümden aynen korunmuştur ----
+    // ---- Yardımcı fonksiyonlar ----
 
     private fun isSiteUrl(url: String): Boolean =
         (url.startsWith("http://", true) || url.startsWith("https://", true)) &&
@@ -427,9 +411,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
             val tag = current.tagName().lowercase()
             if (tag == "nav" || tag == "footer" ||
                 current.attr("role").equals("navigation", ignoreCase = true)
-            ) {
-                return true
-            }
+            ) return true
 
             val hint = normalizedFilterText(current.id() + " " + current.className())
             val nonCatalogMarkers = listOf(
@@ -466,9 +448,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
         val label = normalizedFilterText(title)
         if (label in navigationOnlyLabels ||
             utilityLabelPrefixes.any { label == it || label.startsWith("$it ") }
-        ) {
-            return true
-        }
+        ) return true
 
         val uri = runCatching { URI(url) }.getOrNull() ?: return true
         val rawSegments = uri.path.orEmpty().split("/").filter { it.isNotBlank() }
@@ -518,9 +498,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
     private fun isValidPosterUrl(url: String): Boolean {
         if (isFlagOrIconAsset(url)) return false
-        if (!url.startsWith("https://", true) && !url.startsWith("http://", true)) {
-            return false
-        }
+        if (!url.startsWith("https://", true) && !url.startsWith("http://", true)) return false
         val uri = runCatching { URI(url) }.getOrNull() ?: return false
         val path = uri.path.orEmpty().lowercase()
         val file = path.substringAfterLast('/')
@@ -544,12 +522,9 @@ class AutoDaddyliveApp : NeonMainAPI() {
     }
 
     private fun isNonContentAnchor(anchor: Element, baseUrl: String): Boolean {
-        if (anchor.classNames().any { it.equals("alphabetical-category-link", ignoreCase = true) }) {
-            return true
-        }
+        if (anchor.classNames().any { it.equals("alphabetical-category-link", ignoreCase = true) }) return true
         val rawHref = anchor.attr("href").trim()
         if (rawHref.startsWith("#")) return true
-
         val target = runCatching { URI(normalize(rawHref, baseUrl)) }.getOrNull() ?: return false
         val base = runCatching { URI(normalize(baseUrl)) }.getOrNull() ?: return false
         return !target.rawFragment.isNullOrBlank() &&
@@ -812,20 +787,17 @@ class AutoDaddyliveApp : NeonMainAPI() {
         val normalized = data.trim()
         if (normalized.isBlank()) return false
 
-        // 1. Doğrudan medya akışıysa ilet
         if (neonIsMediaUrl(normalized)) {
             emitDirectLiveLink(normalized, callback)
             return true
         }
 
-        // 2. tvnow247.top embed sayfaları için özel çözümleme
         if (normalized.contains("tvnow247.top/embed/", ignoreCase = true)) {
             val resolved = resolveTvNow247(normalized, callback)
             if (resolved) return true
             Log.w(name.uppercase().take(23), "tvnow247 çözümlenemedi, genel çözümlemeye düşülüyor")
         }
 
-        // 3. Genel çözümleme
         val document = neonCachedDocument(normalized, normalized)
             ?: runCatching {
                 app.get(
