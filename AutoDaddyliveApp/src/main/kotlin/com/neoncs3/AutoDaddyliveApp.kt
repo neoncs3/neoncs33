@@ -2,7 +2,6 @@ package com.neoncs3
 
 import android.util.Log
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.*
 import org.json.JSONArray
@@ -21,17 +20,17 @@ class AutoDaddyliveApp : NeonMainAPI() {
     override var sequentialMainPage = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Live)
 
-    // İki ayrı JSON kaynağı; ikisi de taranır, sonuçlar birleştirilir.
+    // Kanal listesi kaynakları (M3U tamamen kaldırıldı)
     private val channelApiUrls = listOf(
         "https://daddylive.app/player/player5.json",
         "https://daddylive.app/player/player10.json",
     )
 
-    // Her grup kaç kanal içersin
+    // Her grupta kaç kanal gösterilsin
     private val channelsPerPage = 50
 
     private val playerUserAgent =
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
 
     override val mainPage = mainPageOf(
         "https://daddylive.app/" to "Ana Sayfa"
@@ -126,10 +125,12 @@ class AutoDaddyliveApp : NeonMainAPI() {
     // ------------------------------------------------------------------
     private suspend fun loadChannelsFromApis(): List<SearchResponse> {
         val combined = ArrayList<SearchResponse>()
-        val seenNames = HashSet<String>()
+        val seenKeys = HashSet<String>()
         for (apiUrl in channelApiUrls) {
             for (item in parseChannelsFromUrl(apiUrl)) {
-                if (seenNames.add(item.name.trim().lowercase())) {
+                // Aynı isim + URL kombinasyonu iki kaynakta da varsa tekilleştir
+                val key = item.name.trim().lowercase() + "|" + item.url.trim()
+                if (seenKeys.add(key)) {
                     combined += item
                 }
             }
@@ -139,8 +140,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
     }
 
     // ------------------------------------------------------------------
-    // Oynatma linkini doğrudan döndüren yardımcı
-    // Referer/Origin, akışın kendi hostuna göre dinamik üretilir.
+    // Oynatma linkini doğrudan döndüren yardımcı (dinamik Referer/Origin)
     // ------------------------------------------------------------------
     private fun emitDirectLiveLink(
         streamUrl: String,
@@ -169,6 +169,147 @@ class AutoDaddyliveApp : NeonMainAPI() {
                 type = ExtractorLinkType.M3U8,
             )
         )
+    }
+
+    // ------------------------------------------------------------------
+    // tvnow247.top embed sayfalarını çözen fonksiyon
+    // İki adımlı API: resolve-dlstream -> proxy/playlist
+    // ------------------------------------------------------------------
+    private suspend fun resolveTvNow247(
+        embedUrl: String,
+        callback: (ExtractorLink) -> Unit,
+    ): Boolean {
+        Log.d(name.uppercase().take(23), "tvnow247 çözümleniyor: $embedUrl")
+
+        // 1. Embed sayfasını çek
+        val embedResponse = runCatching {
+            app.get(
+                embedUrl,
+                headers = mapOf(
+                    "Referer" to "https://tvnow247.top/",
+                    "Origin" to "https://tvnow247.top",
+                    "User-Agent" to playerUserAgent,
+                ),
+                timeout = 15_000L,
+            )
+        }.getOrNull() ?: return false
+
+        val pageHtml = embedResponse.text
+        if (pageHtml.isBlank()) {
+            Log.w(name.uppercase().take(23), "tvnow247 embed sayfası boş")
+            return false
+        }
+
+        // 2. channelId'yi bul
+        val channelId = sequenceOf(
+            Regex("""channelId\s*[:=]\s*["']?(\d+)["']?""").find(pageHtml)?.groupValues?.getOrNull(1),
+            Regex("""channel_id\s*[:=]\s*["']?(\d+)["']?""").find(pageHtml)?.groupValues?.getOrNull(1),
+            Regex("""streamId\s*[:=]\s*["']?(\d+)["']?""").find(pageHtml)?.groupValues?.getOrNull(1),
+            Regex("""stream_id\s*[:=]\s*["']?(\d+)["']?""").find(pageHtml)?.groupValues?.getOrNull(1),
+            Regex("""/resolve-dlstream/(\d+)""").find(pageHtml)?.groupValues?.getOrNull(1),
+            Regex("""data-(?:channel|stream)-id=["'](\d+)["']""").find(pageHtml)?.groupValues?.getOrNull(1),
+            Regex("""(\d+)$""").find(embedUrl)?.groupValues?.getOrNull(1),
+        ).filterNotNull().firstOrNull()
+
+        if (channelId.isNullOrBlank()) {
+            Log.w(name.uppercase().take(23), "tvnow247: channelId bulunamadı")
+            return false
+        }
+
+        // 3. src değerini bul
+        val src = sequenceOf(
+            Regex("""src\s*[:=]\s*["'](plus|tv\d*|dl|main|alt)["']""").find(pageHtml)?.groupValues?.getOrNull(1),
+            Regex("""[?&]src=(\w+)""").find(pageHtml)?.groupValues?.getOrNull(1),
+            if (embedUrl.contains("-plus-", ignoreCase = true) ||
+                embedUrl.contains("/plus-", ignoreCase = true)
+            ) "plus" else null,
+        ).filterNotNull().firstOrNull() ?: "plus"
+
+        // 4. API host'unu bul
+        val apiHost = sequenceOf(
+            Regex("""["'](https?://chat\.[a-z0-9.-]+)["']""")
+                .find(pageHtml)?.groupValues?.getOrNull(1),
+            Regex("""(https?://[a-z0-9.-]*cfbu[a-z0-9.-]*)""")
+                .find(pageHtml)?.groupValues?.getOrNull(1),
+        ).filterNotNull().firstOrNull() ?: "https://chat.cfbu247.sbs"
+
+        Log.d(
+            name.uppercase().take(23),
+            "tvnow247: channelId=$channelId src=$src apiHost=$apiHost"
+        )
+
+        // 5. resolve-dlstream API'sini çağırarak token al
+        val resolveUrl = "${apiHost.trimEnd('/')}/api/resolve-dlstream/$channelId?src=$src"
+        val resolveBody = runCatching {
+            app.get(
+                resolveUrl,
+                headers = mapOf(
+                    "Referer" to "https://tvnow247.top/",
+                    "Origin" to "https://tvnow247.top",
+                    "User-Agent" to playerUserAgent,
+                    "Accept" to "application/json, text/plain, */*",
+                ),
+                timeout = 15_000L,
+            ).takeIf { it.isSuccessful }?.text
+        }.getOrNull().orEmpty()
+
+        if (resolveBody.isBlank()) {
+            Log.w(name.uppercase().take(23), "tvnow247: resolve-dlstream boş yanıt")
+            return false
+        }
+
+        // 6. Token'ı JSON yanıtından al
+        val token = runCatching {
+            val json = JSONObject(resolveBody)
+            sequenceOf(
+                json.optString("token"),
+                json.optString("dlstream"),
+                json.optJSONObject("data")?.optString("token"),
+            ).map { it.trim() }
+                .firstOrNull { it.isNotBlank() && it != "null" }
+        }.getOrNull()
+
+        if (token.isNullOrBlank()) {
+            Log.w(
+                name.uppercase().take(23),
+                "tvnow247: token bulunamadı. Yanıt: ${resolveBody.take(300)}"
+            )
+            return false
+        }
+
+        // 7. Playlist URL'sini oluştur
+        val playlistHost = sequenceOf(
+            runCatching { JSONObject(resolveBody).optString("proxy") }.getOrNull(),
+            runCatching { JSONObject(resolveBody).optString("host") }.getOrNull(),
+            Regex("""["'](https?://chunk\.[a-z0-9.-]+)["']""")
+                .find(pageHtml)?.groupValues?.getOrNull(1),
+        ).mapNotNull { it?.trim() }
+            .firstOrNull { it.isNotBlank() && it.startsWith("http") }
+            ?: "https://chunk.tvnow247.today"
+
+        val playlistUrl = if (token.startsWith("http")) token
+        else "${playlistHost.trimEnd('/')}/api/proxy/playlist?token=$token"
+
+        Log.d(name.uppercase().take(23), "tvnow247: playlist=$playlistUrl")
+
+        // 8. Oynatıcıya ilet
+        val outHeaders = mapOf(
+            "Referer" to "https://tvnow247.top/",
+            "Origin" to "https://tvnow247.top",
+            "User-Agent" to playerUserAgent,
+        )
+        callback(
+            ExtractorLink(
+                source = name,
+                name = name,
+                url = playlistUrl,
+                referer = "https://tvnow247.top/",
+                quality = Qualities.Unknown.value,
+                headers = outHeaders,
+                type = ExtractorLinkType.M3U8,
+            )
+        )
+        return true
     }
 
     override suspend fun getMainPage(
@@ -201,14 +342,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
         (url.startsWith("http://", true) || url.startsWith("https://", true)) &&
             siteHost(url) == siteHost(mainUrl)
 
-    private fun isBrokenSiteMediaUrl(raw: String): Boolean {
-        val uri = runCatching { URI(raw) }.getOrNull() ?: return false
-        if (siteHost(raw) != siteHost(mainUrl)) return false
-        val path = uri.path.orEmpty().trimEnd('/')
-        return path.equals("/manifest.webm", ignoreCase = true) ||
-            Regex("""(?i)^/cdn/[^/]+/s\d{1,2}e\d{1,3}/master\.m3u8$""").matches(path)
-    }
-
     private fun normalize(raw: String, base: String = mainUrl): String =
         neonNormalizeUrl(raw, base)
 
@@ -237,35 +370,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
         }.getOrDefault("")
         return isYouTubePageUrl(link.url) || host == "googlevideo.com" ||
             host.endsWith(".googlevideo.com")
-    }
-
-    private fun playerUrlsFromText(raw: String, baseUrl: String): List<String> {
-        val text = raw
-            .replace("\\/", "/")
-            .replace("\\u0026", "&")
-            .replace("&#x2F;", "/")
-            .replace("&amp;", "&")
-        val values = LinkedHashSet<String>()
-        neonExtractMediaUrls(text).forEach(values::add)
-
-        val namedValuePattern = Regex(
-            """(?is)["']?(?:src|file|file_url|source|source_url|url|embed|embed_url|iframe|iframe_url|video_url|video_src|videoUrl|play_url|player_url|playerUrl|hls|hls_url|playlist|stream|stream_url|media_url|manifest)["']?\s*[:=]\s*["']([^"'<>\s]+)["']"""
-        )
-        namedValuePattern.findAll(text).forEach { values.add(it.groupValues[1]) }
-
-        val relativePlayerPattern = Regex(
-            """(?i)["'](/[^"'<>\s]*(?:[/_.?=&-](?:player|embed|iframe|watch|video|stream|play|manifest|media|playlist|source)(?:[/_.?=&-]|$))[^"'<>\s]*)["']"""
-        )
-        relativePlayerPattern.findAll(text).forEach { values.add(it.groupValues[1]) }
-
-        return values.mapNotNull { rawValue ->
-            val cleaned = rawValue.trim().trimEnd('"', '\'', ')', ']', '}', ',', ';')
-            val url = normalize(cleaned, baseUrl)
-            url.takeIf { it.startsWith("http://", true) || it.startsWith("https://", true) }
-                ?.takeIf(::isLikelyPlayerUrl)
-        }
-            .filterNot(::isYouTubePageUrl)
-            .distinct()
     }
 
     private fun isEpisodeLike(value: String): Boolean =
@@ -681,204 +785,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
         return emptyList()
     }
 
-    private fun structuredObjects(document: Document): List<JSONObject> {
-        val found = ArrayList<JSONObject>()
-        fun visit(value: Any?) {
-            when (value) {
-                is JSONObject -> {
-                    found.add(value)
-                    val keys = value.keys()
-                    while (keys.hasNext()) {
-                        val key = keys.next()
-                        val child = value.opt(key)
-                        if (child is JSONObject || child is JSONArray) visit(child)
-                    }
-                }
-                is JSONArray -> {
-                    for (i in 0 until value.length()) {
-                        val child = value.opt(i)
-                        if (child is JSONObject || child is JSONArray) visit(child)
-                    }
-                }
-            }
-        }
-        document.select("script[type*=ld+json]").forEach { script ->
-            val raw = script.data().ifBlank { script.html() }
-            runCatching {
-                val value = raw.trim().removeSuffix(";")
-                if (value.startsWith("[")) visit(JSONArray(value)) else visit(JSONObject(value))
-            }
-        }
-        return found
-    }
-
-    private fun jsonText(value: Any?): String? {
-        return when (value) {
-            is String -> value.takeIf { it.isNotBlank() }
-            is JSONObject -> sequenceOf(
-                value.optString("url").takeIf { it.isNotBlank() && it != "null" },
-                value.optString("name").takeIf { it.isNotBlank() && it != "null" },
-                value.optString("@id").takeIf { it.isNotBlank() && it != "null" }
-            ).firstOrNull { it != null }
-            is JSONArray -> (0 until value.length()).asSequence()
-                .mapNotNull { jsonText(value.opt(it)) }.firstOrNull()
-            else -> null
-        }
-    }
-
-    private fun schemaValue(document: Document, vararg keys: String): String? {
-        val objects = structuredObjects(document)
-        for (key in keys) {
-            for (obj in objects) {
-                jsonText(obj.opt(key))?.let { return it }
-            }
-        }
-        return null
-    }
-
-    private fun schemaRating(document: Document): Double? {
-        for (obj in structuredObjects(document)) {
-            val aggregate = obj.optJSONObject("aggregateRating")
-            val raw = aggregate?.optString("ratingValue")
-                ?: obj.optString("ratingValue").takeIf { it.isNotBlank() && it != "null" }
-            val value = raw?.replace(',', '.')?.toDoubleOrNull()
-            if (value != null && value in 0.0..10.0) return value
-        }
-        return null
-    }
-
-    private fun schemaGenres(document: Document): List<String> {
-        val values = ArrayList<String>()
-        for (obj in structuredObjects(document)) {
-            val raw = obj.opt("genre")
-            when (raw) {
-                is String -> values.add(raw)
-                is JSONArray -> for (i in 0 until raw.length()) {
-                    raw.optString(i).takeIf { it.isNotBlank() && it != "null" }?.let(values::add)
-                }
-            }
-        }
-        return values.map { it.trim() }.filter { it.length in 2..40 }.distinct().take(30)
-    }
-
-    private fun schemaTypes(document: Document): Set<String> {
-        return structuredObjects(document).flatMap { obj ->
-            when (val raw = obj.opt("@type")) {
-                is String -> listOf(raw.lowercase())
-                is JSONArray -> (0 until raw.length()).map { raw.optString(it).lowercase() }
-                else -> emptyList()
-            }
-        }.toSet()
-    }
-
-    private fun seasonNumber(value: String): Int? {
-        val before = Regex("""(?i)\b0?(\d{1,2})\s*\.?\s*(?:season|sezon)\b""")
-            .find(value)?.groupValues?.getOrNull(1)?.toIntOrNull()
-        if (before != null) return before
-        return Regex("""(?i)(?:season|sezon|s)[\s._/-]*0?(\d{1,2})""")
-            .find(value)?.groupValues?.getOrNull(1)?.toIntOrNull()
-    }
-
-    private fun episodeInfo(value: String, defaultSeason: Int?): Pair<Int, Int>? {
-        val full = Regex(
-            """(?i)(?:s|season|sezon)[\s._/-]*0?(\d{1,2})[\s._/-]*(?:e|ep|episodes?|b[öo]l[üu]m)[\s._/-]*0?(\d{1,3})"""
-        ).find(value)
-        if (full != null) {
-            val season = full.groupValues[1].toIntOrNull() ?: defaultSeason ?: 1
-            val episode = full.groupValues[2].toIntOrNull() ?: return null
-            return season to episode
-        }
-        val compact = Regex("""(?i)\b(?:s)?0?(\d{1,2})\s*[x×]\s*0?(\d{1,3})\b""").find(value)
-        if (compact != null) {
-            return (compact.groupValues[1].toIntOrNull() ?: defaultSeason ?: 1) to
-                (compact.groupValues[2].toIntOrNull() ?: return null)
-        }
-        val turkish = Regex(
-            """(?i)(\d{1,2})\s*\.?\s*sezon.{0,24}?(\d{1,3})\s*\.?\s*b[öo]l[üu]m"""
-        ).find(value)
-        if (turkish != null) {
-            return (turkish.groupValues[1].toIntOrNull() ?: 1) to
-                (turkish.groupValues[2].toIntOrNull() ?: return null)
-        }
-        val onlyEpisode = Regex(
-            """(?i)(?:b[öo]l[üu]m|episodes?|ep[\s._-]*)[\s._/#:-]*0?(\d{1,3})|\b(\d{1,3})\s*\.?\s*b[öo]l[üu]m"""
-        ).find(value) ?: return null
-        val number = (onlyEpisode.groupValues.getOrNull(1)?.toIntOrNull()
-            ?: onlyEpisode.groupValues.getOrNull(2)?.toIntOrNull()) ?: return null
-        return (seasonNumber(value) ?: defaultSeason ?: 1) to number
-    }
-
-    private data class EpisodeItem(
-        val url: String,
-        val title: String,
-        val season: Int,
-        val episode: Int,
-        val poster: String?
-    )
-
-    private fun seasonLinks(document: Document, baseUrl: String): List<Pair<String, Int?>> {
-        return document.select("a[href]").mapNotNull { anchor ->
-            val rawHref = anchor.attr("href")
-            val text = anchor.text() + " " + anchor.attr("title") + " " + rawHref
-            if (episodeInfo(text, null) != null) return@mapNotNull null
-            val season = seasonNumber(text) ?: return@mapNotNull null
-            if (isNonContentAnchor(anchor, baseUrl)) return@mapNotNull null
-            val href = normalize(rawHref, baseUrl)
-            if (!isDetailUrl(href, baseUrl) || href == baseUrl) return@mapNotNull null
-            href to season
-        }.distinctBy { it.first }.take(12)
-    }
-
-    private fun episodeItems(
-        document: Document,
-        baseUrl: String,
-        defaultSeason: Int?
-    ): List<EpisodeItem> {
-        return document.select("a[href]").mapNotNull { anchor ->
-            val rawHref = anchor.attr("href")
-            val anchorIdentity = listOf(
-                anchor.attr("title"),
-                anchor.attr("aria-label"),
-                anchor.text(),
-                rawHref,
-                anchor.classNames().joinToString(" ")
-            ).joinToString(" ")
-            val numbers = episodeInfo(anchorIdentity, defaultSeason) ?: return@mapNotNull null
-            if (numbers.second !in 1..999 || numbers.first !in 1..99) return@mapNotNull null
-            if (isNonContentAnchor(anchor, baseUrl)) return@mapNotNull null
-
-            val href = normalize(rawHref, baseUrl)
-            if (!isDetailUrl(href, baseUrl) || href == baseUrl) return@mapNotNull null
-            val container = containerFor(anchor)
-            val image = anchor.selectFirst("img") ?: container.selectFirst("img")
-            val title = sequenceOf(
-                anchor.attr("title"),
-                anchor.attr("aria-label"),
-                anchor.text(),
-                image?.attr("alt"),
-                href
-            ).mapNotNull { neonCleanText(it) }
-                .firstOrNull {
-                    it.length in 1..180 &&
-                        normalizedFilterText(it) !in setOf("izledim", "izlendi", "watched")
-                } ?: return@mapNotNull null
-            EpisodeItem(
-                url = href,
-                title = title,
-                season = numbers.first,
-                episode = numbers.second,
-                poster = posterFor(anchor, baseUrl)
-            )
-        }.distinctBy { it.url }
-    }
-
-    private fun cleanSeriesTitle(value: String): String {
-        return value.replace(
-            Regex("""(?i)[\s\-:|]*(?:s\d{1,2}e\d{1,3}|\d{1,2}\s*\.?\s*sezon\s*\d*\s*\.?\s*b[öo]l[üu]m.*)$"""),
-            ""
-        ).trim().ifBlank { value }
-    }
-
     override suspend fun load(url: String): LoadResponse? {
         val normalized = normalize(url)
         if (!isValidHttpUrl(normalized)) return null
@@ -920,11 +826,20 @@ class AutoDaddyliveApp : NeonMainAPI() {
         val normalized = data.trim()
         if (normalized.isBlank()) return false
 
+        // 1. Doğrudan medya akışıysa ilet
         if (neonIsMediaUrl(normalized)) {
             emitDirectLiveLink(normalized, callback)
             return true
         }
 
+        // 2. tvnow247.top embed sayfaları için özel çözümleme
+        if (normalized.contains("tvnow247.top/embed/", ignoreCase = true)) {
+            val resolved = resolveTvNow247(normalized, callback)
+            if (resolved) return true
+            Log.w(name.uppercase().take(23), "tvnow247 çözümlenemedi, genel çözümlemeye düşülüyor")
+        }
+
+        // 3. Genel çözümleme (player5.json'daki cdnlivetv API'leri vb. için)
         val document = neonCachedDocument(normalized, normalized)
             ?: runCatching {
                 app.get(
@@ -957,9 +872,8 @@ class AutoDaddyliveApp : NeonMainAPI() {
             }
         }
 
-        var resolverFound = false
         for (candidate in candidates.take(10)) {
-            val candidateFound = neonResolveLinks(
+            neonResolveLinks(
                 data = candidate,
                 sourceName = name,
                 subtitleCallback = subtitleCallback,
@@ -967,7 +881,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
                 maxDepth = 3,
                 referer = normalized,
             )
-            resolverFound = resolverFound || candidateFound
             if (emitted.isNotEmpty()) break
         }
 
