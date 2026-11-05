@@ -50,6 +50,9 @@ class AutoDaddyliveApp : NeonMainAPI() {
                 !uri.host.isNullOrBlank()
         }.getOrDefault(false)
 
+    // ------------------------------------------------------------------
+    // 1. KANAL LİSTESİ (player10.json)
+    // ------------------------------------------------------------------
     private suspend fun parseChannelsFromUrl(apiUrl: String): List<SearchResponse> {
         val body = runCatching {
             app.get(
@@ -63,7 +66,10 @@ class AutoDaddyliveApp : NeonMainAPI() {
             ).takeIf { it.isSuccessful }?.text
         }.getOrNull().orEmpty()
 
-        if (body.isBlank()) return emptyList()
+        if (body.isBlank()) {
+            Log.w(name.uppercase().take(23), "API empty: $apiUrl")
+            return emptyList()
+        }
 
         val items = ArrayList<SearchResponse>()
         runCatching {
@@ -126,7 +132,9 @@ class AutoDaddyliveApp : NeonMainAPI() {
         return combined
     }
 
-    // proxyPlayerUrl HTML'inden gerçek canlı akışı çıkarmaya çalışır
+    // ------------------------------------------------------------------
+    // 2. TVNOW247 EMBED ÇÖZÜMLEYİCİ
+    // ------------------------------------------------------------------
     private fun extractLiveStreamFromHtml(html: String): String? {
         val text = html
             .replace("\\/", "/")
@@ -134,18 +142,15 @@ class AutoDaddyliveApp : NeonMainAPI() {
             .replace("&#x2F;", "/")
             .replace("&amp;", "&")
 
-        // Doğrudan .m3u8 URL'leri
         val m3u8s = Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""")
             .findAll(text).map { it.value }.toList()
 
-        // Canlı akışları tercih et
         val live = m3u8s.firstOrNull {
             it.contains("live", true) || it.contains("stream", true) || it.contains("chunk", true)
         }
         if (live != null) return live
         if (m3u8s.isNotEmpty()) return m3u8s.first()
 
-        // JS değişkenleri içindeki m3u8
         val patterns = listOf(
             Regex("""(?:src|file|source|stream|url|hls|playlist)\s*[:=]\s*["']([^"']+\.m3u8[^"']*)["']""", RegexOption.IGNORE_CASE),
             Regex("""["']([^"']+\.m3u8[^"']*)["']"""),
@@ -154,19 +159,16 @@ class AutoDaddyliveApp : NeonMainAPI() {
             p.find(text)?.let { return it.groupValues[1] }
         }
 
-        // Base64 encoded m3u8 (bazen player'lar bunu kullanır)
         val b64Pattern = Regex("""["']([A-Za-z0-9+/=]{50,})["']""")
         for (m in b64Pattern.findAll(text)) {
             val decoded = runCatching {
                 String(android.util.Base64.decode(m.groupValues[1], android.util.Base64.DEFAULT))
             }.getOrNull()
             if (decoded != null && decoded.contains(".m3u8", true)) {
-                m3u8s.firstOrNull()?.let { return it }
                 Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""")
                     .find(decoded)?.let { return it.value }
             }
         }
-
         return null
     }
 
@@ -244,12 +246,9 @@ class AutoDaddyliveApp : NeonMainAPI() {
             .takeIf { it.isNotBlank() && it != "null" }
             ?: "https://dembed.st/premiumtv/daddy.php?id=$channelId"
 
-        Log.d(name.uppercase().take(23), "tvnow247: m3u8=$m3u8Url")
-        Log.d(name.uppercase().take(23), "tvnow247: proxyPlayer=$proxyPlayerUrl")
-
         var emitted = 0
 
-        // 1) proxyPlayerUrl'den gerçek canlı akış çıkarmayı dene
+        // Önce proxyPlayerUrl'den gerçek canlı akışı çıkarmayı dene
         if (!proxyPlayerUrl.isNullOrBlank()) {
             val playerHtml = runCatching {
                 app.get(
@@ -288,14 +287,13 @@ class AutoDaddyliveApp : NeonMainAPI() {
             }
         }
 
-        // 2) Doğrudan m3u8'i 3 farklı başlıkla sun
+        // Doğrudan m3u8'i 3 farklı başlık kombinasyonuyla sun
         if (!m3u8Url.isNullOrBlank()) {
             data class Combo(val referer: String, val origin: String?, val label: String)
             val combos = listOf(
                 Combo(apiReferer, "https://dembed.st", "Daddylive (api+origin)"),
                 Combo(apiReferer, null, "Daddylive (api, no-origin)"),
                 Combo("https://tvnow247.top/", "https://tvnow247.top", "Daddylive (tv)"),
-                Combo("https://dembed.st/", null, "Daddylive (dembed root)"),
             )
 
             for (c in combos) {
@@ -325,6 +323,10 @@ class AutoDaddyliveApp : NeonMainAPI() {
         return emitted > 0
     }
 
+    // ------------------------------------------------------------------
+    // 3. ZORUNLU METODLAR
+    // ------------------------------------------------------------------
+
     override suspend fun getMainPage(
         page: Int,
         request: MainPageRequest,
@@ -348,345 +350,17 @@ class AutoDaddyliveApp : NeonMainAPI() {
         return newHomePageResponse(request.name, results, hasNext = false)
     }
 
-    private fun isSiteUrl(url: String): Boolean =
-        (url.startsWith("http://", true) || url.startsWith("https://", true)) &&
-            siteHost(url) == siteHost(mainUrl)
-
-    private fun normalize(raw: String, base: String = mainUrl): String =
-        neonNormalizeUrl(raw, base)
-
-    private fun isLikelyPlayerUrl(url: String): Boolean {
-        if (neonIsMediaUrl(url)) return true
-        val uri = runCatching { URI(url) }.getOrNull() ?: return false
-        val hint = (uri.path.orEmpty() + "?" + uri.rawQuery.orEmpty()).lowercase()
-        return Regex("""(?i)(?:^|[/_.?=&-])(?:player|embed|iframe|video|stream|play|watch|manifest|media|playlist|source)(?:[/_.?=&-]|$)""")
-            .containsMatchIn(hint)
-    }
-
-    private fun isYouTubePageUrl(raw: String): Boolean {
-        val host = runCatching {
-            URI(raw).host.orEmpty().lowercase().removePrefix("www.")
-        }.getOrDefault("")
-        return host == "youtube.com" ||
-            host.endsWith(".youtube.com") ||
-            host == "youtu.be" ||
-            host == "youtube-nocookie.com" ||
-            host.endsWith(".youtube-nocookie.com")
-    }
-
-    private fun isEpisodeLike(value: String): Boolean =
-        Regex("""(?i)(?:b[öo]l[üu]m|episodes?|ep[\s._-]*\d|s\d{1,2}e\d{1,3}|\d{1,2}\s*[x×]\s*\d{1,3})""")
-            .containsMatchIn(value)
-
-    private fun normalizedFilterText(value: String): String =
-        value.lowercase()
-            .replace("ı", "i")
-            .replace("ş", "s")
-            .replace("ğ", "g")
-            .replace("ü", "u")
-            .replace("ö", "o")
-            .replace("ç", "c")
-            .replace(Regex("""[^a-z0-9]+"""), " ")
-            .trim()
-
-    private val navigationOnlyLabels = setOf(
-        "yorum", "yorumlar", "comment", "comments", "replies",
-        "kesfet", "kesif", "explore", "discover",
-        "takvim", "takvimi", "calendar", "schedule",
-        "dizi takvimi", "film takvimi", "tv schedule",
-        "tartisma", "tartismalar", "discussion", "discussions", "discuss",
-        "baslik", "basliklar", "topic", "topics", "forum", "forums",
-        "thread", "threads", "konu", "konular", "sohbet", "sohbetler",
-        "community", "topluluk", "gundem", "duyurular",
-        "login", "register", "giris", "kayit", "hesabim", "profil", "profilim",
-        "profile", "profiles", "user", "users", "member", "members",
-        "author", "authors", "account", "accounts", "uye", "uyeler",
-        "kullanici", "kullanicilar", "ayarlar", "iletisim", "hakkimizda", "yardim",
-        "privacy policy", "terms", "about us", "contact us",
-        "ana sayfa", "home", "menu", "menü",
-        "dizi", "diziler", "film", "filmler", "movies", "series",
-        "izle", "tum diziler", "tum filmler", "tum bolumler",
-        "en son bolumler", "son bolumler", "populer", "populer filmler"
-    )
-
-    private val utilityLabelPrefixes = setOf(
-        "yorum", "yorumlar", "comment", "comments", "reply", "replies",
-        "kesfet", "kesif", "explore", "discover", "takvim", "takvimi",
-        "calendar", "schedule", "dizi takvimi", "film takvimi", "tv schedule",
-        "tartisma", "tartismalar", "discussion", "discussions", "discuss",
-        "baslik", "basliklar", "topic", "topics", "forum", "forums",
-        "thread", "threads", "konu", "konular", "sohbet", "sohbetler",
-        "community", "topluluk", "gundem", "duyurular",
-        "profil", "profile", "user profile", "member profile",
-        "kullanici profili", "uye profili", "my profile"
-    )
-
-    private val navigationOnlyPaths = setOf(
-        "yorum", "yorumlar", "comment", "comments", "replies",
-        "kesfet", "kesif", "explore", "discover", "takvim", "takvimi",
-        "calendar", "schedule", "dizi takvimi", "film takvimi",
-        "tartisma", "tartismalar", "discussion", "discussions", "discuss",
-        "baslik", "basliklar", "topic", "topics", "forum", "forums",
-        "thread", "threads", "konu", "konular", "sohbet", "sohbetler",
-        "community", "topluluk", "gundem", "duyurular",
-        "profile", "profiles", "profil", "profiller", "profilim",
-        "user", "users", "member", "members", "author", "authors",
-        "account", "accounts", "u", "uye", "uyeler", "kullanici",
-        "kullanicilar", "avatar", "avatars", "activity", "notifications",
-        "messages", "inbox", "groups", "group", "settings", "dashboard"
-    )
-
-    private fun isNavigationChrome(anchor: Element): Boolean {
-        var node: Element? = anchor
-        repeat(7) {
-            val current = node ?: return false
-            val tag = current.tagName().lowercase()
-            if (tag == "nav" || tag == "footer" ||
-                current.attr("role").equals("navigation", ignoreCase = true)
-            ) return true
-
-            val hint = normalizedFilterText(current.id() + " " + current.className())
-            val nonCatalogMarkers = listOf(
-                "site header", "site nav", "navbar", "main nav", "primary nav",
-                "main menu", "primary menu", "top menu", "menu item", "sidebar",
-                "breadcrumb", "comments nav", "site footer", "footer menu",
-                "profile", "user profile", "user card", "member card", "avatar",
-                "author box", "author link", "discussion", "thread card",
-                "forum topic", "topic card", "comment list", "reply list",
-                "user meta", "member meta", "profile meta", "user info",
-                "member info", "profile info", "user summary", "member summary"
-            )
-            if (nonCatalogMarkers.any { hint.contains(it) }) return true
-
-            val image = current.selectFirst("img")
-            if (image != null) {
-                val imageHint = normalizedFilterText(
-                    image.attr("class") + " " + image.id() + " " +
-                        image.attr("alt") + " " + image.attr("title") + " " +
-                        image.attr("src") + " " + image.attr("data-src")
-                )
-                if (listOf(
-                        "avatar", "user photo", "profile photo", "profile picture",
-                        "member photo", "author photo", "account photo"
-                    ).any { imageHint.contains(it) }
-                ) return true
-            }
-            node = current.parent()
-        }
-        return false
-    }
-
-    private fun isNavigationItem(title: String, url: String): Boolean {
-        val label = normalizedFilterText(title)
-        if (label in navigationOnlyLabels ||
-            utilityLabelPrefixes.any { label == it || label.startsWith("$it ") }
-        ) return true
-
-        val uri = runCatching { URI(url) }.getOrNull() ?: return true
-        val rawSegments = uri.path.orEmpty().split("/").filter { it.isNotBlank() }
-        if (rawSegments.any { it.startsWith("@") }) return true
-        val segments = rawSegments.map {
-            normalizedFilterText(it.replace('-', ' ').replace('_', ' '))
-        }
-        if (segments.any { it in navigationOnlyPaths }) return true
-
-        val query = uri.rawQuery.orEmpty()
-        if (Regex(
-                "(?i)(?:^|&)(?:user|userid|user_id|profile|profile_id|member|member_id|author|author_id|thread|thread_id|topic|topic_id|discussion|comment|reply|post_id)="
-            ).containsMatchIn(query)
-        ) return true
-
-        if (Regex("""(?i)^.{1,40}\s+\d{1,2}\s*(?:level|lvl)\b.*$""")
-                .matches(title.trim())
-        ) return true
-        if (Regex("""(?i)(?:\+\s*\d[\d,.]*\s*(?:puan|points?)|(?:puan|points?)\s*\+?\s*\d[\d,.]*)""")
-                .containsMatchIn(title)
-        ) return true
-
-        if (segments.size == 1 && segments.first() in setOf(
-                "dizi", "diziler", "film", "filmler", "movies", "series",
-                "home", "ana sayfa", "kesfet", "takvim", "yorumlar"
-            )
-        ) return true
-
-        return false
-    }
-
-    private fun isFlagOrIconAsset(value: String): Boolean {
-        val hint = normalizedFilterText(value)
-        if (listOf(
-                "flag icon", "country flag", "language flag", "flag sprite"
-            ).any { hint.contains(it) }
-        ) return true
-        if (Regex("""(?i)(?:^|/)(?:flags?|flag-icons|country-flags?)/""")
-                .containsMatchIn(value)
-        ) return true
-        val file = value.substringBefore('?').substringBefore('#')
-            .substringAfterLast('/').lowercase()
-        return Regex(
-            """(?i)^(?:flags?|flag[-_]icon|icon[-_]flag|country[-_]?flag|flag[-_]sprite|language[-_]?flag)(?:[-_][a-z]{2})?\.(?:svg|png|jpe?g|webp|gif|ico)$"""
-        ).matches(file)
-    }
-
-    private fun isValidPosterUrl(url: String): Boolean {
-        if (isFlagOrIconAsset(url)) return false
-        if (!url.startsWith("https://", true) && !url.startsWith("http://", true)) return false
-        val uri = runCatching { URI(url) }.getOrNull() ?: return false
-        val path = uri.path.orEmpty().lowercase()
-        val file = path.substringAfterLast('/')
-        val placeholders = listOf(
-            "placeholder", "no-image", "no_image", "noimage", "no-poster",
-            "noposter", "blank.gif", "transparent", "avatar", "favicon",
-            "spinner", "loading", "pixel", "missing", "not-found"
-        )
-        if (placeholders.any { file.contains(it) }) return false
-        return file.isNotBlank()
-    }
-
-    private fun isNonContentAnchor(anchor: Element, baseUrl: String): Boolean {
-        if (anchor.classNames().any { it.equals("alphabetical-category-link", ignoreCase = true) }) return true
-        val rawHref = anchor.attr("href").trim()
-        if (rawHref.startsWith("#")) return true
-        val target = runCatching { URI(normalize(rawHref, baseUrl)) }.getOrNull() ?: return false
-        val base = runCatching { URI(normalize(baseUrl)) }.getOrNull() ?: return false
-        return !target.rawFragment.isNullOrBlank() &&
-            target.scheme.equals(base.scheme, ignoreCase = true) &&
-            target.host.equals(base.host, ignoreCase = true) &&
-            target.path.orEmpty().trimEnd('/') == base.path.orEmpty().trimEnd('/') &&
-            target.rawQuery.orEmpty() == base.rawQuery.orEmpty()
-    }
-
-    private fun isDetailUrl(raw: String, base: String = mainUrl): Boolean {
-        val url = normalize(raw, base)
-        if (!url.startsWith("http", true) || siteHost(url) != siteHost(mainUrl)) return false
-        val uri = runCatching { URI(url) }.getOrNull() ?: return false
-        val path = uri.path.orEmpty().lowercase()
-        if (path.isBlank() || path == "/") return false
-        if (listOf(".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".ico",
-                ".css", ".js", ".m3u8", ".mpd", ".mp4", ".webm", ".m4v",
-                ".ts", ".m4s").any { path.endsWith(it) }) return false
-        return path.trim('/').isNotBlank()
-    }
-
-    private fun containerFor(anchor: Element): Element {
-        var node: Element? = anchor
-        repeat(5) {
-            if (node == null) return@repeat
-            if (node!!.selectFirst("img") != null) return node!!
-            node = node!!.parent()
-        }
-        return anchor
-    }
-
-    private fun imageUrl(image: Element?, baseUrl: String): String? {
-        if (image == null) return null
-        val direct = sequenceOf(
-            image.attr("data-poster"), image.attr("data-src"), image.attr("data-lazy-src"),
-            image.attr("data-original"), image.attr("src"),
-        )
-        return direct
-            .filter { it.isNotBlank() && !it.startsWith("data:", true) }
-            .map { normalize(it, baseUrl) }
-            .firstOrNull { isValidPosterUrl(it) }
-    }
-
-    private fun posterFor(anchor: Element, baseUrl: String): String? {
-        var node: Element? = anchor
-        for (depth in 0..4) {
-            val current = node ?: break
-            if (depth > 0 && current.select("a[href]").any { it !== anchor }) return null
-            imageUrl(current, baseUrl)?.let { return it }
-            val image = current.selectFirst("img")
-            imageUrl(image, baseUrl)?.let { return it }
-            node = current.parent()
-        }
-        return null
-    }
-
-    private fun candidateAnchors(document: Document): List<Element> {
-        val mediaSelector =
-            "a[href]:has(img), a[href][data-poster], a[href][data-src], a[href][data-lazy-src]"
-        val anchors = ArrayList<Element>()
-        val seen = LinkedHashSet<String>()
-        for (anchor in document.select(mediaSelector)) {
-            if (anchors.size >= 200) break
-            if (isNavigationChrome(anchor) || isNonContentAnchor(anchor, mainUrl)) continue
-            if (posterFor(anchor, mainUrl) == null) continue
-            val href = normalize(anchor.attr("href"), mainUrl)
-            if (seen.add(href)) anchors.add(anchor)
-        }
-        return anchors
-    }
-
-    private fun responseFromAnchor(anchor: Element, baseUrl: String): SearchResponse? {
-        if (isNonContentAnchor(anchor, baseUrl)) return null
-        val href = normalize(anchor.attr("href"), baseUrl)
-        if (!isDetailUrl(href, baseUrl)) return null
-        val container = containerFor(anchor)
-        val image = anchor.selectFirst("img") ?: container.selectFirst("img")
-        val title = sequenceOf(
-            anchor.attr("title"),
-            anchor.attr("aria-label"),
-            anchor.selectFirst("h1, h2, h3, h4, .title")?.text(),
-            image?.attr("alt"),
-            anchor.text(),
-        ).mapNotNull { neonCleanText(it) }
-            .firstOrNull { it.length in 2..160 } ?: return null
-        if (title.equals(name, true)) return null
-        if (isEpisodeLike(title + " " + href)) return null
-        if (isNavigationItem(title, href)) return null
-
-        val poster = posterFor(anchor, baseUrl) ?: return null
-        val series = Regex("""(?i)(dizi|series|season|sezon)""")
-            .containsMatchIn(title + " " + href)
-
-        return if (series) {
-            newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
-                posterUrl = poster
-            }
-        } else {
-            newMovieSearchResponse(title, href, TvType.Movie) {
-                posterUrl = poster
-            }
-        }
-    }
-
-    private fun resultsFrom(document: Document, baseUrl: String): List<SearchResponse> {
-        val results = LinkedHashMap<String, SearchResponse>()
-        for (anchor in candidateAnchors(document)) {
-            if (results.size >= 120) break
-            val item = responseFromAnchor(anchor, baseUrl) ?: continue
-            if (!results.containsKey(item.url)) results[item.url] = item
-        }
-        return results.values.toList()
-    }
-
-    override suspend fun search(query: String): List<SearchResponse> {
-        val cleanQuery = query.trim()
-        if (cleanQuery.length < 2) return emptyList()
-        val encoded = URLEncoder.encode(cleanQuery, "UTF-8")
-        val urls = listOf(
-            mainUrl + "/?s=" + encoded,
-            mainUrl + "/?q=" + encoded,
-        )
-        for (searchUrl in urls) {
-            val response = runCatching {
-                app.get(searchUrl, headers = headers(searchUrl), timeout = 12_000L)
-            }.getOrNull() ?: continue
-            val matches = resultsFrom(response.document, searchUrl)
-            if (matches.isNotEmpty()) return matches
-        }
-        return emptyList()
-    }
-
     override suspend fun load(url: String): LoadResponse? {
-        val normalized = normalize(url)
+        val normalized = normalizeUrl(url)
         if (!isValidHttpUrl(normalized)) return null
 
-        val document = if (neonIsMediaUrl(normalized)) Document("")
-        else runCatching {
-            app.get(normalized, headers = headers(normalized), timeout = 12_000L).document
-        }.getOrNull() ?: Document("")
+        val document = if (normalized.contains(".m3u8", ignoreCase = true)) {
+            Document("")
+        } else {
+            runCatching {
+                app.get(normalized, headers = headers(normalized), timeout = 12_000L).document
+            }.getOrNull() ?: Document("")
+        }
 
         val title = document.title().takeIf { it.isNotBlank() }
             ?: runCatching {
@@ -715,7 +389,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
             Log.w(name.uppercase().take(23), "tvnow247 çözümlenemedi")
         }
 
-        if (neonIsMediaUrl(normalized)) {
+        if (normalized.contains(".m3u8", ignoreCase = true) || neonIsMediaUrl(normalized)) {
             val host = runCatching {
                 URI(normalized).host.orEmpty().lowercase()
             }.getOrDefault("").ifBlank { "daddylive.app" }
@@ -739,5 +413,139 @@ class AutoDaddyliveApp : NeonMainAPI() {
         }
 
         return false
+    }
+
+    override suspend fun search(query: String): List<SearchResponse> {
+        val cleanQuery = query.trim()
+        if (cleanQuery.length < 2) return emptyList()
+        val encoded = URLEncoder.encode(cleanQuery, "UTF-8")
+        val urls = listOf(
+            mainUrl + "/?s=" + encoded,
+            mainUrl + "/?q=" + encoded,
+        )
+        for (searchUrl in urls) {
+            val response = runCatching {
+                app.get(searchUrl, headers = headers(searchUrl), timeout = 12_000L)
+            }.getOrNull() ?: continue
+            val matches = resultsFrom(response.document, searchUrl)
+            if (matches.isNotEmpty()) return matches
+        }
+        return emptyList()
+    }
+
+    // ------------------------------------------------------------------
+    // 4. YARDIMCI FONKSİYONLAR (URL / HTML)
+    // ------------------------------------------------------------------
+
+    private fun normalizeUrl(raw: String, base: String = mainUrl): String =
+        runCatching {
+            if (raw.startsWith("http", true)) raw
+            else {
+                val b = URI(base)
+                val resolved = b.resolve(raw)
+                resolved.toString()
+            }
+        }.getOrDefault(raw)
+
+    private fun isNonContentAnchor(anchor: Element, baseUrl: String): Boolean {
+        val rawHref = anchor.attr("href").trim()
+        if (rawHref.startsWith("#")) return true
+        val target = runCatching { URI(normalizeUrl(rawHref, baseUrl)) }.getOrNull() ?: return false
+        val base = runCatching { URI(normalizeUrl(baseUrl)) }.getOrNull() ?: return false
+        return !target.rawFragment.isNullOrBlank() &&
+            target.scheme.equals(base.scheme, ignoreCase = true) &&
+            target.host.equals(base.host, ignoreCase = true) &&
+            target.path.orEmpty().trimEnd('/') == base.path.orEmpty().trimEnd('/') &&
+            target.rawQuery.orEmpty() == base.rawQuery.orEmpty()
+    }
+
+    private fun isDetailUrl(raw: String, base: String = mainUrl): Boolean {
+        val url = normalizeUrl(raw, base)
+        if (!url.startsWith("http", true) || siteHost(url) != siteHost(mainUrl)) return false
+        val uri = runCatching { URI(url) }.getOrNull() ?: return false
+        val path = uri.path.orEmpty().lowercase()
+        if (path.isBlank() || path == "/") return false
+        if (listOf(".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".ico",
+                ".css", ".js", ".m3u8", ".mpd", ".mp4", ".webm", ".m4v",
+                ".ts", ".m4s").any { path.endsWith(it) }) return false
+        return path.trim('/').isNotBlank()
+    }
+
+    private fun containerFor(anchor: Element): Element {
+        var node: Element? = anchor
+        repeat(5) {
+            if (node == null) return@repeat
+            if (node!!.selectFirst("img") != null) return node!!
+            node = node!!.parent()
+        }
+        return anchor
+    }
+
+    private fun posterFor(anchor: Element, baseUrl: String): String? {
+        var node: Element? = anchor
+        for (depth in 0..4) {
+            val current = node ?: break
+            if (depth > 0 && current.select("a[href]").any { it !== anchor }) return null
+            val image = current.selectFirst("img")
+            val src = image?.attr("data-src")?.takeIf { it.isNotBlank() }
+                ?: image?.attr("data-lazy-src")?.takeIf { it.isNotBlank() }
+                ?: image?.attr("src")?.takeIf { it.isNotBlank() }
+            if (src != null && !src.startsWith("data:", true)) {
+                val normalized = normalizeUrl(src, baseUrl)
+                if (normalized.startsWith("http", true)) return normalized
+            }
+            node = current.parent()
+        }
+        return null
+    }
+
+    private fun candidateAnchors(document: Document): List<Element> {
+        val mediaSelector =
+            "a[href]:has(img), a[href][data-poster], a[href][data-src], a[href][data-lazy-src]"
+        val anchors = ArrayList<Element>()
+        val seen = LinkedHashSet<String>()
+        for (anchor in document.select(mediaSelector)) {
+            if (anchors.size >= 200) break
+            if (isNonContentAnchor(anchor, mainUrl)) continue
+            if (posterFor(anchor, mainUrl) == null) continue
+            val href = normalizeUrl(anchor.attr("href"), mainUrl)
+            if (seen.add(href)) anchors.add(anchor)
+        }
+        return anchors
+    }
+
+    private fun resultsFrom(document: Document, baseUrl: String): List<SearchResponse> {
+        val results = LinkedHashMap<String, SearchResponse>()
+        for (anchor in candidateAnchors(document)) {
+            if (results.size >= 120) break
+            val href = normalizeUrl(anchor.attr("href"), baseUrl)
+            if (!isDetailUrl(href, baseUrl)) continue
+            val container = containerFor(anchor)
+            val image = anchor.selectFirst("img") ?: container.selectFirst("img")
+            val title = sequenceOf(
+                anchor.attr("title"),
+                anchor.attr("aria-label"),
+                anchor.selectFirst("h1, h2, h3, h4, .title")?.text(),
+                image?.attr("alt"),
+                anchor.text(),
+            ).mapNotNull { it?.trim() }
+                .firstOrNull { it.length in 2..160 } ?: continue
+
+            val poster = posterFor(anchor, baseUrl) ?: continue
+            val series = Regex("""(?i)(dizi|series|season|sezon)""")
+                .containsMatchIn(title + " " + href)
+
+            val item = if (series) {
+                newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
+                    posterUrl = poster
+                }
+            } else {
+                newMovieSearchResponse(title, href, TvType.Movie) {
+                    posterUrl = poster
+                }
+            }
+            if (!results.containsKey(item.url)) results[item.url] = item
+        }
+        return results.values.toList()
     }
 }
