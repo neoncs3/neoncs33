@@ -881,7 +881,6 @@ def analyse_site(raw_url: str) -> dict:
         "origin": origin,
         "supports_live": bool(
             re.search(r"(?i)/(?:channel|live|iptv)(?:/|$)", target_parts.path)
-            or "live" in name.lower()
         ),
         "root_url": root_page["url"],
         "http_status": root_page["status"],
@@ -2182,7 +2181,7 @@ def render_gradle(config: dict) -> str:
         f"    description = {description}\n"
         '    authors = listOf("neoncs3")\n'
         "    status = 1\n"
-        f"    tvTypes = listOf({tv_types})\\n"
+        f"    tvTypes = listOf({tv_types})\n"
         '    language = "tr"\n'
         f"    iconUrl = {icon}\n"
         "}\n\n"
@@ -2519,6 +2518,9 @@ def run_self_test() -> None:
     live_generated = render_kotlin(live_demo)
     assert "override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Live)" in live_generated
     assert 'tvTypes = listOf("Movie", "TvSeries", "Live")' in render_gradle(live_demo)
+    rendered_live_gradle = render_gradle(live_demo)
+    assert "\\n    language" not in rendered_live_gradle
+    assert "\n    language" in rendered_live_gradle
     assert "@CloudstreamPlugin" in generated_plugin
     assert "class AutoExampleOrgPlugin : Plugin()" in generated_plugin
     assert "registerMainAPI(AutoExampleOrg())" in generated_plugin
