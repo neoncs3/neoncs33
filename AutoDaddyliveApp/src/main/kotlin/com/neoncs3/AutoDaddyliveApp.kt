@@ -21,8 +21,14 @@ class AutoDaddyliveApp : NeonMainAPI() {
     override var sequentialMainPage = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Live)
 
-    // Kanalları çektiğimiz JSON API'si
-    private val channelApiUrl = "https://daddylive.app/player/player14.json"
+    // İki ayrı JSON kaynağı; ikisi de taranır, sonuçlar birleştirilir.
+    private val channelApiUrls = listOf(
+        "https://daddylive.app/player/player5.json",
+        "https://daddylive.app/player/player10.json",
+    )
+
+    // Her grup kaç kanal içersin
+    private val channelsPerPage = 50
 
     private val playerUserAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
@@ -52,13 +58,13 @@ class AutoDaddyliveApp : NeonMainAPI() {
         }.getOrDefault(false)
 
     // ------------------------------------------------------------------
-    // JSON API'sinden kanalları çeken fonksiyon
+    // Tek bir JSON URL'sini indirip kanal listesine çeviren yardımcı
     // ------------------------------------------------------------------
-    private suspend fun loadChannelsFromApi(): List<SearchResponse> {
+    private suspend fun parseChannelsFromUrl(apiUrl: String): List<SearchResponse> {
         val body = runCatching {
             app.get(
-                channelApiUrl,
-                headers = headers(channelApiUrl) + mapOf(
+                apiUrl,
+                headers = headers(apiUrl) + mapOf(
                     "Accept" to "application/json, text/plain, */*",
                     "User-Agent" to playerUserAgent,
                 ),
@@ -68,18 +74,43 @@ class AutoDaddyliveApp : NeonMainAPI() {
         }.getOrNull().orEmpty()
 
         if (body.isBlank()) {
-            Log.w(name.uppercase().take(23), "Channel API returned empty response")
+            Log.w(name.uppercase().take(23), "API empty: $apiUrl")
             return emptyList()
         }
 
         val items = ArrayList<SearchResponse>()
         runCatching {
-            val jsonArray = JSONArray(body)
+            val trimmed = body.trim()
+            val jsonArray: JSONArray = when {
+                trimmed.startsWith("[") -> JSONArray(trimmed)
+                trimmed.startsWith("{") -> {
+                    // Olası kapsayıcı anahtarları dene
+                    val obj = JSONObject(trimmed)
+                    obj.optJSONArray("data")
+                        ?: obj.optJSONArray("channels")
+                        ?: obj.optJSONArray("list")
+                        ?: obj.optJSONArray("items")
+                        ?: JSONArray()
+                }
+                else -> JSONArray()
+            }
+
             for (i in 0 until jsonArray.length()) {
-                val obj = jsonArray.getJSONObject(i)
-                val channelName = obj.optString("name").trim()
-                val streamUrl = obj.optString("url").trim()
-                if (channelName.isBlank() || streamUrl.isBlank()) continue
+                val obj = jsonArray.optJSONObject(i) ?: continue
+                val channelName = sequenceOf(
+                    obj.optString("name"),
+                    obj.optString("channel_name"),
+                    obj.optString("title"),
+                ).map { it.trim() }
+                    .firstOrNull { it.isNotBlank() } ?: continue
+
+                val streamUrl = sequenceOf(
+                    obj.optString("url"),
+                    obj.optString("stream_url"),
+                    obj.optString("link"),
+                ).map { it.trim() }
+                    .firstOrNull { it.isNotBlank() } ?: continue
+
                 if (!isValidHttpUrl(streamUrl)) continue
 
                 items += newLiveSearchResponse(channelName, streamUrl, TvType.Live) {
@@ -87,11 +118,29 @@ class AutoDaddyliveApp : NeonMainAPI() {
                 }
             }
         }.onFailure {
-            Log.e(name.uppercase().take(23), "Error parsing channel JSON", it)
+            Log.e(name.uppercase().take(23), "Error parsing $apiUrl", it)
         }
 
-        Log.d(name.uppercase().take(23), "Channel API parsed items=${items.size}")
+        Log.d(name.uppercase().take(23), "API parsed from $apiUrl -> items=${items.size}")
         return items
+    }
+
+    // ------------------------------------------------------------------
+    // İki API'yi birleştirip kanal listesi döndüren fonksiyon
+    // ------------------------------------------------------------------
+    private suspend fun loadChannelsFromApis(): List<SearchResponse> {
+        val combined = ArrayList<SearchResponse>()
+        val seenNames = HashSet<String>()
+        for (apiUrl in channelApiUrls) {
+            for (item in parseChannelsFromUrl(apiUrl)) {
+                // Aynı isimli kanal iki API'de varsa sadece bir tanesini al
+                if (seenNames.add(item.name.trim().lowercase())) {
+                    combined += item
+                }
+            }
+        }
+        Log.d(name.uppercase().take(23), "Combined channels total=${combined.size}")
+        return combined
     }
 
     // ------------------------------------------------------------------
@@ -124,17 +173,17 @@ class AutoDaddyliveApp : NeonMainAPI() {
         request: MainPageRequest,
     ): HomePageResponse {
         if (page <= 1) {
-            val liveItems = loadChannelsFromApi()
+            val liveItems = loadChannelsFromApis()
             if (liveItems.isNotEmpty()) {
-                val pages = liveItems.chunked(300).mapIndexed { index, chunk ->
-                    val label = if (index == 0) "Canlı Kanallar" else "Canlı Kanallar ${index + 1}"
-                    HomePageList(label, chunk)
+                // 50'şerli gruplara ayır -> "Canlı Kanallar 1", "Canlı Kanallar 2", ...
+                val pages = liveItems.chunked(channelsPerPage).mapIndexed { index, chunk ->
+                    HomePageList("Canlı Kanallar ${index + 1}", chunk)
                 }
                 return newHomePageResponse(pages, hasNext = false)
             }
         }
 
-        // API başarısız olursa eski davranışa düş (boş ana sayfa yerine).
+        // API'ler başarısız olursa eski HTML davranışına düş
         val base = request.data
         val document = runCatching {
             app.get(base, headers = headers(base), timeout = 12_000L).document
@@ -603,12 +652,17 @@ class AutoDaddyliveApp : NeonMainAPI() {
     }
 
     private fun searchUrls(encoded: String): List<String> {
-        return listOf(
-            mainUrl + "/?s=" + encoded,
-            mainUrl + "/?search=" + encoded,
-            mainUrl + "/?q=" + encoded,
-            mainUrl + "/search/" + encoded + "/"
-        ).distinct()
+        val urls = ArrayList<String>()
+        if (configuredSearchAction.isNotBlank()) {
+            val separator = if (configuredSearchAction.contains("?")) "&" else "?"
+            urls += configuredSearchAction + separator +
+                URLEncoder.encode(configuredSearchField, "UTF-8") + "=" + encoded
+        }
+        urls += mainUrl + "/?s=" + encoded
+        urls += mainUrl + "/?search=" + encoded
+        urls += mainUrl + "/?q=" + encoded
+        urls += mainUrl + "/search/" + encoded + "/"
+        return urls.distinct()
     }
 
     private fun matchesQuery(result: SearchResponse, query: String): Boolean {
@@ -829,20 +883,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val normalized = normalize(url)
-        if (!isValidHttpUrl(normalized) || !neonIsMediaUrl(normalized)) return null
-
-        val title = runCatching {
-            URI(normalized).path.orEmpty()
-                .substringAfterLast('/')
-                .substringBeforeLast('.')
-                .replace(Regex("""[-_]+"""), " ")
-                .trim()
-        }.getOrNull()?.takeIf { it.isNotBlank() } ?: "Canlı Yayın"
-
-        val response = newLiveStreamLoadResponse(title, normalized, normalized)
-        val document = Document(normalized)
-        return neonEnrichResponse(response, document, normalized)
+        return null
     }
 
     override suspend fun loadLinks(
