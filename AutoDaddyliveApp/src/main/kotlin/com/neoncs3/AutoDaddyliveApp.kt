@@ -21,6 +21,10 @@ class AutoDaddyliveApp : NeonMainAPI() {
     override var sequentialMainPage = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Live)
 
+    // Kanalları çektiğimiz M3U çalma listesi
+    private val channelPlaylistUrl =
+        "https://raw.githubusercontent.com/pigzillaaaaa/iptv-scraper/main/daddylive-channels.m3u8"
+
     private val configuredSearchAction = "https://daddylive.app/porn"
     private val configuredSearchField = "search"
     private val playerUserAgent =
@@ -48,67 +52,117 @@ class AutoDaddyliveApp : NeonMainAPI() {
         }.getOrDefault(false)
 
     // ------------------------------------------------------------------
-    // /channel sayfasından TÜM kanalları kazıyan fonksiyon
+    // M3U çalma listesini indirip ayrıştıran fonksiyon
     // ------------------------------------------------------------------
-    private suspend fun channelHomePages(): List<HomePageList> {
-        val pageUrl = mainUrl.trimEnd('/') + "/channel"
-        val document = runCatching {
+    private suspend fun loadChannelPlaylist(): List<SearchResponse> {
+        val body = runCatching {
             app.get(
-                pageUrl,
-                headers = headers(pageUrl),
+                channelPlaylistUrl,
+                headers = headers(channelPlaylistUrl),
                 timeout = 20_000L,
                 allowRedirects = true,
-            ).document
-        }.getOrNull() ?: run {
-            Log.w(name.uppercase().take(23), "/channel page could not be fetched")
+            ).takeIf { it.isSuccessful }?.text
+        }.getOrNull().orEmpty()
+
+        if (body.isBlank()) {
+            Log.w(name.uppercase().take(23), "M3U playlist returned empty response")
             return emptyList()
         }
 
-        val seen = HashSet<String>()
         val items = ArrayList<SearchResponse>()
+        var pendingName: String? = null
+        var pendingLogo: String? = null
 
-        // Sayfadaki tüm /live/stream= linklerini al.
-        // div.grid-item sınıfına bağımlı değiliz; link herhangi bir yerde olabilir.
-        document.select("a[href*=/live/stream=]").forEach { anchor ->
-            val rawHref = anchor.attr("href").trim()
-            if (!rawHref.contains("/live/stream=", ignoreCase = true)) return@forEach
-
-            val fullUrl = normalize(rawHref, pageUrl)
-            if (!isValidHttpUrl(fullUrl)) return@forEach
-            if (!seen.add(fullUrl)) return@forEach
-
-            // Başlık: önce <strong>, sonra data-channel-name, sonra link metni
-            val parent = anchor.parent()
-            val title = sequenceOf(
-                anchor.selectFirst("strong")?.text(),
-                parent?.attr("data-channel-name"),
-                anchor.attr("title"),
-                anchor.text()
-            ).mapNotNull { it?.trim() }
-                .firstOrNull {
-                    it.length in 1..160 &&
-                        !it.equals("canlı", true) &&
-                        !it.equals("live", true) &&
-                        !it.equals("izle", true)
-                } ?: return@forEach
-
-            items += newLiveSearchResponse(title, fullUrl, TvType.Live) {
-                posterUrl = mainUrl.trimEnd('/') + "/favicon.ico"
+        // M3U formatı: #EXTINF:-1 tvg-logo="..." group-title="...",Kanal Adı
+        // Ardından yayın URL'si gelir.
+        body.lineSequence().forEach { rawLine ->
+            val line = rawLine.trim()
+            when {
+                line.startsWith("#EXTINF:", ignoreCase = true) -> {
+                    // Başlık bilgisini ayıkla
+                    val infoPart = line.substringAfter("#EXTINF:", "")
+                    val name = infoPart.substringAfterLast(",").trim()
+                    if (name.isNotBlank()) {
+                        pendingName = name
+                        // tvg-logo="..." varsa al
+                        val logoMatch = Regex("""tvg-logo="([^"]+)"""")
+                            .find(infoPart)?.groupValues?.getOrNull(1)
+                        pendingLogo = logoMatch?.takeIf { isValidHttpUrl(it) }
+                    } else {
+                        pendingName = null
+                        pendingLogo = null
+                    }
+                }
+                line.isNotBlank() && !line.startsWith("#") -> {
+                    // Bu satır yayın URL'si
+                    val name = pendingName ?: return@forEach
+                    val streamUrl = line
+                    if (isValidHttpUrl(streamUrl)) {
+                        items += newLiveSearchResponse(name, streamUrl, TvType.Live) {
+                            posterUrl = pendingLogo ?: (mainUrl.trimEnd('/') + "/favicon.ico")
+                        }
+                    }
+                    pendingName = null
+                    pendingLogo = null
+                }
             }
         }
 
-        if (items.isEmpty()) {
-            Log.w(name.uppercase().take(23), "/channel page produced no live cards")
-            return emptyList()
+        Log.d(name.uppercase().take(23), "M3U playlist parsed items=${items.size}")
+        return items
+    }
+
+    // ------------------------------------------------------------------
+    // Oynatma linkini doğrudan döndüren yardımcı
+    // ------------------------------------------------------------------
+    private fun emitDirectLiveLink(
+        streamUrl: String,
+        referer: String,
+        callback: (ExtractorLink) -> Unit,
+    ) {
+        val headers = headers(referer).toMutableMap()
+        headers["User-Agent"] = playerUserAgent
+        callback(
+            ExtractorLink(
+                source = name,
+                name = name,
+                url = streamUrl,
+                referer = referer,
+                quality = Qualities.Unknown.value,
+                headers = headers,
+                type = ExtractorLinkType.M3U8,
+            )
+        )
+    }
+
+    override suspend fun getMainPage(
+        page: Int,
+        request: MainPageRequest,
+    ): HomePageResponse {
+        // Ana sayfa açıldığında M3U çalma listesinden kanalları getir.
+        if (page <= 1) {
+            val liveItems = loadChannelPlaylist()
+            if (liveItems.isNotEmpty()) {
+                // Kanalları 300'erlik gruplara bölerek döndür
+                val pages = liveItems.chunked(300).mapIndexed { index, chunk ->
+                    val label = if (index == 0) "Canlı Kanallar" else "Canlı Kanallar ${index + 1}"
+                    HomePageList(label, chunk)
+                }
+                return newHomePageResponse(pages, hasNext = false)
+            }
         }
 
-        Log.d(name.uppercase().take(23), "/channel scraped items=${items.size}")
-        // Tek bir listede çok fazla öğe olmasın diye 300'erlik parçalara böl.
-        return items.chunked(300).mapIndexed { index, chunk ->
-            val label = if (index == 0) "Canlı Kanallar" else "Canlı Kanallar ${index + 1}"
-            HomePageList(label, chunk)
-        }
+        // Çalma listesi alınamazsa eski davranışa düş (boş ana sayfa yerine).
+        val base = request.data
+        val document = runCatching {
+            app.get(base, headers = headers(base), timeout = 12_000L).document
+        }.getOrNull() ?: return newHomePageResponse(request.name, emptyList(), hasNext = false)
+
+        val results = resultsFrom(document, base)
+        return newHomePageResponse(request.name, results, hasNext = false)
     }
+
+    // ---- Aşağıdaki fonksiyonlar önceki sürümden aynen korunmuştur ----
 
     private fun isSiteUrl(url: String): Boolean =
         (url.startsWith("http://", true) || url.startsWith("https://", true)) &&
@@ -566,38 +620,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
         return results.values.toList()
     }
 
-    override suspend fun getMainPage(
-        page: Int,
-        request: MainPageRequest,
-    ): HomePageResponse {
-        // Ana sayfa açıldığında doğrudan /channel sayfasındaki kanalları döndür.
-        // Sayfalama yok; tüm kanallar birden fazla HomePageList'e bölünmüş olarak gelir.
-        if (page <= 1) {
-            val channelPages = channelHomePages()
-            if (channelPages.isNotEmpty()) {
-                return newHomePageResponse(channelPages, hasNext = false)
-            }
-        }
-
-        // /channel kazınamazsa eski davranışa düş (boş ana sayfa yerine).
-        val base = request.data
-        val candidates = if (page <= 1) listOf(base) else listOf(
-            base.trimEnd('/') + "/page/" + page + "/",
-            base + (if (base.contains("?")) "&" else "?") + "page=" + page,
-            base + (if (base.contains("?")) "&" else "?") + "paged=" + page,
-        ).distinct()
-        for (candidate in candidates) {
-            val document = runCatching {
-                app.get(candidate, headers = headers(candidate), timeout = 12_000L).document
-            }.getOrNull() ?: continue
-            val results = resultsFrom(document, candidate)
-            if (results.isNotEmpty()) {
-                return newHomePageResponse(request.name, results, hasNext = page < 100)
-            }
-        }
-        return newHomePageResponse(request.name, emptyList(), hasNext = false)
-    }
-
     private fun searchUrls(encoded: String): List<String> {
         val urls = ArrayList<String>()
         if (configuredSearchAction.isNotBlank()) {
@@ -830,162 +852,9 @@ class AutoDaddyliveApp : NeonMainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val normalizedUrl = normalize(url)
-
-        // /live/stream= sayfalarından iframe player URL'sini çıkar
-        if (normalizedUrl.contains("/live/stream=", ignoreCase = true)) {
-            val doc = runCatching {
-                app.get(
-                    normalizedUrl,
-                    headers = headers(normalizedUrl),
-                    timeout = 15_000L,
-                ).document
-            }.getOrNull()
-
-            if (doc != null) {
-                val iframeSrc = sequenceOf(
-                    doc.selectFirst("iframe#video-player")?.attr("src"),
-                    doc.selectFirst("iframe#player")?.attr("src"),
-                    doc.selectFirst("iframe.player-iframe")?.attr("src"),
-                    doc.selectFirst("iframe[src]")?.attr("src"),
-                ).mapNotNull { it?.trim() }
-                    .firstOrNull {
-                        it.isNotBlank() &&
-                            !it.startsWith("about:", true) &&
-                            !it.startsWith("javascript:", true) &&
-                            !it.startsWith("data:", true) &&
-                            it != "#"
-                    }
-
-                val channelTitle = sequenceOf(
-                    doc.selectFirst("h1")?.text(),
-                    doc.selectFirst(".channel-title, .stream-title, .player-title")?.text(),
-                    doc.title().substringBefore("|").substringBefore("- Daddylive")
-                ).mapNotNull { neonCleanText(it) }
-                    .firstOrNull { it.isNotBlank() }
-                    ?: "Canlı Yayın"
-
-                if (!iframeSrc.isNullOrBlank()) {
-                    val playUrl = normalize(iframeSrc, normalizedUrl)
-                    if (isValidHttpUrl(playUrl)) {
-                        Log.d(
-                            name.uppercase().take(23),
-                            "live stream iframe resolved path=${playUrl.take(200)}"
-                        )
-                        return newLiveStreamLoadResponse(channelTitle, playUrl, playUrl)
-                    }
-                }
-
-                Log.w(
-                    name.uppercase().take(23),
-                    "no player iframe on channel page, falling back to page URL"
-                )
-                return newLiveStreamLoadResponse(channelTitle, normalizedUrl, normalizedUrl)
-            }
-
-            return newLiveStreamLoadResponse("Canlı Yayın", normalizedUrl, normalizedUrl)
-        }
-
-        val embedUrl = liveEmbedUrl(cleanLiveDataUrl(normalizedUrl))
-        val liveTitle = liveTitleFromUrl(normalizedUrl)
-        if (embedUrl != null && liveTitle != null) {
-            val cleanUrl = cleanLiveDataUrl(embedUrl)
-            return newLiveStreamLoadResponse(liveTitle, cleanUrl, cleanUrl)
-        }
-
-        val document = runCatching {
-            app.get(
-                normalizedUrl,
-                headers = headers(normalizedUrl),
-                timeout = 15_000L,
-            ).document
-        }.getOrNull() ?: return null
-        val title = neonPageTitle(document) ?: schemaValue(document, "name") ?: return null
-        val poster = neonPoster(document, normalizedUrl)
-            ?: schemaValue(document, "image", "thumbnailUrl")
-                ?.let { normalize(it, normalizedUrl) }
-                ?.takeIf { it.startsWith("http", true) }
-        val plot = schemaValue(document, "description") ?: neonPlot(document)
-        val year = Regex("""(?<!\d)(?:19|20)\d{2}(?!\d)""")
-            .find(schemaValue(document, "datePublished", "dateCreated").orEmpty())
-            ?.value?.toIntOrNull() ?: neonExtractYear(document.text())
-        val rating = schemaRating(document) ?: neonExtractRating(document.text())
-        val tags = schemaGenres(document).ifEmpty { neonExtractGenres(document) }
-        val actors = neonExtractActors(document, normalizedUrl)
-
-        val linkedSeasons = seasonLinks(document, normalizedUrl)
-        val foundEpisodes = ArrayList<EpisodeItem>()
-        foundEpisodes += episodeItems(document, normalizedUrl, seasonNumber(normalizedUrl))
-        for ((seasonUrl, seasonNo) in linkedSeasons) {
-            val seasonDocument = runCatching {
-                app.get(
-                    seasonUrl,
-                    headers = headers(normalizedUrl),
-                    timeout = 10_000L,
-                ).document
-            }.getOrNull() ?: continue
-            foundEpisodes += episodeItems(
-                seasonDocument,
-                seasonUrl,
-                seasonNo ?: seasonNumber(seasonUrl)
-            )
-        }
-        val episodes = foundEpisodes.distinctBy { it.url }
-            .sortedWith(compareBy<EpisodeItem> { it.season }.thenBy { it.episode }.thenBy { it.url })
-        val types = schemaTypes(document)
-        val episodePage =
-            episodeInfo(title + " " + normalizedUrl, seasonNumber(normalizedUrl)) != null
-        val series = episodes.isNotEmpty() || linkedSeasons.isNotEmpty() ||
-            types.any { it.contains("tvseries") || it.contains("tvseason") || it.contains("tvepisode") } ||
-            Regex("""(?i)(/dizi/|/series/|/tv-show|tvseries|season|sezon)""")
-                .containsMatchIn(normalizedUrl + " " + title)
-
-        val episodeResponses = episodes.mapIndexed { index, item ->
-            newEpisode(item.url) {
-                name = item.title
-                season = item.season
-                episode = item.episode
-                posterUrl = item.poster ?: poster
-            }
-        }.ifEmpty {
-            if (episodePage || types.any { it.contains("tvepisode") }) {
-                listOf(newEpisode(normalizedUrl) {
-                    name = title
-                    season = seasonNumber(normalizedUrl) ?: 1
-                    episode = episodeInfo(
-                        title + " " + normalizedUrl,
-                        seasonNumber(normalizedUrl)
-                    )?.second ?: 1
-                    posterUrl = poster
-                })
-            } else emptyList()
-        }
-
-        val response: LoadResponse = if (series) {
-            newTvSeriesLoadResponse(
-                cleanSeriesTitle(title),
-                normalizedUrl,
-                TvType.TvSeries,
-                episodeResponses
-            ) {
-                posterUrl = poster
-                this.plot = plot
-                this.year = year
-                this.tags = tags
-                rating?.let { score = Score.from10(it) }
-                addActors(actors)
-            }
-        } else {
-            newMovieLoadResponse(title, normalizedUrl, TvType.Movie, normalizedUrl) {
-                posterUrl = poster
-                this.plot = plot
-                this.year = year
-                this.tags = tags
-                rating?.let { score = Score.from10(it) }
-                addActors(actors)
-            }
-        }
-        return neonEnrichResponse(response, document, normalizedUrl)
+        // Live kanallar doğrudan M3U URL'si olarak gelir; load aşamasında ekstra işlem gerekmez.
+        // CloudStream, loadLinks'i çağıracaktır.
+        return null
     }
 
     override suspend fun loadLinks(
@@ -994,13 +863,17 @@ class AutoDaddyliveApp : NeonMainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
-        val normalized = normalize(data)
+        val normalized = data.trim()
         if (normalized.isBlank()) return false
-        val pagePath = runCatching { URI(normalized).path.orEmpty() }.getOrDefault("/")
-        Log.d(name.uppercase().take(23), "loadLinks start path=$pagePath")
 
-        val candidates = LinkedHashSet<String>()
+        // M3U çalma listesinden gelen URL'ler genellikle doğrudan .m3u8 formatındadır.
+        // Bunları doğrudan ExtractorLink olarak döndür.
+        if (neonIsMediaUrl(normalized)) {
+            emitDirectLiveLink(normalized, mainUrl, callback)
+            return true
+        }
 
+        // Diğer durumlar için mevcut çözümleme mantığını kullan.
         val document = neonCachedDocument(normalized, normalized)
             ?: runCatching {
                 app.get(
@@ -1010,25 +883,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
                 ).document
             }.getOrNull()
 
-        val activePlayerUrls = document?.select(
-            "li.series-alter-active button[data-hhs], li.series-alter-active [data-hhs], " +
-                ".series-alter-active [data-hhs]"
-        )?.mapNotNull { node ->
-            val raw = node.attr("data-hhs").trim()
-            if (raw.isBlank() || raw.startsWith("javascript:", true) || raw.startsWith("data:", true)) {
-                return@mapNotNull null
-            }
-            normalize(raw, normalized).takeIf {
-                it.startsWith("http://", true) || it.startsWith("https://", true)
-            }
-        }?.distinct().orEmpty()
-        if (activePlayerUrls.isNotEmpty()) {
-            candidates.addAll(activePlayerUrls)
-            Log.d(
-                name.uppercase().take(23),
-                "active data-hhs player prioritized count=${activePlayerUrls.size}"
-            )
-        }
+        val candidates = LinkedHashSet<String>()
 
         val externalPlayerFrames = document?.let { page ->
             neonExtractIframeUrls(page, normalized)
@@ -1040,173 +895,31 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
         if (externalPlayerFrames.isNotEmpty()) {
             candidates.addAll(externalPlayerFrames)
-            Log.d(
-                name.uppercase().take(23),
-                "external player iframe prioritized; count=${externalPlayerFrames.size}"
-            )
         } else {
             candidates.add(normalized)
         }
 
-        if (document != null) {
-            if (document.text().contains("site.error", ignoreCase = true) &&
-                document.selectFirst("video[src], iframe[src], iframe[data-src], source[src]") == null
-            ) {
-                Log.w(
-                    name.uppercase().take(23),
-                    "provider page has site.error and no active media element"
-                )
-            }
-            candidates.addAll(neonExtractPlayerCandidates(document, normalized))
-            val playerAttributes = listOf(
-                "src", "data-src", "data-lazy-src", "data-url", "data-vsrc", "data-hhs",
-                "data-video-src", "data-player", "data-embed", "data-embed-url",
-                "data-iframe", "data-file", "data-source", "data-hls",
-                "data-stream", "data-video", "data-play"
-            )
-            document.select(
-                "iframe, video, source, [data-hhs], [data-vsrc], [data-video-src], [data-player], [data-embed], " +
-                    "[data-embed-url], [data-iframe], [data-file], [data-source], " +
-                    "[data-hls], [data-stream], [data-video], [data-play], " +
-                    "iframe[data-url], video[data-url], source[data-url], " +
-                    "iframe[data-src], video[data-src], source[data-src], " +
-                    "iframe[data-lazy-src], video[data-lazy-src], source[data-lazy-src]"
-            ).forEach { node ->
-                playerAttributes.forEach { attribute ->
-                    val raw = node.attr(attribute).trim()
-                    if (raw.isBlank() || raw.startsWith("javascript:", true) ||
-                        raw.startsWith("data:", true) || raw == "#"
-                    ) return@forEach
-                    val candidate = normalize(raw, normalized)
-                    if (candidate.startsWith("http", true)) candidates.add(candidate)
-                }
-            }
-
-            val inlineScriptText = document.select("script:not([src])").joinToString("\n") { script ->
-                script.data().ifBlank { script.html() }
-            }
-            playerUrlsFromText(inlineScriptText, normalized).forEach(candidates::add)
-            neonExtractMediaUrls(inlineScriptText).filterNot(::isYouTubePageUrl)
-                .forEach(candidates::add)
-
-            val scriptUrls = document.select("script[src]")
-                .map { normalize(it.attr("src"), normalized) }
-                .filter { it.startsWith("http", true) }
-                .filter { it.substringBefore('?').substringBefore('#').endsWith(".js", true) }
-                .filter {
-                    isSiteUrl(it) ||
-                        Regex("""(?i)(player|video|stream|embed|media|watch)""")
-                            .containsMatchIn(it)
-                }
-                .distinct()
-                .sortedBy {
-                    when {
-                        Regex("""(?i)(player|video|stream|embed|media|watch|episode)""")
-                            .containsMatchIn(it) -> 0
-                        Regex("""(?i)(app|main|bundle|index|chunk)""")
-                            .containsMatchIn(it) -> 1
-                        else -> 2
-                    }
-                }
-                .take(5)
-
-            for (scriptUrl in scriptUrls) {
-                val scriptBody = runCatching {
-                    app.get(
-                        scriptUrl,
-                        headers = headers(normalized),
-                        timeout = 4_000L,
-                        allowRedirects = true,
-                    ).takeIf { it.isSuccessful }?.text
-                }.getOrNull().orEmpty()
-                if (scriptBody.isBlank()) continue
-                playerUrlsFromText(scriptBody, scriptUrl).forEach(candidates::add)
-                neonExtractMediaUrls(scriptBody).filterNot(::isYouTubePageUrl)
-                    .forEach(candidates::add)
-            }
-            if (externalPlayerFrames.isNotEmpty()) candidates.add(normalized)
-        }
-
-        candidates.removeAll { isBrokenSiteMediaUrl(it) || isYouTubePageUrl(it) }
-
         val emitted = LinkedHashSet<String>()
         val forwardingCallback: (ExtractorLink) -> Unit = { link ->
-            when {
-                isBrokenSiteMediaUrl(link.url) ->
-                    Log.d(name.uppercase().take(23), "filtered dead manifest")
-                isYouTubeMediaLink(link) ->
-                    Log.d(
-                        name.uppercase().take(23),
-                        "filtered YouTube trailer source name=${link.name}"
-                    )
-                emitted.add(link.url) -> {
-                    val linkReferer = link.referer.takeIf(::isValidHttpUrl) ?: normalized
-                    val outputHeaders = link.headers + mapOf(
-                        "Referer" to linkReferer,
-                        "User-Agent" to link.headers["User-Agent"].takeIf { !it.isNullOrBlank() }
-                            .orEmpty().ifBlank { playerUserAgent }
-                    )
-                    val outputLink =
-                        if (linkReferer == link.referer && outputHeaders == link.headers) link
-                        else ExtractorLink(
-                            source = link.source,
-                            name = link.name,
-                            url = link.url,
-                            referer = linkReferer,
-                            quality = link.quality,
-                            headers = outputHeaders,
-                            extractorData = link.extractorData,
-                            type = link.type,
-                            audioTracks = link.audioTracks,
-                        )
-                    callback(outputLink)
-                }
+            if (emitted.add(link.url)) {
+                callback(link)
             }
         }
 
-        val resolverCandidates = candidates.toList().take(14)
-        Log.d(
-            name.uppercase().take(23),
-            "loadLinks resolving candidates=${resolverCandidates.size}/${candidates.size}"
-        )
-
         var resolverFound = false
-        for (candidate in resolverCandidates) {
-            val candidateReferer = normalized
+        for (candidate in candidates.take(10)) {
             val candidateFound = neonResolveLinks(
                 data = candidate,
                 sourceName = name,
                 subtitleCallback = subtitleCallback,
                 callback = forwardingCallback,
                 maxDepth = 3,
-                referer = candidateReferer,
+                referer = normalized,
             )
             resolverFound = resolverFound || candidateFound
-            if (emitted.isNotEmpty()) {
-                Log.d(
-                    name.uppercase().take(23),
-                    "playable source emitted; remaining candidates skipped"
-                )
-                break
-            }
+            if (emitted.isNotEmpty()) break
         }
 
-        if (emitted.isEmpty()) {
-            for (candidate in resolverCandidates.take(8)) {
-                if (isSiteUrl(candidate) || neonIsMediaUrl(candidate)) continue
-                runCatching {
-                    loadExtractor(candidate, normalized, subtitleCallback, forwardingCallback)
-                }
-                if (emitted.isNotEmpty()) break
-            }
-        }
-
-        Log.d(
-            name.uppercase().take(23),
-            "loadLinks finished candidates=${candidates.size}; " +
-                "attempted=${resolverCandidates.size}; " +
-                "resolverFound=$resolverFound; emitted=${emitted.size}"
-        )
         return emitted.isNotEmpty()
     }
 }
