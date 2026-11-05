@@ -55,10 +55,7 @@ class AutoDaddyliveApp : MainAPI() {
         val body = runCatching {
             app.get(
                 apiUrl,
-                headers = headers(apiUrl) + mapOf(
-                    "Accept" to "application/json, text/plain, */*",
-                    "User-Agent" to playerUserAgent,
-                ),
+                headers = headers(apiUrl) + mapOf("Accept" to "application/json"),
                 timeout = 20_000L,
                 allowRedirects = true,
             ).takeIf { it.isSuccessful }?.text
@@ -75,129 +72,66 @@ class AutoDaddyliveApp : MainAPI() {
                     val obj = JSONObject(trimmed)
                     obj.optJSONArray("data")
                         ?: obj.optJSONArray("channels")
-                        ?: obj.optJSONArray("list")
-                        ?: obj.optJSONArray("items")
                         ?: JSONArray()
                 }
                 else -> JSONArray()
             }
-
             for (i in 0 until jsonArray.length()) {
                 val obj = jsonArray.optJSONObject(i) ?: continue
-                val channelName = sequenceOf(
-                    obj.optString("name"),
-                    obj.optString("channel_name"),
-                    obj.optString("title"),
-                ).map { it.trim() }
-                    .firstOrNull { it.isNotBlank() } ?: continue
-
-                val streamUrl = sequenceOf(
-                    obj.optString("url"),
-                    obj.optString("stream_url"),
-                    obj.optString("link"),
-                ).map { it.trim() }
-                    .firstOrNull { it.isNotBlank() } ?: continue
-
-                if (!isValidHttpUrl(streamUrl)) continue
-
-                items += newLiveSearchResponse(channelName, streamUrl, TvType.Live) {
+                val name = obj.optString("name").trim().ifBlank {
+                    obj.optString("channel_name").trim()
+                }.ifBlank { continue }
+                val url = obj.optString("url").trim().ifBlank { continue }
+                if (!isValidHttpUrl(url)) continue
+                items += newLiveSearchResponse(name, url, TvType.Live) {
                     posterUrl = mainUrl.trimEnd('/') + "/favicon.ico"
                 }
             }
         }
-
         return items
     }
 
     private suspend fun loadChannelsFromApis(): List<SearchResponse> {
         val combined = ArrayList<SearchResponse>()
-        val seenKeys = HashSet<String>()
+        val seen = HashSet<String>()
         for (apiUrl in channelApiUrls) {
             for (item in parseChannelsFromUrl(apiUrl)) {
-                val key = item.name.trim().lowercase() + "|" + item.url.trim()
-                if (seenKeys.add(key)) {
-                    combined += item
-                }
+                if (seen.add(item.name.lowercase() + "|" + item.url)) combined += item
             }
         }
         return combined
     }
 
-    // ------------------------------------------------------------------
-    // DAHA AGRESİF CANLI AKIŞ ÇIKARICI
-    // ------------------------------------------------------------------
-    private fun extractLiveStreamFromHtml(html: String): String? {
+    // TÜM .m3u8 URL'lerini çıkarır
+    private fun findAllM3u8(html: String): List<String> {
         val text = html
             .replace("\\/", "/")
             .replace("\\u0026", "&")
             .replace("&#x2F;", "/")
             .replace("&amp;", "&")
 
-        // 1. Tüm .m3u8 URL'lerini topla
-        val m3u8s = Regex("""https?://[^\s"'<>\\]+\.m3u8[^\s"'<>\\]*""")
-            .findAll(text).map { it.value }.toList()
-
-        Log.d("DADDYLIVE", "extractLive: bulunan m3u8=${m3u8s.size}")
-        m3u8s.forEach { Log.d("DADDYLIVE", "  -> $it") }
-
-        // 2. Doğrudan canlı akış gibi görünenleri tercih et
-        val liveKeywords = listOf("live", "stream", "play", "chunk", "edge", "cdn", "hls")
-        for (kw in liveKeywords) {
-            val match = m3u8s.firstOrNull { it.contains(kw, true) }
-            if (match != null) {
-                Log.d("DADDYLIVE", "extractLive: keyword '$kw' ile eşleşti")
-                return match
-            }
-        }
-
-        // 3. İlk .m3u8
-        if (m3u8s.isNotEmpty()) {
-            Log.d("DADDYLIVE", "extractLive: ilk m3u8 kullanıldı")
-            return m3u8s.first()
-        }
-
-        // 4. iframe src
-        val iframeRegex = Regex("""<iframe[^>]+src=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
-        iframeRegex.find(text)?.let { m ->
-            val iframe = m.groupValues[1]
-            Log.d("DADDYLIVE", "extractLive: iframe=$iframe")
-            if (iframe.startsWith("http", true)) return iframe
-        }
-
-        // 5. video src
-        val videoRegex = Regex("""<video[^>]+src=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
-        videoRegex.find(text)?.let { m ->
-            val video = m.groupValues[1]
-            Log.d("DADDYLIVE", "extractLive: video=$video")
-            if (video.startsWith("http", true)) return video
-        }
-
-        // 6. JS değişkenleri
-        val jsPatterns = listOf(
-            Regex("""(?:src|file|source|stream|url|hls|playlist|video)\s*[:=]\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE),
-        )
-        for (p in jsPatterns) {
-            for (m in p.findAll(text)) {
+        val results = LinkedHashSet<String>()
+        Regex("""https?://[^\s"'<>\\]+\.m3u8[^\s"'<>\\]*""")
+            .findAll(text).forEach { results.add(it.value) }
+        Regex("""["']([^"']+\.m3u8[^"']*)["']""")
+            .findAll(text).forEach { m ->
                 val v = m.groupValues[1]
-                if (v.startsWith("http", true) &&
-                    (v.contains(".m3u8", true) || v.contains("stream", true) || v.contains("live", true))) {
-                    Log.d("DADDYLIVE", "extractLive: js var=$v")
-                    return v
-                }
+                if (v.startsWith("http", true)) results.add(v)
             }
-        }
-
-        return null
+        return results.toList()
     }
 
-    // ------------------------------------------------------------------
-    // proxyPlayerUrl'yi birden fazla yolla dene
-    // ------------------------------------------------------------------
+    // TÜM iframe src'lerini çıkarır
+    private fun findAllIframes(html: String): List<String> {
+        return Regex("""<iframe[^>]+src=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+            .findAll(html).map { it.groupValues[1] }.toList()
+    }
+
     private suspend fun resolveTvNow247(
         embedUrl: String,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
-        Log.d("DADDYLIVE", "=== resolveTvNow247 START: $embedUrl ===")
+        Log.d("DADDYLIVE", "START: $embedUrl")
 
         val embedResponse = runCatching {
             app.get(
@@ -209,7 +143,7 @@ class AutoDaddyliveApp : MainAPI() {
                 timeout = 15_000L,
             )
         }.getOrNull() ?: run {
-            Log.d("DADDYLIVE", "Embed sayfası alınamadı")
+            Log.d("DADDYLIVE", "Embed alınamadı")
             return false
         }
 
@@ -221,18 +155,9 @@ class AutoDaddyliveApp : MainAPI() {
             Regex("""channel_id\s*[:=]\s*["']?(\d+)["']?""").find(pageHtml)?.groupValues?.getOrNull(1),
             Regex("""/resolve-dlstream/(\d+)""").find(pageHtml)?.groupValues?.getOrNull(1),
             Regex("""(\d+)$""").find(embedUrl)?.groupValues?.getOrNull(1),
-        ).filterNotNull().firstOrNull() ?: run {
-            Log.d("DADDYLIVE", "channelId bulunamadı")
-            return false
-        }
+        ).filterNotNull().firstOrNull() ?: return false
 
-        val src = if (embedUrl.contains("-plus-", true)) "plus" else "plus"
-
-        val apiHost = "https://chat.cfbu247.sbs"
-
-        Log.d("DADDYLIVE", "channelId=$channelId src=$src")
-
-        val resolveUrl = "$apiHost/api/resolve-dlstream/$channelId?src=$src"
+        val resolveUrl = "https://chat.cfbu247.sbs/api/resolve-dlstream/$channelId?src=plus"
         val resolveBody = runCatching {
             app.get(
                 resolveUrl,
@@ -245,12 +170,8 @@ class AutoDaddyliveApp : MainAPI() {
             ).takeIf { it.isSuccessful }?.text
         }.getOrNull().orEmpty()
 
-        if (resolveBody.isBlank()) {
-            Log.d("DADDYLIVE", "resolve-dlstream boş")
-            return false
-        }
-
-        Log.d("DADDYLIVE", "resolveBody=${resolveBody.take(400)}")
+        Log.d("DADDYLIVE", "channelId=$channelId resolveLen=${resolveBody.length}")
+        if (resolveBody.isBlank()) return false
 
         val json = runCatching { JSONObject(resolveBody) }.getOrNull() ?: return false
 
@@ -259,12 +180,13 @@ class AutoDaddyliveApp : MainAPI() {
         val apiReferer = json.optString("referer").trim().takeIf { it.isNotBlank() && it != "null" }
             ?: "https://dembed.st/premiumtv/daddy.php?id=$channelId"
 
-        Log.d("DADDYLIVE", "m3u8=$m3u8Url")
-        Log.d("DADDYLIVE", "proxyPlayer=$proxyPlayerUrl")
+        Log.d("DADDYLIVE", "m3u8=${m3u8Url?.take(120)}")
+        Log.d("DADDYLIVE", "proxyPlayer=${proxyPlayerUrl?.take(120)}")
 
         var emitted = 0
+        val triedUrls = mutableSetOf<String>()
 
-        // proxyPlayerUrl'yi dene
+        // 1) proxyPlayerUrl'yi aç
         if (!proxyPlayerUrl.isNullOrBlank()) {
             val playerHtml = runCatching {
                 app.get(
@@ -280,64 +202,107 @@ class AutoDaddyliveApp : MainAPI() {
 
             Log.d("DADDYLIVE", "playerHtml uzunluk=${playerHtml.length}")
 
-            if (playerHtml.isNotBlank()) {
-                val liveStream = extractLiveStreamFromHtml(playerHtml)
-                if (!liveStream.isNullOrBlank()) {
-                    Log.d("DADDYLIVE", "✓ GERÇEK AKIŞ BULUNDU: $liveStream")
-                    callback(
-                        ExtractorLink(
-                            source = name,
-                            name = "Daddylive Live",
-                            url = liveStream,
-                            referer = apiReferer,
-                            quality = Qualities.Unknown.value,
-                            headers = mapOf(
-                                "Referer" to apiReferer,
-                                "Origin" to "https://dembed.st",
-                                "User-Agent" to playerUserAgent,
-                            ),
-                            type = ExtractorLinkType.M3U8,
-                        )
-                    )
-                    emitted++
-                } else {
-                    Log.d("DADDYLIVE", "✗ playerHtml'de akış yok")
-                }
-            }
-        }
+            // playerHtml içindeki TÜM m3u8'leri al
+            val m3u8s = findAllM3u8(playerHtml)
+            Log.d("DADDYLIVE", "playerHtml'de ${m3u8s.size} m3u8 bulundu")
+            m3u8s.forEach { Log.d("DADDYLIVE", "  m3u8 -> ${it.take(150)}") }
 
-        // Fallback: m3u8 - 3 başlık kombinasyonu
-        if (!m3u8Url.isNullOrBlank()) {
-            data class Combo(val referer: String, val origin: String?, val label: String)
-            val combos = listOf(
-                Combo(apiReferer, "https://dembed.st", "Daddylive (api+origin)"),
-                Combo(apiReferer, null, "Daddylive (no-origin)"),
-                Combo("https://tvnow247.top/", "https://tvnow247.top", "Daddylive (tv)"),
-            )
+            // Canlı akış tercih et
+            val liveStream = m3u8s.firstOrNull {
+                it.contains("live", true) || it.contains("stream", true) || it.contains("chunk", true)
+            } ?: m3u8s.firstOrNull()
 
-            for (c in combos) {
-                val h = mutableMapOf(
-                    "Referer" to c.referer,
-                    "User-Agent" to playerUserAgent,
-                )
-                if (c.origin != null) h["Origin"] = c.origin
-
+            if (liveStream != null && triedUrls.add(liveStream)) {
+                Log.d("DADDYLIVE", "✓ EMIT (live): ${liveStream.take(150)}")
                 callback(
                     ExtractorLink(
                         source = name,
-                        name = c.label,
-                        url = m3u8Url,
-                        referer = c.referer,
+                        name = "Daddylive Live",
+                        url = liveStream,
+                        referer = apiReferer,
                         quality = Qualities.Unknown.value,
-                        headers = h,
+                        headers = mapOf(
+                            "Referer" to apiReferer,
+                            "Origin" to "https://dembed.st",
+                            "User-Agent" to playerUserAgent,
+                        ),
                         type = ExtractorLinkType.M3U8,
                     )
                 )
                 emitted++
             }
+
+            // 2) iframe'leri takip et (ikinci seviye)
+            val iframes = findAllIframes(playerHtml)
+            Log.d("DADDYLIVE", "playerHtml'de ${iframes.size} iframe bulundu")
+            for (iframe in iframes.take(2)) {
+                val resolved = if (iframe.startsWith("http", true)) iframe
+                    else runCatching { URI(proxyPlayerUrl).resolve(iframe).toString() }.getOrNull() ?: continue
+                Log.d("DADDYLIVE", "iframe -> ${resolved.take(120)}")
+
+                val innerHtml = runCatching {
+                    app.get(
+                        resolved,
+                        headers = mapOf(
+                            "Referer" to "https://tvnow247.top/",
+                            "User-Agent" to playerUserAgent,
+                        ),
+                        timeout = 15_000L,
+                    ).takeIf { it.isSuccessful }?.text
+                }.getOrNull().orEmpty()
+
+                if (innerHtml.isNotBlank()) {
+                    val innerM3u8s = findAllM3u8(innerHtml)
+                    Log.d("DADDYLIVE", "iframe içinde ${innerM3u8s.size} m3u8")
+                    val innerLive = innerM3u8s.firstOrNull {
+                        it.contains("live", true) || it.contains("stream", true)
+                    } ?: innerM3u8s.firstOrNull()
+
+                    if (innerLive != null && triedUrls.add(innerLive)) {
+                        Log.d("DADDYLIVE", "✓ EMIT (iframe): ${innerLive.take(150)}")
+                        callback(
+                            ExtractorLink(
+                                source = name,
+                                name = "Daddylive (iframe)",
+                                url = innerLive,
+                                referer = apiReferer,
+                                quality = Qualities.Unknown.value,
+                                headers = mapOf(
+                                    "Referer" to apiReferer,
+                                    "Origin" to "https://dembed.st",
+                                    "User-Agent" to playerUserAgent,
+                                ),
+                                type = ExtractorLinkType.M3U8,
+                            )
+                        )
+                        emitted++
+                    }
+                }
+            }
         }
 
-        Log.d("DADDYLIVE", "=== resolveTvNow247 END: emitted=$emitted ===")
+        // 3) Doğrudan m3u8'i dene (son çare)
+        if (!m3u8Url.isNullOrBlank() && triedUrls.add(m3u8Url)) {
+            Log.d("DADDYLIVE", "EMIT (fallback): ${m3u8Url.take(150)}")
+            callback(
+                ExtractorLink(
+                    source = name,
+                    name = "Daddylive (fallback)",
+                    url = m3u8Url,
+                    referer = apiReferer,
+                    quality = Qualities.Unknown.value,
+                    headers = mapOf(
+                        "Referer" to apiReferer,
+                        "Origin" to "https://dembed.st",
+                        "User-Agent" to playerUserAgent,
+                    ),
+                    type = ExtractorLinkType.M3U8,
+                )
+            )
+            emitted++
+        }
+
+        Log.d("DADDYLIVE", "END: emitted=$emitted")
         return emitted > 0
     }
 
@@ -358,9 +323,8 @@ class AutoDaddyliveApp : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val normalized = url.trim()
-        if (!isValidHttpUrl(normalized)) return null
-        return newLiveStreamLoadResponse("Canlı Yayın", normalized, normalized)
+        if (!isValidHttpUrl(url)) return null
+        return newLiveStreamLoadResponse("Canlı Yayın", url, url)
     }
 
     override suspend fun loadLinks(
@@ -372,11 +336,11 @@ class AutoDaddyliveApp : MainAPI() {
         val normalized = data.trim()
         if (normalized.isBlank()) return false
 
-        if (normalized.contains("tvnow247.top/embed/", ignoreCase = true)) {
+        if (normalized.contains("tvnow247.top/embed/", true)) {
             return resolveTvNow247(normalized, callback)
         }
 
-        if (normalized.contains(".m3u8", true) || normalized.contains(".mp4", true)) {
+        if (normalized.contains(".m3u8", true)) {
             val host = runCatching { URI(normalized).host.orEmpty() }.getOrDefault("")
             callback(
                 ExtractorLink(
@@ -394,11 +358,8 @@ class AutoDaddyliveApp : MainAPI() {
             )
             return true
         }
-
         return false
     }
 
-    override suspend fun search(query: String): List<SearchResponse> {
-        return emptyList()
-    }
+    override suspend fun search(query: String): List<SearchResponse> = emptyList()
 }
