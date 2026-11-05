@@ -1,10 +1,10 @@
 [
     {
         "iconUrl": "https://daddylive.app/favicon.ico",
-        "fileHash": "sha256-cde832dd9efd9a1632486fd843d07dc28fdbf723f083e8323dee9fa21f8c7cd9",
+        "fileHash": "sha256-b6f49ee0589aed321ea70ca5b89658389a1f0b368c17df9855f498beb0b58057",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 87121,
+        "fileSize": 87132,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -12,7 +12,8 @@
         ],
         "tvTypes": [
             "Movie",
-            "TvSeries"
+            "TvSeries",
+            "Live"
         ],
         "version": 1,
         "internalName": "AutoDaddyliveApp",
