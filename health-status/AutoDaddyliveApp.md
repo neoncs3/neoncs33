@@ -1,4 +1,4 @@
-# 🟢 AutoDaddyliveApp
+# 🟡 AutoDaddyliveApp
 
 Kodda kayıtlı domain: https://daddylive.app
 
@@ -19,10 +19,10 @@ Not: Bu rapor kaynak kodunun yapısını ve site HTTP erişimini ölçer; gerçe
 - Search: ✅
 - Load: ✅
 - LoadLinks: ✅
-- Metadata: ✅
-- Video resolver: ✅
-- Subtitles: ✅
-- Cache/fallback: ✅
+- Metadata: ❌
+- Video resolver: ❌
+- Subtitles: ❌
+- Cache/fallback: ❌
 - TMDB playback yasağı: ✅
 
 Kaynak: AutoDaddyliveApp/src/main/kotlin/com/neoncs3/AutoDaddyliveApp.kt
