@@ -31,7 +31,7 @@
     },
     {
       "provider": "AutoDaddyliveApp",
-      "status": "yellow",
+      "status": "green",
       "domain": "https://daddylive.app",
       "configured_domain": "https://daddylive.app",
       "live_domain": "https://daddylive.app",
@@ -50,7 +50,7 @@
         "load": true,
         "search": true,
         "loadLinks": true,
-        "metadata": false,
+        "metadata": true,
         "video": true,
         "subtitles": true,
         "cache": true,
@@ -98,7 +98,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://www.hdfilmdiziizle.com",
-        "bytes": 5615,
+        "bytes": 5636,
         "title": "Just a moment...",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -140,7 +140,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://tvdiziler.tv",
-        "bytes": 82774,
+        "bytes": 82786,
         "title": "Dizi izle, Yerli ve Full HD Diziler, Dizi Seyret | TvDiziler.tv",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -195,7 +195,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://diziboxizle.com",
-        "bytes": 384728,
+        "bytes": 384571,
         "title": "Dizibox İzle - Güncel Yabancı Dizi izle, HD Diziler izle",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -295,7 +295,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://dramadizilerim.com",
-        "bytes": 199758,
+        "bytes": 199754,
         "title": "Drama Dizilerim - Drama İzle, Dikey Mini Dizi &amp; Kısa Dizi İzle",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -485,7 +485,7 @@
       "source": "WebDramaTurkey/src/main/kotlin/com/neoncs3/WebDramaTurkey.kt"
     }
   ],
-  "green": 9,
-  "yellow": 11,
+  "green": 10,
+  "yellow": 10,
   "red": 0
 }
