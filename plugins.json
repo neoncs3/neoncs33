@@ -1,10 +1,10 @@
 [
     {
         "iconUrl": "https://daddylive.app/favicon.ico",
-        "fileHash": "sha256-c61598a4aecadbcff11d4e61993e8ad29a0acdd96fdc7b89548dddfebb30e431",
+        "fileHash": "sha256-5083acf6a937888f456a55a5cd20488d11ae9583904f2fb8cb8cc0046eb1e29b",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 70782,
+        "fileSize": 70632,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -15,7 +15,7 @@
             "TvSeries",
             "Live"
         ],
-        "version": 8,
+        "version": 9,
         "internalName": "AutoDaddyliveApp",
         "description": "URL analizinden otomatik olu\u015fturuldu: daddylive.app",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/AutoDaddyliveApp.cs3",
