@@ -27,7 +27,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
     private val channelsPerPage = 50
 
-    // Daha yaygın ve kararlı bir UA
     private val playerUserAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
@@ -141,7 +140,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
         val referer = "https://$streamHost/"
 
-        // Origin göndermiyoruz; OkHttp otomatik ekler ve elle eklenen değerle çakışmaz.
         val outHeaders = mapOf(
             "Referer" to referer,
             "User-Agent" to playerUserAgent,
@@ -154,15 +152,11 @@ class AutoDaddyliveApp : NeonMainAPI() {
                 referer = referer,
                 quality = Qualities.Unknown.value,
                 headers = outHeaders,
-                type = ExtractorLinkType.M3U8,
+                type = ExtractorLinkType.VIDEO,
             )
         )
     }
 
-    // ------------------------------------------------------------------
-    // tvnow247.top embed sayfalarını çözen fonksiyon
-    // Origin kaldırıldı, Referer sadeleştirildi, UA/Accept iyileştirildi
-    // ------------------------------------------------------------------
     private suspend fun resolveTvNow247(
         embedUrl: String,
         callback: (ExtractorLink) -> Unit,
@@ -240,12 +234,10 @@ class AutoDaddyliveApp : NeonMainAPI() {
             ?: json?.optString("proxyPlaylistUrl")?.trim()
                 ?.takeIf { it.isNotBlank() && it != "null" }
 
-        // Referer: API yanıtındaki tam referer'ı kullan; eğer çok uzunsa origin'e indir.
         val rawReferer = json?.optString("referer")?.trim()
             ?.takeIf { it.isNotBlank() && it != "null" }
             ?: "https://dembed.st/"
 
-        // Sunucu bazı durumlarda tam URL yerine sadece origin bekleyebiliyor.
         val streamReferer = runCatching {
             val uri = URI(rawReferer)
             "${uri.scheme}://${uri.host}/"
@@ -261,11 +253,10 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
         Log.d(name.uppercase().take(23), "tvnow247: m3u8=$m3u8Url referer=$streamReferer")
 
-        // Origin YOK, Accept HLS, Referer origin seviyesinde.
         val outHeaders = mapOf(
             "Referer" to streamReferer,
             "User-Agent" to playerUserAgent,
-            "Accept" to "application/vnd.apple.mpegurl, application/x-mpegURL, */*",
+            "Accept" to "*/*",
             "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
         )
         callback(
@@ -276,7 +267,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
                 referer = streamReferer,
                 quality = Qualities.Unknown.value,
                 headers = outHeaders,
-                type = ExtractorLinkType.M3U8,
+                type = ExtractorLinkType.VIDEO,
             )
         )
         return true
