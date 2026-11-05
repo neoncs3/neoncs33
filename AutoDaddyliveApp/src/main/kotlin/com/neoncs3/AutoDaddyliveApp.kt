@@ -20,7 +20,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
     override var sequentialMainPage = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Live)
 
-    // Kanal listesi kaynakları (M3U tamamen kaldırıldı)
+    // Kanal listesi kaynakları
     private val channelApiUrls = listOf(
         "https://daddylive.app/player/player5.json",
         "https://daddylive.app/player/player10.json",
@@ -128,7 +128,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
         val seenKeys = HashSet<String>()
         for (apiUrl in channelApiUrls) {
             for (item in parseChannelsFromUrl(apiUrl)) {
-                // Aynı isim + URL kombinasyonu iki kaynakta da varsa tekilleştir
                 val key = item.name.trim().lowercase() + "|" + item.url.trim()
                 if (seenKeys.add(key)) {
                     combined += item
@@ -173,7 +172,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
     // ------------------------------------------------------------------
     // tvnow247.top embed sayfalarını çözen fonksiyon
-    // İki adımlı API: resolve-dlstream -> proxy/playlist
+    // Yeni API yanıtı doğrudan m3u8 ve referer döndürüyor.
     // ------------------------------------------------------------------
     private suspend fun resolveTvNow247(
         embedUrl: String,
@@ -238,7 +237,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
             "tvnow247: channelId=$channelId src=$src apiHost=$apiHost"
         )
 
-        // 5. resolve-dlstream API'sini çağırarak token al
+        // 5. resolve-dlstream API'sini çağır
         val resolveUrl = "${apiHost.trimEnd('/')}/api/resolve-dlstream/$channelId?src=$src"
         val resolveBody = runCatching {
             app.get(
@@ -258,43 +257,27 @@ class AutoDaddyliveApp : NeonMainAPI() {
             return false
         }
 
-        // 6. Token'ı JSON yanıtından al
-        val token = runCatching {
-            val json = JSONObject(resolveBody)
-            sequenceOf(
-                json.optString("token"),
-                json.optString("dlstream"),
-                json.optJSONObject("data")?.optString("token"),
-            ).map { it.trim() }
-                .firstOrNull { it.isNotBlank() && it != "null" }
-        }.getOrNull()
+        // 6. Yanıttan m3u8 ve referer'ı al
+        val json = runCatching { JSONObject(resolveBody) }.getOrNull()
+        val m3u8Url = json?.optString("m3u8")?.trim()
+            ?.takeIf { it.isNotBlank() && it != "null" }
+        val streamReferer = json?.optString("referer")?.trim()
+            ?.takeIf { it.isNotBlank() && it != "null" }
+            ?: "https://dembed.st/premiumtv/daddy.php?id=$channelId"
 
-        if (token.isNullOrBlank()) {
+        if (m3u8Url.isNullOrBlank()) {
             Log.w(
                 name.uppercase().take(23),
-                "tvnow247: token bulunamadı. Yanıt: ${resolveBody.take(300)}"
+                "tvnow247: m3u8 bulunamadı. Yanıt: ${resolveBody.take(300)}"
             )
             return false
         }
 
-        // 7. Playlist URL'sini oluştur
-        val playlistHost = sequenceOf(
-            runCatching { JSONObject(resolveBody).optString("proxy") }.getOrNull(),
-            runCatching { JSONObject(resolveBody).optString("host") }.getOrNull(),
-            Regex("""["'](https?://chunk\.[a-z0-9.-]+)["']""")
-                .find(pageHtml)?.groupValues?.getOrNull(1),
-        ).mapNotNull { it?.trim() }
-            .firstOrNull { it.isNotBlank() && it.startsWith("http") }
-            ?: "https://chunk.tvnow247.today"
+        Log.d(name.uppercase().take(23), "tvnow247: m3u8=$m3u8Url referer=$streamReferer")
 
-        val playlistUrl = if (token.startsWith("http")) token
-        else "${playlistHost.trimEnd('/')}/api/proxy/playlist?token=$token"
-
-        Log.d(name.uppercase().take(23), "tvnow247: playlist=$playlistUrl")
-
-        // 8. Oynatıcıya ilet
+        // 7. Doğrudan oynatıcıya ilet
         val outHeaders = mapOf(
-            "Referer" to "https://tvnow247.top/",
+            "Referer" to streamReferer,
             "Origin" to "https://tvnow247.top",
             "User-Agent" to playerUserAgent,
         )
@@ -302,8 +285,8 @@ class AutoDaddyliveApp : NeonMainAPI() {
             ExtractorLink(
                 source = name,
                 name = name,
-                url = playlistUrl,
-                referer = "https://tvnow247.top/",
+                url = m3u8Url,
+                referer = streamReferer,
                 quality = Qualities.Unknown.value,
                 headers = outHeaders,
                 type = ExtractorLinkType.M3U8,
@@ -326,7 +309,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
             }
         }
 
-        // API'ler başarısız olursa HTML davranışına düş
         val base = request.data
         val document = runCatching {
             app.get(base, headers = headers(base), timeout = 12_000L).document
@@ -839,7 +821,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
             Log.w(name.uppercase().take(23), "tvnow247 çözümlenemedi, genel çözümlemeye düşülüyor")
         }
 
-        // 3. Genel çözümleme (player5.json'daki cdnlivetv API'leri vb. için)
+        // 3. Genel çözümleme
         val document = neonCachedDocument(normalized, normalized)
             ?: runCatching {
                 app.get(
