@@ -261,6 +261,8 @@ class AutoDaddyliveApp : NeonMainAPI() {
         val json = runCatching { JSONObject(resolveBody) }.getOrNull()
         val m3u8Url = json?.optString("m3u8")?.trim()
             ?.takeIf { it.isNotBlank() && it != "null" }
+            ?: json?.optString("proxyPlaylistUrl")?.trim()
+                ?.takeIf { it.isNotBlank() && it != "null" }
         val streamReferer = json?.optString("referer")?.trim()
             ?.takeIf { it.isNotBlank() && it != "null" }
             ?: "https://dembed.st/premiumtv/daddy.php?id=$channelId"
@@ -275,11 +277,13 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
         Log.d(name.uppercase().take(23), "tvnow247: m3u8=$m3u8Url referer=$streamReferer")
 
-        // 7. Doğrudan oynatıcıya ilet
+        // 7. Genişletilmiş başlıklarla oynatıcıya ilet
         val outHeaders = mapOf(
             "Referer" to streamReferer,
             "Origin" to "https://tvnow247.top",
             "User-Agent" to playerUserAgent,
+            "Accept" to "*/*",
+            "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
         )
         callback(
             ExtractorLink(
