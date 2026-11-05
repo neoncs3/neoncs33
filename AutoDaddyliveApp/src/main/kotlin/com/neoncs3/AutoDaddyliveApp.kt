@@ -20,8 +20,8 @@ class AutoDaddyliveApp : NeonMainAPI() {
     override var sequentialMainPage = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Live)
 
+    // Sadece player10.json - player5.json'daki cdnlivetv.tv API çalışmıyor
     private val channelApiUrls = listOf(
-        "https://daddylive.app/player/player5.json",
         "https://daddylive.app/player/player10.json",
     )
 
@@ -51,6 +51,9 @@ class AutoDaddyliveApp : NeonMainAPI() {
                 !uri.host.isNullOrBlank()
         }.getOrDefault(false)
 
+    // ------------------------------------------------------------------
+    // JSON API'sinden kanalları çeken fonksiyon
+    // ------------------------------------------------------------------
     private suspend fun parseChannelsFromUrl(apiUrl: String): List<SearchResponse> {
         val body = runCatching {
             app.get(
@@ -130,71 +133,10 @@ class AutoDaddyliveApp : NeonMainAPI() {
         return combined
     }
 
-    private fun emitDirectLiveLink(
-        streamUrl: String,
-        callback: (ExtractorLink) -> Unit,
-    ) {
-        val streamHost = runCatching {
-            URI(streamUrl).host.orEmpty().lowercase()
-        }.getOrDefault("").ifBlank { "daddylive.app" }
-
-        val referer = "https://$streamHost/"
-
-        val outHeaders = mapOf(
-            "Referer" to referer,
-            "User-Agent" to playerUserAgent,
-        )
-        callback(
-            ExtractorLink(
-                source = name,
-                name = name,
-                url = streamUrl,
-                referer = referer,
-                quality = Qualities.Unknown.value,
-                headers = outHeaders,
-                type = ExtractorLinkType.M3U8,
-            )
-        )
-    }
-
-    // proxyPlayerUrl sayfasındaki HTML'den gerçek canlı akışı çıkarır
-    private fun extractStreamFromPlayerHtml(html: String): String? {
-        val text = html
-            .replace("\\/", "/")
-            .replace("\\u0026", "&")
-            .replace("&#x2F;", "/")
-            .replace("&amp;", "&")
-
-        // HLS (.m3u8) adreslerini bul
-        val m3u8Regex = Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""")
-        val candidates = m3u8Regex.findAll(text).map { it.value }.toList()
-        if (candidates.isNotEmpty()) {
-            // Önce canlı (chunk/stream/live) tercih et, sonra ilk bulunan
-            val preferred = candidates.firstOrNull {
-                it.contains("chunk", true) ||
-                    it.contains("stream", true) ||
-                    it.contains("live", true) ||
-                    it.contains("play", true)
-            } ?: candidates.first()
-            return preferred
-        }
-
-        // Bazı player'lar m3u8'i JS değişkeninde tutar
-        val jsVarPatterns = listOf(
-            Regex(
-                """(?:src|file|source|stream|url|hls|playlist)\s*[:=]\s*["']([^"']+\.m3u8[^"']*)["']""",
-                RegexOption.IGNORE_CASE
-            ),
-            Regex("""["']([^"']+\.m3u8[^"']*)["']"""),
-        )
-        for (p in jsVarPatterns) {
-            val m = p.find(text)
-            if (m != null) return m.groupValues[1]
-        }
-
-        return null
-    }
-
+    // ------------------------------------------------------------------
+    // tvnow247.top embed sayfalarını çözen fonksiyon
+    // API yanıtındaki m3u8 için 3 farklı başlık kombinasyonu dener
+    // ------------------------------------------------------------------
     private suspend fun resolveTvNow247(
         embedUrl: String,
         callback: (ExtractorLink) -> Unit,
@@ -218,6 +160,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
             return false
         }
 
+        // 1. channelId
         val channelId = sequenceOf(
             Regex("""channelId\s*[:=]\s*["']?(\d+)["']?""").find(pageHtml)?.groupValues?.getOrNull(1),
             Regex("""channel_id\s*[:=]\s*["']?(\d+)["']?""").find(pageHtml)?.groupValues?.getOrNull(1),
@@ -233,6 +176,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
             return false
         }
 
+        // 2. src
         val src = sequenceOf(
             Regex("""src\s*[:=]\s*["'](plus|tv\d*|dl|main|alt)["']""").find(pageHtml)?.groupValues?.getOrNull(1),
             Regex("""[?&]src=(\w+)""").find(pageHtml)?.groupValues?.getOrNull(1),
@@ -241,6 +185,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
             ) "plus" else null,
         ).filterNotNull().firstOrNull() ?: "plus"
 
+        // 3. apiHost
         val apiHost = sequenceOf(
             Regex("""["'](https?://chat\.[a-z0-9.-]+)["']""")
                 .find(pageHtml)?.groupValues?.getOrNull(1),
@@ -248,6 +193,12 @@ class AutoDaddyliveApp : NeonMainAPI() {
                 .find(pageHtml)?.groupValues?.getOrNull(1),
         ).filterNotNull().firstOrNull() ?: "https://chat.cfbu247.sbs"
 
+        Log.d(
+            name.uppercase().take(23),
+            "tvnow247: channelId=$channelId src=$src apiHost=$apiHost"
+        )
+
+        // 4. resolve-dlstream API
         val resolveUrl = "${apiHost.trimEnd('/')}/api/resolve-dlstream/$channelId?src=$src"
         val resolveBody = runCatching {
             app.get(
@@ -268,79 +219,49 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
         val json = runCatching { JSONObject(resolveBody) }.getOrNull() ?: return false
 
-        val proxyPlayerUrl = json.optString("proxyPlayerUrl").trim()
+        val m3u8Url = json.optString("m3u8").trim()
             .takeIf { it.isNotBlank() && it != "null" }
-        val directM3u8 = json.optString("m3u8").trim()
-            .takeIf { it.isNotBlank() && it != "null" }
-        val proxyPlaylistUrl = json.optString("proxyPlaylistUrl").trim()
-            .takeIf { it.isNotBlank() && it != "null" }
-        val streamReferer = json.optString("referer").trim()
+            ?: json.optString("proxyPlaylistUrl").trim()
+                .takeIf { it.isNotBlank() && it != "null" }
+
+        val apiReferer = json.optString("referer").trim()
             .takeIf { it.isNotBlank() && it != "null" }
             ?: "https://dembed.st/premiumtv/daddy.php?id=$channelId"
 
-        // 1) Önce proxyPlayerUrl'den gerçek canlı m3u8'i çıkarmayı dene
-        if (!proxyPlayerUrl.isNullOrBlank()) {
-            val playerHtml = runCatching {
-                app.get(
-                    proxyPlayerUrl,
-                    headers = mapOf(
-                        "Referer" to "https://tvnow247.top/",
-                        "User-Agent" to playerUserAgent,
-                        "Accept" to "text/html,application/xhtml+xml,*/*",
-                    ),
-                    timeout = 15_000L,
-                ).takeIf { it.isSuccessful }?.text
-            }.getOrNull().orEmpty()
-
-            if (playerHtml.isNotBlank()) {
-                val extracted = extractStreamFromPlayerHtml(playerHtml)
-                if (!extracted.isNullOrBlank()) {
-                    Log.d(name.uppercase().take(23), "tvnow247: gerçek akış bulundu=$extracted")
-                    callback(
-                        ExtractorLink(
-                            source = name,
-                            name = name,
-                            url = extracted,
-                            referer = streamReferer,
-                            quality = Qualities.Unknown.value,
-                            headers = mapOf(
-                                "Referer" to streamReferer,
-                                "User-Agent" to playerUserAgent,
-                                "Accept" to "*/*",
-                            ),
-                            type = ExtractorLinkType.M3U8,
-                        )
-                    )
-                    return true
-                }
-            }
-            Log.d(name.uppercase().take(23), "tvnow247: proxyPlayerUrl'den akış çıkarılamadı, m3u8'e düşülüyor")
-        }
-
-        // 2) Yedek: doğrudan m3u8 / proxyPlaylistUrl
-        val fallback = directM3u8 ?: proxyPlaylistUrl
-        if (fallback.isNullOrBlank()) {
+        if (m3u8Url.isNullOrBlank()) {
             Log.w(name.uppercase().take(23), "tvnow247: m3u8 bulunamadı")
             return false
         }
 
-        Log.d(name.uppercase().take(23), "tvnow247: fallback=$fallback referer=$streamReferer")
+        Log.d(name.uppercase().take(23), "tvnow247: m3u8=$m3u8Url apiReferer=$apiReferer")
 
-        callback(
-            ExtractorLink(
-                source = name,
-                name = name,
-                url = fallback,
-                referer = streamReferer,
-                quality = Qualities.Unknown.value,
-                headers = mapOf(
-                    "Referer" to streamReferer,
-                    "User-Agent" to playerUserAgent,
-                    "Accept" to "*/*",
-                ),
-                type = ExtractorLinkType.M3U8,
-            )
+        // 5. 3 farklı başlık kombinasyonu dene - kullanıcı çalışanı seçer
+        val combos = listOf(
+            Triple(apiReferer, "https://dembed.st", "Daddylive (api)"),
+            Triple("https://tvnow247.top/", "https://tvnow247.top", "Daddylive (tv)"),
+            Triple(apiReferer, null as String?, "Daddylive (no-origin)"),
         )
+
+        for ((referer, origin, label) in combos) {
+            val outHeaders = mutableMapOf(
+                "Referer" to referer,
+                "User-Agent" to playerUserAgent,
+                "Accept" to "*/*",
+            )
+            if (origin != null) outHeaders["Origin"] = origin
+
+            callback(
+                ExtractorLink(
+                    source = name,
+                    name = label,
+                    url = m3u8Url,
+                    referer = referer,
+                    quality = Qualities.Unknown.value,
+                    headers = outHeaders,
+                    type = ExtractorLinkType.M3U8,
+                )
+            )
+        }
         return true
     }
 
@@ -848,17 +769,38 @@ class AutoDaddyliveApp : NeonMainAPI() {
         val normalized = data.trim()
         if (normalized.isBlank()) return false
 
-        if (neonIsMediaUrl(normalized)) {
-            emitDirectLiveLink(normalized, callback)
-            return true
-        }
-
+        // tvnow247.top embed sayfaları için özel çözümleme
         if (normalized.contains("tvnow247.top/embed/", ignoreCase = true)) {
             val resolved = resolveTvNow247(normalized, callback)
             if (resolved) return true
-            Log.w(name.uppercase().take(23), "tvnow247 çözümlenemedi, genel çözümlemeye düşülüyor")
+            Log.w(name.uppercase().take(23), "tvnow247 çözümlenemedi")
         }
 
+        // Doğrudan medya akışıysa ilet
+        if (neonIsMediaUrl(normalized)) {
+            val streamHost = runCatching {
+                URI(normalized).host.orEmpty().lowercase()
+            }.getOrDefault("").ifBlank { "daddylive.app" }
+            val referer = "https://$streamHost/"
+
+            callback(
+                ExtractorLink(
+                    source = name,
+                    name = name,
+                    url = normalized,
+                    referer = referer,
+                    quality = Qualities.Unknown.value,
+                    headers = mapOf(
+                        "Referer" to referer,
+                        "User-Agent" to playerUserAgent,
+                    ),
+                    type = ExtractorLinkType.M3U8,
+                )
+            )
+            return true
+        }
+
+        // Diğerleri için genel çözümleme
         val document = neonCachedDocument(normalized, normalized)
             ?: runCatching {
                 app.get(
