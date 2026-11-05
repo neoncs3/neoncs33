@@ -31,10 +31,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
     private val channelsPerPage = 50
 
     private val playerUserAgent =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
-
-    private val liveReferer = "https://daddylive.app/"
-    private val liveOrigin = "https://daddylive.app"
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
 
     override val mainPage = mainPageOf(
         "https://daddylive.app/" to "Ana Sayfa"
@@ -84,7 +81,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
             val jsonArray: JSONArray = when {
                 trimmed.startsWith("[") -> JSONArray(trimmed)
                 trimmed.startsWith("{") -> {
-                    // Olası kapsayıcı anahtarları dene
                     val obj = JSONObject(trimmed)
                     obj.optJSONArray("data")
                         ?: obj.optJSONArray("channels")
@@ -133,7 +129,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
         val seenNames = HashSet<String>()
         for (apiUrl in channelApiUrls) {
             for (item in parseChannelsFromUrl(apiUrl)) {
-                // Aynı isimli kanal iki API'de varsa sadece bir tanesini al
                 if (seenNames.add(item.name.trim().lowercase())) {
                     combined += item
                 }
@@ -145,14 +140,22 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
     // ------------------------------------------------------------------
     // Oynatma linkini doğrudan döndüren yardımcı
+    // Referer/Origin, akışın kendi hostuna göre dinamik üretilir.
     // ------------------------------------------------------------------
     private fun emitDirectLiveLink(
         streamUrl: String,
         callback: (ExtractorLink) -> Unit,
     ) {
+        val streamHost = runCatching {
+            URI(streamUrl).host.orEmpty().lowercase()
+        }.getOrDefault("").ifBlank { "daddylive.app" }
+
+        val referer = "https://$streamHost/"
+        val origin = "https://$streamHost"
+
         val outHeaders = mapOf(
-            "Referer" to liveReferer,
-            "Origin" to liveOrigin,
+            "Referer" to referer,
+            "Origin" to origin,
             "User-Agent" to playerUserAgent,
         )
         callback(
@@ -160,7 +163,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
                 source = name,
                 name = name,
                 url = streamUrl,
-                referer = liveReferer,
+                referer = referer,
                 quality = Qualities.Unknown.value,
                 headers = outHeaders,
                 type = ExtractorLinkType.M3U8,
@@ -175,7 +178,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
         if (page <= 1) {
             val liveItems = loadChannelsFromApis()
             if (liveItems.isNotEmpty()) {
-                // 50'şerli gruplara ayır -> "Canlı Kanallar 1", "Canlı Kanallar 2", ...
                 val pages = liveItems.chunked(channelsPerPage).mapIndexed { index, chunk ->
                     HomePageList("Canlı Kanallar ${index + 1}", chunk)
                 }
@@ -183,7 +185,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
             }
         }
 
-        // API'ler başarısız olursa eski HTML davranışına düş
+        // API'ler başarısız olursa HTML davranışına düş
         val base = request.data
         val document = runCatching {
             app.get(base, headers = headers(base), timeout = 12_000L).document
