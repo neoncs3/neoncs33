@@ -11,7 +11,6 @@ import org.jsoup.nodes.Element
 import java.net.URI
 import java.net.URLEncoder
 
-// NeonMainAPI yerine doğrudan MainAPI'den miras alınıyor
 class AutoDaddyliveApp : MainAPI() {
     override var mainUrl = "https://daddylive.app"
     override var name = "Daddylive"
@@ -250,7 +249,6 @@ class AutoDaddyliveApp : MainAPI() {
 
         var emitted = 0
 
-        // Önce proxyPlayerUrl'den gerçek canlı akışı çıkarmayı dene
         if (!proxyPlayerUrl.isNullOrBlank()) {
             val playerHtml = runCatching {
                 app.get(
@@ -289,7 +287,6 @@ class AutoDaddyliveApp : MainAPI() {
             }
         }
 
-        // Doğrudan m3u8'i 3 farklı başlık kombinasyonuyla sun
         if (!m3u8Url.isNullOrBlank()) {
             data class Combo(val referer: String, val origin: String?, val label: String)
             val combos = listOf(
@@ -326,13 +323,13 @@ class AutoDaddyliveApp : MainAPI() {
     }
 
     // ------------------------------------------------------------------
-    // ZORUNLU METOTLAR (validate_repo.py için)
+    // ZORUNLU METOTLAR
     // ------------------------------------------------------------------
 
     override suspend fun getMainPage(
         page: Int,
         request: MainPageRequest,
-    ): HomePageResponse? {
+    ): HomePageResponse {
         if (page <= 1) {
             val liveItems = loadChannelsFromApis()
             if (liveItems.isNotEmpty()) {
@@ -391,7 +388,10 @@ class AutoDaddyliveApp : MainAPI() {
             Log.w(name.uppercase().take(23), "tvnow247 çözümlenemedi")
         }
 
-        if (normalized.contains(".m3u8", ignoreCase = true) || neonIsMediaUrl(normalized)) {
+        // neonIsMediaUrl yerine basit URL kontrolü
+        if (normalized.contains(".m3u8", ignoreCase = true) ||
+            normalized.contains(".mp4", ignoreCase = true) ||
+            normalized.contains(".mpd", ignoreCase = true)) {
             val host = runCatching {
                 URI(normalized).host.orEmpty().lowercase()
             }.getOrDefault("").ifBlank { "daddylive.app" }
@@ -417,7 +417,7 @@ class AutoDaddyliveApp : MainAPI() {
         return false
     }
 
-    override suspend fun search(query: String): List<SearchResponse>? {
+    override suspend fun search(query: String): List<SearchResponse> {
         val cleanQuery = query.trim()
         if (cleanQuery.length < 2) return emptyList()
         val encoded = URLEncoder.encode(cleanQuery, "UTF-8")
@@ -436,7 +436,7 @@ class AutoDaddyliveApp : MainAPI() {
     }
 
     // ------------------------------------------------------------------
-    // YARDIMCI FONKSİYONLAR (URL / HTML)
+    // YARDIMCI FONKSİYONLAR
     // ------------------------------------------------------------------
 
     private fun normalizeUrl(raw: String, base: String = mainUrl): String =
@@ -444,8 +444,7 @@ class AutoDaddyliveApp : MainAPI() {
             if (raw.startsWith("http", true)) raw
             else {
                 val b = URI(base)
-                val resolved = b.resolve(raw)
-                resolved.toString()
+                b.resolve(raw).toString()
             }
         }.getOrDefault(raw)
 
