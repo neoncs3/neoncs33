@@ -79,9 +79,11 @@ class AutoDaddyliveApp : NeonMainAPI() {
         val query = uri.rawQuery.orEmpty().split("&")
             .filter { it.isNotBlank() && !it.substringBefore("=").equals("neon_title", true) }
             .joinToString("&").ifBlank { null }
-        return runCatching {
-            URI(uri.scheme, uri.rawAuthority, uri.path, query, uri.rawFragment).toString()
-        }.getOrDefault(raw)
+        return buildString {
+            append(uri.scheme).append("://").append(uri.rawAuthority).append(uri.rawPath.orEmpty())
+            if (!query.isNullOrBlank()) append("?").append(query)
+            if (!uri.rawFragment.isNullOrBlank()) append("#").append(uri.rawFragment)
+        }
     }
 
     private suspend fun liveEventHomePages(): List<HomePageList> {
