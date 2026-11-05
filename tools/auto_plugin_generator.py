@@ -989,6 +989,14 @@ __MAIN_PAGES__
     private fun siteHost(url: String): String =
         runCatching { URI(url).host.orEmpty().lowercase().removePrefix("www.") }.getOrDefault("")
 
+    private fun isValidHttpUrl(raw: String): Boolean =
+        runCatching {
+            val uri = URI(raw)
+            (uri.scheme.equals("http", ignoreCase = true) ||
+                uri.scheme.equals("https", ignoreCase = true)) &&
+                !uri.host.isNullOrBlank()
+        }.getOrDefault(false)
+
     private fun isSiteUrl(url: String): Boolean =
         (url.startsWith("http://", true) || url.startsWith("https://", true)) &&
             siteHost(url) == siteHost(mainUrl)
@@ -2378,6 +2386,8 @@ def run_self_test() -> None:
     assert "for (candidate in resolverCandidates)" in generated
     assert "referer = candidateReferer" in generated
     assert "private fun isYouTubeMediaLink(link: ExtractorLink): Boolean" in generated
+    assert "private fun isValidHttpUrl(raw: String): Boolean" in generated
+    assert "link.referer.takeIf(::isValidHttpUrl)" in generated
     assert "private fun isLikelyPlayerUrl(url: String): Boolean" in generated
     assert '(?:^|[/_.?=&-])(?:player|embed|iframe|video|stream|play|watch|manifest|media|playlist|source)' in generated
     assert 'iframe[data-url], video[data-url], source[data-url]' in generated
