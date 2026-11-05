@@ -879,6 +879,10 @@ def analyse_site(raw_url: str) -> dict:
     return {
         "input_url": target,
         "origin": origin,
+        "supports_live": bool(
+            re.search(r"(?i)/(?:channel|live|iptv)(?:/|$)", target_parts.path)
+            or "live" in name.lower()
+        ),
         "root_url": root_page["url"],
         "http_status": root_page["status"],
         "site_name": clean_label(name, 70) or hostname,
@@ -944,6 +948,9 @@ def render_kotlin(config: dict) -> str:
     search = config["search"]
     action = search["action"] if search.get("method") == "get" else ""
     field = search.get("field") or "s"
+    supported_types = "TvType.Movie, TvType.TvSeries" + (
+        ", TvType.Live" if config.get("supports_live") else ""
+    )
 
     template = r'''package com.neoncs3
 
@@ -967,7 +974,7 @@ class __CLASS__ : NeonMainAPI() {
     override val hasMainPage = true
     override val hasQuickSearch = true
     override var sequentialMainPage = true
-    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
+    override val supportedTypes = setOf(__SUPPORTED_TYPES__)
 
     private val configuredSearchAction = __SEARCH_ACTION__
     private val configuredSearchField = __SEARCH_FIELD__
@@ -2138,6 +2145,7 @@ __MAIN_PAGES__
         "__SITE_NAME__": kotlin_string(config["site_name"]),
         "__SEARCH_ACTION__": kotlin_string(action),
         "__SEARCH_FIELD__": kotlin_string(field),
+        "__SUPPORTED_TYPES__": supported_types,
         "__SMOKE_QUERIES__": ", ".join(kotlin_string(item) for item in config.get("sample_titles", [])),
         "__MAIN_PAGES__": page_entries,
     }
@@ -2167,13 +2175,14 @@ class {config["class_name"]}Plugin : Plugin() {{
 def render_gradle(config: dict) -> str:
     description = kotlin_string("URL analizinden otomatik oluşturuldu: " + config["host"])
     icon = kotlin_string(config["origin"].rstrip("/") + "/favicon.ico")
+    tv_types = '"Movie", "TvSeries"' + (', "Live"' if config.get("supports_live") else "")
     return (
         "version = 1\n\n"
         "cloudstream {\n"
         f"    description = {description}\n"
         '    authors = listOf("neoncs3")\n'
         "    status = 1\n"
-        '    tvTypes = listOf("Movie", "TvSeries")\n'
+        f"    tvTypes = listOf({tv_types})\\n"
         '    language = "tr"\n'
         f"    iconUrl = {icon}\n"
         "}\n\n"
@@ -2505,6 +2514,11 @@ def run_self_test() -> None:
     generated = render_kotlin(demo)
     generated_plugin = render_plugin(demo)
     assert "class AutoExampleOrg : NeonMainAPI()" in generated
+    assert "override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)" in generated
+    live_demo = {**demo, "supports_live": True, "origin": "https://daddylive.app", "host": "daddylive.app"}
+    live_generated = render_kotlin(live_demo)
+    assert "override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Live)" in live_generated
+    assert 'tvTypes = listOf("Movie", "TvSeries", "Live")' in render_gradle(live_demo)
     assert "@CloudstreamPlugin" in generated_plugin
     assert "class AutoExampleOrgPlugin : Plugin()" in generated_plugin
     assert "registerMainAPI(AutoExampleOrg())" in generated_plugin

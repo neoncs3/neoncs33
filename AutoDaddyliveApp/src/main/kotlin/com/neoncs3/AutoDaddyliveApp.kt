@@ -20,7 +20,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
     override val hasMainPage = true
     override val hasQuickSearch = true
     override var sequentialMainPage = true
-    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
+    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Live)
 
     private val configuredSearchAction = "https://daddylive.app/porn"
     private val configuredSearchField = "search"
