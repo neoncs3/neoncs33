@@ -834,7 +834,20 @@ class AutoDaddyliveApp : NeonMainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        return null
+        val normalized = normalize(url)
+        if (!isValidHttpUrl(normalized) || !neonIsMediaUrl(normalized)) return null
+
+        val title = runCatching {
+            URI(normalized).path.orEmpty()
+                .substringAfterLast('/')
+                .substringBeforeLast('.')
+                .replace(Regex("""[-_]+"""), " ")
+                .trim()
+        }.getOrNull()?.takeIf { it.isNotBlank() } ?: "Canlı Yayın"
+
+        val response = newLiveStreamLoadResponse(title, normalized, normalized)
+        val document = Document(normalized)
+        return neonEnrichResponse(response, document, normalized)
     }
 
     override suspend fun loadLinks(
