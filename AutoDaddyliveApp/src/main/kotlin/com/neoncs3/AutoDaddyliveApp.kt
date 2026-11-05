@@ -24,9 +24,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
     private val configuredSearchAction = "https://daddylive.app/porn"
     private val configuredSearchField = "search"
-    // Scraped from actual poster-backed catalogue cards; consumed by the real-playback smoke test.
-    private val neonSmokeTestQueries = listOf<String>("🗂️ Channels List", "🔞 Porn", "🧬 Embed Api", "I am 18+ · Enter", "🍑 Popular", "💦 Trending")
-    // Keep media requests consistent with the browser used for iframe probing when an extractor omits a UA.
     private val playerUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0"
 
     override val mainPage = mainPageOf(
@@ -49,7 +46,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
                 uri.scheme.equals("https", ignoreCase = true)) &&
                 !uri.host.isNullOrBlank()
         }.getOrDefault(false)
-
 
     private fun liveEmbedUrl(raw: String, baseUrl: String = mainUrl): String? {
         val normalized = normalize(raw, baseUrl)
@@ -86,114 +82,9 @@ class AutoDaddyliveApp : NeonMainAPI() {
         }
     }
 
-    private fun liveTokenMapUrl(raw: String): String? {
-        val embedUrl = liveEmbedUrl(cleanLiveDataUrl(raw)) ?: return null
-        val uri = runCatching { URI(embedUrl) }.getOrNull() ?: return null
-        val params = uri.rawQuery.orEmpty().split("&").mapNotNull { part ->
-            val key = runCatching {
-                java.net.URLDecoder.decode(part.substringBefore("="), "UTF-8")
-            }.getOrNull() ?: return@mapNotNull null
-            val value = runCatching {
-                java.net.URLDecoder.decode(part.substringAfter("=", ""), "UTF-8")
-            }.getOrNull() ?: return@mapNotNull null
-            key.lowercase() to value
-        }.toMap()
-        val source = params["source"]?.lowercase() ?: return null
-        val token = params["id"] ?: return null
-        // tv2/tv3 carry a path rather than a five-character token. Other documented
-        // tv sources use the public delete/streams/{token}.json mapping.
-        if (source == "tv2" || source == "tv3") return null
-        if (!source.matches(Regex("""(?i)^tv(?:1|[4-9]|1[0-8])$"""))) return null
-        if (!token.matches(Regex("""(?i)^[a-z0-9]{5}$"""))) return null
-        return mainUrl.trimEnd('/') + "/delete/streams/" + token + ".json"
-    }
-
-    private suspend fun liveEventHomePages(): List<HomePageList> {
-        val endpoint = mainUrl.trimEnd('/') + "/api/events"
-        val body = runCatching {
-            app.get(
-                endpoint,
-                headers = headers(endpoint) + mapOf("Accept" to "application/json, text/plain, */*"),
-                timeout = 15_000L,
-            ).takeIf { it.isSuccessful }?.text
-        }.getOrNull().orEmpty()
-        Log.d(name.uppercase().take(23), "live events API response bytes=" + body.length)
-        if (body.isBlank()) {
-            Log.w(name.uppercase().take(23), "live events API returned an empty response")
-            return emptyList()
-        }
-
-        val categories = runCatching { JSONObject(body).optJSONObject("categories") }.getOrNull()
-            ?: run {
-                Log.w(name.uppercase().take(23), "live events API has no categories object")
-                return emptyList()
-            }
-
-        val pages = ArrayList<HomePageList>()
-        val categoryKeys = categories.keys()
-        while (categoryKeys.hasNext()) {
-            val categoryName = categoryKeys.next().trim()
-            if (categoryName.isBlank()) continue
-            val events = categories.optJSONArray(categoryName) ?: continue
-            val items = ArrayList<SearchResponse>()
-            val seenUrls = HashSet<String>()
-
-            for (eventIndex in 0 until events.length()) {
-                val event = events.optJSONObject(eventIndex) ?: continue
-                val eventName = event.optString("event").trim()
-                if (eventName.isBlank() || eventName.equals("null", true)) continue
-                val time = event.optString("time").trim()
-                val channels = event.optJSONArray("channels") ?: continue
-
-                for (channelIndex in 0 until channels.length()) {
-                    val channel = channels.optJSONObject(channelIndex) ?: continue
-                    val rawUrl = channel.optString("url").trim()
-                    val embedUrl = liveEmbedUrl(rawUrl) ?: continue
-                    val displayChannel = channel.optString("channel_name").trim()
-                        .takeIf { it.isNotBlank() && !it.equals("null", true) }
-                        ?: "Yayın ${channelIndex + 1}"
-                    val displayTitle = buildString {
-                        if (time.isNotBlank() && !time.equals("null", true)) {
-                            append(time).append(" · ")
-                        }
-                        append(eventName)
-                        if (channels.length() > 1) append(" · ").append(displayChannel)
-                    }
-                    val taggedUrl = withLiveTitle(embedUrl, displayTitle)
-                    if (!seenUrls.add(taggedUrl)) continue
-
-                    // The current public event feed often omits channel logos. Keep cards visible
-                    // with the site's own icon instead of returning a completely blank image tile.
-                    val poster = sequenceOf("logo_url", "logo", "poster", "image")
-                        .map { channel.optString(it).trim() }
-                        .firstOrNull { it.isNotBlank() && !it.equals("null", true) }
-                        ?.let { normalize(it, mainUrl) }
-                        ?.takeIf { isValidHttpUrl(it) }
-                        ?: (mainUrl.trimEnd('/') + "/favicon.ico")
-
-                    items += newLiveSearchResponse(
-                        name = displayTitle,
-                        url = taggedUrl,
-                        type = TvType.Live,
-                        fix = false,
-                    ) {
-                        posterUrl = poster
-                        posterHeaders = poster?.let { headers(mainUrl + "/") }
-                    }
-                }
-            }
-
-            if (items.isNotEmpty()) {
-                pages += HomePageList(categoryName, items)
-                Log.d(name.uppercase().take(23), "live category '$categoryName' items=${items.size}")
-            }
-        }
-
-        Log.d(name.uppercase().take(23), "live events API categories=${pages.size}; items=${pages.sumOf { it.list.size }}")
-        return pages
-    }
-
-    // Scrapes the public /channel listing page and turns every /live/stream= link into a live card.
+    // ------------------------------------------------------------------
+    // /channel sayfasından kanal listesini kazıyan fonksiyon
+    // ------------------------------------------------------------------
     private suspend fun channelHomePages(): List<HomePageList> {
         val pageUrl = mainUrl.trimEnd('/') + "/channel"
         val document = runCatching {
@@ -206,21 +97,23 @@ class AutoDaddyliveApp : NeonMainAPI() {
         val seen = HashSet<String>()
         val items = ArrayList<SearchResponse>()
 
-        document.select("a[href]").forEach { anchor ->
+        // HTML'de kanallar <div class="grid-item" data-channel-name="...">
+        // içindeki <a href="/live/stream=..."> bağlantılarıyla listelenir.
+        document.select("div.grid-item a[href*=/live/stream=]").forEach { anchor ->
             val rawHref = anchor.attr("href").trim()
             if (!rawHref.contains("/live/stream=", ignoreCase = true)) return@forEach
-            if (rawHref.startsWith("javascript:", true) || rawHref.startsWith("data:", true)) return@forEach
 
             val fullUrl = normalize(rawHref, pageUrl)
             if (!isValidHttpUrl(fullUrl)) return@forEach
             if (!seen.add(fullUrl)) return@forEach
 
+            // Başlık önceliği: <strong> içindeki metin, yoksa data-channel-name, yoksa a metni
+            val parent = anchor.parent()
             val title = sequenceOf(
+                anchor.selectFirst("strong")?.text(),
+                parent?.attr("data-channel-name"),
                 anchor.attr("title"),
-                anchor.attr("aria-label"),
-                anchor.selectFirst("h1, h2, h3, h4, h5, .title, .name, .channel-name, .card-title")?.text(),
-                anchor.text(),
-                anchor.parent()?.selectFirst(".title, .name, .channel-name, .card-title")?.text()
+                anchor.text()
             ).mapNotNull { neonCleanText(it) }
                 .firstOrNull {
                     it.length in 1..160 &&
@@ -247,9 +140,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
         (url.startsWith("http://", true) || url.startsWith("https://", true)) &&
             siteHost(url) == siteHost(mainUrl)
 
-    // ddizimag.com exposes this root-level URL in page scripts, but it is not a playable video.
-    // Ignore known non-playable media endpoints exposed by this site.
-    // The root manifest and episode-shaped CDN playlists return errors instead of media.
     private fun isBrokenSiteMediaUrl(raw: String): Boolean {
         val uri = runCatching { URI(raw) }.getOrNull() ?: return false
         if (siteHost(raw) != siteHost(mainUrl)) return false
@@ -260,7 +150,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
     private fun normalize(raw: String, base: String = mainUrl): String =
         neonNormalizeUrl(raw, base)
-
 
     private fun isLikelyPlayerUrl(url: String): Boolean {
         if (neonIsMediaUrl(url)) return true
@@ -287,7 +176,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
             host.endsWith(".googlevideo.com")
     }
 
-    // Player settings are sometimes stored in JSON/JavaScript instead of iframe or video tags.
     private fun playerUrlsFromText(raw: String, baseUrl: String): List<String> {
         val text = raw
             .replace("\\/", "/")
@@ -313,7 +201,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
             url.takeIf { it.startsWith("http://", true) || it.startsWith("https://", true) }
                 ?.takeIf(::isLikelyPlayerUrl)
         }
-            // A trailer URL in page metadata is not the episode's playback source.
             .filterNot(::isYouTubePageUrl)
             .distinct()
     }
@@ -492,9 +379,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
         return file.isNotBlank()
     }
 
-    // Navigation chips such as <a href="#other-series" class="alphabetical-category-link">#
-    // are page anchors, not episode/detail links. Reject them before deriving titles
-    // or poster images from their shared parent container.
     private fun isNonContentAnchor(anchor: Element, baseUrl: String): Boolean {
         if (anchor.classNames().any { it.equals("alphabetical-category-link", ignoreCase = true) }) {
             return true
@@ -502,7 +386,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
         val rawHref = anchor.attr("href").trim()
         if (rawHref.startsWith("#")) return true
 
-        // Also reject absolute/relative links that point to a fragment on this same page.
         val target = runCatching { URI(normalize(rawHref, baseUrl)) }.getOrNull() ?: return false
         val base = runCatching { URI(normalize(baseUrl)) }.getOrNull() ?: return false
         return !target.rawFragment.isNullOrBlank() &&
@@ -590,14 +473,9 @@ class AutoDaddyliveApp : NeonMainAPI() {
     }
 
     private fun posterFor(anchor: Element, baseUrl: String): String? {
-        // Only take a poster from the anchor's own card. If a higher-level list/grid
-        // contains several images, picking the first one makes sibling items all reuse
-        // the same poster.
         var node: Element? = anchor
         for (depth in 0..4) {
             val current = node ?: break
-            // Do not walk into a shared archive/list wrapper: its single poster can be
-            // incorrectly reused by unrelated title links (notably alphabetical lists).
             if (depth > 0 && current.select("a[href]").any { it !== anchor }) return null
             imageUrl(current, baseUrl)?.let { return it }
             val urls = LinkedHashSet<String>()
@@ -615,10 +493,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
     }
 
     private fun candidateAnchors(document: Document): List<Element> {
-        // Prefer explicit catalogue cards and elements that actually carry poster data.
-        // The live site renders a very large alphabetical directory before archive cards;
-        // never use a global a[href] fallback, or these links dominate parsing and can
-        // inherit a neighbour's poster from a shared ancestor.
         val cardSelector =
             "article:has(img) a[href], article:has([style*=background]) a[href], " +
                 "article:has([data-poster]) a[href], .movie-card a[href], .film-card a[href], " +
@@ -636,9 +510,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
             "a[href]:has(img), a[href]:has(picture), a[href][data-poster], " +
                 "a[href][data-image], a[href][data-src], a[href][data-lazy-src], " +
                 "a[href][style*=background], a[href]:has([style*=background])"
-        // Poster-bearing anchors are the fastest and most reliable path. The old combined
-        // selector walked every link in the very large alphabetical directory before the
-        // result cap in resultsFrom() could take effect.
         val anchors = ArrayList<Element>()
         val seen = LinkedHashSet<String>()
         fun collect(selector: String, limit: Int) {
@@ -651,7 +522,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
             }
         }
         collect(mediaSelector, 200)
-        // Only pay for broad card selectors on sites whose anchors do not carry posters directly.
         if (anchors.size < 15) collect(cardSelector, 200)
         return anchors
     }
@@ -697,7 +567,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
     }
 
     private fun resultsFrom(document: Document, baseUrl: String): List<SearchResponse> {
-        // Stop processing card details when the maximum number of unique results is reached.
         val results = LinkedHashMap<String, SearchResponse>()
         for (anchor in candidateAnchors(document)) {
             if (results.size >= 120) break
@@ -712,16 +581,10 @@ class AutoDaddyliveApp : NeonMainAPI() {
         request: MainPageRequest,
     ): HomePageResponse {
         if (page <= 1) {
-            // Öncelik: /channel sayfasındaki statik kanal listesi
+            // Yalnızca /channel sayfasındaki statik kanal listesi
             val channelPages = channelHomePages()
             if (channelPages.isNotEmpty()) {
                 return newHomePageResponse(channelPages, hasNext = false)
-            }
-
-            // Yedek: /api/events üzerinden canlı etkinlik listesi
-            val livePages = liveEventHomePages()
-            if (livePages.isNotEmpty()) {
-                return newHomePageResponse(livePages, hasNext = false)
             }
         }
 
@@ -761,7 +624,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
         return neonRelevantSearchResults(listOf(result), query).isNotEmpty()
     }
 
-
     override suspend fun search(query: String): List<SearchResponse> {
         val cleanQuery = query.trim()
         if (cleanQuery.length < 2) return emptyList()
@@ -770,8 +632,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
             val response = runCatching {
                 app.get(searchUrl, headers = headers(searchUrl), timeout = 12_000L)
             }.getOrNull() ?: continue
-            // Some sites ignore ?s= / ?q= and return the home page for every query.
-            // Never leak those unrelated home-page items into search results.
             val matches = resultsFrom(response.document, searchUrl)
                 .filter { matchesQuery(it, cleanQuery) }
             if (matches.isNotEmpty()) return matches
@@ -917,8 +777,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
     private fun seasonLinks(document: Document, baseUrl: String): List<Pair<String, Int?>> {
         return document.select("a[href]").mapNotNull { anchor ->
             val rawHref = anchor.attr("href")
-            // Check visible label/path before URI normalization; the alphabetical
-            // directory contains many links but almost no season indicators.
             val text = anchor.text() + " " + anchor.attr("title") + " " + rawHref
             if (episodeInfo(text, null) != null) return@mapNotNull null
             val season = seasonNumber(text) ?: return@mapNotNull null
@@ -936,8 +794,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
     ): List<EpisodeItem> {
         return document.select("a[href]").mapNotNull { anchor ->
             val rawHref = anchor.attr("href")
-            // Classify using only this link's own text/path before doing URL or poster
-            // work. Parent/container text spans neighbouring episodes and seasons.
             val anchorIdentity = listOf(
                 anchor.attr("title"),
                 anchor.attr("aria-label"),
@@ -984,9 +840,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
     override suspend fun load(url: String): LoadResponse? {
         val normalizedUrl = normalize(url)
 
-        // --- YENİ: /live/stream= sayfalarından iframe player URL'sini çıkar ---
-        // Kanal listesi /channel sayfasından /live/stream=CHANNEL&source=listX linkleri döner.
-        // Bu sayfalar asıl oynatıcıyı <iframe id="video-player" src="..."> içinde barındırır.
+        // /live/stream= sayfalarından iframe player URL'sini çıkar
         if (normalizedUrl.contains("/live/stream=", ignoreCase = true)) {
             val doc = runCatching {
                 app.get(normalizedUrl, headers = headers(normalizedUrl), timeout = 15_000L).document
@@ -1023,16 +877,12 @@ class AutoDaddyliveApp : NeonMainAPI() {
                     }
                 }
 
-                // Iframe bulunamadıysa, sayfayı loadLinks'in kendi çözümlemesine bırak.
-                // LoadLinks sayfa içindeki script'lerden/iframe'lerden medya bulmayı deneyecek.
                 Log.w(name.uppercase().take(23), "no player iframe on channel page, falling back to page URL")
                 return newLiveStreamLoadResponse(channelTitle, normalizedUrl, normalizedUrl)
             }
 
-            // Sayfa getirilemediyse yine de URL'yi data olarak ver ki loadLinks denesin.
             return newLiveStreamLoadResponse("Canlı Yayın", normalizedUrl, normalizedUrl)
         }
-        // --- YENİ BLOK SONU ---
 
         val embedUrl = liveEmbedUrl(cleanLiveDataUrl(normalizedUrl))
         val liveTitle = liveTitleFromUrl(normalizedUrl)
@@ -1126,45 +976,13 @@ class AutoDaddyliveApp : NeonMainAPI() {
         val pagePath = runCatching { URI(normalized).path.orEmpty() }.getOrDefault("/")
         Log.d(name.uppercase().take(23), "loadLinks start path=$pagePath")
 
-        // The site often adds player URLs lazily or stores them in player scripts.
-        // Probe the episode page first, then resolve its iframe/media candidates.
         val candidates = LinkedHashSet<String>()
-
-        // Current token-based event feeds expose a small JSON mapping per stream ID.
-        // Probe it before the embed page so direct media candidates are tried first.
-        val tokenMapUrl = liveTokenMapUrl(normalized)
-        if (tokenMapUrl != null) {
-            val tokenResponse = runCatching {
-                app.get(
-                    tokenMapUrl,
-                    headers = headers(normalized) + mapOf("Accept" to "application/json, text/plain, */*"),
-                    timeout = 12_000L,
-                    allowRedirects = true,
-                )
-            }.getOrNull()
-            val tokenBody = tokenResponse?.takeIf { it.isSuccessful }?.text.orEmpty()
-            val tokenCandidates = if (tokenBody.isBlank()) {
-                emptyList()
-            } else {
-                (playerUrlsFromText(tokenBody, tokenMapUrl) + neonExtractMediaUrls(tokenBody))
-                    .map { normalize(it, tokenMapUrl) }
-                    .filter { isValidHttpUrl(it) && (neonIsMediaUrl(it) || isLikelyPlayerUrl(it)) }
-                    .distinct()
-            }
-            candidates.addAll(tokenCandidates)
-            Log.d(
-                name.uppercase().take(23),
-                "live token map ok=${tokenResponse?.isSuccessful == true}; bytes=${tokenBody.length}; candidates=${tokenCandidates.size}"
-            )
-        }
 
         val document = neonCachedDocument(normalized, normalized)
             ?: runCatching {
                 app.get(normalized, headers = headers(normalized), timeout = 15_000L).document
             }.getOrNull()
 
-        // Some sites keep the current player URL on the active part button instead of
-        // an iframe tag. Prioritize data-hhs before generic iframe/script candidates.
         val activePlayerUrls = document?.select(
             "li.series-alter-active button[data-hhs], li.series-alter-active [data-hhs], " +
                 ".series-alter-active [data-hhs]"
@@ -1182,8 +1000,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
             Log.d(name.uppercase().take(23), "active data-hhs player prioritized count=${activePlayerUrls.size}")
         }
 
-        // A third-party iframe is the authoritative player on current episode pages.
-        // Do not emit stale /cdn/*.m3u8 URLs scraped from page scripts before resolving it.
         val externalPlayerFrames = document?.let { page ->
             neonExtractIframeUrls(page, normalized)
                 .filter { frame ->
@@ -1194,15 +1010,12 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
         if (externalPlayerFrames.isNotEmpty()) {
             candidates.addAll(externalPlayerFrames)
-            Log.d(name.uppercase().take(23), "external player iframe prioritized; continuing page media/script discovery count=${externalPlayerFrames.size}")
+            Log.d(name.uppercase().take(23), "external player iframe prioritized; count=${externalPlayerFrames.size}")
         } else {
             candidates.add(normalized)
         }
 
         if (document != null) {
-            // The live page may return an error placeholder instead of an actual player.
-            // Make this visible in Logcat so an origin-side playback failure is not
-            // confused with an ExoPlayer/codec problem.
             if (document.text().contains("site.error", ignoreCase = true) &&
                 document.selectFirst("video[src], iframe[src], iframe[data-src], source[src]") == null
             ) {
@@ -1239,8 +1052,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
             playerUrlsFromText(inlineScriptText, normalized).forEach(candidates::add)
             neonExtractMediaUrls(inlineScriptText).filterNot(::isYouTubePageUrl).forEach(candidates::add)
 
-            // Some newer pages keep the actual player configuration in an external JS bundle.
-            // Probe only a few relevant scripts so the link resolver remains bounded.
             val scriptUrls = document.select("script[src]")
                 .map { normalize(it.attr("src"), normalized) }
                 .filter { it.startsWith("http", true) }
@@ -1272,15 +1083,10 @@ class AutoDaddyliveApp : NeonMainAPI() {
                 playerUrlsFromText(scriptBody, scriptUrl).forEach(candidates::add)
                 neonExtractMediaUrls(scriptBody).filterNot(::isYouTubePageUrl).forEach(candidates::add)
             }
-            // Keep the episode page as a final fallback, after its real player and script candidates.
             if (externalPlayerFrames.isNotEmpty()) candidates.add(normalized)
         }
 
-        // Remove direct YouTube pages and known non-playable site media before resolving candidates.
         candidates.removeAll { isBrokenSiteMediaUrl(it) || isYouTubePageUrl(it) }
-
-        val candidateSummary = candidates.joinToString(" | ") { raw -> runCatching { val uri = URI(raw); uri.host.orEmpty() + uri.path.orEmpty() }.getOrDefault("invalid-url") }
-        Log.d(name.uppercase().take(23), "loadLinks candidates=${candidates.size}: ${candidateSummary.take(2600)}")
 
         val emitted = LinkedHashSet<String>()
         val forwardingCallback: (ExtractorLink) -> Unit = { link ->
@@ -1309,9 +1115,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
                 }
             }
         }
-        // Keep resolver work bounded and stop after the first usable source instead of
-        // scanning every low-confidence URL collected from scripts.
-        // This also avoids repeating all candidates after neonResolveLinkCandidates returns false.
+
         val resolverCandidates = candidates.toList().take(14)
         Log.d(name.uppercase().take(23), "loadLinks resolving candidates=${resolverCandidates.size}/${candidates.size}")
 
@@ -1333,7 +1137,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
             }
         }
 
-        // Try CloudStream's native extractors only if the generic resolver found no media.
         if (emitted.isEmpty()) {
             for (candidate in resolverCandidates.take(8)) {
                 if (isSiteUrl(candidate) || neonIsMediaUrl(candidate)) continue
@@ -1344,7 +1147,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
             }
         }
 
-        // A resolver may report a candidate even if the callback deliberately filtered it.
         Log.d(name.uppercase().take(23), "loadLinks finished candidates=${candidates.size}; attempted=${resolverCandidates.size}; resolverFound=$resolverFound; emitted=${emitted.size}")
         return emitted.isNotEmpty()
     }
