@@ -1,14 +1,14 @@
 # 🟡 AutoDaddyliveApp
 
-Kodda kayıtlı domain: https://daddylive.app
+Kodda kayıtlı domain: -
 
-Son HTTP URL: https://daddylive.app
+Son HTTP URL: -
 
-HTTP: ✅ 200
+HTTP: ❌ 
 
 Anti-bot engeli: hayır
 
-Sayfa başlığı: Daddylive - DaddyLiveHD | CrackStreams - Stream Anytime, Anywhere
+Sayfa başlığı: -
 
 Canlı medya ipucu: 0 media URL, 0 iframe
 
@@ -16,13 +16,15 @@ Not: Bu rapor kaynak kodunun yapısını ve site HTTP erişimini ölçer; gerçe
 
 ## Pipeline
 
-- Search: ✅
-- Load: ✅
-- LoadLinks: ✅
+- Search: ❌
+- Load: ❌
+- LoadLinks: ❌
 - Metadata: ❌
 - Video resolver: ❌
 - Subtitles: ❌
 - Cache/fallback: ❌
-- TMDB playback yasağı: ✅
+- TMDB playback yasağı: ❌
 
-Kaynak: AutoDaddyliveApp/src/main/kotlin/com/neoncs3/AutoDaddyliveApp.kt
+Kaynak: -
+
+Hata: NeonMainAPI provider source bulunamadı
