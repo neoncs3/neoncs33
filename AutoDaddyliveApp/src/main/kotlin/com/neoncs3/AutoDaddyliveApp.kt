@@ -89,9 +89,13 @@ class AutoDaddyliveApp : NeonMainAPI() {
     private suspend fun liveEventHomePages(): List<HomePageList> {
         val endpoint = mainUrl.trimEnd('/') + "/api/events"
         val body = runCatching {
-            app.get(endpoint, headers = headers(endpoint), timeout = 12_000L)
-                .takeIf { it.isSuccessful }?.text
+            app.get(
+                endpoint,
+                headers = headers(endpoint) + mapOf("Accept" to "application/json, text/plain, */*"),
+                timeout = 15_000L,
+            ).takeIf { it.isSuccessful }?.text
         }.getOrNull().orEmpty()
+        Log.d(name.uppercase().take(23), "live events API response bytes=" + body.length)
         if (body.isBlank()) {
             Log.w(name.uppercase().take(23), "live events API returned an empty response")
             return emptyList()
@@ -136,11 +140,14 @@ class AutoDaddyliveApp : NeonMainAPI() {
                     val taggedUrl = withLiveTitle(embedUrl, displayTitle)
                     if (!seenUrls.add(taggedUrl)) continue
 
+                    // The current public event feed often omits channel logos. Keep cards visible
+                    // with the site's own icon instead of returning a completely blank image tile.
                     val poster = sequenceOf("logo_url", "logo", "poster", "image")
                         .map { channel.optString(it).trim() }
                         .firstOrNull { it.isNotBlank() && !it.equals("null", true) }
                         ?.let { normalize(it, mainUrl) }
                         ?.takeIf { isValidHttpUrl(it) }
+                        ?: (mainUrl.trimEnd('/') + "/favicon.ico")
 
                     items += newLiveSearchResponse(
                         name = displayTitle,
