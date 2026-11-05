@@ -30,6 +30,35 @@
       "source": "AsyaFilmIzle/src/main/kotlin/com/neoncs3/AsyaFilmIzle.kt"
     },
     {
+      "provider": "AutoDaddyliveApp",
+      "status": "green",
+      "domain": "https://daddylive.app",
+      "configured_domain": "https://daddylive.app",
+      "live_domain": "https://daddylive.app",
+      "live": {
+        "ok": true,
+        "anti_bot_blocked": false,
+        "status_code": 200,
+        "final_url": "https://daddylive.app",
+        "bytes": 68530,
+        "title": "Daddylive - DaddyLiveHD | CrackStreams - Stream Anytime, Anywhere",
+        "media_hints": 0,
+        "iframe_hints": 0,
+        "error": null
+      },
+      "pipelines": {
+        "load": true,
+        "search": true,
+        "loadLinks": true,
+        "metadata": true,
+        "video": true,
+        "subtitles": true,
+        "cache": true,
+        "tmdb_playback_forbidden": true
+      },
+      "source": "AutoDaddyliveApp/src/main/kotlin/com/neoncs3/AutoDaddyliveApp.kt"
+    },
+    {
       "provider": "AutoDdizimagCom",
       "status": "green",
       "domain": "https://dizimag.onl",
@@ -69,7 +98,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://www.hdfilmdiziizle.com",
-        "bytes": 5594,
+        "bytes": 5679,
         "title": "Just a moment...",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -111,7 +140,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://tvdiziler.tv",
-        "bytes": 82739,
+        "bytes": 82730,
         "title": "Dizi izle, Yerli ve Full HD Diziler, Dizi Seyret | TvDiziler.tv",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -166,7 +195,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://diziboxizle.com",
-        "bytes": 384728,
+        "bytes": 384571,
         "title": "Dizibox İzle - Güncel Yabancı Dizi izle, HD Diziler izle",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -266,7 +295,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://dramadizilerim.com",
-        "bytes": 196868,
+        "bytes": 198468,
         "title": "Drama Dizilerim - Drama İzle, Dikey Mini Dizi &amp; Kısa Dizi İzle",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -286,17 +315,17 @@
     },
     {
       "provider": "FilmModu",
-      "status": "yellow",
+      "status": "green",
       "domain": "https://www.filmmodu.one",
       "configured_domain": "https://www.filmmodu.one",
       "live_domain": "https://www.filmmodu.one",
       "live": {
-        "ok": false,
-        "anti_bot_blocked": true,
-        "status_code": 403,
+        "ok": true,
+        "anti_bot_blocked": false,
+        "status_code": 200,
         "final_url": "https://www.filmmodu.one",
-        "bytes": 7221,
-        "title": "Access denied | www.filmmodu.one used Cloudflare to restrict access | www.filmmodu.one | Cloudflare",
+        "bytes": 108039,
+        "title": "Filmmodu: Film izle, 1080p Kalitesinde HD Film izle",
         "media_hints": 0,
         "iframe_hints": 0,
         "error": null
@@ -315,17 +344,17 @@
     },
     {
       "provider": "JetFilmizle",
-      "status": "yellow",
+      "status": "green",
       "domain": "https://jetfilmizle.now",
       "configured_domain": "https://jetfilmizle.now",
-      "live_domain": "https://jetfilmizle.now",
+      "live_domain": "https://jetfilmizle.app",
       "live": {
-        "ok": false,
-        "anti_bot_blocked": true,
-        "status_code": 403,
-        "final_url": "https://jetfilmizle.now",
-        "bytes": 8332,
-        "title": "Access denied | jetfilmizle.now used Cloudflare to restrict access | jetfilmizle.now | Cloudflare",
+        "ok": true,
+        "anti_bot_blocked": false,
+        "status_code": 200,
+        "final_url": "https://jetfilmizle.app",
+        "bytes": 200076,
+        "title": "JetFilmizle - Film İzle, Türkçe Dublaj, Altyazılı ve Yerli Filmler",
         "media_hints": 0,
         "iframe_hints": 0,
         "error": null
@@ -456,7 +485,7 @@
       "source": "WebDramaTurkey/src/main/kotlin/com/neoncs3/WebDramaTurkey.kt"
     }
   ],
-  "green": 7,
-  "yellow": 12,
+  "green": 10,
+  "yellow": 10,
   "red": 0
 }

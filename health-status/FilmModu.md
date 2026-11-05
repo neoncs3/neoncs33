@@ -1,14 +1,14 @@
-# 🟡 FilmModu
+# 🟢 FilmModu
 
 Kodda kayıtlı domain: https://www.filmmodu.one
 
 Son HTTP URL: https://www.filmmodu.one
 
-HTTP: ❌ 403
+HTTP: ✅ 200
 
-Anti-bot engeli: evet
+Anti-bot engeli: hayır
 
-Sayfa başlığı: Access denied | www.filmmodu.one used Cloudflare to restrict access | www.filmmodu.one | Cloudflare
+Sayfa başlığı: Filmmodu: Film izle, 1080p Kalitesinde HD Film izle
 
 Canlı medya ipucu: 0 media URL, 0 iframe
 
