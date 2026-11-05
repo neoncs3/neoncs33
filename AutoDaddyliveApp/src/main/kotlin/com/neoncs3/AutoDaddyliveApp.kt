@@ -193,6 +193,56 @@ class AutoDaddyliveApp : NeonMainAPI() {
         return pages
     }
 
+    // Scrapes the public /channel listing page and turns every /live/stream= link into a live card.
+    private suspend fun channelHomePages(): List<HomePageList> {
+        val pageUrl = mainUrl.trimEnd('/') + "/channel"
+        val document = runCatching {
+            app.get(pageUrl, headers = headers(pageUrl), timeout = 15_000L).document
+        }.getOrNull() ?: run {
+            Log.w(name.uppercase().take(23), "/channel page could not be fetched")
+            return emptyList()
+        }
+
+        val seen = HashSet<String>()
+        val items = ArrayList<SearchResponse>()
+
+        document.select("a[href]").forEach { anchor ->
+            val rawHref = anchor.attr("href").trim()
+            if (!rawHref.contains("/live/stream=", ignoreCase = true)) return@forEach
+            if (rawHref.startsWith("javascript:", true) || rawHref.startsWith("data:", true)) return@forEach
+
+            val fullUrl = normalize(rawHref, pageUrl)
+            if (!isValidHttpUrl(fullUrl)) return@forEach
+            if (!seen.add(fullUrl)) return@forEach
+
+            val title = sequenceOf(
+                anchor.attr("title"),
+                anchor.attr("aria-label"),
+                anchor.selectFirst("h1, h2, h3, h4, h5, .title, .name, .channel-name, .card-title")?.text(),
+                anchor.text(),
+                anchor.parent()?.selectFirst(".title, .name, .channel-name, .card-title")?.text()
+            ).mapNotNull { neonCleanText(it) }
+                .firstOrNull {
+                    it.length in 1..160 &&
+                        !it.equals("canlı", true) &&
+                        !it.equals("live", true) &&
+                        !it.equals("izle", true)
+                } ?: return@forEach
+
+            items += newLiveSearchResponse(title, fullUrl, TvType.Live) {
+                posterUrl = mainUrl.trimEnd('/') + "/favicon.ico"
+            }
+        }
+
+        if (items.isEmpty()) {
+            Log.w(name.uppercase().take(23), "/channel page produced no live cards")
+            return emptyList()
+        }
+
+        Log.d(name.uppercase().take(23), "/channel scraped items=${items.size}")
+        return listOf(HomePageList("Canlı Kanallar", items))
+    }
+
     private fun isSiteUrl(url: String): Boolean =
         (url.startsWith("http://", true) || url.startsWith("https://", true)) &&
             siteHost(url) == siteHost(mainUrl)
@@ -662,6 +712,13 @@ class AutoDaddyliveApp : NeonMainAPI() {
         request: MainPageRequest,
     ): HomePageResponse {
         if (page <= 1) {
+            // Öncelik: /channel sayfasındaki statik kanal listesi
+            val channelPages = channelHomePages()
+            if (channelPages.isNotEmpty()) {
+                return newHomePageResponse(channelPages, hasNext = false)
+            }
+
+            // Yedek: /api/events üzerinden canlı etkinlik listesi
             val livePages = liveEventHomePages()
             if (livePages.isNotEmpty()) {
                 return newHomePageResponse(livePages, hasNext = false)
@@ -926,6 +983,57 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
     override suspend fun load(url: String): LoadResponse? {
         val normalizedUrl = normalize(url)
+
+        // --- YENİ: /live/stream= sayfalarından iframe player URL'sini çıkar ---
+        // Kanal listesi /channel sayfasından /live/stream=CHANNEL&source=listX linkleri döner.
+        // Bu sayfalar asıl oynatıcıyı <iframe id="video-player" src="..."> içinde barındırır.
+        if (normalizedUrl.contains("/live/stream=", ignoreCase = true)) {
+            val doc = runCatching {
+                app.get(normalizedUrl, headers = headers(normalizedUrl), timeout = 15_000L).document
+            }.getOrNull()
+
+            if (doc != null) {
+                val iframeSrc = sequenceOf(
+                    doc.selectFirst("iframe#video-player")?.attr("src"),
+                    doc.selectFirst("iframe#player")?.attr("src"),
+                    doc.selectFirst("iframe.player-iframe")?.attr("src"),
+                    doc.selectFirst("iframe[src]")?.attr("src"),
+                ).mapNotNull { it?.trim() }
+                    .firstOrNull {
+                        it.isNotBlank() &&
+                            !it.startsWith("about:", true) &&
+                            !it.startsWith("javascript:", true) &&
+                            !it.startsWith("data:", true) &&
+                            it != "#"
+                    }
+
+                val channelTitle = sequenceOf(
+                    doc.selectFirst("h1")?.text(),
+                    doc.selectFirst(".channel-title, .stream-title, .player-title")?.text(),
+                    doc.title().substringBefore("|").substringBefore("- Daddylive")
+                ).mapNotNull { neonCleanText(it) }
+                    .firstOrNull { it.isNotBlank() }
+                    ?: "Canlı Yayın"
+
+                if (!iframeSrc.isNullOrBlank()) {
+                    val playUrl = normalize(iframeSrc, normalizedUrl)
+                    if (isValidHttpUrl(playUrl)) {
+                        Log.d(name.uppercase().take(23), "live stream iframe resolved path=${playUrl.take(200)}")
+                        return newLiveStreamLoadResponse(channelTitle, playUrl, playUrl)
+                    }
+                }
+
+                // Iframe bulunamadıysa, sayfayı loadLinks'in kendi çözümlemesine bırak.
+                // LoadLinks sayfa içindeki script'lerden/iframe'lerden medya bulmayı deneyecek.
+                Log.w(name.uppercase().take(23), "no player iframe on channel page, falling back to page URL")
+                return newLiveStreamLoadResponse(channelTitle, normalizedUrl, normalizedUrl)
+            }
+
+            // Sayfa getirilemediyse yine de URL'yi data olarak ver ki loadLinks denesin.
+            return newLiveStreamLoadResponse("Canlı Yayın", normalizedUrl, normalizedUrl)
+        }
+        // --- YENİ BLOK SONU ---
+
         val embedUrl = liveEmbedUrl(cleanLiveDataUrl(normalizedUrl))
         val liveTitle = liveTitleFromUrl(normalizedUrl)
         if (embedUrl != null && liveTitle != null) {
