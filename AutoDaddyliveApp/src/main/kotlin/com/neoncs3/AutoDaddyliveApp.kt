@@ -21,18 +21,14 @@ class AutoDaddyliveApp : NeonMainAPI() {
     override var sequentialMainPage = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Live)
 
-    // Güncel ve çalışan M3U çalma listesi
-    private val channelPlaylistUrl =
-        "https://raw.githubusercontent.com/dtankdempse/daddylive-m3u/refs/heads/main/playlist.m3u8"
+    // Kanalları çektiğimiz JSON API'si
+    private val channelApiUrl = "https://daddylive.app/player/player14.json"
 
-    private val configuredSearchAction = "https://daddylive.app/porn"
-    private val configuredSearchField = "search"
     private val playerUserAgent =
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
 
-    // Yayınlar için gerekli başlıklar
-    private val liveReferer = "https://ilovetoplay.xyz/"
-    private val liveOrigin = "https://ilovetoplay.xyz"
+    private val liveReferer = "https://daddylive.app/"
+    private val liveOrigin = "https://daddylive.app"
 
     override val mainPage = mainPageOf(
         "https://daddylive.app/" to "Ana Sayfa"
@@ -56,58 +52,45 @@ class AutoDaddyliveApp : NeonMainAPI() {
         }.getOrDefault(false)
 
     // ------------------------------------------------------------------
-    // M3U çalma listesini indirip ayrıştıran fonksiyon
+    // JSON API'sinden kanalları çeken fonksiyon
     // ------------------------------------------------------------------
-    private suspend fun loadChannelPlaylist(): List<SearchResponse> {
+    private suspend fun loadChannelsFromApi(): List<SearchResponse> {
         val body = runCatching {
             app.get(
-                channelPlaylistUrl,
-                headers = headers(channelPlaylistUrl),
+                channelApiUrl,
+                headers = headers(channelApiUrl) + mapOf(
+                    "Accept" to "application/json, text/plain, */*",
+                    "User-Agent" to playerUserAgent,
+                ),
                 timeout = 20_000L,
                 allowRedirects = true,
             ).takeIf { it.isSuccessful }?.text
         }.getOrNull().orEmpty()
 
         if (body.isBlank()) {
-            Log.w(name.uppercase().take(23), "M3U playlist returned empty response")
+            Log.w(name.uppercase().take(23), "Channel API returned empty response")
             return emptyList()
         }
 
         val items = ArrayList<SearchResponse>()
-        var pendingName: String? = null
-        var pendingLogo: String? = null
+        runCatching {
+            val jsonArray = JSONArray(body)
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                val channelName = obj.optString("name").trim()
+                val streamUrl = obj.optString("url").trim()
+                if (channelName.isBlank() || streamUrl.isBlank()) continue
+                if (!isValidHttpUrl(streamUrl)) continue
 
-        body.lineSequence().forEach { rawLine ->
-            val line = rawLine.trim()
-            when {
-                line.startsWith("#EXTINF:", ignoreCase = true) -> {
-                    val infoPart = line.substringAfter("#EXTINF:", "")
-                    val name = infoPart.substringAfterLast(",").trim()
-                    if (name.isNotBlank()) {
-                        pendingName = name
-                        val logoMatch = Regex("""tvg-logo="([^"]+)"""")
-                            .find(infoPart)?.groupValues?.getOrNull(1)
-                        pendingLogo = logoMatch?.takeIf { isValidHttpUrl(it) }
-                    } else {
-                        pendingName = null
-                        pendingLogo = null
-                    }
-                }
-                line.isNotBlank() && !line.startsWith("#") -> {
-                    val name = pendingName ?: return@forEach
-                    val streamUrl = line
-                    if (isValidHttpUrl(streamUrl)) {
-                        items += newLiveSearchResponse(name, streamUrl, TvType.Live) {
-                            posterUrl = pendingLogo ?: (mainUrl.trimEnd('/') + "/favicon.ico")
-                        }
-                    }
-                    pendingName = null
-                    pendingLogo = null
+                items += newLiveSearchResponse(channelName, streamUrl, TvType.Live) {
+                    posterUrl = mainUrl.trimEnd('/') + "/favicon.ico"
                 }
             }
+        }.onFailure {
+            Log.e(name.uppercase().take(23), "Error parsing channel JSON", it)
         }
 
-        Log.d(name.uppercase().take(23), "M3U playlist parsed items=${items.size}")
+        Log.d(name.uppercase().take(23), "Channel API parsed items=${items.size}")
         return items
     }
 
@@ -141,7 +124,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
         request: MainPageRequest,
     ): HomePageResponse {
         if (page <= 1) {
-            val liveItems = loadChannelPlaylist()
+            val liveItems = loadChannelsFromApi()
             if (liveItems.isNotEmpty()) {
                 val pages = liveItems.chunked(300).mapIndexed { index, chunk ->
                     val label = if (index == 0) "Canlı Kanallar" else "Canlı Kanallar ${index + 1}"
@@ -151,6 +134,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
             }
         }
 
+        // API başarısız olursa eski davranışa düş (boş ana sayfa yerine).
         val base = request.data
         val document = runCatching {
             app.get(base, headers = headers(base), timeout = 12_000L).document
@@ -850,20 +834,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val normalized = normalize(url)
-        if (!isValidHttpUrl(normalized) || !neonIsMediaUrl(normalized)) return null
-
-        val title = runCatching {
-            URI(normalized).path.orEmpty()
-                .substringAfterLast('/')
-                .substringBeforeLast('.')
-                .replace(Regex("""[-_]+"""), " ")
-                .trim()
-        }.getOrNull()?.takeIf { it.isNotBlank() } ?: "Canlı Yayın"
-
-        val response = newLiveStreamLoadResponse(title, normalized, normalized)
-        val document = Document(normalized)
-        return neonEnrichResponse(response, document, normalized)
+        return null
     }
 
     override suspend fun loadLinks(
