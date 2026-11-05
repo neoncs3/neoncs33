@@ -27,8 +27,9 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
     private val channelsPerPage = 50
 
+    // Daha yaygın ve kararlı bir UA
     private val playerUserAgent =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
     override val mainPage = mainPageOf(
         "https://daddylive.app/" to "Ana Sayfa"
@@ -139,11 +140,10 @@ class AutoDaddyliveApp : NeonMainAPI() {
         }.getOrDefault("").ifBlank { "daddylive.app" }
 
         val referer = "https://$streamHost/"
-        val origin = "https://$streamHost"
 
+        // Origin göndermiyoruz; OkHttp otomatik ekler ve elle eklenen değerle çakışmaz.
         val outHeaders = mapOf(
             "Referer" to referer,
-            "Origin" to origin,
             "User-Agent" to playerUserAgent,
         )
         callback(
@@ -161,7 +161,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
     // ------------------------------------------------------------------
     // tvnow247.top embed sayfalarını çözen fonksiyon
-    // KRİTİK DÜZELTME: Origin -> https://dembed.st
+    // Origin kaldırıldı, Referer sadeleştirildi, UA/Accept iyileştirildi
     // ------------------------------------------------------------------
     private suspend fun resolveTvNow247(
         embedUrl: String,
@@ -174,7 +174,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
                 embedUrl,
                 headers = mapOf(
                     "Referer" to "https://tvnow247.top/",
-                    "Origin" to "https://tvnow247.top",
                     "User-Agent" to playerUserAgent,
                 ),
                 timeout = 15_000L,
@@ -217,18 +216,12 @@ class AutoDaddyliveApp : NeonMainAPI() {
                 .find(pageHtml)?.groupValues?.getOrNull(1),
         ).filterNotNull().firstOrNull() ?: "https://chat.cfbu247.sbs"
 
-        Log.d(
-            name.uppercase().take(23),
-            "tvnow247: channelId=$channelId src=$src apiHost=$apiHost"
-        )
-
         val resolveUrl = "${apiHost.trimEnd('/')}/api/resolve-dlstream/$channelId?src=$src"
         val resolveBody = runCatching {
             app.get(
                 resolveUrl,
                 headers = mapOf(
                     "Referer" to "https://tvnow247.top/",
-                    "Origin" to "https://tvnow247.top",
                     "User-Agent" to playerUserAgent,
                     "Accept" to "application/json, text/plain, */*",
                 ),
@@ -246,9 +239,17 @@ class AutoDaddyliveApp : NeonMainAPI() {
             ?.takeIf { it.isNotBlank() && it != "null" }
             ?: json?.optString("proxyPlaylistUrl")?.trim()
                 ?.takeIf { it.isNotBlank() && it != "null" }
-        val streamReferer = json?.optString("referer")?.trim()
+
+        // Referer: API yanıtındaki tam referer'ı kullan; eğer çok uzunsa origin'e indir.
+        val rawReferer = json?.optString("referer")?.trim()
             ?.takeIf { it.isNotBlank() && it != "null" }
-            ?: "https://dembed.st/premiumtv/daddy.php?id=$channelId"
+            ?: "https://dembed.st/"
+
+        // Sunucu bazı durumlarda tam URL yerine sadece origin bekleyebiliyor.
+        val streamReferer = runCatching {
+            val uri = URI(rawReferer)
+            "${uri.scheme}://${uri.host}/"
+        }.getOrDefault("https://dembed.st/")
 
         if (m3u8Url.isNullOrBlank()) {
             Log.w(
@@ -260,13 +261,11 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
         Log.d(name.uppercase().take(23), "tvnow247: m3u8=$m3u8Url referer=$streamReferer")
 
-        // KRİTİK: Origin -> https://dembed.st
-        // Segment istekleri bu değeri bekliyor; aksi halde 403 alınır ve 3001 hatası oluşur.
+        // Origin YOK, Accept HLS, Referer origin seviyesinde.
         val outHeaders = mapOf(
             "Referer" to streamReferer,
-            "Origin" to "https://dembed.st",
             "User-Agent" to playerUserAgent,
-            "Accept" to "*/*",
+            "Accept" to "application/vnd.apple.mpegurl, application/x-mpegURL, */*",
             "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
         )
         callback(
