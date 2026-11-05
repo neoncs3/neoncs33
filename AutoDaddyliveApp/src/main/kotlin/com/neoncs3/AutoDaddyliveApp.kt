@@ -20,7 +20,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
     override var sequentialMainPage = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Live)
 
-    // Sadece player10.json - player5.json'daki cdnlivetv.tv API çalışmıyor
     private val channelApiUrls = listOf(
         "https://daddylive.app/player/player10.json",
     )
@@ -51,9 +50,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
                 !uri.host.isNullOrBlank()
         }.getOrDefault(false)
 
-    // ------------------------------------------------------------------
-    // JSON API'sinden kanalları çeken fonksiyon
-    // ------------------------------------------------------------------
     private suspend fun parseChannelsFromUrl(apiUrl: String): List<SearchResponse> {
         val body = runCatching {
             app.get(
@@ -67,10 +63,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
             ).takeIf { it.isSuccessful }?.text
         }.getOrNull().orEmpty()
 
-        if (body.isBlank()) {
-            Log.w(name.uppercase().take(23), "API empty: $apiUrl")
-            return emptyList()
-        }
+        if (body.isBlank()) return emptyList()
 
         val items = ArrayList<SearchResponse>()
         runCatching {
@@ -114,7 +107,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
             Log.e(name.uppercase().take(23), "Error parsing $apiUrl", it)
         }
 
-        Log.d(name.uppercase().take(23), "API parsed from $apiUrl -> items=${items.size}")
+        Log.d(name.uppercase().take(23), "API parsed -> items=${items.size}")
         return items
     }
 
@@ -133,10 +126,50 @@ class AutoDaddyliveApp : NeonMainAPI() {
         return combined
     }
 
-    // ------------------------------------------------------------------
-    // tvnow247.top embed sayfalarını çözen fonksiyon
-    // API yanıtındaki m3u8 için 3 farklı başlık kombinasyonu dener
-    // ------------------------------------------------------------------
+    // proxyPlayerUrl HTML'inden gerçek canlı akışı çıkarmaya çalışır
+    private fun extractLiveStreamFromHtml(html: String): String? {
+        val text = html
+            .replace("\\/", "/")
+            .replace("\\u0026", "&")
+            .replace("&#x2F;", "/")
+            .replace("&amp;", "&")
+
+        // Doğrudan .m3u8 URL'leri
+        val m3u8s = Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""")
+            .findAll(text).map { it.value }.toList()
+
+        // Canlı akışları tercih et
+        val live = m3u8s.firstOrNull {
+            it.contains("live", true) || it.contains("stream", true) || it.contains("chunk", true)
+        }
+        if (live != null) return live
+        if (m3u8s.isNotEmpty()) return m3u8s.first()
+
+        // JS değişkenleri içindeki m3u8
+        val patterns = listOf(
+            Regex("""(?:src|file|source|stream|url|hls|playlist)\s*[:=]\s*["']([^"']+\.m3u8[^"']*)["']""", RegexOption.IGNORE_CASE),
+            Regex("""["']([^"']+\.m3u8[^"']*)["']"""),
+        )
+        for (p in patterns) {
+            p.find(text)?.let { return it.groupValues[1] }
+        }
+
+        // Base64 encoded m3u8 (bazen player'lar bunu kullanır)
+        val b64Pattern = Regex("""["']([A-Za-z0-9+/=]{50,})["']""")
+        for (m in b64Pattern.findAll(text)) {
+            val decoded = runCatching {
+                String(android.util.Base64.decode(m.groupValues[1], android.util.Base64.DEFAULT))
+            }.getOrNull()
+            if (decoded != null && decoded.contains(".m3u8", true)) {
+                m3u8s.firstOrNull()?.let { return it }
+                Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""")
+                    .find(decoded)?.let { return it.value }
+            }
+        }
+
+        return null
+    }
+
     private suspend fun resolveTvNow247(
         embedUrl: String,
         callback: (ExtractorLink) -> Unit,
@@ -155,12 +188,8 @@ class AutoDaddyliveApp : NeonMainAPI() {
         }.getOrNull() ?: return false
 
         val pageHtml = embedResponse.text
-        if (pageHtml.isBlank()) {
-            Log.w(name.uppercase().take(23), "tvnow247 embed sayfası boş")
-            return false
-        }
+        if (pageHtml.isBlank()) return false
 
-        // 1. channelId
         val channelId = sequenceOf(
             Regex("""channelId\s*[:=]\s*["']?(\d+)["']?""").find(pageHtml)?.groupValues?.getOrNull(1),
             Regex("""channel_id\s*[:=]\s*["']?(\d+)["']?""").find(pageHtml)?.groupValues?.getOrNull(1),
@@ -169,14 +198,8 @@ class AutoDaddyliveApp : NeonMainAPI() {
             Regex("""/resolve-dlstream/(\d+)""").find(pageHtml)?.groupValues?.getOrNull(1),
             Regex("""data-(?:channel|stream)-id=["'](\d+)["']""").find(pageHtml)?.groupValues?.getOrNull(1),
             Regex("""(\d+)$""").find(embedUrl)?.groupValues?.getOrNull(1),
-        ).filterNotNull().firstOrNull()
+        ).filterNotNull().firstOrNull() ?: return false
 
-        if (channelId.isNullOrBlank()) {
-            Log.w(name.uppercase().take(23), "tvnow247: channelId bulunamadı")
-            return false
-        }
-
-        // 2. src
         val src = sequenceOf(
             Regex("""src\s*[:=]\s*["'](plus|tv\d*|dl|main|alt)["']""").find(pageHtml)?.groupValues?.getOrNull(1),
             Regex("""[?&]src=(\w+)""").find(pageHtml)?.groupValues?.getOrNull(1),
@@ -185,7 +208,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
             ) "plus" else null,
         ).filterNotNull().firstOrNull() ?: "plus"
 
-        // 3. apiHost
         val apiHost = sequenceOf(
             Regex("""["'](https?://chat\.[a-z0-9.-]+)["']""")
                 .find(pageHtml)?.groupValues?.getOrNull(1),
@@ -193,12 +215,8 @@ class AutoDaddyliveApp : NeonMainAPI() {
                 .find(pageHtml)?.groupValues?.getOrNull(1),
         ).filterNotNull().firstOrNull() ?: "https://chat.cfbu247.sbs"
 
-        Log.d(
-            name.uppercase().take(23),
-            "tvnow247: channelId=$channelId src=$src apiHost=$apiHost"
-        )
+        Log.d(name.uppercase().take(23), "tvnow247: id=$channelId src=$src apiHost=$apiHost")
 
-        // 4. resolve-dlstream API
         val resolveUrl = "${apiHost.trimEnd('/')}/api/resolve-dlstream/$channelId?src=$src"
         val resolveBody = runCatching {
             app.get(
@@ -212,10 +230,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
             ).takeIf { it.isSuccessful }?.text
         }.getOrNull().orEmpty()
 
-        if (resolveBody.isBlank()) {
-            Log.w(name.uppercase().take(23), "tvnow247: resolve-dlstream boş yanıt")
-            return false
-        }
+        if (resolveBody.isBlank()) return false
 
         val json = runCatching { JSONObject(resolveBody) }.getOrNull() ?: return false
 
@@ -223,46 +238,91 @@ class AutoDaddyliveApp : NeonMainAPI() {
             .takeIf { it.isNotBlank() && it != "null" }
             ?: json.optString("proxyPlaylistUrl").trim()
                 .takeIf { it.isNotBlank() && it != "null" }
-
+        val proxyPlayerUrl = json.optString("proxyPlayerUrl").trim()
+            .takeIf { it.isNotBlank() && it != "null" }
         val apiReferer = json.optString("referer").trim()
             .takeIf { it.isNotBlank() && it != "null" }
             ?: "https://dembed.st/premiumtv/daddy.php?id=$channelId"
 
-        if (m3u8Url.isNullOrBlank()) {
-            Log.w(name.uppercase().take(23), "tvnow247: m3u8 bulunamadı")
-            return false
+        Log.d(name.uppercase().take(23), "tvnow247: m3u8=$m3u8Url")
+        Log.d(name.uppercase().take(23), "tvnow247: proxyPlayer=$proxyPlayerUrl")
+
+        var emitted = 0
+
+        // 1) proxyPlayerUrl'den gerçek canlı akış çıkarmayı dene
+        if (!proxyPlayerUrl.isNullOrBlank()) {
+            val playerHtml = runCatching {
+                app.get(
+                    proxyPlayerUrl,
+                    headers = mapOf(
+                        "Referer" to "https://tvnow247.top/",
+                        "User-Agent" to playerUserAgent,
+                        "Accept" to "text/html,application/xhtml+xml,*/*",
+                    ),
+                    timeout = 15_000L,
+                ).takeIf { it.isSuccessful }?.text
+            }.getOrNull().orEmpty()
+
+            if (playerHtml.isNotBlank()) {
+                val liveStream = extractLiveStreamFromHtml(playerHtml)
+                if (!liveStream.isNullOrBlank()) {
+                    Log.d(name.uppercase().take(23), "tvnow247: gerçek akış=$liveStream")
+                    callback(
+                        ExtractorLink(
+                            source = name,
+                            name = "Daddylive Live",
+                            url = liveStream,
+                            referer = apiReferer,
+                            quality = Qualities.Unknown.value,
+                            headers = mapOf(
+                                "Referer" to apiReferer,
+                                "Origin" to "https://dembed.st",
+                                "User-Agent" to playerUserAgent,
+                                "Accept" to "*/*",
+                            ),
+                            type = ExtractorLinkType.M3U8,
+                        )
+                    )
+                    emitted++
+                }
+            }
         }
 
-        Log.d(name.uppercase().take(23), "tvnow247: m3u8=$m3u8Url apiReferer=$apiReferer")
-
-        // 5. 3 farklı başlık kombinasyonu dene - kullanıcı çalışanı seçer
-        val combos = listOf(
-            Triple(apiReferer, "https://dembed.st", "Daddylive (api)"),
-            Triple("https://tvnow247.top/", "https://tvnow247.top", "Daddylive (tv)"),
-            Triple(apiReferer, null as String?, "Daddylive (no-origin)"),
-        )
-
-        for ((referer, origin, label) in combos) {
-            val outHeaders = mutableMapOf(
-                "Referer" to referer,
-                "User-Agent" to playerUserAgent,
-                "Accept" to "*/*",
+        // 2) Doğrudan m3u8'i 3 farklı başlıkla sun
+        if (!m3u8Url.isNullOrBlank()) {
+            data class Combo(val referer: String, val origin: String?, val label: String)
+            val combos = listOf(
+                Combo(apiReferer, "https://dembed.st", "Daddylive (api+origin)"),
+                Combo(apiReferer, null, "Daddylive (api, no-origin)"),
+                Combo("https://tvnow247.top/", "https://tvnow247.top", "Daddylive (tv)"),
+                Combo("https://dembed.st/", null, "Daddylive (dembed root)"),
             )
-            if (origin != null) outHeaders["Origin"] = origin
 
-            callback(
-                ExtractorLink(
-                    source = name,
-                    name = label,
-                    url = m3u8Url,
-                    referer = referer,
-                    quality = Qualities.Unknown.value,
-                    headers = outHeaders,
-                    type = ExtractorLinkType.M3U8,
+            for (c in combos) {
+                val h = mutableMapOf(
+                    "Referer" to c.referer,
+                    "User-Agent" to playerUserAgent,
+                    "Accept" to "*/*",
                 )
-            )
+                if (c.origin != null) h["Origin"] = c.origin
+
+                callback(
+                    ExtractorLink(
+                        source = name,
+                        name = c.label,
+                        url = m3u8Url,
+                        referer = c.referer,
+                        quality = Qualities.Unknown.value,
+                        headers = h,
+                        type = ExtractorLinkType.M3U8,
+                    )
+                )
+                emitted++
+            }
         }
-        return true
+
+        Log.d(name.uppercase().take(23), "tvnow247: emitted=$emitted variants")
+        return emitted > 0
     }
 
     override suspend fun getMainPage(
@@ -288,8 +348,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
         return newHomePageResponse(request.name, results, hasNext = false)
     }
 
-    // ---- Yardımcı fonksiyonlar ----
-
     private fun isSiteUrl(url: String): Boolean =
         (url.startsWith("http://", true) || url.startsWith("https://", true)) &&
             siteHost(url) == siteHost(mainUrl)
@@ -314,14 +372,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
             host == "youtu.be" ||
             host == "youtube-nocookie.com" ||
             host.endsWith(".youtube-nocookie.com")
-    }
-
-    private fun isYouTubeMediaLink(link: ExtractorLink): Boolean {
-        val host = runCatching {
-            URI(link.url).host.orEmpty().lowercase().removePrefix("www.")
-        }.getOrDefault("")
-        return isYouTubePageUrl(link.url) || host == "googlevideo.com" ||
-            host.endsWith(".googlevideo.com")
     }
 
     private fun isEpisodeLike(value: String): Boolean =
@@ -484,22 +534,12 @@ class AutoDaddyliveApp : NeonMainAPI() {
         val uri = runCatching { URI(url) }.getOrNull() ?: return false
         val path = uri.path.orEmpty().lowercase()
         val file = path.substringAfterLast('/')
-        if (listOf(
-                "/avatar/", "/avatars/", "/user/", "/users/", "/profile/",
-                "/profiles/", "/member/", "/members/", "/author/", "/authors/",
-                "/account/", "/accounts/", "/community/", "/forum/", "/forums/"
-            ).any { path.contains(it) }
-        ) return false
-        val placeholderMarkers = listOf(
+        val placeholders = listOf(
             "placeholder", "no-image", "no_image", "noimage", "no-poster",
             "noposter", "blank.gif", "transparent", "avatar", "favicon",
-            "spinner", "loading", "pixel", "missing", "not-found",
-            "user-photo", "profile-photo", "member-photo", "author-photo"
+            "spinner", "loading", "pixel", "missing", "not-found"
         )
-        if (placeholderMarkers.any { file.contains(it) }) return false
-        if (Regex("""(?i)^logo(?:[-_].*)?\.(?:png|jpe?g|webp|gif|svg|ico)$""")
-                .matches(file)
-        ) return false
+        if (placeholders.any { file.contains(it) }) return false
         return file.isNotBlank()
     }
 
@@ -522,26 +562,9 @@ class AutoDaddyliveApp : NeonMainAPI() {
         val uri = runCatching { URI(url) }.getOrNull() ?: return false
         val path = uri.path.orEmpty().lowercase()
         if (path.isBlank() || path == "/") return false
-        if (listOf(
-                "/wp-admin", "/wp-content", "/wp-json", "/tag/", "/category/", "/genre/",
-                "/kategori/", "/tur/", "/oyuncu/", "/actor/", "/search/", "/page/",
-                "/login", "/register", "/giris", "/kayit", "/iletisim", "/contact",
-                "/privacy", "/terms", "/feed", "/yorum", "/comment", "/kesfet",
-                "/discover", "/takvim", "/calendar", "/tartisma", "/discussion",
-                "/baslik", "/topics", "/forum", "/profile", "/profil", "/user",
-                "/member", "/author", "/account", "/uye", "/kullanici", "/threads",
-                "/thread", "/konu", "/konular", "/community", "/sohbet", "/replies"
-            ).any { path.contains(it) }
-        ) return false
-        if (listOf(
-                ".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".ico",
+        if (listOf(".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".ico",
                 ".css", ".js", ".m3u8", ".mpd", ".mp4", ".webm", ".m4v",
-                ".mov", ".flv", ".avi", ".mkv", ".mpeg", ".mpg", ".3gp",
-                ".ts", ".m4s", ".mp3", ".m4a", ".aac", ".ogg", ".wav",
-                ".srt", ".vtt", ".ass", ".ssa", ".sub", ".idx", ".woff",
-                ".woff2", ".ttf", ".eot", ".webmanifest"
-            ).any { path.endsWith(it) }
-        ) return false
+                ".ts", ".m4s").any { path.endsWith(it) }) return false
         return path.trim('/').isNotBlank()
     }
 
@@ -557,40 +580,11 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
     private fun imageUrl(image: Element?, baseUrl: String): String? {
         if (image == null) return null
-        val imageHint = normalizedFilterText(
-            image.attr("class") + " " + image.id() + " " +
-                image.attr("alt") + " " + image.attr("title")
-        )
-        val assetHints = imageHint + " " + listOf(
-            "src", "data-src", "data-lazy-src", "data-lazy", "data-original", "data-original-src",
-            "data-poster", "data-image", "data-img", "data-thumb", "data-cover", "data-bg",
-            "data-background", "srcset", "data-srcset", "style"
-        ).joinToString(" ") { image.attr(it) }
-        if (isFlagOrIconAsset(assetHints)) return null
-        if (listOf(
-                "avatar", "user photo", "profile photo", "profile picture",
-                "member photo", "author photo", "account photo", "user profile"
-            ).any { imageHint.contains(it) }
-        ) return null
-
         val direct = sequenceOf(
             image.attr("data-poster"), image.attr("data-src"), image.attr("data-lazy-src"),
-            image.attr("data-lazy"), image.attr("data-original"), image.attr("data-original-src"),
-            image.attr("data-image"), image.attr("data-img"), image.attr("data-thumb"),
-            image.attr("data-cover"), image.attr("data-bg"), image.attr("data-background"),
-            image.attr("poster"), image.attr("src"),
+            image.attr("data-original"), image.attr("src"),
         )
-        val responsive = sequenceOf(image.attr("data-srcset"), image.attr("srcset"))
-            .flatMap { value ->
-                value.split(",").asSequence()
-                    .map { it.trim().substringBefore(" ") }
-                    .filter { it.isNotBlank() }
-            }
-        val cssBackgrounds = Regex("""(?i)url\(\s*['"]?([^'")]+)['"]?\s*\)""")
-            .findAll(image.attr("style"))
-            .map { it.groupValues[1].trim() }
-
-        return (direct + responsive + cssBackgrounds)
+        return direct
             .filter { it.isNotBlank() && !it.startsWith("data:", true) }
             .map { normalize(it, baseUrl) }
             .firstOrNull { isValidPosterUrl(it) }
@@ -602,51 +596,25 @@ class AutoDaddyliveApp : NeonMainAPI() {
             val current = node ?: break
             if (depth > 0 && current.select("a[href]").any { it !== anchor }) return null
             imageUrl(current, baseUrl)?.let { return it }
-            val urls = LinkedHashSet<String>()
-            current.select(
-                "img, picture source, source[srcset], [data-poster], [data-bg], " +
-                    "[data-background], [style*=background]"
-            ).forEach { candidate ->
-                imageUrl(candidate, baseUrl)?.let(urls::add)
-            }
-            if (urls.size == 1) return urls.first()
-            if (urls.size > 1) return null
+            val image = current.selectFirst("img")
+            imageUrl(image, baseUrl)?.let { return it }
             node = current.parent()
         }
         return null
     }
 
     private fun candidateAnchors(document: Document): List<Element> {
-        val cardSelector =
-            "article:has(img) a[href], article:has([style*=background]) a[href], " +
-                "article:has([data-poster]) a[href], .movie-card a[href], .film-card a[href], " +
-                ".dizi-card a[href], .post:has(img) a[href], .post:has([style*=background]) a[href], " +
-                ".post:has([data-poster]) a[href], .item:has(img) a[href], " +
-                ".item:has([style*=background]) a[href], .item:has([data-poster]) a[href], " +
-                ".item:has([data-src]) a[href], .card:has(img) a[href], " +
-                ".card:has([style*=background]) a[href], .card:has([data-poster]) a[href], " +
-                ".card:has([data-src]) a[href], .movie:has(img) a[href], " +
-                ".movie:has([style*=background]) a[href], .film:has(img) a[href], " +
-                ".film:has([style*=background]) a[href], .dizi:has(img) a[href], " +
-                ".dizi:has([style*=background]) a[href], .poster a[href], " +
-                ".videos:has(img) a[href], .videos:has([style*=background]) a[href]"
         val mediaSelector =
-            "a[href]:has(img), a[href]:has(picture), a[href][data-poster], " +
-                "a[href][data-image], a[href][data-src], a[href][data-lazy-src], " +
-                "a[href][style*=background], a[href]:has([style*=background])"
+            "a[href]:has(img), a[href][data-poster], a[href][data-src], a[href][data-lazy-src]"
         val anchors = ArrayList<Element>()
         val seen = LinkedHashSet<String>()
-        fun collect(selector: String, limit: Int) {
-            for (anchor in document.select(selector)) {
-                if (anchors.size >= limit) break
-                if (isNavigationChrome(anchor) || isNonContentAnchor(anchor, mainUrl)) continue
-                if (posterFor(anchor, mainUrl) == null) continue
-                val href = normalize(anchor.attr("href"), mainUrl)
-                if (seen.add(href)) anchors.add(anchor)
-            }
+        for (anchor in document.select(mediaSelector)) {
+            if (anchors.size >= 200) break
+            if (isNavigationChrome(anchor) || isNonContentAnchor(anchor, mainUrl)) continue
+            if (posterFor(anchor, mainUrl) == null) continue
+            val href = normalize(anchor.attr("href"), mainUrl)
+            if (seen.add(href)) anchors.add(anchor)
         }
-        collect(mediaSelector, 200)
-        if (anchors.size < 15) collect(cardSelector, 200)
         return anchors
     }
 
@@ -659,33 +627,26 @@ class AutoDaddyliveApp : NeonMainAPI() {
         val title = sequenceOf(
             anchor.attr("title"),
             anchor.attr("aria-label"),
-            anchor.selectFirst("h1, h2, h3, h4, .title, .name, .movie-title, .film-title, .dizi-title")?.text(),
+            anchor.selectFirst("h1, h2, h3, h4, .title")?.text(),
             image?.attr("alt"),
             anchor.text(),
-            container.attr("title")
         ).mapNotNull { neonCleanText(it) }
             .firstOrNull { it.length in 2..160 } ?: return null
-        if (title.equals(name, true) || title.equals("Ana Sayfa", true)) return null
+        if (title.equals(name, true)) return null
         if (isEpisodeLike(title + " " + href)) return null
-        if (isNavigationItem(title, href) || isNavigationChrome(anchor)) return null
+        if (isNavigationItem(title, href)) return null
 
         val poster = posterFor(anchor, baseUrl) ?: return null
-        if (!isValidPosterUrl(poster)) return null
-        val scoreValue = neonExtractRating(container.text())
-        val series = Regex("""(?i)(dizi|series|season|sezon|tv-show|tvseries)""")
+        val series = Regex("""(?i)(dizi|series|season|sezon)""")
             .containsMatchIn(title + " " + href)
-        val posterHeaders = headers(baseUrl)
+
         return if (series) {
             newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
                 posterUrl = poster
-                this.posterHeaders = posterHeaders
-                scoreValue?.let { score = Score.from10(it) }
             }
         } else {
             newMovieSearchResponse(title, href, TvType.Movie) {
                 posterUrl = poster
-                this.posterHeaders = posterHeaders
-                scoreValue?.let { score = Score.from10(it) }
             }
         }
     }
@@ -700,29 +661,19 @@ class AutoDaddyliveApp : NeonMainAPI() {
         return results.values.toList()
     }
 
-    private fun searchUrls(encoded: String): List<String> {
-        val urls = ArrayList<String>()
-        urls += mainUrl + "/?s=" + encoded
-        urls += mainUrl + "/?search=" + encoded
-        urls += mainUrl + "/?q=" + encoded
-        urls += mainUrl + "/search/" + encoded + "/"
-        return urls.distinct()
-    }
-
-    private fun matchesQuery(result: SearchResponse, query: String): Boolean {
-        return neonRelevantSearchResults(listOf(result), query).isNotEmpty()
-    }
-
     override suspend fun search(query: String): List<SearchResponse> {
         val cleanQuery = query.trim()
         if (cleanQuery.length < 2) return emptyList()
         val encoded = URLEncoder.encode(cleanQuery, "UTF-8")
-        for (searchUrl in searchUrls(encoded)) {
+        val urls = listOf(
+            mainUrl + "/?s=" + encoded,
+            mainUrl + "/?q=" + encoded,
+        )
+        for (searchUrl in urls) {
             val response = runCatching {
                 app.get(searchUrl, headers = headers(searchUrl), timeout = 12_000L)
             }.getOrNull() ?: continue
             val matches = resultsFrom(response.document, searchUrl)
-                .filter { matchesQuery(it, cleanQuery) }
             if (matches.isNotEmpty()) return matches
         }
         return emptyList()
@@ -732,19 +683,10 @@ class AutoDaddyliveApp : NeonMainAPI() {
         val normalized = normalize(url)
         if (!isValidHttpUrl(normalized)) return null
 
-        val document = if (neonIsMediaUrl(normalized)) {
-            Document("")
-        } else {
-            neonCachedDocument(normalized, normalized)
-                ?: runCatching {
-                    app.get(
-                        normalized,
-                        headers = headers(normalized),
-                        timeout = 12_000L,
-                    ).document
-                }.getOrNull()
-                ?: Document("")
-        }
+        val document = if (neonIsMediaUrl(normalized)) Document("")
+        else runCatching {
+            app.get(normalized, headers = headers(normalized), timeout = 12_000L).document
+        }.getOrNull() ?: Document("")
 
         val title = document.title().takeIf { it.isNotBlank() }
             ?: runCatching {
@@ -756,8 +698,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
             }.getOrNull()?.takeIf { it.isNotBlank() }
             ?: "Canlı Yayın"
 
-        val response = newLiveStreamLoadResponse(title, normalized, normalized)
-        return neonEnrichResponse(response, document, normalized)
+        return newLiveStreamLoadResponse(title, normalized, normalized)
     }
 
     override suspend fun loadLinks(
@@ -769,19 +710,16 @@ class AutoDaddyliveApp : NeonMainAPI() {
         val normalized = data.trim()
         if (normalized.isBlank()) return false
 
-        // tvnow247.top embed sayfaları için özel çözümleme
         if (normalized.contains("tvnow247.top/embed/", ignoreCase = true)) {
-            val resolved = resolveTvNow247(normalized, callback)
-            if (resolved) return true
+            if (resolveTvNow247(normalized, callback)) return true
             Log.w(name.uppercase().take(23), "tvnow247 çözümlenemedi")
         }
 
-        // Doğrudan medya akışıysa ilet
         if (neonIsMediaUrl(normalized)) {
-            val streamHost = runCatching {
+            val host = runCatching {
                 URI(normalized).host.orEmpty().lowercase()
             }.getOrDefault("").ifBlank { "daddylive.app" }
-            val referer = "https://$streamHost/"
+            val referer = "https://$host/"
 
             callback(
                 ExtractorLink(
@@ -800,51 +738,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
             return true
         }
 
-        // Diğerleri için genel çözümleme
-        val document = neonCachedDocument(normalized, normalized)
-            ?: runCatching {
-                app.get(
-                    normalized,
-                    headers = headers(normalized),
-                    timeout = 15_000L,
-                ).document
-            }.getOrNull()
-
-        val candidates = LinkedHashSet<String>()
-
-        val externalPlayerFrames = document?.let { page ->
-            neonExtractIframeUrls(page, normalized)
-                .filter { frame ->
-                    !isSiteUrl(frame) && !isYouTubePageUrl(frame) && frame.startsWith("http", true)
-                }
-                .distinct()
-        }.orEmpty()
-
-        if (externalPlayerFrames.isNotEmpty()) {
-            candidates.addAll(externalPlayerFrames)
-        } else {
-            candidates.add(normalized)
-        }
-
-        val emitted = LinkedHashSet<String>()
-        val forwardingCallback: (ExtractorLink) -> Unit = { link ->
-            if (emitted.add(link.url)) {
-                callback(link)
-            }
-        }
-
-        for (candidate in candidates.take(10)) {
-            neonResolveLinks(
-                data = candidate,
-                sourceName = name,
-                subtitleCallback = subtitleCallback,
-                callback = forwardingCallback,
-                maxDepth = 3,
-                referer = normalized,
-            )
-            if (emitted.isNotEmpty()) break
-        }
-
-        return emitted.isNotEmpty()
+        return false
     }
 }
