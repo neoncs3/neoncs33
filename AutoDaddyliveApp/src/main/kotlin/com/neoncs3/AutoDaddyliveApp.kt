@@ -157,6 +157,44 @@ class AutoDaddyliveApp : NeonMainAPI() {
         )
     }
 
+    // proxyPlayerUrl sayfasındaki HTML'den gerçek canlı akışı çıkarır
+    private fun extractStreamFromPlayerHtml(html: String): String? {
+        val text = html
+            .replace("\\/", "/")
+            .replace("\\u0026", "&")
+            .replace("&#x2F;", "/")
+            .replace("&amp;", "&")
+
+        // HLS (.m3u8) adreslerini bul
+        val m3u8Regex = Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""")
+        val candidates = m3u8Regex.findAll(text).map { it.value }.toList()
+        if (candidates.isNotEmpty()) {
+            // Önce canlı (chunk/stream/live) tercih et, sonra ilk bulunan
+            val preferred = candidates.firstOrNull {
+                it.contains("chunk", true) ||
+                    it.contains("stream", true) ||
+                    it.contains("live", true) ||
+                    it.contains("play", true)
+            } ?: candidates.first()
+            return preferred
+        }
+
+        // Bazı player'lar m3u8'i JS değişkeninde tutar
+        val jsVarPatterns = listOf(
+            Regex(
+                """(?:src|file|source|stream|url|hls|playlist)\s*[:=]\s*["']([^"']+\.m3u8[^"']*)["']""",
+                RegexOption.IGNORE_CASE
+            ),
+            Regex("""["']([^"']+\.m3u8[^"']*)["']"""),
+        )
+        for (p in jsVarPatterns) {
+            val m = p.find(text)
+            if (m != null) return m.groupValues[1]
+        }
+
+        return null
+    }
+
     private suspend fun resolveTvNow247(
         embedUrl: String,
         callback: (ExtractorLink) -> Unit,
@@ -228,42 +266,78 @@ class AutoDaddyliveApp : NeonMainAPI() {
             return false
         }
 
-        val json = runCatching { JSONObject(resolveBody) }.getOrNull()
-        val m3u8Url = json?.optString("m3u8")?.trim()
-            ?.takeIf { it.isNotBlank() && it != "null" }
-            ?: json?.optString("proxyPlaylistUrl")?.trim()
-                ?.takeIf { it.isNotBlank() && it != "null" }
+        val json = runCatching { JSONObject(resolveBody) }.getOrNull() ?: return false
 
-        // Referer: API yanıtındaki TAM URL'yi kullan (query string dahil)
-        val streamReferer = json?.optString("referer")?.trim()
-            ?.takeIf { it.isNotBlank() && it != "null" }
+        val proxyPlayerUrl = json.optString("proxyPlayerUrl").trim()
+            .takeIf { it.isNotBlank() && it != "null" }
+        val directM3u8 = json.optString("m3u8").trim()
+            .takeIf { it.isNotBlank() && it != "null" }
+        val proxyPlaylistUrl = json.optString("proxyPlaylistUrl").trim()
+            .takeIf { it.isNotBlank() && it != "null" }
+        val streamReferer = json.optString("referer").trim()
+            .takeIf { it.isNotBlank() && it != "null" }
             ?: "https://dembed.st/premiumtv/daddy.php?id=$channelId"
 
-        if (m3u8Url.isNullOrBlank()) {
-            Log.w(
-                name.uppercase().take(23),
-                "tvnow247: m3u8 bulunamadı. Yanıt: ${resolveBody.take(300)}"
-            )
+        // 1) Önce proxyPlayerUrl'den gerçek canlı m3u8'i çıkarmayı dene
+        if (!proxyPlayerUrl.isNullOrBlank()) {
+            val playerHtml = runCatching {
+                app.get(
+                    proxyPlayerUrl,
+                    headers = mapOf(
+                        "Referer" to "https://tvnow247.top/",
+                        "User-Agent" to playerUserAgent,
+                        "Accept" to "text/html,application/xhtml+xml,*/*",
+                    ),
+                    timeout = 15_000L,
+                ).takeIf { it.isSuccessful }?.text
+            }.getOrNull().orEmpty()
+
+            if (playerHtml.isNotBlank()) {
+                val extracted = extractStreamFromPlayerHtml(playerHtml)
+                if (!extracted.isNullOrBlank()) {
+                    Log.d(name.uppercase().take(23), "tvnow247: gerçek akış bulundu=$extracted")
+                    callback(
+                        ExtractorLink(
+                            source = name,
+                            name = name,
+                            url = extracted,
+                            referer = streamReferer,
+                            quality = Qualities.Unknown.value,
+                            headers = mapOf(
+                                "Referer" to streamReferer,
+                                "User-Agent" to playerUserAgent,
+                                "Accept" to "*/*",
+                            ),
+                            type = ExtractorLinkType.M3U8,
+                        )
+                    )
+                    return true
+                }
+            }
+            Log.d(name.uppercase().take(23), "tvnow247: proxyPlayerUrl'den akış çıkarılamadı, m3u8'e düşülüyor")
+        }
+
+        // 2) Yedek: doğrudan m3u8 / proxyPlaylistUrl
+        val fallback = directM3u8 ?: proxyPlaylistUrl
+        if (fallback.isNullOrBlank()) {
+            Log.w(name.uppercase().take(23), "tvnow247: m3u8 bulunamadı")
             return false
         }
 
-        Log.d(name.uppercase().take(23), "tvnow247: m3u8=$m3u8Url referer=$streamReferer")
+        Log.d(name.uppercase().take(23), "tvnow247: fallback=$fallback referer=$streamReferer")
 
-        // Origin YOK, Referer tam URL, tip M3U8
-        val outHeaders = mapOf(
-            "Referer" to streamReferer,
-            "User-Agent" to playerUserAgent,
-            "Accept" to "*/*",
-            "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
-        )
         callback(
             ExtractorLink(
                 source = name,
                 name = name,
-                url = m3u8Url,
+                url = fallback,
                 referer = streamReferer,
                 quality = Qualities.Unknown.value,
-                headers = outHeaders,
+                headers = mapOf(
+                    "Referer" to streamReferer,
+                    "User-Agent" to playerUserAgent,
+                    "Accept" to "*/*",
+                ),
                 type = ExtractorLinkType.M3U8,
             )
         )
