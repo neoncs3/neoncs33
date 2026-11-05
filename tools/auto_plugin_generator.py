@@ -2580,7 +2580,7 @@ def run_self_test() -> None:
     assert "override suspend fun load(url: String)" in generated
     assert "private suspend fun liveEventHomePages(): List<HomePageList>" in generated
     assert "private fun liveTokenMapUrl(raw: String): String?" in generated
-    assert \"/delete/streams/\" in generated
+    assert "/delete/streams/" in generated
     assert "val tokenMapUrl = liveTokenMapUrl(normalized)" in generated
     assert '"/api/events"' in generated
     assert "newLiveSearchResponse(" in generated
