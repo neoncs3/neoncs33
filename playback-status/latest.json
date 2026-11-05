@@ -15,17 +15,17 @@
       "query": null,
       "item": "DiziBoxizle",
       "links": 7,
-      "positionMs": 2416,
+      "positionMs": 3007,
       "error": null
     },
     {
       "provider": "HDFilmDiziizle • Tron",
-      "status": "FAIL",
+      "status": "PASS",
       "query": "Tron",
       "item": "Tron: Ares",
-      "links": 0,
-      "positionMs": 0,
-      "error": "Gerçek video bağlantısı bulunamadı. Aday denemeleri: doğrudan: HDFilmDiziizle • Tron -> bağlantı yok (loadLinks=false); Tron: Tron: Legacy -> veri adresi yok; Tron: Tron -> bağlantı yok (Gerçek video bağlantısı bulunamadı); Tron: Tron: Ares -> bağlantı yok (Gerçek video bağlantısı bulunamadı)"
+      "links": 1,
+      "positionMs": 3201,
+      "error": null
     },
     {
       "provider": "Dizimag • Below S1E1",
@@ -33,7 +33,7 @@
       "query": null,
       "item": "Dizimag • Below S1E1",
       "links": 1,
-      "positionMs": 3095,
+      "positionMs": 3298,
       "error": null
     },
     {
@@ -42,7 +42,7 @@
       "query": null,
       "item": "Dizimag • Below S1E2",
       "links": 1,
-      "positionMs": 3390,
+      "positionMs": 3274,
       "error": null
     },
     {
@@ -51,7 +51,7 @@
       "query": null,
       "item": "Dizimag • Below S1E3",
       "links": 1,
-      "positionMs": 3203,
+      "positionMs": 3333,
       "error": null
     },
     {
@@ -60,7 +60,7 @@
       "query": null,
       "item": "Dizimag • Below S1E6",
       "links": 1,
-      "positionMs": 2615,
+      "positionMs": 3367,
       "error": null
     },
     {
@@ -87,7 +87,7 @@
       "query": null,
       "item": "TvDiziler • Tuzlu Kahve 7",
       "links": 1,
-      "positionMs": 3009,
+      "positionMs": 3215,
       "error": null
     },
     {
@@ -109,7 +109,7 @@
       "error": "Gerçek video bağlantısı bulunamadı. Aday denemeleri: doğrudan: TvDiziler • Haysiyet 6 -> bağlantı yok (Gerçek video bağlantısı bulunamadı)"
     }
   ],
-  "pass": 6,
+  "pass": 7,
   "blocked": 2,
-  "fail": 4
+  "fail": 3
 }
