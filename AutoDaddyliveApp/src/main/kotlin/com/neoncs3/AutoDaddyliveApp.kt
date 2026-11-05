@@ -21,14 +21,18 @@ class AutoDaddyliveApp : NeonMainAPI() {
     override var sequentialMainPage = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Live)
 
-    // Kanalları çektiğimiz M3U çalma listesi
+    // Güncel ve çalışan M3U çalma listesi
     private val channelPlaylistUrl =
-        "https://raw.githubusercontent.com/pigzillaaaaa/iptv-scraper/main/daddylive-channels.m3u8"
+        "https://raw.githubusercontent.com/dtankdempse/daddylive-m3u/refs/heads/main/playlist.m3u8"
 
     private val configuredSearchAction = "https://daddylive.app/porn"
     private val configuredSearchField = "search"
     private val playerUserAgent =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0"
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
+
+    // Yayınlar için gerekli başlıklar
+    private val liveReferer = "https://ilovetoplay.xyz/"
+    private val liveOrigin = "https://ilovetoplay.xyz"
 
     override val mainPage = mainPageOf(
         "https://daddylive.app/" to "Ana Sayfa"
@@ -73,18 +77,14 @@ class AutoDaddyliveApp : NeonMainAPI() {
         var pendingName: String? = null
         var pendingLogo: String? = null
 
-        // M3U formatı: #EXTINF:-1 tvg-logo="..." group-title="...",Kanal Adı
-        // Ardından yayın URL'si gelir.
         body.lineSequence().forEach { rawLine ->
             val line = rawLine.trim()
             when {
                 line.startsWith("#EXTINF:", ignoreCase = true) -> {
-                    // Başlık bilgisini ayıkla
                     val infoPart = line.substringAfter("#EXTINF:", "")
                     val name = infoPart.substringAfterLast(",").trim()
                     if (name.isNotBlank()) {
                         pendingName = name
-                        // tvg-logo="..." varsa al
                         val logoMatch = Regex("""tvg-logo="([^"]+)"""")
                             .find(infoPart)?.groupValues?.getOrNull(1)
                         pendingLogo = logoMatch?.takeIf { isValidHttpUrl(it) }
@@ -94,7 +94,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
                     }
                 }
                 line.isNotBlank() && !line.startsWith("#") -> {
-                    // Bu satır yayın URL'si
                     val name = pendingName ?: return@forEach
                     val streamUrl = line
                     if (isValidHttpUrl(streamUrl)) {
@@ -117,19 +116,21 @@ class AutoDaddyliveApp : NeonMainAPI() {
     // ------------------------------------------------------------------
     private fun emitDirectLiveLink(
         streamUrl: String,
-        referer: String,
         callback: (ExtractorLink) -> Unit,
     ) {
-        val headers = headers(referer).toMutableMap()
-        headers["User-Agent"] = playerUserAgent
+        val outHeaders = mapOf(
+            "Referer" to liveReferer,
+            "Origin" to liveOrigin,
+            "User-Agent" to playerUserAgent,
+        )
         callback(
             ExtractorLink(
                 source = name,
                 name = name,
                 url = streamUrl,
-                referer = referer,
+                referer = liveReferer,
                 quality = Qualities.Unknown.value,
-                headers = headers,
+                headers = outHeaders,
                 type = ExtractorLinkType.M3U8,
             )
         )
@@ -139,11 +140,9 @@ class AutoDaddyliveApp : NeonMainAPI() {
         page: Int,
         request: MainPageRequest,
     ): HomePageResponse {
-        // Ana sayfa açıldığında M3U çalma listesinden kanalları getir.
         if (page <= 1) {
             val liveItems = loadChannelPlaylist()
             if (liveItems.isNotEmpty()) {
-                // Kanalları 300'erlik gruplara bölerek döndür
                 val pages = liveItems.chunked(300).mapIndexed { index, chunk ->
                     val label = if (index == 0) "Canlı Kanallar" else "Canlı Kanallar ${index + 1}"
                     HomePageList(label, chunk)
@@ -152,7 +151,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
             }
         }
 
-        // Çalma listesi alınamazsa eski davranışa düş (boş ana sayfa yerine).
         val base = request.data
         val document = runCatching {
             app.get(base, headers = headers(base), timeout = 12_000L).document
@@ -852,8 +850,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        // Live kanallar doğrudan M3U URL'si olarak gelir; load aşamasında ekstra işlem gerekmez.
-        // CloudStream, loadLinks'i çağıracaktır.
         return null
     }
 
@@ -866,14 +862,11 @@ class AutoDaddyliveApp : NeonMainAPI() {
         val normalized = data.trim()
         if (normalized.isBlank()) return false
 
-        // M3U çalma listesinden gelen URL'ler genellikle doğrudan .m3u8 formatındadır.
-        // Bunları doğrudan ExtractorLink olarak döndür.
         if (neonIsMediaUrl(normalized)) {
-            emitDirectLiveLink(normalized, mainUrl, callback)
+            emitDirectLiveLink(normalized, callback)
             return true
         }
 
-        // Diğer durumlar için mevcut çözümleme mantığını kullan.
         val document = neonCachedDocument(normalized, normalized)
             ?: runCatching {
                 app.get(
