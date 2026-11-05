@@ -1,10 +1,10 @@
 [
     {
         "iconUrl": "https://daddylive.app/favicon.ico",
-        "fileHash": "sha256-9c1e67afdf5e0858f41495dea5fec99adfd98e413e7ffe10fea30c8eb7b5e200",
+        "fileHash": "sha256-246cc347ca1ef4249bbc1738a654d98fd340a6212eec5529661059a6a8339223",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 73563,
+        "fileSize": 73072,
         "status": 1,
         "language": "tr",
         "authors": [
