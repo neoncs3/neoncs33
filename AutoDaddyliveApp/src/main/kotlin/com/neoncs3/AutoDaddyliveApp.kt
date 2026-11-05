@@ -42,6 +42,14 @@ class AutoDaddyliveApp : NeonMainAPI() {
     private fun siteHost(url: String): String =
         runCatching { URI(url).host.orEmpty().lowercase().removePrefix("www.") }.getOrDefault("")
 
+    private fun isValidHttpUrl(raw: String): Boolean =
+        runCatching {
+            val uri = URI(raw)
+            (uri.scheme.equals("http", ignoreCase = true) ||
+                uri.scheme.equals("https", ignoreCase = true)) &&
+                !uri.host.isNullOrBlank()
+        }.getOrDefault(false)
+
     private fun isSiteUrl(url: String): Boolean =
         (url.startsWith("http://", true) || url.startsWith("https://", true)) &&
             siteHost(url) == siteHost(mainUrl)
