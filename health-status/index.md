@@ -5,7 +5,7 @@ Bu rapor tools/provider_health.py tarafından otomatik güncellenir.
 | Eklenti | Durum | Kodda kayıtlı domain | HTTP yönlendirmesi | HTTP | Medya ipucu | Resolver kodu | Altyazı kodu | Metadata | Cache |
 |---|---|---|---|---|---|---|---|
 | **AsyaFilmIzle** | 🟡 | https://asyafilmizle.com | https://asyafilmizle.com | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
-| **AutoDaddyliveApp** | 🟢 | https://daddylive.app | https://daddylive.app | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **AutoDaddyliveApp** | 🟡 | https://daddylive.app | https://daddylive.app | ✅ (200) | 0 / 0 | ✅ | ✅ | ❌ | ✅ |
 | **AutoDdizimagCom** | 🟢 | https://dizimag.onl | https://dizimag.onl | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **AutoHdfilmdiziizleCom** | 🟡 | https://www.hdfilmdiziizle.com | https://www.hdfilmdiziizle.com | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **AutoKlubnichkaLive** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
@@ -18,7 +18,7 @@ Bu rapor tools/provider_health.py tarafından otomatik güncellenir.
 | **DiziPal** | 🟡 | https://dizipal1586.com | https://dizipal1594.com | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **Dramadizilerim** | 🟢 | https://dramadizilerim.com | https://dramadizilerim.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **FilmModu** | 🟢 | https://www.filmmodu.one | https://www.filmmodu.one | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
-| **JetFilmizle** | 🟡 | https://jetfilmizle.now | https://jetfilmizle.now | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **JetFilmizle** | 🟢 | https://jetfilmizle.now | https://jetfilmizle.app | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **NeonHub** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **SetFilmIzle** | 🟢 | https://www.setfilmizle.ltd | https://www.setfilmizle.ltd | ✅ (200) | 1 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **SinemaCX** | 🟢 | https://sinemacc.com | https://sinemacc.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
