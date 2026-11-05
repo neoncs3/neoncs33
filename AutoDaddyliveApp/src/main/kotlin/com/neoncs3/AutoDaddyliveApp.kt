@@ -603,17 +603,12 @@ class AutoDaddyliveApp : NeonMainAPI() {
     }
 
     private fun searchUrls(encoded: String): List<String> {
-        val urls = ArrayList<String>()
-        if (configuredSearchAction.isNotBlank()) {
-            val separator = if (configuredSearchAction.contains("?")) "&" else "?"
-            urls += configuredSearchAction + separator +
-                URLEncoder.encode(configuredSearchField, "UTF-8") + "=" + encoded
-        }
-        urls += mainUrl + "/?s=" + encoded
-        urls += mainUrl + "/?search=" + encoded
-        urls += mainUrl + "/?q=" + encoded
-        urls += mainUrl + "/search/" + encoded + "/"
-        return urls.distinct()
+        return listOf(
+            mainUrl + "/?s=" + encoded,
+            mainUrl + "/?search=" + encoded,
+            mainUrl + "/?q=" + encoded,
+            mainUrl + "/search/" + encoded + "/"
+        ).distinct()
     }
 
     private fun matchesQuery(result: SearchResponse, query: String): Boolean {
