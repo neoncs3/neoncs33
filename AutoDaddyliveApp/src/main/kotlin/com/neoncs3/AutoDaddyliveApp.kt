@@ -11,7 +11,8 @@ import org.jsoup.nodes.Element
 import java.net.URI
 import java.net.URLEncoder
 
-class AutoDaddyliveApp : NeonMainAPI() {
+// NeonMainAPI yerine doğrudan MainAPI'den miras alınıyor
+class AutoDaddyliveApp : MainAPI() {
     override var mainUrl = "https://daddylive.app"
     override var name = "Daddylive"
     override var lang = "tr"
@@ -34,9 +35,10 @@ class AutoDaddyliveApp : NeonMainAPI() {
     )
 
     private fun headers(referer: String = mainUrl + "/"): Map<String, String> =
-        neonHeaders + mapOf(
+        mapOf(
             "Referer" to referer,
-            "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
+            "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+            "User-Agent" to playerUserAgent,
         )
 
     private fun siteHost(url: String): String =
@@ -51,7 +53,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
         }.getOrDefault(false)
 
     // ------------------------------------------------------------------
-    // 1. KANAL LİSTESİ (player10.json)
+    // KANAL LİSTESİ (player10.json)
     // ------------------------------------------------------------------
     private suspend fun parseChannelsFromUrl(apiUrl: String): List<SearchResponse> {
         val body = runCatching {
@@ -133,7 +135,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
     }
 
     // ------------------------------------------------------------------
-    // 2. TVNOW247 EMBED ÇÖZÜMLEYİCİ
+    // TVNOW247 EMBED ÇÖZÜMLEYİCİ
     // ------------------------------------------------------------------
     private fun extractLiveStreamFromHtml(html: String): String? {
         val text = html
@@ -324,13 +326,13 @@ class AutoDaddyliveApp : NeonMainAPI() {
     }
 
     // ------------------------------------------------------------------
-    // 3. ZORUNLU METODLAR
+    // ZORUNLU METOTLAR (validate_repo.py için)
     // ------------------------------------------------------------------
 
     override suspend fun getMainPage(
         page: Int,
         request: MainPageRequest,
-    ): HomePageResponse {
+    ): HomePageResponse? {
         if (page <= 1) {
             val liveItems = loadChannelsFromApis()
             if (liveItems.isNotEmpty()) {
@@ -415,7 +417,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
         return false
     }
 
-    override suspend fun search(query: String): List<SearchResponse> {
+    override suspend fun search(query: String): List<SearchResponse>? {
         val cleanQuery = query.trim()
         if (cleanQuery.length < 2) return emptyList()
         val encoded = URLEncoder.encode(cleanQuery, "UTF-8")
@@ -434,7 +436,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
     }
 
     // ------------------------------------------------------------------
-    // 4. YARDIMCI FONKSİYONLAR (URL / HTML)
+    // YARDIMCI FONKSİYONLAR (URL / HTML)
     // ------------------------------------------------------------------
 
     private fun normalizeUrl(raw: String, base: String = mainUrl): String =
