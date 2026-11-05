@@ -653,11 +653,6 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
     private fun searchUrls(encoded: String): List<String> {
         val urls = ArrayList<String>()
-        if (configuredSearchAction.isNotBlank()) {
-            val separator = if (configuredSearchAction.contains("?")) "&" else "?"
-            urls += configuredSearchAction + separator +
-                URLEncoder.encode(configuredSearchField, "UTF-8") + "=" + encoded
-        }
         urls += mainUrl + "/?s=" + encoded
         urls += mainUrl + "/?search=" + encoded
         urls += mainUrl + "/?q=" + encoded
