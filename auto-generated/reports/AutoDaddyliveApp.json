@@ -1,0 +1,59 @@
+{
+  "host": "daddylive.app",
+  "origin": "https://daddylive.app",
+  "site_name": "Daddylive",
+  "http_status": 200,
+  "blocked": false,
+  "signals": {
+    "poster": true,
+    "imdb_rating": false,
+    "actors": true,
+    "genres": false,
+    "seasons": false,
+    "episodes": true,
+    "subtitles": true,
+    "player_embed_or_media": false,
+    "media_endpoint_reachable": false,
+    "schema_metadata": false,
+    "search_form": true,
+    "listing_cards": true,
+    "series_or_movie_schema": false
+  },
+  "counts": {
+    "pages": 14,
+    "images": 20,
+    "card_like_links": 20,
+    "season_links": 0,
+    "episode_links": 2,
+    "subtitle_hints": 0,
+    "schema_objects": 0,
+    "episodes_detected": 0,
+    "episode_seasons_detected": 0,
+    "episode_gaps": 0,
+    "media_urls_probed": 0,
+    "media_urls_reachable": 0
+  },
+  "categories": [],
+  "sample_titles": [
+    "🗂️ Channels List",
+    "🔞 Porn",
+    "🧬 Embed Api",
+    "I am 18+ · Enter",
+    "🍑 Popular",
+    "💦 Trending"
+  ],
+  "quality": {
+    "score": 61,
+    "status": "BUILD_CANDIDATE",
+    "issues": [
+      "Oynatıcı veya doğrudan medya sinyali bulunamadı."
+    ]
+  },
+  "schema_version": 1,
+  "observed_at": "2026-11-05 08:04 UTC",
+  "fingerprint": "bb387cbc39f7d247",
+  "previous_fingerprint": null,
+  "changes": [
+    "İlk tarama: sonraki çalıştırmalar için başlangıç profili kaydedildi."
+  ]
+}
