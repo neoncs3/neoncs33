@@ -152,7 +152,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
                 referer = referer,
                 quality = Qualities.Unknown.value,
                 headers = outHeaders,
-                type = ExtractorLinkType.VIDEO,
+                type = ExtractorLinkType.M3U8,
             )
         )
     }
@@ -253,8 +253,10 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
         Log.d(name.uppercase().take(23), "tvnow247: m3u8=$m3u8Url referer=$streamReferer")
 
+        // M3U8 tipi + Origin başlığı: HLS segment isteklerinin reddedilmesini önler.
         val outHeaders = mapOf(
             "Referer" to streamReferer,
+            "Origin" to "https://dembed.st",
             "User-Agent" to playerUserAgent,
             "Accept" to "*/*",
             "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
@@ -267,7 +269,7 @@ class AutoDaddyliveApp : NeonMainAPI() {
                 referer = streamReferer,
                 quality = Qualities.Unknown.value,
                 headers = outHeaders,
-                type = ExtractorLinkType.VIDEO,
+                type = ExtractorLinkType.M3U8,
             )
         )
         return true
