@@ -1039,6 +1039,28 @@ __MAIN_PAGES__
         }
     }
 
+    private fun liveTokenMapUrl(raw: String): String? {
+        val embedUrl = liveEmbedUrl(cleanLiveDataUrl(raw)) ?: return null
+        val uri = runCatching { URI(embedUrl) }.getOrNull() ?: return null
+        val params = uri.rawQuery.orEmpty().split("&").mapNotNull { part ->
+            val key = runCatching {
+                java.net.URLDecoder.decode(part.substringBefore("="), "UTF-8")
+            }.getOrNull() ?: return@mapNotNull null
+            val value = runCatching {
+                java.net.URLDecoder.decode(part.substringAfter("=", ""), "UTF-8")
+            }.getOrNull() ?: return@mapNotNull null
+            key.lowercase() to value
+        }.toMap()
+        val source = params["source"]?.lowercase() ?: return null
+        val token = params["id"] ?: return null
+        // tv2/tv3 carry a path rather than a five-character token. Other documented
+        // tv sources use the public delete/streams/{token}.json mapping.
+        if (source == "tv2" || source == "tv3") return null
+        if (!source.matches(Regex("""(?i)^tv(?:1|[4-9]|1[0-8])$"""))) return null
+        if (!token.matches(Regex("""(?i)^[a-z0-9]{5}$"""))) return null
+        return mainUrl.trimEnd('/') + "/delete/streams/" + token + ".json"
+    }
+
     private suspend fun liveEventHomePages(): List<HomePageList> {
         val endpoint = mainUrl.trimEnd('/') + "/api/events"
         val body = runCatching {
@@ -1946,6 +1968,34 @@ __MAIN_PAGES__
         // Probe the episode page first, then resolve its iframe/media candidates.
         val candidates = LinkedHashSet<String>()
 
+        // Current token-based event feeds expose a small JSON mapping per stream ID.
+        // Probe it before the embed page so direct media candidates are tried first.
+        val tokenMapUrl = liveTokenMapUrl(normalized)
+        if (tokenMapUrl != null) {
+            val tokenResponse = runCatching {
+                app.get(
+                    tokenMapUrl,
+                    headers = headers(normalized) + mapOf("Accept" to "application/json, text/plain, */*"),
+                    timeout = 12_000L,
+                    allowRedirects = true,
+                )
+            }.getOrNull()
+            val tokenBody = tokenResponse?.takeIf { it.isSuccessful }?.text.orEmpty()
+            val tokenCandidates = if (tokenBody.isBlank()) {
+                emptyList()
+            } else {
+                (playerUrlsFromText(tokenBody, tokenMapUrl) + neonExtractMediaUrls(tokenBody))
+                    .map { normalize(it, tokenMapUrl) }
+                    .filter { isValidHttpUrl(it) && (neonIsMediaUrl(it) || isLikelyPlayerUrl(it)) }
+                    .distinct()
+            }
+            candidates.addAll(tokenCandidates)
+            Log.d(
+                name.uppercase().take(23),
+                "live token map ok=${tokenResponse?.isSuccessful == true}; bytes=${tokenBody.length}; candidates=${tokenCandidates.size}"
+            )
+        }
+
         val document = neonCachedDocument(normalized, normalized)
             ?: runCatching {
                 app.get(normalized, headers = headers(normalized), timeout = 15_000L).document
@@ -2529,6 +2579,9 @@ def run_self_test() -> None:
     assert "registerMainAPI(AutoExampleOrg())" in generated_plugin
     assert "override suspend fun load(url: String)" in generated
     assert "private suspend fun liveEventHomePages(): List<HomePageList>" in generated
+    assert "private fun liveTokenMapUrl(raw: String): String?" in generated
+    assert \"/delete/streams/\" in generated
+    assert "val tokenMapUrl = liveTokenMapUrl(normalized)" in generated
     assert '"/api/events"' in generated
     assert "newLiveSearchResponse(" in generated
     assert "newLiveStreamLoadResponse(liveTitle, cleanUrl, cleanUrl)" in generated
