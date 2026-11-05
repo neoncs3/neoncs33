@@ -234,14 +234,10 @@ class AutoDaddyliveApp : NeonMainAPI() {
             ?: json?.optString("proxyPlaylistUrl")?.trim()
                 ?.takeIf { it.isNotBlank() && it != "null" }
 
-        val rawReferer = json?.optString("referer")?.trim()
+        // Referer: API yanıtındaki TAM URL'yi kullan (query string dahil)
+        val streamReferer = json?.optString("referer")?.trim()
             ?.takeIf { it.isNotBlank() && it != "null" }
-            ?: "https://dembed.st/"
-
-        val streamReferer = runCatching {
-            val uri = URI(rawReferer)
-            "${uri.scheme}://${uri.host}/"
-        }.getOrDefault("https://dembed.st/")
+            ?: "https://dembed.st/premiumtv/daddy.php?id=$channelId"
 
         if (m3u8Url.isNullOrBlank()) {
             Log.w(
@@ -253,10 +249,9 @@ class AutoDaddyliveApp : NeonMainAPI() {
 
         Log.d(name.uppercase().take(23), "tvnow247: m3u8=$m3u8Url referer=$streamReferer")
 
-        // M3U8 tipi + Origin başlığı: HLS segment isteklerinin reddedilmesini önler.
+        // Origin YOK, Referer tam URL, tip M3U8
         val outHeaders = mapOf(
             "Referer" to streamReferer,
-            "Origin" to "https://dembed.st",
             "User-Agent" to playerUserAgent,
             "Accept" to "*/*",
             "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
