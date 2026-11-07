@@ -9,7 +9,7 @@ Bu rapor tools/provider_health.py tarafından otomatik güncellenir.
 | **AutoDdizimagCom** | 🟢 | https://dizimag.onl | https://dizimag.onl | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **AutoHdfilmdiziizleCom** | 🟡 | https://www.hdfilmdiziizle.com | https://www.hdfilmdiziizle.com | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **AutoKlubnichkaLive** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
-| **AutoTvdizilerTv** | 🟢 | https://tvdiziler.tv | https://tvdiziler.tv | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **AutoTvdizilerTv** | 🟡 | https://tvdiziler.tv | https://tvdiziler.tv | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **CineStream** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **DDizi** | 🟡 | https://www.ddizi.tel | https://www.ddizi.tel | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **DiziBoxizle** | 🟢 | https://diziboxizle.com | https://diziboxizle.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
