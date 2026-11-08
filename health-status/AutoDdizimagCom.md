@@ -2,7 +2,7 @@
 
 Kodda kayıtlı domain: https://dizimag.onl
 
-Son HTTP URL: https://dizimag.onl
+Son HTTP URL: https://dizimag.best
 
 HTTP: ✅ 200
 
