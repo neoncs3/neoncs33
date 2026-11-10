@@ -1,14 +1,14 @@
-# 🟢 WebDramaTurkey
+# 🔴 WebDramaTurkey
 
 Kodda kayıtlı domain: https://webdramaturkey2.com
 
 Son HTTP URL: https://webdramaturkey2.com
 
-HTTP: ✅ 200
+HTTP: ❌ 522
 
 Anti-bot engeli: hayır
 
-Sayfa başlığı: Web Drama Turkey - Kore, Çin, Japon Dizileri İzle
+Sayfa başlığı: -
 
 Canlı medya ipucu: 0 media URL, 0 iframe
 
