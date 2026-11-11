@@ -82,7 +82,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://www.hdfilmdiziizle.com",
-        "bytes": 5636,
+        "bytes": 5594,
         "title": "Just a moment...",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -124,7 +124,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://tvdiziler.tv",
-        "bytes": 82628,
+        "bytes": 82307,
         "title": "Dizi izle, Yerli ve Full HD Diziler, Dizi Seyret | TvDiziler.tv",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -279,7 +279,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://dramadizilerim.com",
-        "bytes": 198538,
+        "bytes": 199486,
         "title": "Drama İzle — Türkçe Dublaj &amp; Altyazılı Kısa Mini Dizi İzle | Drama Dizilerim",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -379,7 +379,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://www.setfilmizle.ltd",
-        "bytes": 109839,
+        "bytes": 109815,
         "title": "Set Film izle | HD Film | Yabancı Dizi",
         "media_hints": 1,
         "iframe_hints": 0,
@@ -441,17 +441,17 @@
     },
     {
       "provider": "WebDramaTurkey",
-      "status": "red",
+      "status": "yellow",
       "domain": "https://webdramaturkey2.com",
       "configured_domain": "https://webdramaturkey2.com",
       "live_domain": "https://webdramaturkey2.com",
       "live": {
         "ok": false,
-        "anti_bot_blocked": false,
-        "status_code": 522,
+        "anti_bot_blocked": true,
+        "status_code": 403,
         "final_url": "https://webdramaturkey2.com",
-        "bytes": 0,
-        "title": "",
+        "bytes": 5663,
+        "title": "Just a moment...",
         "media_hints": 0,
         "iframe_hints": 0,
         "error": null
@@ -470,6 +470,6 @@
     }
   ],
   "green": 7,
-  "yellow": 11,
-  "red": 2
+  "yellow": 12,
+  "red": 1
 }

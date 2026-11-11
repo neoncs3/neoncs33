@@ -1,14 +1,14 @@
-# 🔴 WebDramaTurkey
+# 🟡 WebDramaTurkey
 
 Kodda kayıtlı domain: https://webdramaturkey2.com
 
 Son HTTP URL: https://webdramaturkey2.com
 
-HTTP: ❌ 522
+HTTP: ❌ 403
 
-Anti-bot engeli: hayır
+Anti-bot engeli: evet
 
-Sayfa başlığı: -
+Sayfa başlığı: Just a moment...
 
 Canlı medya ipucu: 0 media URL, 0 iframe
 
