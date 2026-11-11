@@ -2,7 +2,7 @@
 
 Kodda kayıtlı domain: https://dramadizilerim.com
 
-Son HTTP URL: https://dramadizilerim.com
+Son HTTP URL: https://dramadizilerim1.com
 
 HTTP: ✅ 200
 
