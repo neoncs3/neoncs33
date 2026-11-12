@@ -440,13 +440,21 @@ class JetFilmizle : NeonMainAPI() {
                     ?.trim()
                     ?.takeIf { it.isNotBlank() && it != "about:blank" }
 
+                val hasVideoParkInitial = Regex(
+                    """(?is)(?:const|let|var)\\s+initial\\s*="""
+                ).containsMatchIn(responseText) &&
+                    (responseText.contains("has_dub") ||
+                        responseText.contains("vsrc.top", true) ||
+                        responseText.contains("videopark.top", true))
+
+                // Sadece gerçek player HTML'sini inline kabul et. Bir iframe
+                // satırında videopark.top geçmesi, iframe sayfasının kendisi değildir.
                 val inlinePlayerHtml = responseText.takeIf {
                     it.contains("PUB_ID") || it.contains("WORKER_URL") ||
                         it.contains("dplayer.erikkalinina1994.workers.dev") ||
                         it.contains("WORKER_BASE") ||
                         it.contains("godrive.erikkalinina1994.workers.dev") ||
-                        (it.contains("const initial") &&
-                            it.contains("vsrc.top/you/p/", true))
+                        hasVideoParkInitial
                 }
 
                 if (iframeSrc.isNullOrBlank() && inlinePlayerHtml.isNullOrBlank()) {
@@ -597,14 +605,18 @@ class JetFilmizle : NeonMainAPI() {
                                     val initialMode = if (initialLanguage == "dub") "dub" else "sub"
                                     val hasDub = initial.optBoolean("has_dub", initialMode == "dub")
                                     val streamPayloads = mutableListOf<Pair<String, org.json.JSONObject>>()
-                                    streamPayloads.add(initialMode to initial)
 
                                     val videoCode = initial.optString("code").trim()
                                     if (videoCode.isNotBlank()) {
-                                        val alternateModes = listOf("dub", "sub").filter { mode ->
-                                            mode != initialMode && (mode != "dub" || hasDub)
+                                        // initial.sources içindeki vsrc.top URL'leri imzalı ve
+                                        // süreli olabilir. Her oynatmada API'den yenisini al.
+                                        val modesToFetch = if (hasDub) {
+                                            listOf("dub", "sub")
+                                        } else {
+                                            listOf("sub")
                                         }
-                                        for (mode in alternateModes) {
+
+                                        for (mode in modesToFetch) {
                                             val apiUrl = runCatching {
                                                 java.net.URI(baseUrl).resolve(
                                                     "api.php?action=stream&v=" +
@@ -615,7 +627,7 @@ class JetFilmizle : NeonMainAPI() {
 
                                             if (apiUrl.isBlank()) continue
 
-                                            val alternatePayload = runCatching {
+                                            val freshPayload = runCatching {
                                                 val apiText = app.get(
                                                     apiUrl,
                                                     headers = mapOf(
@@ -628,12 +640,22 @@ class JetFilmizle : NeonMainAPI() {
                                                 org.json.JSONObject(apiText)
                                             }.getOrNull()
 
-                                            if (alternatePayload?.optJSONArray("sources") != null) {
-                                                streamPayloads.add(mode to alternatePayload)
-                                                Log.d(JET_TAG, "VideoPark alternatif akış alındı: " + mode)
+                                            if (freshPayload?.optJSONArray("sources")?.length()?.let { it > 0 } == true) {
+                                                streamPayloads.add(mode to freshPayload)
+                                                Log.d(JET_TAG, "VideoPark taze akış alındı: " + mode)
                                             } else {
-                                                Log.w(JET_TAG, "VideoPark alternatif akış alınamadı: " + mode)
+                                                Log.w(JET_TAG, "VideoPark API akışı alınamadı: " + mode)
                                             }
+                                        }
+                                    }
+
+                                    // API erişilemezse aynı player yanıtındaki URL son çare
+                                    // olarak kullanılır; normal durumda imzalı eski adresler seçilmez.
+                                    if (streamPayloads.isEmpty()) {
+                                        val initialSources = initial.optJSONArray("sources")
+                                        if (initialSources != null && initialSources.length() > 0) {
+                                            streamPayloads.add(initialMode to initial)
+                                            Log.w(JET_TAG, "VideoPark API başarısız; ilk HTML akışı yedek olarak kullanılıyor")
                                         }
                                     }
 
