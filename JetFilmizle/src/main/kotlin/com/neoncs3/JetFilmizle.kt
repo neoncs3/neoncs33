@@ -441,7 +441,7 @@ class JetFilmizle : NeonMainAPI() {
                     ?.takeIf { it.isNotBlank() && it != "about:blank" }
 
                 val hasVideoParkInitial = Regex(
-                    """(?is)(?:const|let|var)\\s+initial\\s*="""
+                    """(?is)(?:const|let|var)\s+initial\s*="""
                 ).containsMatchIn(responseText) &&
                     (responseText.contains("has_dub") ||
                         responseText.contains("vsrc.top", true) ||
