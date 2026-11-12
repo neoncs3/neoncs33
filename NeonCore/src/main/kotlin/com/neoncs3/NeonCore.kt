@@ -4,6 +4,7 @@ import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.Actor
 import com.lagradost.cloudstream3.LoadResponse
+import com.lagradost.cloudstream3.TvSeriesLoadResponse
 import com.lagradost.cloudstream3.Score
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
@@ -598,29 +599,53 @@ open class NeonMainAPI : MainAPI() {
             .take(40)
     }
 
-    protected fun neonExtractTrailer(document: Document, baseUrl: String = mainUrl): String? {
-        val html = document.html().replace("\\\\/", "/")
-        val youtube = Regex(
-            """(?i)(?:https?:)?//(?:www\.)?(?:youtube\.com/(?:watch\?v=|embed/)|youtu\.be/)[^"'<>\s]+"""
+    protected fun neonExtractTrailer(
+        document: Document,
+        baseUrl: String = mainUrl,
+        isSeries: Boolean = false,
+    ): String? {
+        // Only read a trailer from an explicitly marked trailer/fragman area.
+        // Searching the entire page for the first YouTube URL can accidentally
+        // select the actual player iframe or a recommended video.
+        val typeSpecificSelectors = if (isSeries) {
+            ".series-trailer, .dizi-trailer, .dizi-fragman, [data-trailer-type='series']"
+        } else {
+            ".movie-trailer, .film-trailer, .film-fragman, [data-trailer-type='movie']"
+        }
+        val trailerContainers = document.select(
+            typeSpecificSelectors + ", #trailer, .trailer, .fragman, " +
+                "[id*=trailer i], [class*=trailer i], [id*=fragman i], [class*=fragman i], [data-trailer]"
+        ).distinct()
+
+        val youtubePattern = Regex(
+            """(?i)(?:https?:)?//(?:www\.)?(?:youtube\.com/(?:watch\?v=|embed/)|youtu\.be/)[^"'<>\\s]+"""
         )
-            .find(html)
-            ?.value
-            ?.let { neonNormalizeUrl(it, baseUrl) }
 
-        if (!youtube.isNullOrBlank()) return youtube
-
-        return document.select("a[href], iframe[src], [data-trailer], [data-video]")
-            .mapNotNull { node ->
-                sequenceOf(
-                    node.attr("data-trailer"),
-                    node.attr("src"),
-                    node.attr("href"),
-                    node.attr("data-video"),
-                )
-                    .firstOrNull { it.isNotBlank() }
-                    ?.let { neonNormalizeUrl(it, baseUrl) }
+        for (container in trailerContainers) {
+            val candidates = buildList {
+                add(container.attr("data-trailer"))
+                add(container.attr("data-video"))
+                add(container.selectFirst("iframe[src]")?.attr("src"))
+                add(container.selectFirst("iframe[data-src]")?.attr("data-src"))
+                add(container.selectFirst("a[href]")?.attr("href"))
+                add(youtubePattern.find(container.html().replace("\\\\/", "/"))?.value)
             }
-            .firstOrNull { it.contains("youtube.com", true) || it.contains("youtu.be", true) }
+
+            val trailer = candidates.asSequence()
+                .filterNot { it.isNullOrBlank() }
+                .map { neonNormalizeUrl(it, baseUrl) }
+                .firstOrNull {
+                    it.contains("youtube.com", true) ||
+                        it.contains("youtu.be", true) ||
+                        it.contains("youtube-nocookie.com", true)
+                }
+
+            if (!trailer.isNullOrBlank()) return trailer
+        }
+
+        // Never classify an arbitrary YouTube URL elsewhere on the detail page
+        // as a trailer. The main play action is resolved independently.
+        return null
     }
 
     protected suspend fun neonEnrichResponse(
@@ -660,7 +685,11 @@ open class NeonMainAPI : MainAPI() {
         }
 
         if (response.trailers.isEmpty()) {
-            neonExtractTrailer(document, baseUrl)?.let { response.addTrailer(it) }
+            neonExtractTrailer(
+                document = document,
+                baseUrl = baseUrl,
+                isSeries = response is TvSeriesLoadResponse,
+            )?.let { response.addTrailer(it) }
         }
 
         if (response.backgroundPosterUrl.isNullOrBlank() && response.posterUrl != null) {
