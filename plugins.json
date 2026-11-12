@@ -1,10 +1,10 @@
 [
     {
         "iconUrl": "https://daddylive.app/favicon.ico",
-        "fileHash": "sha256-e820d2214a8cfcb57ddca66b642c678ba00170856dd570e90abee1bfb42c8f0f",
+        "fileHash": "sha256-dbceb93af54274a7ce767d6462fa15015e87c0f12477617f501ebd1240180732",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 55667,
+        "fileSize": 55413,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -15,7 +15,7 @@
             "TvSeries",
             "Live"
         ],
-        "version": 13,
+        "version": 14,
         "internalName": "AutoDaddyliveApp",
         "description": "URL analizinden otomatik olu\u015fturuldu: daddylive.app",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/AutoDaddyliveApp.cs3",
@@ -23,10 +23,10 @@
     },
     {
         "iconUrl": "https://raw.githubusercontent.com/neoncs3/neoncs33/master/1792415151509.jpg?v=18",
-        "fileHash": "sha256-4ac166e30fbbf0b521ffe446c9ee7c55b424bce4ef932f4e8680577315f9c8c5",
+        "fileHash": "sha256-041b053873b9b20b1936ef53d602da21fdb6e47127f36ae3268cd1bf50217325",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 895471,
+        "fileSize": 895475,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -40,7 +40,7 @@
             "Torrent",
             "NSFW"
         ],
-        "version": 25,
+        "version": 26,
         "internalName": "NeonHub",
         "description": "NeonHub \u2014 neoncs3 sa\u011flay\u0131c\u0131lar\u0131n\u0131n tek eklentide birle\u015ftirilmi\u015f s\u00fcr\u00fcm\u00fc",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/NeonHub.cs3",
