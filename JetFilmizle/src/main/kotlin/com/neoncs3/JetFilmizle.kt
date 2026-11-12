@@ -417,8 +417,8 @@ class JetFilmizle : NeonMainAPI() {
                         it.contains("dplayer.erikkalinina1994.workers.dev") ||
                         it.contains("WORKER_BASE") ||
                         it.contains("godrive.erikkalinina1994.workers.dev") ||
-                        it.contains("videopark.top", true) ||
-                        it.contains("vsrc.top/you/p/", true)
+                        (it.contains("const initial") &&
+                            it.contains("vsrc.top/you/p/", true))
                 }
 
                 if (iframeSrc.isNullOrBlank() && inlinePlayerHtml.isNullOrBlank()) {
@@ -906,7 +906,7 @@ class JetFilmizle : NeonMainAPI() {
                     }
 
                     if (emitted) {
-                        Log.d(JET_TAG, "JWPlayer/GoDrive Worker kaynakları başarıyla alındı: " + label)
+                        Log.d(JET_TAG, "Player kaynakları başarıyla alındı: " + label)
                     } else if (!isGoDrivePlayer && !isVideoParkPlayer) {
                         // Eski iframe sağlayıcıları için extractor yedeği.
                         // GoDrive bilinen bir player ise sayfayı genel extractor'a
@@ -921,7 +921,11 @@ class JetFilmizle : NeonMainAPI() {
                             },
                         )
                     } else {
-                        Log.w(JET_TAG, "GoDrive player kaynağı alınamadı; yanlış fragman yedeği açılmayacak")
+                        Log.w(
+                            JET_TAG,
+                            "Bilinen player kaynağı alınamadı; yanlış fragman yedeği açılmayacak: " +
+                                if (isVideoParkPlayer) "VideoPark" else "GoDrive",
+                        )
                     }
                 }
 
