@@ -82,7 +82,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://www.hdfilmdiziizle.com",
-        "bytes": 5636,
+        "bytes": 5572,
         "title": "Just a moment...",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -124,7 +124,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://tvdiziler.tv",
-        "bytes": 82437,
+        "bytes": 82463,
         "title": "Dizi izle, Yerli ve Full HD Diziler, Dizi Seyret | TvDiziler.tv",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -170,19 +170,20 @@
     },
     {
       "provider": "DiziBoxizle",
-      "status": "red",
+      "status": "green",
       "domain": "https://diziboxizle.com",
       "configured_domain": "https://diziboxizle.com",
       "live_domain": "https://diziboxizle.com",
       "live": {
-        "ok": false,
-        "status_code": null,
+        "ok": true,
+        "anti_bot_blocked": false,
+        "status_code": 200,
         "final_url": "https://diziboxizle.com",
-        "bytes": 0,
-        "title": "",
+        "bytes": 384045,
+        "title": "Dizibox İzle - Güncel Yabancı Dizi izle, HD Diziler izle",
         "media_hints": 0,
         "iframe_hints": 0,
-        "error": "ReadTimeout: HTTPSConnectionPool(host='diziboxizle.com', port=443): Read timed out. (read timeout=20)"
+        "error": null
       },
       "pipelines": {
         "load": true,
@@ -449,7 +450,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://webdramaturkey2.com",
-        "bytes": 5705,
+        "bytes": 5642,
         "title": "Just a moment...",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -468,7 +469,7 @@
       "source": "WebDramaTurkey/src/main/kotlin/com/neoncs3/WebDramaTurkey.kt"
     }
   ],
-  "green": 6,
+  "green": 7,
   "yellow": 12,
-  "red": 2
+  "red": 1
 }
