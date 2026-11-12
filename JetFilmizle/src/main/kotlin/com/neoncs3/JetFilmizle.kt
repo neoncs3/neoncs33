@@ -414,19 +414,28 @@ class JetFilmizle : NeonMainAPI() {
                     ?.trim()
                     ?.takeIf { it.isNotBlank() && it != "about:blank" }
 
-                if (iframeSrc.isNullOrBlank()) {
+                val inlinePlayerHtml = responseText.takeIf {
+                    it.contains("PUB_ID") || it.contains("WORKER_URL") ||
+                        it.contains("dplayer.erikkalinina1994.workers.dev")
+                }
+
+                if (iframeSrc.isNullOrBlank() && inlinePlayerHtml.isNullOrBlank()) {
                     Log.d(
                         JET_TAG,
-                        "iframe bulunamadı: " + label +
+                        "iframe/player HTML bulunamadı: " + label +
                             " -> " + responseText.take(180).replace("\n", " "),
                     )
                     return false
                 }
 
-                val playerUrl = when {
-                    iframeSrc.startsWith("//") -> "https:" + iframeSrc
-                    iframeSrc.startsWith("/") -> "$mainUrl$iframeSrc"
-                    else -> fixUrlNull(iframeSrc) ?: iframeSrc
+                val playerUrl = if (iframeSrc.isNullOrBlank()) {
+                    data.substringBefore("?")
+                } else {
+                    when {
+                        iframeSrc.startsWith("//") -> "https:" + iframeSrc
+                        iframeSrc.startsWith("/") -> "$mainUrl$iframeSrc"
+                        else -> fixUrlNull(iframeSrc) ?: iframeSrc
+                    }
                 }
 
                 Log.d(JET_TAG, "player bulundu [" + label + "]: " + playerUrl)
@@ -460,15 +469,176 @@ class JetFilmizle : NeonMainAPI() {
                         emitted = true
                     }
                 } else {
-                    loadExtractor(
-                        playerUrl,
-                        data,
-                        subtitleCallback,
-                        { link ->
-                            emitted = true
-                            callback(link)
-                        },
-                    )
+                    // Yeni JetFilmizle JWPlayer sayfası, medya URL'lerini
+                    // dplayer Worker API'sinden JSON olarak alıyor.
+                    val playerPageText = inlinePlayerHtml ?: runCatching {
+                        app.get(
+                            playerUrl,
+                            headers = mapOf(
+                                "User-Agent" to JET_UA,
+                                "Referer" to data,
+                                "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                            ),
+                            allowRedirects = true,
+                        ).text
+                    }.getOrDefault("")
+
+                    if (
+                        playerPageText.contains("PUB_ID") ||
+                        playerPageText.contains("WORKER_URL") ||
+                        playerPageText.contains("dplayer.erikkalinina1994.workers.dev")
+                    ) {
+                        try {
+                            fun jsConstant(constantName: String): String? {
+                                val pattern = Regex(
+                                    """(?:const|let|var)\s+""" +
+                                        Regex.escape(constantName) +
+                                        """\s*=\s*["']([^"']*)["']"""
+                                )
+                                return pattern.find(playerPageText)
+                                    ?.groupValues
+                                    ?.getOrNull(1)
+                                    ?.trim()
+                                    ?.takeIf { it.isNotBlank() }
+                            }
+
+                            fun queryValue(parameter: String): String? {
+                                val pattern = Regex(
+                                    """[?&]""" + Regex.escape(parameter) + """=([^&#]+)"""
+                                )
+                                return pattern.find(playerUrl)
+                                    ?.groupValues
+                                    ?.getOrNull(1)
+                                    ?.takeIf { it.isNotBlank() }
+                            }
+
+                            val pubId = jsConstant("PUB_ID") ?: queryValue("pubId")
+                            val videoId = jsConstant("VIDEO_ID") ?: queryValue("id")
+                            val publisherId = jsConstant("PUBLISHER_ID")
+                                ?: queryValue("publisherId")
+                            val videoTitle = jsConstant("VIDEO_TITLE")
+                                ?: videoId
+                                ?: label
+                            val workerUrl = jsConstant("WORKER_URL")
+                                ?: "https://dplayer.erikkalinina1994.workers.dev"
+
+                            val apiUrl = when {
+                                !pubId.isNullOrBlank() -> {
+                                    workerUrl.trimEnd('/') +
+                                        "/api/stream?pubId=" +
+                                        URLEncoder.encode(pubId, "UTF-8") +
+                                        "&title=" +
+                                        URLEncoder.encode(videoTitle, "UTF-8") +
+                                        if (!publisherId.isNullOrBlank()) {
+                                            "&publisherId=" +
+                                                URLEncoder.encode(publisherId, "UTF-8")
+                                        } else {
+                                            ""
+                                        }
+                                }
+
+                                !videoId.isNullOrBlank() -> {
+                                    workerUrl.trimEnd('/') +
+                                        "/api/video?id=" +
+                                        URLEncoder.encode(videoId, "UTF-8")
+                                }
+
+                                else -> ""
+                            }
+
+                            if (apiUrl.isNotBlank()) {
+                                Log.d(
+                                    JET_TAG,
+                                    "JWPlayer Worker API deneniyor: pubId=" +
+                                        (pubId ?: "yok") + " videoId=" + (videoId ?: "yok"),
+                                )
+
+                                val apiText = app.get(
+                                    apiUrl,
+                                    headers = mapOf(
+                                        "User-Agent" to JET_UA,
+                                        "Referer" to playerUrl,
+                                        "Accept" to "application/json,text/plain,*/*",
+                                    ),
+                                    allowRedirects = true,
+                                ).text
+
+                                val payload = org.json.JSONObject(apiText)
+                                val apiError = payload.optString("error").trim()
+                                if (apiError.isNotBlank() && apiError != "null") {
+                                    Log.w(JET_TAG, "JWPlayer Worker API hatası: " + apiError)
+                                } else {
+                                    val hlsFile = payload.optJSONObject("hlsSource")
+                                        ?.optString("file")
+                                        ?.trim()
+                                        ?.takeIf { it.startsWith("http", true) }
+                                        ?: payload.optString("hlsSource")
+                                            .trim()
+                                            .takeIf { it.startsWith("http", true) }
+
+                                    if (!hlsFile.isNullOrBlank()) {
+                                        callback(
+                                            newExtractorLink(
+                                                source = name,
+                                                name = label + " - HLS",
+                                                url = hlsFile,
+                                                type = ExtractorLinkType.M3U8,
+                                            ) {
+                                                referer = playerUrl
+                                                quality = Qualities.Unknown.value
+                                            }
+                                        )
+                                        emitted = true
+                                    }
+
+                                    val mp4Sources = payload.optJSONArray("mp4Sources")
+                                    if (mp4Sources != null) {
+                                        for (i in 0 until mp4Sources.length()) {
+                                            val sourceObject = mp4Sources.optJSONObject(i) ?: continue
+                                            val fileUrl = sourceObject.optString("file")
+                                                .trim()
+                                                .takeIf { it.startsWith("http", true) }
+                                                ?: continue
+                                            val qualityLabel = sourceObject.optString("label")
+                                                .trim()
+                                                .ifBlank { "MP4" }
+
+                                            callback(
+                                                newExtractorLink(
+                                                    source = name,
+                                                    name = label + " - " + qualityLabel,
+                                                    url = fileUrl,
+                                                    type = ExtractorLinkType.VIDEO,
+                                                ) {
+                                                    referer = playerUrl
+                                                    quality = getQualityFromName(qualityLabel)
+                                                }
+                                            )
+                                            emitted = true
+                                        }
+                                    }
+                                }
+                            } else {
+                                Log.d(JET_TAG, "JWPlayer HTML içinde pubId/videoId bulunamadı")
+                            }
+                        } catch (e: Exception) {
+                            Log.e(JET_TAG, "JWPlayer Worker çözümleme hatası: " + e.message)
+                        }
+                    }
+
+                    if (emitted) {
+                        Log.d(JET_TAG, "JWPlayer Worker kaynakları başarıyla alındı: " + label)
+                    } else {
+                        loadExtractor(
+                            playerUrl,
+                            data,
+                            subtitleCallback,
+                            { link ->
+                                emitted = true
+                                callback(link)
+                            },
+                        )
+                    }
                 }
 
                 Log.d(
