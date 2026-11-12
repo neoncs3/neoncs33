@@ -174,7 +174,13 @@ class NeonPlaybackSmokeTest {
         Target("Dizigecesi", listOf("Wednesday", "The Last of Us", "The Boys")),
         Target("Dramadizilerim", listOf("Squid Game", "Moving", "Hidden Love")),
         Target("FilmModu", listOf("Inception", "Interstellar", "The Batman")),
-        Target("JetFilmizle", listOf("Inception", "Interstellar", "The Batman")),
+        Target(
+            "JetFilmizle",
+            listOf("Inception", "Interstellar", "The Batman"),
+            // User-provided current page: test this exact URL before generic search fallbacks.
+            directUrls = listOf("https://jetfilmizle.app/film/zirh"),
+            apiName = "NeonHub",
+        ),
         Target("SetFilmIzle", listOf("Inception", "Interstellar", "The Batman")),
         Target("SinemaCX", listOf("Inception", "Interstellar", "The Batman")),
         Target("WebDramaTurkey", listOf("Squid Game", "Moving", "Alchemy of Souls")),
