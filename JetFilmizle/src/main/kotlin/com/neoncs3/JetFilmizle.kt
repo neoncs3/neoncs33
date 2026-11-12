@@ -416,7 +416,9 @@ class JetFilmizle : NeonMainAPI() {
                     it.contains("PUB_ID") || it.contains("WORKER_URL") ||
                         it.contains("dplayer.erikkalinina1994.workers.dev") ||
                         it.contains("WORKER_BASE") ||
-                        it.contains("godrive.erikkalinina1994.workers.dev")
+                        it.contains("godrive.erikkalinina1994.workers.dev") ||
+                        it.contains("videopark.top", true) ||
+                        it.contains("vsrc.top/you/p/", true)
                 }
 
                 if (iframeSrc.isNullOrBlank() && inlinePlayerHtml.isNullOrBlank()) {
@@ -429,7 +431,9 @@ class JetFilmizle : NeonMainAPI() {
                 }
 
                 val playerUrl = if (!inlinePlayerHtml.isNullOrBlank() || iframeSrc.isNullOrBlank()) {
-                    data.substringBefore("?")
+                    val embeddedBase = Regex("""(?is)<base\b[^>]*\bhref\s*=\s*["']([^"']+)["']""")
+                        .find(responseText)?.groupValues?.get(1)
+                    embeddedBase?.let { fixUrlNull(it) } ?: data.substringBefore("?")
                 } else {
                     when {
                         iframeSrc.startsWith("//") -> "https:" + iframeSrc
@@ -486,14 +490,197 @@ class JetFilmizle : NeonMainAPI() {
                     val isGoDrivePlayer =
                         playerPageText.contains("WORKER_BASE") ||
                             playerPageText.contains("godrive.erikkalinina1994.workers.dev")
+                    val isVideoParkPlayer =
+                        playerUrl.contains("videopark.top", true) ||
+                            playerPageText.contains("videopark.top", true) ||
+                            playerPageText.contains("vsrc.top/you/p/", true) ||
+                            (playerPageText.contains("const initial") &&
+                                playerPageText.contains("api.php?action=stream"))
 
                     if (
+                        isVideoParkPlayer ||
                         playerPageText.contains("PUB_ID") ||
                         playerPageText.contains("WORKER_URL") ||
                         playerPageText.contains("dplayer.erikkalinina1994.workers.dev") ||
                         isGoDrivePlayer
                     ) {
                         try {
+                            if (isVideoParkPlayer) {
+                                fun extractInitialPayload(html: String): org.json.JSONObject? {
+                                    val marker = Regex("""(?:const|let|var)\s+initial\s*=""")
+                                        .find(html) ?: return null
+                                    val start = html.indexOf('{', marker.range.last + 1)
+                                    if (start < 0) return null
+
+                                    var depth = 0
+                                    var quoted = false
+                                    var escaped = false
+                                    var quote = '\u0000'
+
+                                    for (index in start until html.length) {
+                                        val char = html[index]
+                                        if (quoted) {
+                                            if (escaped) {
+                                                escaped = false
+                                            } else if (char == '\\') {
+                                                escaped = true
+                                            } else if (char == quote) {
+                                                quoted = false
+                                            }
+                                        } else {
+                                            when (char) {
+                                                '"', '\'' -> {
+                                                    quoted = true
+                                                    quote = char
+                                                }
+                                                '{' -> depth++
+                                                '}' -> {
+                                                    depth--
+                                                    if (depth == 0) {
+                                                        return runCatching {
+                                                            org.json.JSONObject(html.substring(start, index + 1))
+                                                        }.getOrNull()
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    return null
+                                }
+
+                                val initial = extractInitialPayload(playerPageText)
+                                if (initial == null) {
+                                    Log.w(JET_TAG, "VideoPark initial JSON bulunamadı: " + playerUrl)
+                                } else {
+                                    val baseHref = Regex("""(?is)<base\b[^>]*\bhref\s*=\s*["']([^"']+)["']""")
+                                        .find(playerPageText)?.groupValues?.get(1)
+                                    val baseUrl = baseHref?.takeIf { it.startsWith("http", true) }
+                                        ?: playerUrl.substringBeforeLast('/') + "/"
+
+                                    fun resolveVideoParkUrl(raw: String): String? {
+                                        val value = raw.trim()
+                                        if (value.isBlank()) return null
+                                        return runCatching {
+                                            java.net.URI(baseUrl).resolve(value).toString()
+                                        }.getOrNull()?.takeIf { it.startsWith("http", true) }
+                                    }
+
+                                    val initialLanguage = initial.optString("lang").trim().lowercase()
+                                    val initialMode = if (initialLanguage == "dub") "dub" else "sub"
+                                    val hasDub = initial.optBoolean("has_dub", initialMode == "dub")
+                                    val streamPayloads = mutableListOf<Pair<String, org.json.JSONObject>>()
+                                    streamPayloads.add(initialMode to initial)
+
+                                    val videoCode = initial.optString("code").trim()
+                                    if (videoCode.isNotBlank()) {
+                                        val alternateModes = listOf("dub", "sub").filter { mode ->
+                                            mode != initialMode && (mode != "dub" || hasDub)
+                                        }
+                                        for (mode in alternateModes) {
+                                            val apiUrl = runCatching {
+                                                java.net.URI(baseUrl).resolve(
+                                                    "api.php?action=stream&v=" +
+                                                        URLEncoder.encode(videoCode, "UTF-8") +
+                                                        "&lang=" + mode
+                                                ).toString()
+                                            }.getOrDefault("")
+
+                                            if (apiUrl.isBlank()) continue
+
+                                            val alternatePayload = runCatching {
+                                                val apiText = app.get(
+                                                    apiUrl,
+                                                    headers = mapOf(
+                                                        "User-Agent" to JET_UA,
+                                                        "Referer" to playerUrl,
+                                                        "Accept" to "application/json,text/plain,*/*",
+                                                    ),
+                                                    allowRedirects = true,
+                                                ).text
+                                                org.json.JSONObject(apiText)
+                                            }.getOrNull()
+
+                                            if (alternatePayload?.optJSONArray("sources") != null) {
+                                                streamPayloads.add(mode to alternatePayload)
+                                                Log.d(JET_TAG, "VideoPark alternatif akış alındı: " + mode)
+                                            } else {
+                                                Log.w(JET_TAG, "VideoPark alternatif akış alınamadı: " + mode)
+                                            }
+                                        }
+                                    }
+
+                                    val seenMediaUrls = mutableSetOf<String>()
+                                    val seenSubtitleUrls = mutableSetOf<String>()
+
+                                    for ((streamMode, payload) in streamPayloads) {
+                                        val modeLabel = if (streamMode == "dub") {
+                                            "TR Dublaj"
+                                        } else {
+                                            "Orijinal / Altyazı"
+                                        }
+
+                                        val sources = payload.optJSONArray("sources")
+                                        if (sources != null) {
+                                            for (index in 0 until sources.length()) {
+                                                val sourceObject = sources.optJSONObject(index) ?: continue
+                                                val rawFile = sourceObject.optString("file").trim()
+                                                val mediaUrl = resolveVideoParkUrl(rawFile) ?: continue
+                                                if (!seenMediaUrls.add(mediaUrl)) continue
+
+                                                val format = sourceObject.optString("type").trim().lowercase()
+                                                val isHls = format.contains("hls") ||
+                                                    mediaUrl.substringBefore('?').endsWith(".m3u8", true)
+                                                val linkType = if (isHls) {
+                                                    ExtractorLinkType.M3U8
+                                                } else {
+                                                    ExtractorLinkType.VIDEO
+                                                }
+                                                val qualityLabel = sourceObject.optString("label")
+                                                    .trim()
+                                                    .ifBlank { if (isHls) "HLS" else "Video" }
+
+                                                callback(
+                                                    newExtractorLink(
+                                                        source = name,
+                                                        name = label + " - VideoPark - " +
+                                                            modeLabel + " - " + qualityLabel,
+                                                        url = mediaUrl,
+                                                        type = linkType,
+                                                    ) {
+                                                        referer = playerUrl
+                                                        quality = getQualityFromName(qualityLabel)
+                                                    }
+                                                )
+                                                emitted = true
+                                            }
+                                        }
+
+                                        val tracks = payload.optJSONArray("tracks")
+                                        if (tracks != null) {
+                                            for (index in 0 until tracks.length()) {
+                                                val track = tracks.optJSONObject(index) ?: continue
+                                                val rawTrack = track.optString("file").trim()
+                                                val trackUrl = resolveVideoParkUrl(rawTrack) ?: continue
+                                                if (!seenSubtitleUrls.add(trackUrl)) continue
+
+                                                val trackLabel = track.optString("label").trim()
+                                                    .ifBlank { track.optString("lang").uppercase() }
+                                                    .ifBlank { "Altyazı" }
+                                                subtitleCallback(
+                                                    SubtitleFile(modeLabel + " - " + trackLabel, trackUrl)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Log.d(
+                                        JET_TAG,
+                                        "VideoPark kaynakları: akış=" + streamPayloads.size +
+                                            " medya=" + seenMediaUrls.size +
+                                            " altyazı=" + seenSubtitleUrls.size,
+                                    )
+                                }
+                            } else {
                             fun jsConstant(constantName: String): String? {
                                 // Player değişkenleri bazen string ("963078"),
                                 // bazen sayısal (20371) olarak tanımlanıyor.
@@ -712,14 +899,15 @@ class JetFilmizle : NeonMainAPI() {
                                 Log.d(JET_TAG, "JWPlayer HTML içinde pubId/videoId bulunamadı")
                             }
                             }
+                            }
                         } catch (e: Exception) {
-                            Log.e(JET_TAG, "JWPlayer Worker çözümleme hatası: " + e.message)
+                            Log.e(JET_TAG, "JWPlayer/VideoPark çözümleme hatası: " + e.message)
                         }
                     }
 
                     if (emitted) {
                         Log.d(JET_TAG, "JWPlayer/GoDrive Worker kaynakları başarıyla alındı: " + label)
-                    } else if (!isGoDrivePlayer) {
+                    } else if (!isGoDrivePlayer && !isVideoParkPlayer) {
                         // Eski iframe sağlayıcıları için extractor yedeği.
                         // GoDrive bilinen bir player ise sayfayı genel extractor'a
                         // vermeyip fragman veya HTML içeriğinin ana video sayılmasını önle.
