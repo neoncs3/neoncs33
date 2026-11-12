@@ -80,9 +80,11 @@ class AutoDaddyliveApp : MainAPI() {
                 val obj = jsonArray.optJSONObject(i) ?: continue
                 val name = obj.optString("name").trim().ifBlank {
                     obj.optString("channel_name").trim()
-                }.ifBlank { continue }
-                val url = obj.optString("url").trim().ifBlank { continue }
-                if (!isValidHttpUrl(url)) continue
+                }
+                if (name.isBlank()) continue
+
+                val url = obj.optString("url").trim()
+                if (url.isBlank() || !isValidHttpUrl(url)) continue
                 items += newLiveSearchResponse(name, url, TvType.Live) {
                     posterUrl = mainUrl.trimEnd('/') + "/favicon.ico"
                 }
