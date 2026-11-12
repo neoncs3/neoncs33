@@ -720,8 +720,11 @@ class JetFilmizle : NeonMainAPI() {
                     }
 
                     if (emitted) {
-                        Log.d(JET_TAG, "JWPlayer Worker kaynakları başarıyla alındı: " + label)
-                    } else {
+                        Log.d(JET_TAG, "JWPlayer/GoDrive Worker kaynakları başarıyla alındı: " + label)
+                    } else if (!isGoDrivePlayer) {
+                        // Eski iframe sağlayıcıları için extractor yedeği.
+                        // GoDrive bilinen bir player ise sayfayı genel extractor'a
+                        // vermeyip fragman veya HTML içeriğinin ana video sayılmasını önle.
                         loadExtractor(
                             playerUrl,
                             data,
@@ -731,6 +734,8 @@ class JetFilmizle : NeonMainAPI() {
                                 callback(link)
                             },
                         )
+                    } else {
+                        Log.w(JET_TAG, "GoDrive player kaynağı alınamadı; yanlış fragman yedeği açılmayacak")
                     }
                 }
 
