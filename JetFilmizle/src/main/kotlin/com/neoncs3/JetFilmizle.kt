@@ -428,7 +428,7 @@ class JetFilmizle : NeonMainAPI() {
                     return false
                 }
 
-                val playerUrl = if (iframeSrc.isNullOrBlank()) {
+                val playerUrl = if (!inlinePlayerHtml.isNullOrBlank() || iframeSrc.isNullOrBlank()) {
                     data.substringBefore("?")
                 } else {
                     when {
@@ -746,17 +746,48 @@ class JetFilmizle : NeonMainAPI() {
 
                 if (requestPlayer(index, type, label)) return true
             }
+
+            // A source button exists, so the film's playback must come from
+            // /jetplayer. Never substitute the page's independent trailer iframe.
+            Log.w(JET_TAG, "Film oynatma kaynakları çözülemedi; fragman yedeği kullanılmayacak")
+            return false
         }
 
         // Eski/alternatif HTML yapısı.
         document.select(
-            "#movie iframe[src], #movie iframe[data-src], iframe[src], iframe[data-src]"
+            "#movie iframe[src], #movie iframe[data-src], .player iframe[src], " +
+                ".video-player iframe[src], .video-container iframe[src], iframe[src], iframe[data-src]"
         ).forEach { iframe ->
             val raw = iframe.attr("data-src")
                 .ifBlank { iframe.attr("src") }
+            if (raw.isBlank()) return@forEach
+
+            val context = buildString {
+                var node: Element? = iframe
+                repeat(5) {
+                    val current = node ?: return@repeat
+                    append(' ')
+                    append(current.id())
+                    append(' ')
+                    append(current.className())
+                    append(' ')
+                    append(current.attr("data-role"))
+                    append(' ')
+                    node = current.parent()
+                }
+            }.lowercase()
+
+            val candidateMarker = (raw + " " + context).lowercase()
+            val isTrailer = listOf(
+                "trailer", "fragman", "preview", "teaser", "youtube.com",
+                "youtu.be", "youtube-nocookie.com"
+            ).any { candidateMarker.contains(it) }
+            if (isTrailer) {
+                Log.d(JET_TAG, "Fragman iframe'i oynatma kaynağı olarak atlandı: " + raw)
+                return@forEach
+            }
 
             val playerUrl = fixUrlNull(raw) ?: return@forEach
-
             runCatching {
                 var emitted = false
                 loadExtractor(
@@ -768,9 +799,7 @@ class JetFilmizle : NeonMainAPI() {
                         callback(link)
                     },
                 )
-                if (emitted) {
-                    return true
-                }
+                if (emitted) return true
             }.onFailure {
                 Log.e(JET_TAG, "fallback extractor hata: " + it.message)
             }
@@ -789,13 +818,22 @@ class JetFilmizle : NeonMainAPI() {
             }
         }
 
-        val neonFound = neonResolveLinks(
-            data = data,
-            sourceName = "$name - NeonCore",
-            subtitleCallback = subtitleCallback,
-            callback = callback,
-        )
-        if (neonFound) return true
+        val hasTrailerMarkup = document.select(
+            "[id*=trailer i], [class*=trailer i], [id*=fragman i], [class*=fragman i], " +
+                "[data-trailer], .preview, [class*=preview i]"
+        ).isNotEmpty()
+
+        if (!hasTrailerMarkup) {
+            val neonFound = neonResolveLinks(
+                data = data,
+                sourceName = "$name - NeonCore",
+                subtitleCallback = subtitleCallback,
+                callback = callback,
+            )
+            if (neonFound) return true
+        } else {
+            Log.d(JET_TAG, "Sayfada ayrı fragman alanı var; ana oynatma için genel sayfa taraması atlandı")
+        }
 
         return false
     }
