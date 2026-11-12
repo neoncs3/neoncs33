@@ -311,7 +311,7 @@ class JetFilmizle : NeonMainAPI() {
         // Bir içerik için dil başına tek bir temiz altyazı seçeneği göster.
         val sentSubtitleLanguages = mutableSetOf<String>()
         val uniqueSubtitleCallback: (SubtitleFile) -> Unit = { subtitle ->
-            val subtitleName = subtitle.name.trim()
+            val subtitleName = subtitle.lang.trim()
             val normalizedName = subtitleName.lowercase()
             val languageKey = when {
                 normalizedName.contains("türk") || normalizedName.contains("turk") ||
