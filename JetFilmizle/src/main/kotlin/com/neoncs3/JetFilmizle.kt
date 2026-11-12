@@ -326,6 +326,15 @@ class JetFilmizle : NeonMainAPI() {
             }
         }
 
+        // Aynı medya URL'sini farklı source düğmeleri döndürürse listede tek kez göster.
+        val sentMediaUrls = mutableSetOf<String>()
+        val uniqueLinkCallback: (ExtractorLink) -> Unit = { link ->
+            val mediaKey = link.url.trim()
+            if (mediaKey.isNotBlank() && sentMediaUrls.add(mediaKey)) {
+                callback.invoke(link)
+            }
+        }
+
         // Tek bölüm URL'si artık kaynak indeksini taşımaz; bütün
         // oynatma kaynakları aşağıda aynı bölüm için toplanır.
         val episodeMode = data.contains("sezon=") && data.contains("bolum=")
@@ -477,7 +486,7 @@ class JetFilmizle : NeonMainAPI() {
                         val directUrl =
                             "https://pixeldrain.com/api/file/" + pixelId + "?download"
 
-                        callback(
+                        uniqueLinkCallback(
                             newExtractorLink(
                                 source = "PixelDrain",
                                 name = label + " - PixelDrain",
@@ -661,7 +670,7 @@ class JetFilmizle : NeonMainAPI() {
                                                     .takeIf { it.isNotBlank() }
                                                     ?: if (isHls) "Otomatik" else "Video"
 
-                                                callback(
+                                                uniqueLinkCallback(
                                                     newExtractorLink(
                                                         source = name,
                                                         name = "VideoPark • " + modeLabel + " • " + qualityLabel,
@@ -785,7 +794,7 @@ class JetFilmizle : NeonMainAPI() {
                                                 URLEncoder.encode(goDriveId, "UTF-8") +
                                                 "?q=" + URLEncoder.encode(quality, "UTF-8")
 
-                                            callback(
+                                            uniqueLinkCallback(
                                                 newExtractorLink(
                                                     source = name,
                                                     name = label + " - " + qualityLabel,
@@ -803,7 +812,7 @@ class JetFilmizle : NeonMainAPI() {
                                     if (!emitted) {
                                         val directUrl = workerBase + "/v/" +
                                             URLEncoder.encode(goDriveId, "UTF-8")
-                                        callback(
+                                        uniqueLinkCallback(
                                             newExtractorLink(
                                                 source = name,
                                                 name = label + " - MP4",
@@ -890,7 +899,7 @@ class JetFilmizle : NeonMainAPI() {
                                             .takeIf { it.startsWith("http", true) }
 
                                     if (!hlsFile.isNullOrBlank()) {
-                                        callback(
+                                        uniqueLinkCallback(
                                             newExtractorLink(
                                                 source = name,
                                                 name = label + " - HLS",
@@ -916,7 +925,7 @@ class JetFilmizle : NeonMainAPI() {
                                                 .trim()
                                                 .ifBlank { "MP4" }
 
-                                            callback(
+                                            uniqueLinkCallback(
                                                 newExtractorLink(
                                                     source = name,
                                                     name = label + " - " + qualityLabel,
@@ -953,7 +962,7 @@ class JetFilmizle : NeonMainAPI() {
                             uniqueSubtitleCallback,
                             { link ->
                                 emitted = true
-                                callback(link)
+                                uniqueLinkCallback(link)
                             },
                         )
                     } else {
@@ -1148,7 +1157,7 @@ class JetFilmizle : NeonMainAPI() {
                     uniqueSubtitleCallback,
                     { link ->
                         emitted = true
-                        callback(link)
+                        uniqueLinkCallback(link)
                     },
                 )
                 if (emitted) legacySourcesFound = true
