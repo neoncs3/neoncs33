@@ -322,7 +322,7 @@ class JetFilmizle : NeonMainAPI() {
                     .trim()
             }
             if (languageKey.isNotBlank() && sentSubtitleLanguages.add(languageKey)) {
-                uniqueSubtitleCallback(subtitle)
+                subtitleCallback(subtitle)
             }
         }
 
