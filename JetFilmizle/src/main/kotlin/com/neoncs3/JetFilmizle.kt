@@ -307,6 +307,25 @@ class JetFilmizle : NeonMainAPI() {
     ): Boolean {
         Log.d(JET_TAG, "loadLinks: " + data)
 
+        // Farklı player'ların aynı dil altyazısını tekrar tekrar eklemesini önle.
+        // Bir içerik için dil başına tek bir temiz altyazı seçeneği göster.
+        val sentSubtitleLanguages = mutableSetOf<String>()
+        val uniqueSubtitleCallback: (SubtitleFile) -> Unit = { subtitle ->
+            val subtitleName = subtitle.name.trim()
+            val normalizedName = subtitleName.lowercase()
+            val languageKey = when {
+                normalizedName.contains("türk") || normalizedName.contains("turk") ||
+                    normalizedName == "tr" || normalizedName.contains("turkish") -> "tr"
+                normalizedName == "en" || normalizedName.contains("english") -> "en"
+                else -> normalizedName
+                    .replace(Regex("""\s*[\(\[].*?[\)\]]\s*"""), "")
+                    .trim()
+            }
+            if (languageKey.isNotBlank() && sentSubtitleLanguages.add(languageKey)) {
+                uniqueSubtitleCallback(subtitle)
+            }
+        }
+
         // Tek bölüm URL'si artık kaynak indeksini taşımaz; bütün
         // oynatma kaynakları aşağıda aynı bölüm için toplanır.
         val episodeMode = data.contains("sezon=") && data.contains("bolum=")
@@ -686,7 +705,7 @@ class JetFilmizle : NeonMainAPI() {
                                             val subtitleKey = trackLabel.lowercase()
                                             if (!seenSubtitleLanguages.add(subtitleKey)) continue
 
-                                            subtitleCallback(SubtitleFile(trackLabel, trackUrl))
+                                            uniqueSubtitleCallback(SubtitleFile(trackLabel, trackUrl))
                                         }
                                     }
 
@@ -931,7 +950,7 @@ class JetFilmizle : NeonMainAPI() {
                         loadExtractor(
                             playerUrl,
                             data,
-                            subtitleCallback,
+                            uniqueSubtitleCallback,
                             { link ->
                                 emitted = true
                                 callback(link)
@@ -1126,7 +1145,7 @@ class JetFilmizle : NeonMainAPI() {
                 loadExtractor(
                     playerUrl,
                     data,
-                    subtitleCallback,
+                    uniqueSubtitleCallback,
                     { link ->
                         emitted = true
                         callback(link)
@@ -1146,7 +1165,7 @@ class JetFilmizle : NeonMainAPI() {
             val subUrl = fixUrlNull(raw) ?: return@forEach
 
             runCatching {
-                subtitleCallback(
+                uniqueSubtitleCallback(
                     SubtitleFile("Türkçe", subUrl)
                 )
             }
@@ -1161,7 +1180,7 @@ class JetFilmizle : NeonMainAPI() {
             val neonFound = neonResolveLinks(
                 data = data,
                 sourceName = "$name - NeonCore",
-                subtitleCallback = subtitleCallback,
+                subtitleCallback = uniqueSubtitleCallback,
                 callback = callback,
             )
             if (neonFound) return true
