@@ -450,7 +450,7 @@ class JetFilmizle : NeonMainAPI() {
                 // Sadece player değişkenleri gerçekten HTML/JS içinde tanımlıysa
                 // yanıtı inline say. Iframe src içindeki host adı tek başına yeterli değil.
                 val hasInlineWorkerPlayer = Regex(
-                    """(?is)(?:const|let|var)\\s+(?:PUB_ID|WORKER_URL|WORKER_BASE)\\s*="""
+                    """(?is)(?:const|let|var)\s+(?:PUB_ID|WORKER_URL|WORKER_BASE)\s*="""
                 ).containsMatchIn(responseText)
                 val inlinePlayerHtml = responseText.takeIf {
                     iframeSrc.isNullOrBlank() &&
