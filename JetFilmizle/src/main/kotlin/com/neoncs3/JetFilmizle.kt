@@ -447,14 +447,14 @@ class JetFilmizle : NeonMainAPI() {
                         responseText.contains("vsrc.top", true) ||
                         responseText.contains("videopark.top", true))
 
-                // Sadece gerçek player HTML'sini inline kabul et. Bir iframe
-                // satırında videopark.top geçmesi, iframe sayfasının kendisi değildir.
+                // Sadece player değişkenleri gerçekten HTML/JS içinde tanımlıysa
+                // yanıtı inline say. Iframe src içindeki host adı tek başına yeterli değil.
+                val hasInlineWorkerPlayer = Regex(
+                    """(?is)(?:const|let|var)\\s+(?:PUB_ID|WORKER_URL|WORKER_BASE)\\s*="""
+                ).containsMatchIn(responseText)
                 val inlinePlayerHtml = responseText.takeIf {
-                    it.contains("PUB_ID") || it.contains("WORKER_URL") ||
-                        it.contains("dplayer.erikkalinina1994.workers.dev") ||
-                        it.contains("WORKER_BASE") ||
-                        it.contains("godrive.erikkalinina1994.workers.dev") ||
-                        hasVideoParkInitial
+                    iframeSrc.isNullOrBlank() &&
+                        (hasInlineWorkerPlayer || hasVideoParkInitial)
                 }
 
                 if (iframeSrc.isNullOrBlank() && inlinePlayerHtml.isNullOrBlank()) {
