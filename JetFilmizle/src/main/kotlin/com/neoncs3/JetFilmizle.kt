@@ -313,13 +313,17 @@ class JetFilmizle : NeonMainAPI() {
             data.contains("index=") &&
             data.contains("type=")
 
-        var document = runCatching {
+        var pageResponse = runCatching {
             app.get(
                 data,
                 headers = pageHeaders + mapOf("Referer" to "$mainUrl/"),
                 allowRedirects = true,
-            ).document
+            )
         }.getOrNull() ?: return false
+        var document = pageResponse.document
+        // Keep the session cookies from the film page: /jetplayer is an AJAX
+        // endpoint and may return an empty player fragment without this session.
+        var pageCookies = pageResponse.cookies
 
         var filmId = document.selectFirst(
             "input[name=film_id], input[name='film_id'], input[name=filmId]"
@@ -330,13 +334,15 @@ class JetFilmizle : NeonMainAPI() {
         if (filmId.isNullOrBlank() && episodeMode) {
             val baseUrl = data.substringBefore("?")
 
-            document = runCatching {
+            pageResponse = runCatching {
                 app.get(
                     baseUrl,
                     headers = pageHeaders + mapOf("Referer" to "$mainUrl/"),
                     allowRedirects = true,
-                ).document
+                )
             }.getOrNull() ?: return false
+            document = pageResponse.document
+            pageCookies = pageResponse.cookies
 
             filmId = document.selectFirst(
                 "input[name=film_id], input[name='film_id'], input[name=filmId]"
@@ -365,16 +371,24 @@ class JetFilmizle : NeonMainAPI() {
                         " type=" + playerType,
                 )
 
+                val playerHeaders = mutableMapOf(
+                    "User-Agent" to JET_UA,
+                    "Referer" to data,
+                    "Origin" to mainUrl,
+                    "X-Requested-With" to "XMLHttpRequest",
+                    "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
+                )
+                if (pageCookies.isNotEmpty()) {
+                    playerHeaders["Cookie"] = pageCookies.entries.joinToString("; ") {
+                        it.key + "=" + it.value
+                    }
+                }
+
                 val responseText = app.post(
                     "$mainUrl/jetplayer",
-                    headers = mapOf(
-                        "User-Agent" to JET_UA,
-                        "Referer" to data,
-                        "Origin" to mainUrl,
-                        "X-Requested-With" to "XMLHttpRequest",
-                        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                        "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
-                    ),
+                    headers = playerHeaders,
+                    cookies = pageCookies,
                     data = mapOf(
                         "film_id" to filmId,
                         "source_index" to sourceIndex.toString(),
