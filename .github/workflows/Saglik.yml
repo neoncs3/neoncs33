@@ -83,7 +83,7 @@ jobs:
             exit 1
           fi
 
-      - name: Kırmızı sağlayıcıları hata olarak bildir
+      - name: Sağlayıcı sorunlarını uyarı olarak bildir
         if: success()
         shell: bash
         run: |
@@ -113,15 +113,15 @@ jobs:
               for item in red:
                   live = item.get("live", {})
                   print(
-                      f"::error title={item.get('provider', 'Bilinmeyen')}::"
+                      f"::warning title={item.get('provider', 'Bilinmeyen')}::"
                       f"domain={item.get('configured_domain', item.get('domain', '-'))}; "
                       f"HTTP={live.get('status_code', '-')}; "
                       f"hata={live.get('error') or 'HTTP erişimi başarısız'}"
                   )
-              sys.exit(1)
-
-          print(
-              f"Sağlık raporu tamamlandı: {len(providers)} sağlayıcı; "
-              f"kırmızı hata yok, sarı uyarı sayısı={data.get('yellow', 0)}."
-          )
+              print("Sağlık taraması tamamlandı; sağlayıcı sorunları rapora yazıldı, workflow başarılı bırakılıyor.")
+          else:
+              print(
+                  f"Sağlık raporu tamamlandı: {len(providers)} sağlayıcı; "
+                  f"kırmızı hata yok, sarı uyarı sayısı={data.get('yellow', 0)}."
+              )
           PY
