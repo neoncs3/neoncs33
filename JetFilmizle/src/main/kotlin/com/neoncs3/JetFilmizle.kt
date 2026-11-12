@@ -853,7 +853,7 @@ class JetFilmizle : NeonMainAPI() {
                                                 url = directUrl,
                                                 type = ExtractorLinkType.VIDEO,
                                             ) {
-                                                referer = "https://videopark.top/"
+                                                referer = playerUrl
                                                 quality = Qualities.Unknown.value
                                             }
                                         )
@@ -942,11 +942,41 @@ class JetFilmizle : NeonMainAPI() {
                                                 url = hlsFile,
                                                 type = ExtractorLinkType.M3U8,
                                             ) {
-                                                referer = playerUrl
+                                                referer = "https://videopark.top/"
                                                 quality = Qualities.Unknown.value
                                             }
                                         )
                                         emitted = true
+                                    }
+
+                                    // Worker API sürümleri hlsSource yerine yalnızca
+                                    // sources dizisini döndürürse HLS kaynağını yine yakala.
+                                    val genericSources = payload.optJSONArray("sources")
+                                    if (genericSources != null) {
+                                        for (i in 0 until genericSources.length()) {
+                                            val sourceObject = genericSources.optJSONObject(i) ?: continue
+                                            val fileUrl = sourceObject.optString("file").trim()
+                                                .takeIf { it.startsWith("http", true) } ?: continue
+                                            val format = sourceObject.optString("type").lowercase()
+                                            val isHls = format.contains("hls") ||
+                                                fileUrl.substringBefore('?').endsWith(".m3u8", true)
+                                            uniqueLinkCallback(
+                                                newExtractorLink(
+                                                    source = name,
+                                                    name = label + " - " +
+                                                        sourceObject.optString("label").ifBlank {
+                                                            if (isHls) "HLS" else "Video"
+                                                        },
+                                                    url = fileUrl,
+                                                    type = if (isHls) ExtractorLinkType.M3U8
+                                                        else ExtractorLinkType.VIDEO,
+                                                ) {
+                                                    referer = "https://videopark.top/"
+                                                    quality = getQualityFromName(sourceObject.optString("label"))
+                                                }
+                                            )
+                                            emitted = true
+                                        }
                                     }
 
                                     val mp4Sources = payload.optJSONArray("mp4Sources")
