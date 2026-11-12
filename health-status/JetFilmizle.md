@@ -1,14 +1,14 @@
-# 🟢 JetFilmizle
+# 🔴 JetFilmizle
 
 Kodda kayıtlı domain: https://jetfilmizle.app
 
 Son HTTP URL: https://jetfilmizle.app
 
-HTTP: ✅ 200
+HTTP: ❌ 404
 
 Anti-bot engeli: hayır
 
-Sayfa başlığı: JetFilmizle - Film İzle, Türkçe Dublaj, Altyazılı ve Yerli Filmler
+Sayfa başlığı: 404 Not Found
 
 Canlı medya ipucu: 0 media URL, 0 iframe
 
@@ -20,9 +20,9 @@ Not: Bu rapor kaynak kodunun yapısını ve site HTTP erişimini ölçer; gerçe
 - Load: ✅
 - LoadLinks: ✅
 - Metadata: ✅
-- Video resolver: ✅
-- Subtitles: ✅
-- Cache/fallback: ✅
+- Video resolver: ❌
+- Subtitles: ❌
+- Cache/fallback: ❌
 - TMDB playback yasağı: ✅
 
 Kaynak: JetFilmizle/src/main/kotlin/com/neoncs3/JetFilmizle.kt
