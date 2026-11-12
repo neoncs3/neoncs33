@@ -247,15 +247,14 @@ class JetFilmizle : NeonMainAPI() {
         }.distinctBy { it.name }
 
         if (pageUrl.contains("/dizi/", true)) {
-            val episodes = document.select("button.episode-btn[data-player-type], button.episode-btn")
+            // Her bölüm tek kart olsun. Kaynaklar aynı bölümün oynatma
+            // penceresinde ayrı ayrı gösterilsin; kaynak başına bölüm çoğaltma.
+            val episodes = document.select("button.episode-btn[data-season][data-episode]")
                 .mapNotNull { button ->
                     val season = button.attr("data-season").toIntOrNull() ?: return@mapNotNull null
                     val episode = button.attr("data-episode").toIntOrNull() ?: return@mapNotNull null
-                    val sourceIndex = button.attr("data-source-index")
-                    val playerType = button.attr("data-player-type")
-                    if (sourceIndex.isBlank() || playerType.isBlank()) return@mapNotNull null
 
-                    val episodeUrl = pageUrl + "?sezon=" + season + "&bolum=" + episode + "&index=" + sourceIndex + "&type=" + playerType
+                    val episodeUrl = pageUrl + "?sezon=" + season + "&bolum=" + episode
 
                     newEpisode(episodeUrl) {
                         name = season.toString() + ".Sezon " + episode + ".Bölüm"
@@ -264,7 +263,7 @@ class JetFilmizle : NeonMainAPI() {
                         posterUrl = poster
                     }
                 }
-                .distinctBy { it.season.toString() + "-" + it.episode.toString() + "-" + it.data }
+                .distinctBy { it.season.toString() + "-" + it.episode.toString() }
                 .sortedWith(compareBy({ it.season ?: 0 }, { it.episode ?: 0 }))
 
             Log.d(JET_TAG, "Dizi bölümleri: " + episodes.size)
@@ -308,10 +307,9 @@ class JetFilmizle : NeonMainAPI() {
     ): Boolean {
         Log.d(JET_TAG, "loadLinks: " + data)
 
-        val episodeMode = data.contains("sezon=") &&
-            data.contains("bolum=") &&
-            data.contains("index=") &&
-            data.contains("type=")
+        // Tek bölüm URL'si artık kaynak indeksini taşımaz; bütün
+        // oynatma kaynakları aşağıda aynı bölüm için toplanır.
+        val episodeMode = data.contains("sezon=") && data.contains("bolum=")
 
         var pageResponse = runCatching {
             app.get(
@@ -763,6 +761,7 @@ class JetFilmizle : NeonMainAPI() {
                 .substringBefore("&")
                 .toIntOrNull()
 
+            // Eski sürümden gelen bölüm bağlantıları için geriye dönük uyumluluk.
             val selectedIndex = data.substringAfter("index=")
                 .substringBefore("&")
                 .toIntOrNull()
@@ -774,18 +773,8 @@ class JetFilmizle : NeonMainAPI() {
 
             if (season == null || episode == null) return false
 
-            // Önce CloudStream'in seçtiği kaynak.
-            if (selectedIndex != null) {
-                if (requestPlayer(
-                        selectedIndex,
-                        selectedType,
-                        "S" + season + "E" + episode,
-                    )
-                ) return true
-            }
-
-            // Aynı bölüm için sitedeki tüm kaynak kombinasyonlarını dene.
             val tried = mutableSetOf<String>()
+            var foundAny = false
 
             val matchingButtons = document.select(
                 "button.episode-btn[data-season][data-episode][data-source-index][data-player-type]"
@@ -794,6 +783,27 @@ class JetFilmizle : NeonMainAPI() {
                     button.attr("data-episode").toIntOrNull() == episode
             }
 
+            // Eski link seçili bir indeks taşıyorsa önce onu dene, sonra diğer
+            // kaynaklara geç. Yeni bölüm kartları tüm kaynakları doğrudan tarar.
+            if (selectedIndex != null) {
+                val selectedButton = matchingButtons.firstOrNull { button ->
+                    button.attr("data-source-index").toIntOrNull() == selectedIndex &&
+                        button.attr("data-player-type").trim() == selectedType
+                }
+                val selectedLabel = selectedButton?.text()?.trim()
+                    ?.ifBlank { null }
+                    ?: "S" + season + "E" + episode + " • " + selectedType
+
+                val key = "$selectedIndex|$selectedType"
+                if (tried.add(key) &&
+                    requestPlayer(selectedIndex, selectedType, selectedLabel)
+                ) {
+                    foundAny = true
+                }
+            }
+
+            // Tek tek bütün kaynakları çöz. Bir tanesinin başarılı olması
+            // döngüyü durdurmaz; Vidmoly ve diğer player'lar da listelenir.
             for (button in matchingButtons) {
                 val index = button.attr("data-source-index").toIntOrNull() ?: continue
                 val type = button.attr("data-player-type").trim()
@@ -802,27 +812,34 @@ class JetFilmizle : NeonMainAPI() {
                 val key = "$index|$type"
                 if (!tried.add(key)) continue
 
-                if (requestPlayer(
-                        index,
-                        type,
-                        "S" + season + "E" + episode + " fallback",
-                    )
-                ) return true
+                val label = button.text().trim()
+                    .ifBlank { "S" + season + "E" + episode + " • Kaynak " + index }
+
+                if (requestPlayer(index, type, label)) {
+                    foundAny = true
+                }
             }
 
-            // Sayfadaki butonlar yoksa index üzerinde tipleri sırayla dene.
+            // Sayfada kaynak düğmeleri bulunmayan eski HTML için yedek deneme.
             if (tried.isEmpty() && selectedIndex != null) {
                 for (type in listOf(selectedType, "dublaj", "altyazili").distinct()) {
                     if (requestPlayer(
                             selectedIndex,
                             type,
-                            "S" + season + "E" + episode + " type-fallback",
+                            "S" + season + "E" + episode + " • " + type,
                         )
-                    ) return true
+                    ) {
+                        foundAny = true
+                    }
                 }
             }
 
-            return false
+            Log.d(
+                JET_TAG,
+                "Bölüm kaynakları: S" + season + "E" + episode +
+                    " denenen=" + tried.size + " bulunan=" + foundAny,
+            )
+            return foundAny
         }
 
         // Film: doğrudan sayfadaki kaynakları önce dene.
@@ -832,26 +849,34 @@ class JetFilmizle : NeonMainAPI() {
 
         if (sourceButtons.isNotEmpty()) {
             val tried = mutableSetOf<String>()
+            var foundAny = false
 
             for (button in sourceButtons) {
                 val index = button.attr("data-source-index").toIntOrNull() ?: continue
                 val type = button.attr("data-player-type").trim()
                     .ifBlank { "dublaj" }
-                val label = button.text().trim().ifBlank { "Kaynak" }
+                val label = button.text().trim().ifBlank { "Kaynak " + index }
 
                 val key = "$index|$type"
                 if (!tried.add(key)) continue
 
-                if (requestPlayer(index, type, label)) return true
+                // Bir kaynak açıldı diye diğer kaynakları bırakma.
+                if (requestPlayer(index, type, label)) {
+                    foundAny = true
+                }
             }
 
-            // A source button exists, so the film's playback must come from
-            // /jetplayer. Never substitute the page's independent trailer iframe.
-            Log.w(JET_TAG, "Film oynatma kaynakları çözülemedi; fragman yedeği kullanılmayacak")
-            return false
+            Log.d(
+                JET_TAG,
+                "Film kaynakları: denenen=" + tried.size + " bulunan=" + foundAny,
+            )
+
+            // Kaynak düğmeleri olan film sayfasında fragman iframe'ine düşme.
+            return foundAny
         }
 
         // Eski/alternatif HTML yapısı.
+        var legacySourcesFound = false
         document.select(
             "#movie iframe[src], #movie iframe[data-src], .player iframe[src], " +
                 ".video-player iframe[src], .video-container iframe[src], iframe[src], iframe[data-src]"
@@ -897,11 +922,12 @@ class JetFilmizle : NeonMainAPI() {
                         callback(link)
                     },
                 )
-                if (emitted) return true
+                if (emitted) legacySourcesFound = true
             }.onFailure {
                 Log.e(JET_TAG, "fallback extractor hata: " + it.message)
             }
         }
+        if (legacySourcesFound) return true
 
         document.select("track[src], track[data-src]").forEach { track ->
             val raw = track.attr("src")
