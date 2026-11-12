@@ -20,9 +20,9 @@ Not: Bu rapor kaynak kodunun yapısını ve site HTTP erişimini ölçer; gerçe
 - Load: ✅
 - LoadLinks: ✅
 - Metadata: ✅
-- Video resolver: ❌
-- Subtitles: ❌
-- Cache/fallback: ❌
+- Video resolver: ✅
+- Subtitles: ✅
+- Cache/fallback: ✅
 - TMDB playback yasağı: ✅
 
 Kaynak: JetFilmizle/src/main/kotlin/com/neoncs3/JetFilmizle.kt
