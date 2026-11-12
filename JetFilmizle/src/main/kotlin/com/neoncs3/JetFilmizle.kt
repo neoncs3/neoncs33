@@ -296,8 +296,7 @@ class JetFilmizle : NeonMainAPI() {
         
             },
             document = document,
-            baseUrl = pageUrl,
-        )
+            baseUrl = pageUrl,        )
     }
     override suspend fun loadLinks(
         data: String,
@@ -596,8 +595,7 @@ class JetFilmizle : NeonMainAPI() {
                                     fun resolveVideoParkUrl(raw: String): String? {
                                         val value = raw.trim()
                                         if (value.isBlank()) return null
-                                        return runCatching {
-                                            java.net.URI(baseUrl).resolve(value).toString()
+                                        return runCatching {                                            java.net.URI(baseUrl).resolve(value).toString()
                                         }.getOrNull()?.takeIf { it.startsWith("http", true) }
                                     }
 
@@ -748,20 +746,34 @@ class JetFilmizle : NeonMainAPI() {
                                     )
                                 }
                             } else {
-                            fun jsConstant(constantName: String): String? {
-                                // Player değişkenleri bazen string ("963078"),
-                                // bazen sayısal (20371) olarak tanımlanıyor.
-                                val pattern = Regex(
-                                    """(?:const|let|var)\s+""" +
-                                        Regex.escape(constantName) +
-                                        """\s*=\s*(?:["']([^"']*)["']|([0-9]+))"""
-                                )
-                                val match = pattern.find(playerPageText) ?: return null
-                                return (match.groupValues.getOrNull(1)
-                                    ?.takeIf { it.isNotBlank() }
-                                    ?: match.groupValues.getOrNull(2))
-                                    ?.trim()
-                                    ?.takeIf { it.isNotBlank() }
+                            fun jsConstant(vararg constantNames: String): String? {
+                                // Player sürümleri aynı alanları PUB_ID/pubId veya
+                                // PUBLISHER_ID/publisherId gibi farklı adlarla sunabiliyor.
+                                for (constantName in constantNames) {
+                                    val escapedName = Regex.escape(constantName)
+                                    val declarationPattern = Regex(
+                                        """(?is)(?:const|let|var)\s+""" +
+                                            escapedName +
+                                            """\s*=\s*(?:["']([^"']*)["']|([0-9]+))"""
+                                    )
+                                    val declaration = declarationPattern.find(playerPageText)
+                                    val declaredValue = declaration?.let {
+                                        it.groupValues.getOrNull(1)
+                                            ?.takeIf(String::isNotBlank)
+                                            ?: it.groupValues.getOrNull(2)
+                                    }?.trim()
+                                    if (!declaredValue.isNullOrBlank()) return declaredValue
+
+                                    // Bazı player sürümleri değerleri config nesnesinde tutuyor.
+                                    val objectPattern = Regex(
+                                        """(?is)["']?""" + escapedName +
+                                            """["']?\s*:\s*["']([^"']+)["']"""
+                                    )
+                                    val objectValue = objectPattern.find(playerPageText)
+                                        ?.groupValues?.getOrNull(1)?.trim()
+                                    if (!objectValue.isNullOrBlank()) return objectValue
+                                }
+                                return null
                             }
 
                             fun queryValue(parameter: String): String? {
@@ -841,7 +853,7 @@ class JetFilmizle : NeonMainAPI() {
                                                 url = directUrl,
                                                 type = ExtractorLinkType.VIDEO,
                                             ) {
-                                                referer = playerUrl
+                                                referer = "https://videopark.top/"
                                                 quality = Qualities.Unknown.value
                                             }
                                         )
@@ -857,10 +869,10 @@ class JetFilmizle : NeonMainAPI() {
                                     Log.w(JET_TAG, "GoDrive player içinde VIDEO_ID bulunamadı")
                                 }
                             } else {
-                            val pubId = jsConstant("PUB_ID") ?: queryValue("pubId")
-                            val publisherId = jsConstant("PUBLISHER_ID")
+                            val pubId = jsConstant("PUB_ID", "pubId", "publicationId") ?: queryValue("pubId")
+                            val publisherId = jsConstant("PUBLISHER_ID", "publisherId")
                                 ?: queryValue("publisherId")
-                            val videoTitle = jsConstant("VIDEO_TITLE")
+                            val videoTitle = jsConstant("VIDEO_TITLE", "videoTitle", "title")
                                 ?: videoId
                                 ?: label
                             val workerUrl = jsConstant("WORKER_URL")
@@ -896,12 +908,14 @@ class JetFilmizle : NeonMainAPI() {
                                     "JWPlayer Worker API deneniyor: pubId=" +
                                         (pubId ?: "yok") + " videoId=" + (videoId ?: "yok"),
                                 )
-
                                 val apiText = app.get(
                                     apiUrl,
                                     headers = mapOf(
                                         "User-Agent" to JET_UA,
-                                        "Referer" to playerUrl,
+                                        // VideoPark sayfası Worker API'ye kök sayfa
+                                        // referer'ı ve kendi origin'i ile istek gönderiyor.
+                                        "Referer" to "https://videopark.top/",
+                                        "Origin" to "https://videopark.top",
                                         "Accept" to "application/json,text/plain,*/*",
                                     ),
                                     allowRedirects = true,
@@ -954,7 +968,7 @@ class JetFilmizle : NeonMainAPI() {
                                                     url = fileUrl,
                                                     type = ExtractorLinkType.VIDEO,
                                                 ) {
-                                                    referer = playerUrl
+                                                    referer = "https://videopark.top/"
                                                     quality = getQualityFromName(qualityLabel)
                                                 }
                                             )
@@ -1198,28 +1212,3 @@ class JetFilmizle : NeonMainAPI() {
             runCatching {
                 uniqueSubtitleCallback(
                     SubtitleFile("Türkçe", subUrl)
-                )
-            }
-        }
-
-        val hasTrailerMarkup = document.select(
-            "[id*=trailer i], [class*=trailer i], [id*=fragman i], [class*=fragman i], " +
-                "[data-trailer], .preview, [class*=preview i]"
-        ).isNotEmpty()
-
-        if (!hasTrailerMarkup) {
-            val neonFound = neonResolveLinks(
-                data = data,
-                sourceName = "$name - NeonCore",
-                subtitleCallback = uniqueSubtitleCallback,
-                callback = callback,
-            )
-            if (neonFound) return true
-        } else {
-            Log.d(JET_TAG, "Sayfada ayrı fragman alanı var; ana oynatma için genel sayfa taraması atlandı")
-        }
-
-        return false
-    }
-
-}
