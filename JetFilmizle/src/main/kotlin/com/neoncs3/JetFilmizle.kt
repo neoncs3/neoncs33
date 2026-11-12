@@ -791,7 +791,7 @@ class JetFilmizle : NeonMainAPI() {
                         button.attr("data-player-type").trim() == selectedType
                 }
                 val selectedLabel = selectedButton?.text()?.trim()
-                    ?.ifBlank { null }
+                    ?.takeIf { it.isNotBlank() }
                     ?: "S" + season + "E" + episode + " • " + selectedType
 
                 val key = "$selectedIndex|$selectedType"
@@ -821,8 +821,9 @@ class JetFilmizle : NeonMainAPI() {
             }
 
             // Sayfada kaynak düğmeleri bulunmayan eski HTML için yedek deneme.
-            if (tried.isEmpty() && selectedIndex != null) {
+            if (matchingButtons.isEmpty() && selectedIndex != null) {
                 for (type in listOf(selectedType, "dublaj", "altyazili").distinct()) {
+                    if (type == selectedType) continue
                     if (requestPlayer(
                             selectedIndex,
                             type,
