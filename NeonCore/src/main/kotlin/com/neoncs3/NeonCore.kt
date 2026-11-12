@@ -618,7 +618,7 @@ open class NeonMainAPI : MainAPI() {
         ).distinct()
 
         val youtubePattern = Regex(
-            """(?i)(?:https?:)?//(?:www\.)?(?:youtube\.com/(?:watch\?v=|embed/)|youtu\.be/)[^"'<>\\s]+"""
+            """(?i)(?:https?:)?//(?:www\.)?(?:youtube\.com/(?:watch\?v=|embed/)|youtu\.be/)[^"'<>\s]+"""
         )
 
         for (container in trailerContainers) {
@@ -628,7 +628,7 @@ open class NeonMainAPI : MainAPI() {
                 add(container.selectFirst("iframe[src]")?.attr("src"))
                 add(container.selectFirst("iframe[data-src]")?.attr("data-src"))
                 add(container.selectFirst("a[href]")?.attr("href"))
-                add(youtubePattern.find(container.html().replace("\\\\/", "/"))?.value)
+                add(youtubePattern.find(container.html().replace("\\/", "/"))?.value)
             }
 
             val trailer = candidates.asSequence()
