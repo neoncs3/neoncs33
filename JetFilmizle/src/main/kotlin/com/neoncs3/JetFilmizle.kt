@@ -1242,3 +1242,28 @@ class JetFilmizle : NeonMainAPI() {
             runCatching {
                 uniqueSubtitleCallback(
                     SubtitleFile("Türkçe", subUrl)
+                )
+            }
+        }
+
+        val hasTrailerMarkup = document.select(
+            "[id*=trailer i], [class*=trailer i], [id*=fragman i], [class*=fragman i], " +
+                "[data-trailer], .preview, [class*=preview i]"
+        ).isNotEmpty()
+
+        if (!hasTrailerMarkup) {
+            val neonFound = neonResolveLinks(
+                data = data,
+                sourceName = "$name - NeonCore",
+                subtitleCallback = uniqueSubtitleCallback,
+                callback = callback,
+            )
+            if (neonFound) return true
+        } else {
+            Log.d(JET_TAG, "Sayfada ayrı fragman alanı var; ana oynatma için genel sayfa taraması atlandı")
+        }
+
+        return false
+    }
+
+}
