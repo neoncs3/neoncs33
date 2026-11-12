@@ -416,7 +416,9 @@ class JetFilmizle : NeonMainAPI() {
 
                 val inlinePlayerHtml = responseText.takeIf {
                     it.contains("PUB_ID") || it.contains("WORKER_URL") ||
-                        it.contains("dplayer.erikkalinina1994.workers.dev")
+                        it.contains("dplayer.erikkalinina1994.workers.dev") ||
+                        it.contains("WORKER_BASE") ||
+                        it.contains("godrive.erikkalinina1994.workers.dev")
                 }
 
                 if (iframeSrc.isNullOrBlank() && inlinePlayerHtml.isNullOrBlank()) {
@@ -483,21 +485,29 @@ class JetFilmizle : NeonMainAPI() {
                         ).text
                     }.getOrDefault("")
 
+                    val isGoDrivePlayer =
+                        playerPageText.contains("WORKER_BASE") ||
+                            playerPageText.contains("godrive.erikkalinina1994.workers.dev")
+
                     if (
                         playerPageText.contains("PUB_ID") ||
                         playerPageText.contains("WORKER_URL") ||
-                        playerPageText.contains("dplayer.erikkalinina1994.workers.dev")
+                        playerPageText.contains("dplayer.erikkalinina1994.workers.dev") ||
+                        isGoDrivePlayer
                     ) {
                         try {
                             fun jsConstant(constantName: String): String? {
+                                // Player değişkenleri bazen string ("963078"),
+                                // bazen sayısal (20371) olarak tanımlanıyor.
                                 val pattern = Regex(
                                     """(?:const|let|var)\s+""" +
                                         Regex.escape(constantName) +
-                                        """\s*=\s*["']([^"']*)["']"""
+                                        """\s*=\s*(?:["']([^"']*)["']|([0-9]+))"""
                                 )
-                                return pattern.find(playerPageText)
-                                    ?.groupValues
-                                    ?.getOrNull(1)
+                                val match = pattern.find(playerPageText) ?: return null
+                                return (match.groupValues.getOrNull(1)
+                                    ?.takeIf { it.isNotBlank() }
+                                    ?: match.groupValues.getOrNull(2))
                                     ?.trim()
                                     ?.takeIf { it.isNotBlank() }
                             }
@@ -512,8 +522,90 @@ class JetFilmizle : NeonMainAPI() {
                                     ?.takeIf { it.isNotBlank() }
                             }
 
-                            val pubId = jsConstant("PUB_ID") ?: queryValue("pubId")
                             val videoId = jsConstant("VIDEO_ID") ?: queryValue("id")
+
+                            if (isGoDrivePlayer) {
+                                // İkinci JetFilmizle player: kalite listesi /v/{id}/info
+                                // üzerinden gelir; gerçek video /v/{id}?q={quality} yoludur.
+                                val workerBase = (
+                                    jsConstant("WORKER_BASE")
+                                        ?: "https://godrive.erikkalinina1994.workers.dev"
+                                    ).replace("\\/", "/").trimEnd('/')
+                                val goDriveId = videoId
+
+                                if (!goDriveId.isNullOrBlank()) {
+                                    val infoUrl = workerBase + "/v/" +
+                                        URLEncoder.encode(goDriveId, "UTF-8") + "/info"
+                                    val info = runCatching {
+                                        val infoText = app.get(
+                                            infoUrl,
+                                            headers = mapOf(
+                                                "User-Agent" to JET_UA,
+                                                "Referer" to playerUrl,
+                                                "Accept" to "application/json,text/plain,*/*",
+                                            ),
+                                            allowRedirects = true,
+                                        ).text
+                                        org.json.JSONObject(infoText)
+                                    }.getOrNull()
+
+                                    val qualities = info?.optJSONArray("qualities")
+                                    if (qualities != null && qualities.length() > 0) {
+                                        for (i in 0 until qualities.length()) {
+                                            val quality = qualities.optString(i).trim()
+                                            if (quality.isBlank() || quality == "null") continue
+
+                                            val qualityLabel = if (quality.endsWith("p", true)) {
+                                                quality
+                                            } else {
+                                                quality + "p"
+                                            }
+                                            val fileUrl = workerBase + "/v/" +
+                                                URLEncoder.encode(goDriveId, "UTF-8") +
+                                                "?q=" + URLEncoder.encode(quality, "UTF-8")
+
+                                            callback(
+                                                newExtractorLink(
+                                                    source = name,
+                                                    name = label + " - " + qualityLabel,
+                                                    url = fileUrl,
+                                                    type = ExtractorLinkType.VIDEO,
+                                                ) {
+                                                    referer = playerUrl
+                                                    this.quality = getQualityFromName(qualityLabel)
+                                                }
+                                            )
+                                            emitted = true
+                                        }
+                                    }
+
+                                    if (!emitted) {
+                                        val directUrl = workerBase + "/v/" +
+                                            URLEncoder.encode(goDriveId, "UTF-8")
+                                        callback(
+                                            newExtractorLink(
+                                                source = name,
+                                                name = label + " - MP4",
+                                                url = directUrl,
+                                                type = ExtractorLinkType.VIDEO,
+                                            ) {
+                                                referer = playerUrl
+                                                quality = Qualities.Unknown.value
+                                            }
+                                        )
+                                        emitted = true
+                                    }
+
+                                    Log.d(
+                                        JET_TAG,
+                                        "GoDrive Worker kaynak sonucu: id=" + goDriveId +
+                                            " qualities=" + (qualities?.length() ?: 0),
+                                    )
+                                } else {
+                                    Log.w(JET_TAG, "GoDrive player içinde VIDEO_ID bulunamadı")
+                                }
+                            } else {
+                            val pubId = jsConstant("PUB_ID") ?: queryValue("pubId")
                             val publisherId = jsConstant("PUBLISHER_ID")
                                 ?: queryValue("publisherId")
                             val videoTitle = jsConstant("VIDEO_TITLE")
@@ -620,6 +712,7 @@ class JetFilmizle : NeonMainAPI() {
                                 }
                             } else {
                                 Log.d(JET_TAG, "JWPlayer HTML içinde pubId/videoId bulunamadı")
+                            }
                             }
                         } catch (e: Exception) {
                             Log.e(JET_TAG, "JWPlayer Worker çözümleme hatası: " + e.message)
