@@ -610,13 +610,15 @@ class JetFilmizle : NeonMainAPI() {
                                     }
 
                                     val seenMediaUrls = mutableSetOf<String>()
-                                    val seenSubtitleUrls = mutableSetOf<String>()
+                                    val seenSubtitleLanguages = mutableSetOf<String>()
 
+                                    // Kaynak isimlerini kısa tut: dublaj ve altyazılı
+                                    // akışlar ayrı, anlaşılır seçenekler olarak görünür.
                                     for ((streamMode, payload) in streamPayloads) {
                                         val modeLabel = if (streamMode == "dub") {
-                                            "TR Dublaj"
+                                            "Dublaj"
                                         } else {
-                                            "Orijinal / Altyazı"
+                                            "Altyazılı"
                                         }
 
                                         val sources = payload.optJSONArray("sources")
@@ -635,15 +637,15 @@ class JetFilmizle : NeonMainAPI() {
                                                 } else {
                                                     ExtractorLinkType.VIDEO
                                                 }
-                                                val qualityLabel = sourceObject.optString("label")
-                                                    .trim()
-                                                    .ifBlank { if (isHls) "HLS" else "Video" }
+                                                val rawQuality = sourceObject.optString("label").trim()
+                                                val qualityLabel = rawQuality
+                                                    .takeIf { it.isNotBlank() }
+                                                    ?: if (isHls) "Otomatik" else "Video"
 
                                                 callback(
                                                     newExtractorLink(
                                                         source = name,
-                                                        name = label + " - VideoPark - " +
-                                                            modeLabel + " - " + qualityLabel,
+                                                        name = "VideoPark • " + modeLabel + " • " + qualityLabel,
                                                         url = mediaUrl,
                                                         type = linkType,
                                                     ) {
@@ -654,22 +656,37 @@ class JetFilmizle : NeonMainAPI() {
                                                 emitted = true
                                             }
                                         }
+                                    }
 
-                                        val tracks = payload.optJSONArray("tracks")
-                                        if (tracks != null) {
-                                            for (index in 0 until tracks.length()) {
-                                                val track = tracks.optJSONObject(index) ?: continue
-                                                val rawTrack = track.optString("file").trim()
-                                                val trackUrl = resolveVideoParkUrl(rawTrack) ?: continue
-                                                if (!seenSubtitleUrls.add(trackUrl)) continue
+                                    // Altyazı listesine yalnızca altyazılı akışın
+                                    // parçalarını ekle. Dublaj JSON'undaki kopyalar
+                                    // CloudStream menüsünü gereksiz yere çoğaltmasın.
+                                    val subtitlePayload = streamPayloads.firstOrNull { (mode, payload) ->
+                                        mode == "sub" && (payload.optJSONArray("tracks")?.length() ?: 0) > 0
+                                    }?.second ?: streamPayloads.firstOrNull { (_, payload) ->
+                                        (payload.optJSONArray("tracks")?.length() ?: 0) > 0
+                                    }?.second
 
-                                                val trackLabel = track.optString("label").trim()
-                                                    .ifBlank { track.optString("lang").uppercase() }
-                                                    .ifBlank { "Altyazı" }
-                                                subtitleCallback(
-                                                    SubtitleFile(modeLabel + " - " + trackLabel, trackUrl)
-                                                )
+                                    val tracks = subtitlePayload?.optJSONArray("tracks")
+                                    if (tracks != null) {
+                                        for (index in 0 until tracks.length()) {
+                                            val track = tracks.optJSONObject(index) ?: continue
+                                            val rawTrack = track.optString("file").trim()
+                                            val trackUrl = resolveVideoParkUrl(rawTrack) ?: continue
+
+                                            val rawLang = track.optString("lang").trim().lowercase()
+                                            val rawLabel = track.optString("label").trim()
+                                            val trackLabel = when (rawLang) {
+                                                "tr", "tr-tr", "tur", "turkish" -> "Türkçe"
+                                                "en", "en-us", "eng", "english" -> "English"
+                                                else -> rawLabel.ifBlank {
+                                                    rawLang.uppercase().ifBlank { "Altyazı" }
+                                                }
                                             }
+                                            val subtitleKey = trackLabel.lowercase()
+                                            if (!seenSubtitleLanguages.add(subtitleKey)) continue
+
+                                            subtitleCallback(SubtitleFile(trackLabel, trackUrl))
                                         }
                                     }
 
@@ -677,7 +694,7 @@ class JetFilmizle : NeonMainAPI() {
                                         JET_TAG,
                                         "VideoPark kaynakları: akış=" + streamPayloads.size +
                                             " medya=" + seenMediaUrls.size +
-                                            " altyazı=" + seenSubtitleUrls.size,
+                                            " altyazı=" + seenSubtitleLanguages.size,
                                     )
                                 }
                             } else {
