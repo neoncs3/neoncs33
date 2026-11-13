@@ -30,6 +30,8 @@ import org.jsoup.nodes.Element
 import java.net.URLEncoder
 
 private const val JET_TAG = "JetFilmizle"
+private const val JET_REQUEST_TIMEOUT_MS = 15_000L
+private const val JET_PLAYER_TIMEOUT_MS = 12_000L
 private const val JET_UA =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
         "(KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
@@ -83,6 +85,7 @@ class JetFilmizle : NeonMainAPI() {
                 url,
                 headers = pageHeaders,
                 referer = "$mainUrl/",
+                timeout = JET_REQUEST_TIMEOUT_MS,
                 allowRedirects = true,
             ).document
         }.getOrNull() ?: return newHomePageResponse(
@@ -160,6 +163,7 @@ class JetFilmizle : NeonMainAPI() {
                 "$mainUrl/arama-json?q=$encoded",
                 headers = pageHeaders,
                 referer = "$mainUrl/",
+                timeout = JET_REQUEST_TIMEOUT_MS,
             ).text
         }.getOrNull() ?: return emptyList()
 
@@ -204,7 +208,13 @@ class JetFilmizle : NeonMainAPI() {
         val pageUrl = fixUrlNull(url) ?: return null
 
         val document = runCatching {
-            app.get(pageUrl, headers = pageHeaders, referer = mainUrl + "/", allowRedirects = true).document
+            app.get(
+                pageUrl,
+                headers = pageHeaders,
+                referer = mainUrl + "/",
+                timeout = JET_REQUEST_TIMEOUT_MS,
+                allowRedirects = true,
+            ).document
         }.getOrNull() ?: return null
 
         val title = sequenceOf(
@@ -305,20 +315,41 @@ class JetFilmizle : NeonMainAPI() {
 
         // Farklı player'ların aynı dil altyazısını tekrar tekrar eklemesini önle.
         // Bir içerik için dil başına tek bir temiz altyazı seçeneği göster.
-        val sentSubtitleLanguages = mutableSetOf<String>()
-        val uniqueSubtitleCallback: (SubtitleFile) -> Unit = { subtitle ->
-            val subtitleName = subtitle.lang.trim()
-            val normalizedName = subtitleName.lowercase()
-            val languageKey = when {
-                normalizedName.contains("türk") || normalizedName.contains("turk") ||
-                    normalizedName == "tr" || normalizedName.contains("turkish") -> "tr"
-                normalizedName == "en" || normalizedName.contains("english") -> "en"
-                else -> normalizedName
+        fun normalizeSubtitleLabel(raw: String): String {
+            val value = raw.trim()
+            val key = value.lowercase().replace('_', '-').substringBefore(' ')
+            return when {
+                key in setOf("tr", "tr-tr", "tur", "turkish", "türkçe", "turkce") ||
+                    value.contains("türk", true) || value.contains("turkish", true) -> "Türkçe"
+                key in setOf("en", "en-us", "en-gb", "eng", "english") ||
+                    value.contains("english", true) -> "English"
+                key in setOf("de", "de-de", "ger", "deu", "german") -> "Deutsch"
+                key in setOf("fr", "fr-fr", "fre", "fra", "french") -> "Français"
+                key in setOf("es", "es-es", "spa", "spanish") -> "Español"
+                key in setOf("pt", "pt-br", "por", "portuguese") -> "Português"
+                key in setOf("ar", "ara", "arabic") -> "العربية"
+                key in setOf("ru", "rus", "russian") -> "Русский"
+                else -> value
                     .replace(Regex("""\s*[\(\[].*?[\)\]]\s*"""), "")
                     .trim()
+                    .ifBlank { "Altyazı" }
             }
-            if (languageKey.isNotBlank() && sentSubtitleLanguages.add(languageKey)) {
-                subtitleCallback(subtitle)
+        }
+
+        // Bir içerikte aynı dili ve aynı altyazı URL'sini birden fazla kez gösterme.
+        val sentSubtitleLanguages = mutableSetOf<String>()
+        val sentSubtitleUrls = mutableSetOf<String>()
+        val uniqueSubtitleCallback: (SubtitleFile) -> Unit = { subtitle ->
+            val subtitleLabel = normalizeSubtitleLabel(subtitle.lang)
+            val languageKey = subtitleLabel.lowercase()
+            val urlKey = subtitle.url.trim()
+            if (
+                languageKey.isNotBlank() &&
+                urlKey.isNotBlank() &&
+                sentSubtitleLanguages.add(languageKey) &&
+                sentSubtitleUrls.add(urlKey)
+            ) {
+                subtitleCallback(SubtitleFile(subtitleLabel, urlKey))
             }
         }
 
@@ -334,11 +365,13 @@ class JetFilmizle : NeonMainAPI() {
         // Tek bölüm URL'si artık kaynak indeksini taşımaz; bütün
         // oynatma kaynakları aşağıda aynı bölüm için toplanır.
         val episodeMode = data.contains("sezon=") && data.contains("bolum=")
+        val attemptedPlayerUrls = mutableSetOf<String>()
 
         var pageResponse = runCatching {
             app.get(
                 data,
                 headers = pageHeaders + mapOf("Referer" to "$mainUrl/"),
+                timeout = JET_REQUEST_TIMEOUT_MS,
                 allowRedirects = true,
             )
         }.getOrNull() ?: return false
@@ -360,6 +393,7 @@ class JetFilmizle : NeonMainAPI() {
                 app.get(
                     baseUrl,
                     headers = pageHeaders + mapOf("Referer" to "$mainUrl/"),
+                    timeout = JET_REQUEST_TIMEOUT_MS,
                     allowRedirects = true,
                 )
             }.getOrNull() ?: return false
@@ -416,6 +450,7 @@ class JetFilmizle : NeonMainAPI() {
                         "source_index" to sourceIndex.toString(),
                         "player_type" to playerType,
                     ),
+                    timeout = JET_REQUEST_TIMEOUT_MS,
                     allowRedirects = true,
                 ).text
 
@@ -475,6 +510,10 @@ class JetFilmizle : NeonMainAPI() {
                 }
 
                 Log.d(JET_TAG, "player bulundu [" + label + "]: " + playerUrl)
+                if (!attemptedPlayerUrls.add(playerUrl)) {
+                    Log.d(JET_TAG, "Aynı player URL daha önce denendi; yinelenen istek atlandı")
+                    return false
+                }
 
                 var emitted = false
 
@@ -507,17 +546,28 @@ class JetFilmizle : NeonMainAPI() {
                 } else {
                     // Yeni JetFilmizle JWPlayer sayfası, medya URL'lerini
                     // dplayer Worker API'sinden JSON olarak alıyor.
-                    val playerPageText = inlinePlayerHtml ?: runCatching {
-                        app.get(
-                            playerUrl,
-                            headers = mapOf(
-                                "User-Agent" to JET_UA,
-                                "Referer" to data,
-                                "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                            ),
-                            allowRedirects = true,
-                        ).text
-                    }.getOrDefault("")
+                    val isVideoParkGoPlayer =
+                        playerUrl.contains("videopark.top", true) &&
+                            playerUrl.contains("/go/", true)
+
+                    // VideoPark /go/ sayfası doğrudan açıldığında ana sayfaya yönlenebiliyor.
+                    // Doğrulanmış Worker API'ye doğrudan gitmek fazladan HTML isteğini önler.
+                    val playerPageText = inlinePlayerHtml ?: if (isVideoParkGoPlayer) {
+                        ""
+                    } else {
+                        runCatching {
+                            app.get(
+                                playerUrl,
+                                headers = mapOf(
+                                    "User-Agent" to JET_UA,
+                                    "Referer" to data,
+                                    "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                                ),
+                                timeout = JET_PLAYER_TIMEOUT_MS,
+                                allowRedirects = true,
+                            ).text
+                        }.getOrDefault("")
+                    }
 
                     val isGoDrivePlayer =
                         playerPageText.contains("WORKER_BASE") ||
@@ -534,7 +584,8 @@ class JetFilmizle : NeonMainAPI() {
 
                     val isVideoParkHost = playerUrl.contains("videopark.top", true)
                     val isDPlayerWorkerPlayer =
-                        playerPageText.contains("dplayer.erikkalinina1994.workers.dev", true) ||
+                        isVideoParkGoPlayer ||
+                            playerPageText.contains("dplayer.erikkalinina1994.workers.dev", true) ||
                             playerPageText.contains("api/stream?pubId", true) ||
                             Regex(
                                 """(?is)(?:const|let|var)\s+(?:PUB_ID|pubId|PUBLISHER_ID|publisherId)\s*="""
