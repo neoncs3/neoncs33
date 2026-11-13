@@ -297,8 +297,7 @@ class JetFilmizle : NeonMainAPI() {
             },
             document = document,
             baseUrl = pageUrl,        )
-    }
-    override suspend fun loadLinks(
+    }    override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
@@ -525,18 +524,35 @@ class JetFilmizle : NeonMainAPI() {
                     val isGoDrivePlayer =
                         playerPageText.contains("WORKER_BASE") ||
                             playerPageText.contains("godrive.erikkalinina1994.workers.dev")
+
+                    // VideoPark alan adı artık iki farklı oynatıcı için kullanılıyor:
+                    // eski VideoPark initial/api.php ve yeni DPlayer Worker API.
+                    // DPlayer imzası varsa host adına bakmadan doğru Worker yoluna gir.
+                    val isDPlayerWorkerPlayer =
+                        playerPageText.contains("dplayer.erikkalinina1994.workers.dev", true) ||
+                            playerPageText.contains("api/stream?pubId", true) ||
+                            Regex(
+                                """(?is)(?:const|let|var)\\s+(?:PUB_ID|pubId|PUBLISHER_ID|publisherId)\\s*="""
+                            ).containsMatchIn(playerPageText)
+
+                    val hasLegacyVideoParkConfig =
+                        Regex("""(?is)(?:const|let|var)\\s+initial\\s*=""")
+                            .containsMatchIn(playerPageText) &&
+                            (playerPageText.contains("has_dub") ||
+                                playerPageText.contains("vsrc.top", true) ||
+                                playerPageText.contains("api.php?action=stream", true))
+
                     val isVideoParkPlayer =
-                        playerUrl.contains("videopark.top", true) ||
-                            playerPageText.contains("videopark.top", true) ||
-                            playerPageText.contains("vsrc.top/you/p/", true) ||
-                            (playerPageText.contains("const initial") &&
-                                playerPageText.contains("api.php?action=stream"))
+                        !isDPlayerWorkerPlayer &&
+                            (playerUrl.contains("videopark.top", true) ||
+                                playerPageText.contains("vsrc.top/you/p/", true) ||
+                                hasLegacyVideoParkConfig)
 
                     if (
                         isVideoParkPlayer ||
+                        isDPlayerWorkerPlayer ||
                         playerPageText.contains("PUB_ID") ||
                         playerPageText.contains("WORKER_URL") ||
-                        playerPageText.contains("dplayer.erikkalinina1994.workers.dev") ||
                         isGoDrivePlayer
                     ) {
                         try {
@@ -598,7 +614,6 @@ class JetFilmizle : NeonMainAPI() {
                                         return runCatching {                                            java.net.URI(baseUrl).resolve(value).toString()
                                         }.getOrNull()?.takeIf { it.startsWith("http", true) }
                                     }
-
                                     val initialLanguage = initial.optString("lang").trim().lowercase()
                                     val initialMode = if (initialLanguage == "dub") "dub" else "sub"
                                     val hasDub = initial.optBoolean("has_dub", initialMode == "dub")
@@ -898,7 +913,6 @@ class JetFilmizle : NeonMainAPI() {
                                         "/api/video?id=" +
                                         URLEncoder.encode(videoId, "UTF-8")
                                 }
-
                                 else -> ""
                             }
 
@@ -1018,7 +1032,9 @@ class JetFilmizle : NeonMainAPI() {
 
                     if (emitted) {
                         Log.d(JET_TAG, "Player kaynakları başarıyla alındı: " + label)
-                    } else if (!isGoDrivePlayer && !isVideoParkPlayer) {
+                    } else if (
+                        !isGoDrivePlayer && !isVideoParkPlayer && !isDPlayerWorkerPlayer
+                    ) {
                         // Eski iframe sağlayıcıları için extractor yedeği.
                         // GoDrive bilinen bir player ise sayfayı genel extractor'a
                         // vermeyip fragman veya HTML içeriğinin ana video sayılmasını önle.
@@ -1035,7 +1051,11 @@ class JetFilmizle : NeonMainAPI() {
                         Log.w(
                             JET_TAG,
                             "Bilinen player kaynağı alınamadı; yanlış fragman yedeği açılmayacak: " +
-                                if (isVideoParkPlayer) "VideoPark" else "GoDrive",
+                                when {
+                                    isVideoParkPlayer -> "VideoPark"
+                                    isDPlayerWorkerPlayer -> "DPlayer Worker"
+                                    else -> "GoDrive"
+                                },
                         )
                     }
                 }
@@ -1197,8 +1217,7 @@ class JetFilmizle : NeonMainAPI() {
                     append(current.id())
                     append(' ')
                     append(current.className())
-                    append(' ')
-                    append(current.attr("data-role"))
+                    append(' ')                    append(current.attr("data-role"))
                     append(' ')
                     node = current.parent()
                 }
