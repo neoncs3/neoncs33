@@ -297,8 +297,7 @@ class JetFilmizle : NeonMainAPI() {
             },
             document = document,
             baseUrl = pageUrl,        )
-    }    override suspend fun loadLinks(        data: String,
-        isCasting: Boolean,
+    }    override suspend fun loadLinks(        data: String,        isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
@@ -540,9 +539,12 @@ class JetFilmizle : NeonMainAPI() {
                             Regex(
                                 """(?is)(?:const|let|var)\s+(?:PUB_ID|pubId|PUBLISHER_ID|publisherId)\s*="""
                             ).containsMatchIn(playerPageText) ||
-                            // VideoPark'ın yeni /go/?id= oynatıcısı DPlayer Worker kullanıyor.
-                            // Harici player scripti HTML'de görünmese bile yanlış eski API'ye gitme.
-                            (isVideoParkHost && !hasLegacyVideoParkConfig)
+                            // Tarayıcıda doğrulanan /go/?id= isteği DPlayer Worker'a gidiyor.
+                            // Harici player scripti HTML'de görünmese veya eski değişkenler
+                            // yanında bulunsa bile bu URL'yi DPlayer API'sine yönlendir.
+                            (isVideoParkHost &&
+                                (playerUrl.contains("/go/", true) ||
+                                    !hasLegacyVideoParkConfig))
 
                     val isVideoParkPlayer =
                         !isDPlayerWorkerPlayer &&
@@ -597,8 +599,7 @@ class JetFilmizle : NeonMainAPI() {
                                                 }
                                             }
                                         }
-                                    }
-                                    return null
+                                    }                                    return null
                                 }
                                 val initial = extractInitialPayload(playerPageText)
                                 if (initial == null) {
@@ -897,8 +898,7 @@ class JetFilmizle : NeonMainAPI() {
                                 ?: if (isVideoParkHost) "688dd580384ba8406f5a4c3a" else null
                             val videoTitle = jsConstant("VIDEO_TITLE", "videoTitle", "title")
                                 ?: videoId
-                                ?: label
-                            val workerUrl = jsConstant("WORKER_URL")
+                                ?: label                            val workerUrl = jsConstant("WORKER_URL")
                                 ?: "https://dplayer.erikkalinina1994.workers.dev"
 
                             val apiUrl = when {
@@ -1197,8 +1197,7 @@ class JetFilmizle : NeonMainAPI() {
                 }
             }
 
-            Log.d(
-                JET_TAG,
+            Log.d(                JET_TAG,
                 "Film kaynakları: denenen=" + tried.size + " bulunan=" + foundAny,
             )
 
