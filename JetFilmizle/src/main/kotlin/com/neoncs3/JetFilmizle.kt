@@ -346,9 +346,10 @@ class JetFilmizle : NeonMainAPI() {
             if (
                 languageKey.isNotBlank() &&
                 urlKey.isNotBlank() &&
-                sentSubtitleLanguages.add(languageKey) &&
+                languageKey !in sentSubtitleLanguages &&
                 sentSubtitleUrls.add(urlKey)
             ) {
+                sentSubtitleLanguages.add(languageKey)
                 subtitleCallback(SubtitleFile(subtitleLabel, urlKey))
             }
         }
@@ -1298,7 +1299,8 @@ class JetFilmizle : NeonMainAPI() {
                 }
             }
 
-            Log.d(                JET_TAG,
+            Log.d(
+                JET_TAG,
                 "Film kaynakları: denenen=" + tried.size + " bulunan=" + foundAny,
             )
 
