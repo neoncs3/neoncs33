@@ -33,6 +33,9 @@ jobs:
       - name: Python sözdizimi
         run: python3 -m compileall -q tools KONTROL.py
 
+      - name: JetFilmizle oynatıcı parser testi
+        run: python3 tools/jetfilmizle_player_health.py --self-test
+
       - name: Sağlık sistemi yapısal kontrolü
         run: |
           test -f tools/provider_health.py
