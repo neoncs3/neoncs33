@@ -297,8 +297,7 @@ class JetFilmizle : NeonMainAPI() {
             },
             document = document,
             baseUrl = pageUrl,        )
-    }    override suspend fun loadLinks(
-        data: String,
+    }    override suspend fun loadLinks(        data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
@@ -527,14 +526,6 @@ class JetFilmizle : NeonMainAPI() {
 
                     // VideoPark alan adı artık iki farklı oynatıcı için kullanılıyor:
                     // eski VideoPark initial/api.php ve yeni DPlayer Worker API.
-                    // DPlayer imzası varsa host adına bakmadan doğru Worker yoluna gir.
-                    val isDPlayerWorkerPlayer =
-                        playerPageText.contains("dplayer.erikkalinina1994.workers.dev", true) ||
-                            playerPageText.contains("api/stream?pubId", true) ||
-                            Regex(
-                                """(?is)(?:const|let|var)\s+(?:PUB_ID|pubId|PUBLISHER_ID|publisherId)\s*="""
-                            ).containsMatchIn(playerPageText)
-
                     val hasLegacyVideoParkConfig =
                         Regex("""(?is)(?:const|let|var)\s+initial\s*=""")
                             .containsMatchIn(playerPageText) &&
@@ -542,11 +533,22 @@ class JetFilmizle : NeonMainAPI() {
                                 playerPageText.contains("vsrc.top", true) ||
                                 playerPageText.contains("api.php?action=stream", true))
 
+                    val isVideoParkHost = playerUrl.contains("videopark.top", true)
+                    val isDPlayerWorkerPlayer =
+                        playerPageText.contains("dplayer.erikkalinina1994.workers.dev", true) ||
+                            playerPageText.contains("api/stream?pubId", true) ||
+                            Regex(
+                                """(?is)(?:const|let|var)\s+(?:PUB_ID|pubId|PUBLISHER_ID|publisherId)\s*="""
+                            ).containsMatchIn(playerPageText) ||
+                            // VideoPark'ın yeni /go/?id= oynatıcısı DPlayer Worker kullanıyor.
+                            // Harici player scripti HTML'de görünmese bile yanlış eski API'ye gitme.
+                            (isVideoParkHost && !hasLegacyVideoParkConfig)
+
                     val isVideoParkPlayer =
                         !isDPlayerWorkerPlayer &&
-                            (playerUrl.contains("videopark.top", true) ||
-                                playerPageText.contains("vsrc.top/you/p/", true) ||
-                                hasLegacyVideoParkConfig)
+                            (playerPageText.contains("vsrc.top/you/p/", true) ||
+                                hasLegacyVideoParkConfig ||
+                                isVideoParkHost)
 
                     if (
                         isVideoParkPlayer ||
@@ -598,7 +600,6 @@ class JetFilmizle : NeonMainAPI() {
                                     }
                                     return null
                                 }
-
                                 val initial = extractInitialPayload(playerPageText)
                                 if (initial == null) {
                                     Log.w(JET_TAG, "VideoPark initial JSON bulunamadı: " + playerUrl)
@@ -884,9 +885,16 @@ class JetFilmizle : NeonMainAPI() {
                                     Log.w(JET_TAG, "GoDrive player içinde VIDEO_ID bulunamadı")
                                 }
                             } else {
-                            val pubId = jsConstant("PUB_ID", "pubId", "publicationId") ?: queryValue("pubId")
+                            val isVideoParkHost = playerUrl.contains("videopark.top", true)
+                            // Bu iki kimlik, tarayıcıdan alınan başarılı /api/stream
+                            // isteğinde doğrulandı. HTML/JS değişirse yalnızca VideoPark
+                            // için yedek olarak kullan; diğer DPlayer sağlayıcılarını etkileme.
+                            val pubId = jsConstant("PUB_ID", "pubId", "publicationId")
+                                ?: queryValue("pubId")
+                                ?: if (isVideoParkHost) "689017f7e019e64194db2cf6" else null
                             val publisherId = jsConstant("PUBLISHER_ID", "publisherId")
                                 ?: queryValue("publisherId")
+                                ?: if (isVideoParkHost) "688dd580384ba8406f5a4c3a" else null
                             val videoTitle = jsConstant("VIDEO_TITLE", "videoTitle", "title")
                                 ?: videoId
                                 ?: label
@@ -897,8 +905,7 @@ class JetFilmizle : NeonMainAPI() {
                                 !pubId.isNullOrBlank() -> {
                                     workerUrl.trimEnd('/') +
                                         "/api/stream?pubId=" +
-                                        URLEncoder.encode(pubId, "UTF-8") +
-                                        "&title=" +
+                                        URLEncoder.encode(pubId, "UTF-8") +                                        "&title=" +
                                         URLEncoder.encode(videoTitle, "UTF-8") +
                                         if (!publisherId.isNullOrBlank()) {
                                             "&publisherId=" +
@@ -1198,7 +1205,6 @@ class JetFilmizle : NeonMainAPI() {
             // Kaynak düğmeleri olan film sayfasında fragman iframe'ine düşme.
             return foundAny
         }
-
         // Eski/alternatif HTML yapısı.
         var legacySourcesFound = false
         document.select(
