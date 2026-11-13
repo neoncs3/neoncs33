@@ -599,7 +599,8 @@ class JetFilmizle : NeonMainAPI() {
                                                 }
                                             }
                                         }
-                                    }                                    return null
+                                    }
+                                    return null
                                 }
                                 val initial = extractInitialPayload(playerPageText)
                                 if (initial == null) {
@@ -898,14 +899,16 @@ class JetFilmizle : NeonMainAPI() {
                                 ?: if (isVideoParkHost) "688dd580384ba8406f5a4c3a" else null
                             val videoTitle = jsConstant("VIDEO_TITLE", "videoTitle", "title")
                                 ?: videoId
-                                ?: label                            val workerUrl = jsConstant("WORKER_URL")
+                                ?: label
+                            val workerUrl = jsConstant("WORKER_URL")
                                 ?: "https://dplayer.erikkalinina1994.workers.dev"
 
                             val apiUrl = when {
                                 !pubId.isNullOrBlank() -> {
                                     workerUrl.trimEnd('/') +
                                         "/api/stream?pubId=" +
-                                        URLEncoder.encode(pubId, "UTF-8") +                                        "&title=" +
+                                        URLEncoder.encode(pubId, "UTF-8") +
+                                        "&title=" +
                                         URLEncoder.encode(videoTitle, "UTF-8") +
                                         if (!publisherId.isNullOrBlank()) {
                                             "&publisherId=" +
@@ -1222,7 +1225,8 @@ class JetFilmizle : NeonMainAPI() {
                     append(current.id())
                     append(' ')
                     append(current.className())
-                    append(' ')                    append(current.attr("data-role"))
+                    append(' ')
+                    append(current.attr("data-role"))
                     append(' ')
                     node = current.parent()
                 }
