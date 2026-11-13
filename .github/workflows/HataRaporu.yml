@@ -2,13 +2,12 @@ name: Otomatik Hata Raporu
 
 on:
   workflow_run:
+    # Yalnızca ana derleme ve gerçek oynatma sonucunu izle.
+    # Sağlık/kalite/domain yardımcı iş akışlarının her tamamlanışında
+    # gereksiz rapor çalışması oluşturulmasın.
     workflows:
       - CloudStream Derleyici
       - NeonCS Gerçek Oynatma Testi
-      - NeonCS Sağlık Kontrolü
-      - NeonCS Kalite Kontrolü
-      - Domain Değişiklik Kontrolü
-      - Otomatik Eklenti Oluşturucu
     types:
       - completed
     branches:
@@ -20,7 +19,9 @@ permissions:
   issues: write
 
 concurrency:
-  group: neon-error-report-${{ github.event.workflow_run.name }}-${{ github.event.workflow_run.head_branch }}
+  # Tüm hata raporları tek grupta çalışsın; farklı workflow adları paralel
+  # rapor job'ları başlatamasın. Devam eden gerçek rapor iptal edilmez.
+  group: neon-error-report-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
