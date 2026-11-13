@@ -11,6 +11,7 @@ on:
       - "**/*.kt"
       - "NeonCore/**"
       - "tools/provider_health.py"
+      - "tools/jetfilmizle_player_health.py"
       - "KONTROL.py"
       - ".github/workflows/Saglik.yml"
       - "repo.json"
@@ -44,12 +45,18 @@ jobs:
       - name: Provider sağlık testi
         run: python3 tools/provider_health.py
 
+      - name: JetFilmizle oynatıcı API kontrolü
+        run: python3 tools/jetfilmizle_player_health.py
+
       - name: GitHub Step Summary
         if: always()
         shell: bash
         run: |
           if [ -f health-status/index.md ]; then
             cat health-status/index.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f health-status/jetfilmizle-player.md ]; then
+            cat health-status/jetfilmizle-player.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Sağlık raporunu commit et
