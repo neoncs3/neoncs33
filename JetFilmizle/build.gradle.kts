@@ -1,4 +1,4 @@
-version = 39
+version = 40
 
 cloudstream {
     description = "Jet Film - Türkçe dublajlı ve altyazılı film sağlayıcısı"
