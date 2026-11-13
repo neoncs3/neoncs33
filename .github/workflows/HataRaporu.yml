@@ -8,6 +8,7 @@ on:
     workflows:
       - CloudStream Derleyici
       - NeonCS Gerçek Oynatma Testi
+      - NeonCS Kalite Kontrolü
     types:
       - completed
     branches:
