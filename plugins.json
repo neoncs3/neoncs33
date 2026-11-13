@@ -23,10 +23,10 @@
     },
     {
         "iconUrl": "https://raw.githubusercontent.com/neoncs3/neoncs33/master/1792415151509.jpg?v=18",
-        "fileHash": "sha256-46d20df80048fd979b1352ecad30d7d8d383727bababc76634af1b7d6c071eb7",
+        "fileHash": "sha256-c6588163ab653d59ef366fe3d749df0afe171ccb1f75fae5c0d75211a9d514fc",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 922525,
+        "fileSize": 926722,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -40,7 +40,7 @@
             "Torrent",
             "NSFW"
         ],
-        "version": 39,
+        "version": 40,
         "internalName": "NeonHub",
         "description": "NeonHub \u2014 neoncs3 sa\u011flay\u0131c\u0131lar\u0131n\u0131n tek eklentide birle\u015ftirilmi\u015f s\u00fcr\u00fcm\u00fc",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/NeonHub.cs3",
