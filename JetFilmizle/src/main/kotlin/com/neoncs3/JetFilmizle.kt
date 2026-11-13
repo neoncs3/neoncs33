@@ -569,6 +569,26 @@ class JetFilmizle : NeonMainAPI() {
                         }.getOrDefault("")
                     }
 
+                    if (playerPageText.isNotBlank()) {
+                        org.jsoup.Jsoup.parse(playerPageText).select(
+                            "track[src], track[data-src], track[data-subtitle]"
+                        ).forEach { track ->
+                            val trackUrl = sequenceOf(
+                                track.attr("src"),
+                                track.attr("data-src"),
+                                track.attr("data-subtitle"),
+                            ).firstOrNull { it.isNotBlank() }?.let(::fixUrlNull) ?: return@forEach
+                            val trackLabel = sequenceOf(
+                                track.attr("srclang"),
+                                track.attr("lang"),
+                                track.attr("label"),
+                            ).firstOrNull { it.isNotBlank() } ?: "Türkçe"
+                            uniqueSubtitleCallback(
+                                SubtitleFile(normalizeSubtitleLabel(trackLabel), trackUrl)
+                            )
+                        }
+                    }
+
                     val isGoDrivePlayer =
                         playerPageText.contains("WORKER_BASE") ||
                             playerPageText.contains("godrive.erikkalinina1994.workers.dev")
@@ -702,6 +722,7 @@ class JetFilmizle : NeonMainAPI() {
                                                         "Referer" to playerUrl,
                                                         "Accept" to "application/json,text/plain,*/*",
                                                     ),
+                                                    timeout = JET_PLAYER_TIMEOUT_MS,
                                                     allowRedirects = true,
                                                 ).text
                                                 org.json.JSONObject(apiText)
@@ -793,13 +814,9 @@ class JetFilmizle : NeonMainAPI() {
 
                                             val rawLang = track.optString("lang").trim().lowercase()
                                             val rawLabel = track.optString("label").trim()
-                                            val trackLabel = when (rawLang) {
-                                                "tr", "tr-tr", "tur", "turkish" -> "Türkçe"
-                                                "en", "en-us", "eng", "english" -> "English"
-                                                else -> rawLabel.ifBlank {
-                                                    rawLang.uppercase().ifBlank { "Altyazı" }
-                                                }
-                                            }
+                                            val trackLabel = normalizeSubtitleLabel(
+                                                rawLang.ifBlank { rawLabel.ifBlank { "Altyazı" } }
+                                            )
                                             val subtitleKey = trackLabel.lowercase()
                                             if (!seenSubtitleLanguages.add(subtitleKey)) continue
 
@@ -877,6 +894,7 @@ class JetFilmizle : NeonMainAPI() {
                                                 "Referer" to playerUrl,
                                                 "Accept" to "application/json,text/plain,*/*",
                                             ),
+                                            timeout = JET_PLAYER_TIMEOUT_MS,
                                             allowRedirects = true,
                                         ).text
                                         org.json.JSONObject(infoText)
@@ -993,6 +1011,7 @@ class JetFilmizle : NeonMainAPI() {
                                         "Origin" to "https://videopark.top",
                                         "Accept" to "application/json,text/plain,*/*",
                                     ),
+                                    timeout = JET_PLAYER_TIMEOUT_MS,
                                     allowRedirects = true,
                                 ).text
 
@@ -1051,6 +1070,33 @@ class JetFilmizle : NeonMainAPI() {
                                                 }
                                             )
                                             emitted = true
+                                        }
+                                    }
+
+                                    val workerTracks = payload.optJSONArray("tracks")
+                                    if (workerTracks != null) {
+                                        for (i in 0 until workerTracks.length()) {
+                                            val track = workerTracks.optJSONObject(i) ?: continue
+                                            val trackUrl = sequenceOf(
+                                                track.optString("file"),
+                                                track.optString("src"),
+                                                track.optString("url"),
+                                            ).firstOrNull { it.startsWith("http", true) } ?: continue
+                                            val kind = track.optString("kind").lowercase()
+                                            if (kind.isNotBlank() &&
+                                                !kind.contains("subtitle") &&
+                                                !kind.contains("caption")
+                                            ) continue
+                                            val language = sequenceOf(
+                                                track.optString("lang"),
+                                                track.optString("srclang"),
+                                                track.optString("language"),
+                                                track.optString("label"),
+                                            ).firstOrNull { it.isNotBlank() && it != "null" }
+                                                ?: "Türkçe"
+                                            uniqueSubtitleCallback(
+                                                SubtitleFile(normalizeSubtitleLabel(language), trackUrl)
+                                            )
                                         }
                                     }
 
@@ -1224,7 +1270,8 @@ class JetFilmizle : NeonMainAPI() {
                 "Bölüm kaynakları: S" + season + "E" + episode +
                     " denenen=" + tried.size + " bulunan=" + foundAny,
             )
-            return foundAny
+            if (foundAny) return true
+            Log.w(JET_TAG, "Bölüm kaynakları başarısız; sayfa iframe ve NeonCore yedekleri deneniyor")
         }
 
         // Film: doğrudan sayfadaki kaynakları önce dene.
@@ -1256,7 +1303,8 @@ class JetFilmizle : NeonMainAPI() {
             )
 
             // Kaynak düğmeleri olan film sayfasında fragman iframe'ine düşme.
-            return foundAny
+            if (foundAny) return true
+            Log.w(JET_TAG, "Film kaynakları başarısız; sayfa iframe ve NeonCore yedekleri deneniyor")
         }
         // Eski/alternatif HTML yapısı.
         var legacySourcesFound = false
@@ -1318,9 +1366,14 @@ class JetFilmizle : NeonMainAPI() {
 
             val subUrl = fixUrlNull(raw) ?: return@forEach
 
+            val trackLabel = sequenceOf(
+                track.attr("srclang"),
+                track.attr("lang"),
+                track.attr("label"),
+            ).firstOrNull { it.isNotBlank() } ?: "Türkçe"
             runCatching {
                 uniqueSubtitleCallback(
-                    SubtitleFile("Türkçe", subUrl)
+                    SubtitleFile(normalizeSubtitleLabel(trackLabel), subUrl)
                 )
             }
         }
