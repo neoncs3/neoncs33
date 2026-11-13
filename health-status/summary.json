@@ -124,7 +124,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://tvdiziler.tv",
-        "bytes": 82449,
+        "bytes": 82414,
         "title": "Dizi izle, Yerli ve Full HD Diziler, Dizi Seyret | TvDiziler.tv",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -179,7 +179,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://diziboxizle.com",
-        "bytes": 383889,
+        "bytes": 384045,
         "title": "Dizibox İzle - Güncel Yabancı Dizi izle, HD Diziler izle",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -279,7 +279,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://dramadizilerim1.com",
-        "bytes": 199019,
+        "bytes": 196364,
         "title": "Drama İzle — Türkçe Dublaj &amp; Altyazılı Kısa Mini Dizi İzle | Drama Dizilerim",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -328,17 +328,17 @@
     },
     {
       "provider": "JetFilmizle",
-      "status": "red",
+      "status": "green",
       "domain": "https://jetfilmizle.app",
       "configured_domain": "https://jetfilmizle.app",
       "live_domain": "https://jetfilmizle.app",
       "live": {
-        "ok": false,
+        "ok": true,
         "anti_bot_blocked": false,
-        "status_code": 404,
+        "status_code": 200,
         "final_url": "https://jetfilmizle.app",
-        "bytes": 513,
-        "title": "404 Not Found",
+        "bytes": 201270,
+        "title": "JetFilmizle - Film İzle, Türkçe Dublaj, Altyazılı ve Yerli Filmler",
         "media_hints": 0,
         "iframe_hints": 0,
         "error": null
@@ -469,7 +469,7 @@
       "source": "WebDramaTurkey/src/main/kotlin/com/neoncs3/WebDramaTurkey.kt"
     }
   ],
-  "green": 7,
+  "green": 8,
   "yellow": 12,
-  "red": 1
+  "red": 0
 }
