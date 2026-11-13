@@ -2,13 +2,11 @@ name: Otomatik Hata Raporu
 
 on:
   workflow_run:
-    # Yalnızca ana derleme ve gerçek oynatma sonucunu izle.
-    # Sağlık/kalite/domain yardımcı iş akışlarının her tamamlanışında
-    # gereksiz rapor çalışması oluşturulmasın.
+    # Yalnızca ana derleme ve derleme başarılıysa başlayan gerçek oynatma
+    # testini izle. Yardımcı kontrol iş akışları rapor trafiği oluşturmasın.
     workflows:
       - CloudStream Derleyici
       - NeonCS Gerçek Oynatma Testi
-      - NeonCS Kalite Kontrolü
     types:
       - completed
     branches:
