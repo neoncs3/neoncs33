@@ -7,8 +7,8 @@
 | Provider | Durum | Link | Position | Sorgu | İçerik | Hata |
 |---|---|---:|---:|---|---|---|
 | **DiziDad • Tyson afişleri** | 🔴 FAIL | 0 | 0 ms | - | https://www.dizidad.com/diziler/tyson-izle/ | Dizi sayfası TvSeriesLoadResponse döndürmedi; tür=null |
-| **DiziBoxizle** | 🟢 PASS | 7 | 3127 ms | - | DiziBoxizle | - |
-| **HDFilmDiziizle • Tron** | 🟢 PASS | 1 | 3121 ms | Tron | Tron: Ares | - |
+| **DiziBoxizle** | 🟢 PASS | 7 | 2926 ms | - | DiziBoxizle | - |
+| **HDFilmDiziizle • Tron** | 🟢 PASS | 1 | 2968 ms | Tron | Tron: Ares | - |
 | **Dizimag • Below S1E1** | 🔴 FAIL | 0 | 0 ms | - | Dizimag • Below S1E1 | loadLinks=false. Aday denemeleri: doğrudan: Dizimag • Below S1E1 -> bağlantı yok (loadLinks=false) |
 | **Dizimag • Below S1E2** | 🔴 FAIL | 0 | 0 ms | - | Dizimag • Below S1E2 | loadLinks=false. Aday denemeleri: doğrudan: Dizimag • Below S1E2 -> bağlantı yok (loadLinks=false) |
 | **Dizimag • Below S1E3** | 🔴 FAIL | 0 | 0 ms | - | Dizimag • Below S1E3 | loadLinks=false. Aday denemeleri: doğrudan: Dizimag • Below S1E3 -> bağlantı yok (loadLinks=false) |
