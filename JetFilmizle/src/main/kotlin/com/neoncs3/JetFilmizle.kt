@@ -532,11 +532,11 @@ class JetFilmizle : NeonMainAPI() {
                         playerPageText.contains("dplayer.erikkalinina1994.workers.dev", true) ||
                             playerPageText.contains("api/stream?pubId", true) ||
                             Regex(
-                                """(?is)(?:const|let|var)\\s+(?:PUB_ID|pubId|PUBLISHER_ID|publisherId)\\s*="""
+                                """(?is)(?:const|let|var)\s+(?:PUB_ID|pubId|PUBLISHER_ID|publisherId)\s*="""
                             ).containsMatchIn(playerPageText)
 
                     val hasLegacyVideoParkConfig =
-                        Regex("""(?is)(?:const|let|var)\\s+initial\\s*=""")
+                        Regex("""(?is)(?:const|let|var)\s+initial\s*=""")
                             .containsMatchIn(playerPageText) &&
                             (playerPageText.contains("has_dub") ||
                                 playerPageText.contains("vsrc.top", true) ||
