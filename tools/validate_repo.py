@@ -19,6 +19,7 @@ required = [
     "NeonCore/domain-candidates.json",
     "NeonCore/src/main/kotlin/com/neoncs3/NeonCore.kt",
     "tools/provider_health.py",
+    "tools/jetfilmizle_player_health.py",
     "tools/NeonPlaybackSmokeTest.kt",
     "tools/neon_playback_runner.sh",
     "tools/format_playback_report.py",
@@ -70,6 +71,30 @@ if generator.exists():
     ):
         if token not in generator_text:
             errors.append(f"Otomatik eklenti oluşturucu özelliği eksik: {token}")
+
+player_health = ROOT / "tools/jetfilmizle_player_health.py"
+if player_health.exists():
+    player_health_text = player_health.read_text(encoding="utf-8", errors="replace")
+    for token in ("def hls_candidate(", "hlsSource", "WORKER_API", "--self-test"):
+        if token not in player_health_text:
+            errors.append(f"JetFilmizle player health kontrolü eksik: {token}")
+
+jetfilmizle_source = ROOT / "JetFilmizle/src/main/kotlin/com/neoncs3/JetFilmizle.kt"
+if jetfilmizle_source.exists():
+    jet_text = jetfilmizle_source.read_text(encoding="utf-8", errors="replace")
+    for token in (
+        "dplayer.erikkalinina1994.workers.dev",
+        "godrive.erikkalinina1994.workers.dev",
+        "api.php?action=stream",
+        "isVideoParkGoPlayer",
+        "attemptedPlayerUrls",
+        "normalizeSubtitleLabel",
+        "JET_PLAYER_TIMEOUT_MS",
+        "Film kaynakları başarısız",
+        "Bölüm kaynakları başarısız",
+    ):
+        if token not in jet_text:
+            errors.append(f"JetFilmizle oynatıcı/TV optimizasyonu eksik: {token}")
 
 error_report = ROOT / ".github/workflows/HataRaporu.yml"
 if error_report.exists():
