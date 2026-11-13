@@ -178,7 +178,7 @@ class NeonPlaybackSmokeTest {
             "JetFilmizle",
             listOf("Inception", "Interstellar", "The Batman"),
             // User-provided current page: test this exact URL before generic search fallbacks.
-            directUrls = listOf("https://jetfilmizle.app/film/zirh"),
+            directUrls = listOf("https://jetfilmizle.app/film/witchblade", "https://jetfilmizle.app/film/zirh"),
             apiName = "NeonHub",
         ),
         Target("SetFilmIzle", listOf("Inception", "Interstellar", "The Batman")),
