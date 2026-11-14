@@ -15,7 +15,7 @@
       "query": null,
       "item": "DiziBoxizle",
       "links": 7,
-      "positionMs": 2926,
+      "positionMs": 2766,
       "error": null
     },
     {
@@ -24,7 +24,7 @@
       "query": "Tron",
       "item": "Tron: Ares",
       "links": 1,
-      "positionMs": 2968,
+      "positionMs": 3224,
       "error": null
     },
     {
@@ -83,12 +83,12 @@
     },
     {
       "provider": "TvDiziler • Tuzlu Kahve 7",
-      "status": "FAIL",
+      "status": "PASS",
       "query": null,
       "item": "TvDiziler • Tuzlu Kahve 7",
-      "links": 0,
-      "positionMs": 0,
-      "error": "loadLinks=false. Aday denemeleri: doğrudan: TvDiziler • Tuzlu Kahve 7 -> bağlantı yok (loadLinks=false)"
+      "links": 1,
+      "positionMs": 3351,
+      "error": null
     },
     {
       "provider": "TvDiziler • Anne Yarısı 4",
@@ -118,7 +118,7 @@
       "error": "ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403. Aday denemeleri: Inception: Inception -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403); Inception: Inception -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403); Interstellar: Interstellar -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403); Interstellar: Interstellar -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403); Interstellar: Interstellar -> oynatma başarısız (ExoPlaybackException: Source error <- InvalidResponseCodeException: Response code: 403); Interstellar: Interste"
     }
   ],
-  "pass": 2,
+  "pass": 3,
   "blocked": 2,
-  "fail": 9
+  "fail": 8
 }
