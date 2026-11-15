@@ -1,6 +1,6 @@
 # 🟢 JetFilmizle oynatıcı kontrolü
 
-- Kontrol zamanı (UTC): 2026-11-15T06:53:31+00:00
+- Kontrol zamanı (UTC): 2026-11-15T18:59:55+00:00
 - Oynatıcı: DPlayer Worker / VideoPark
 - Worker API HTTP: 200
 - HLS kontrolü HTTP: 200
