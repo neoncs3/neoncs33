@@ -179,7 +179,7 @@ class AsyaWatchProvider : MainAPI() {
 
         val jsonLdEpisodes = seasonNodes.flatMap { seasonNode ->
             val seasonNumber = seasonNode.optString("seasonNumber").toIntOrNull()
-                ?: Regex("""(?i)(?:season|sezon)[\\s-]*(\\d+)""")
+                ?: Regex("""(?i)(?:season|sezon)[\s-]*(\d+)""")
                     .find(seasonNode.optString("name"))?.groupValues?.getOrNull(1)?.toIntOrNull()
                 ?: 1
             val episodeArray = seasonNode.optJSONArray("episode") ?: JSONArray()
@@ -189,7 +189,7 @@ class AsyaWatchProvider : MainAPI() {
                     ?: return@mapNotNull null
                 val episodeName = episodeNode.optString("name").ifBlank { "Bölüm" }
                 val episodeNumber = episodeNode.opt("episodeNumber")?.toString()?.toIntOrNull()
-                    ?: Regex("""(\\d+)""").find(episodeName)
+                    ?: Regex("""(\d+)""").find(episodeName)
                         ?.groupValues?.getOrNull(1)?.toIntOrNull()
 
                 newEpisode(episodeUrl) {
@@ -212,9 +212,9 @@ class AsyaWatchProvider : MainAPI() {
                 val label = anchor.text().trim().ifBlank { "Bölüm" }
                 newEpisode(href) {
                     name = label
-                    season = Regex("""(?i)sezon-(\\d+)""")
+                    season = Regex("""(?i)sezon-(\d+)""")
                         .find(href)?.groupValues?.getOrNull(1)?.toIntOrNull()
-                    episode = Regex("""(?i)bolum-(\\d+)""")
+                    episode = Regex("""(?i)bolum-(\d+)""")
                         .find(href)?.groupValues?.getOrNull(1)?.toIntOrNull()
                     posterUrl = poster
                 }
