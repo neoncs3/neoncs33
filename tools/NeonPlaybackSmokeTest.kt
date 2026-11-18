@@ -66,6 +66,12 @@ class NeonPlaybackSmokeTest {
 
     private val targets = listOf(
         Target(
+            name = "AsyaWatch",
+            queries = listOf("Hidden Love", "Moving", "Alchemy of Souls", "Squid Game"),
+            pluginInternalName = "AsyaWatch",
+            apiName = "AsyaWatch",
+        ),
+        Target(
             name = "DiziDad • Tyson afişleri",
             queries = emptyList(),
             directUrls = listOf("https://www.dizidad.com/diziler/tyson-izle/"),
@@ -1052,12 +1058,12 @@ class NeonPlaybackSmokeTest {
                 " names=" + autoTargets.joinToString(",") { it.name },
         )
 
-        // The repository now publishes a single aggregate package. All site and
-        // generated Auto* providers are registered from NeonHub.cs3, not separate files.
-        val expectedPlugins = if (localPlugins.any { it.equals("NeonHub", true) }) {
-            setOf("NeonHub")
-        } else {
-            activeTargets.map { it.pluginInternalName ?: it.name }.toSet()
+        // Site providers are normally bundled in NeonHub; AsyaWatch is also
+        // installed standalone here so its own playback resolver gets real ExoPlayer coverage.
+        val expectedPlugins = buildSet {
+            if (localPlugins.any { it.equals("NeonHub", true) }) add("NeonHub")
+            if (requestedProviders.any { it.equals("AsyaWatch", true) }) add("AsyaWatch")
+            if (isEmpty()) addAll(activeTargets.map { it.pluginInternalName ?: it.name })
         }
         val missingPlugins = expectedPlugins - localPlugins.toSet()
 
