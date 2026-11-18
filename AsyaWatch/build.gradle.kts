@@ -1,7 +1,7 @@
-version = 1
+version = 2
 
 cloudstream {
-    description = "AsyaWatch Asya dizileri ve filmleri sağlayıcısı"
+    description = "AsyaWatch film ve dizi sağlayıcısı"
     authors = listOf("neoncs3")
     status = 1
     tvTypes = listOf("Movie", "TvSeries")
