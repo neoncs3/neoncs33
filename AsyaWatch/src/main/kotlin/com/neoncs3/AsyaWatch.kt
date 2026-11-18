@@ -588,10 +588,10 @@ class AsyaWatch : MainAPI() {
 
     private companion object {
         val MEDIA_URL = Regex(
-            """(?i)https?://[^"'<>\\s]+?\\.(?:m3u8|mpd|mp4|webm)(?:\\?[^"'<>\\s]*)?"""
+            """(?i)https?://[^"'<>\s]+?\.(?:m3u8|mpd|mp4|webm)(?:\?[^"'<>\s]*)?"""
         )
         val BAD_IMAGE = Regex(
-            """(?i)^(?:data:|about:|javascript:)|/(?:pixel|blank|lazy|placeholder|empty|spacer|transparent|altyazi|dublaj|tr-flag|en-flag)\\.(?:png|gif|jpe?g|svg|webp)(?:[?#]|$)"""
+            """(?i)^(?:data:|about:|javascript:)|/(?:pixel|blank|lazy|placeholder|empty|spacer|transparent|altyazi|dublaj|tr-flag|en-flag)\.(?:png|gif|jpe?g|svg|webp)(?:[?#]|$)"""
         )
     }
 }
