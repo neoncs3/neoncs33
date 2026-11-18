@@ -519,7 +519,7 @@ class AsyaWatchProvider : MainAPI() {
 
     private fun looksLikePlayerUrl(url: String): Boolean {
         val value = url.lowercase()
-        return isMediaUrl(url) ||
+        return url.isMediaUrl() ||
             listOf(
                 "iframe",
                 "player",
