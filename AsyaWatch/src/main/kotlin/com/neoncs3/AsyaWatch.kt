@@ -46,7 +46,7 @@ class AsyaWatchProvider : MainAPI() {
     )
 
     private val mediaRegex = Regex(
-        """(?i)(?:https?:)?//[^"'<>\\s]+?\.(?:m3u8|mpd|mp4|webm)(?:\?[^"'<>\\s]*)?"""
+        """(?i)(?:https?:)?//[^"'<>\s]+?\.(?:m3u8|mpd|mp4|webm)(?:\?[^"'<>\s]*)?"""
     )
 
     private val playerUrlRegex = Regex(
