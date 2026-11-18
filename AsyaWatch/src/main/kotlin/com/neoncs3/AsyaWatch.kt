@@ -54,7 +54,7 @@ class AsyaWatchProvider : MainAPI() {
     )
 
     private val subtitleUrlRegex = Regex(
-        """(?i)["']([^"'<>\\s]+\\.(?:vtt|srt|ass|ssa|ttml|dfxp)(?:\\?[^"'<>\\s]*)?)["']"""
+        """(?i)["']([^"'<>\s]+\.(?:vtt|srt|ass|ssa|ttml|dfxp)(?:\?[^"'<> \s]*)?)["']"""
     )
 
     override suspend fun getMainPage(
@@ -420,7 +420,7 @@ class AsyaWatchProvider : MainAPI() {
 
         if (!manifest.contains("#EXTM3U")) return
 
-        Regex("""(?im)^#EXT-X-MEDIA:[^\\r\\n]*TYPE=SUBTITLES[^\\r\\n]*$""")
+        Regex("""(?im)^#EXT-X-MEDIA:[^\r\n]*TYPE=SUBTITLES[^\r\n]*$""")
             .findAll(manifest)
             .forEach { match ->
                 val line = match.value
@@ -456,8 +456,8 @@ class AsyaWatchProvider : MainAPI() {
         if (raw.isBlank()) return
 
         val text = raw
-            .replace("\\\\/", "/")
-            .replace("\\\\u0026", "&")
+            .replace("\\/", "/")
+            .replace("\\u0026", "&")
             .replace("&amp;", "&")
 
         val parsed = runCatching { org.jsoup.Jsoup.parse(text, baseUrl) }.getOrNull()
@@ -483,7 +483,7 @@ class AsyaWatchProvider : MainAPI() {
             val end = (match.range.last + 180).coerceAtMost(text.length)
             val context = text.substring(start, end)
             val language = Regex(
-                """(?i)["'](?:label|language|lang|srclang|name)["']\\s*:\\s*["']([^"']+)["']"""
+                """(?i)["'](?:label|language|lang|srclang|name)["']\s*:\s*["']([^"']+)["']"""
             ).findAll(context).lastOrNull()?.groupValues?.getOrNull(1) ?: "Türkçe"
             emitSubtitle(
                 subtitle,
@@ -523,7 +523,7 @@ class AsyaWatchProvider : MainAPI() {
                                 candidate.startsWith("./") ||
                                 candidate.startsWith("../")
                             if (looksLikeUrl && (candidate.matches(Regex(
-                                    """(?is).*\\.(?:vtt|srt|ass|ssa|ttml|dfxp)(?:[?#].*)?$"""
+                                    """(?is).*\.(?:vtt|srt|ass|ssa|ttml|dfxp)(?:[?#].*)?$"""
                                 )) || isSubtitleField)
                             ) {
                                 absoluteUrl(candidate, baseUrl)?.let { subtitle ->
@@ -553,7 +553,7 @@ class AsyaWatchProvider : MainAPI() {
                         candidate.startsWith("./") ||
                         candidate.startsWith("../")
                     if (looksLikeUrl && (candidate.matches(Regex(
-                            """(?is).*\\.(?:vtt|srt|ass|ssa|ttml|dfxp)(?:[?#].*)?$"""
+                            """(?is).*\.(?:vtt|srt|ass|ssa|ttml|dfxp)(?:[?#].*)?$"""
                         )) || parentKey.contains("subtitle", true) ||
                             parentKey.contains("caption", true))
                     ) {
