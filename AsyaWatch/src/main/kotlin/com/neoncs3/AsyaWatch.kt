@@ -420,34 +420,35 @@ class AsyaWatchProvider : MainAPI() {
 
         if (!manifest.contains("#EXTM3U")) return
 
-        Regex("""(?im)^#EXT-X-MEDIA:[^\r\n]*TYPE=SUBTITLES[^\r\n]*$""")
-            .findAll(manifest)
-            .forEach { match ->
-                val line = match.value
-                val uri = Regex("""(?i)URI="([^"]+)"""")
-                    .find(line)?.groupValues?.getOrNull(1) ?: return@forEach
-                val language = sequenceOf("LANGUAGE", "NAME")
-                    .mapNotNull { key ->
-                        Regex("""(?i)$key="([^"]+)"""").find(line)
-                            ?.groupValues?.getOrNull(1)
-                    }
-                    .firstOrNull()
-                    ?: "Türkçe"
-                absoluteUrl(uri, manifestUrl)?.let { subtitle ->
-                    emitSubtitle(
-                        subtitle,
-                        language,
-                        referer,
-                        subtitleCallback,
-                        emittedSubtitles,
-                    )
+        val subtitleLines = Regex(
+            """(?im)^#EXT-X-MEDIA:[^\r\n]*TYPE=SUBTITLES[^\r\n]*$"""
+        ).findAll(manifest)
+
+        for (match in subtitleLines) {
+            val line = match.value
+            val uri = Regex("""(?i)URI="([^"]+)"""")
+                .find(line)?.groupValues?.getOrNull(1) ?: continue
+            val language = sequenceOf("LANGUAGE", "NAME")
+                .mapNotNull { key ->
+                    Regex("""(?i)$key="([^"]+)"""").find(line)
+                        ?.groupValues?.getOrNull(1)
                 }
-            }
+                .firstOrNull()
+                ?: "Türkçe"
+            val subtitle = absoluteUrl(uri, manifestUrl) ?: continue
+            emitSubtitle(
+                subtitle,
+                language,
+                referer,
+                subtitleCallback,
+                emittedSubtitles,
+            )
+        }
 
         collectSubtitles(manifest, manifestUrl, subtitleCallback, emittedSubtitles)
     }
 
-    private fun collectSubtitles(
+    private suspend fun collectSubtitles(
         raw: String,
         baseUrl: String,
         subtitleCallback: (SubtitleFile) -> Unit,
@@ -461,9 +462,11 @@ class AsyaWatchProvider : MainAPI() {
             .replace("&amp;", "&")
 
         val parsed = runCatching { org.jsoup.Jsoup.parse(text, baseUrl) }.getOrNull()
-        parsed?.select("track[src], track[data-src]").orEmpty().forEach { track ->
-            val rawUrl = track.attr("src").ifBlank { track.attr("data-src") }
-            absoluteUrl(rawUrl, baseUrl)?.let { subtitle ->
+        val tracks = parsed?.select("track[src], track[data-src]")
+        if (tracks != null) {
+            for (track in tracks) {
+                val rawUrl = track.attr("src").ifBlank { track.attr("data-src") }
+                val subtitle = absoluteUrl(rawUrl, baseUrl) ?: continue
                 val language = track.attr("label")
                     .ifBlank { track.attr("srclang").ifBlank { "Türkçe" } }
                 emitSubtitle(
@@ -476,9 +479,9 @@ class AsyaWatchProvider : MainAPI() {
             }
         }
 
-        subtitleUrlRegex.findAll(text).forEach { match ->
+        for (match in subtitleUrlRegex.findAll(text)) {
             val rawUrl = cleanUrl(match.groupValues[1])
-            val subtitle = absoluteUrl(rawUrl, baseUrl) ?: return@forEach
+            val subtitle = absoluteUrl(rawUrl, baseUrl) ?: continue
             val start = (match.range.first - 180).coerceAtLeast(0)
             val end = (match.range.last + 180).coerceAtMost(text.length)
             val context = text.substring(start, end)
@@ -499,7 +502,12 @@ class AsyaWatchProvider : MainAPI() {
             if (trimmed.startsWith("[")) JSONArray(trimmed) else JSONObject(trimmed)
         }.getOrNull()
 
-        fun visit(value: Any?, parentKey: String = "", inheritedLanguage: String? = null) {
+        suspend fun visit(
+            value: Any?,
+            parentKey: String = "",
+            inheritedLanguage: String? = null,
+            subtitleContext: Boolean = false,
+        ) {
             when (value) {
                 is JSONObject -> {
                     val language = sequenceOf("label", "language", "lang", "srclang", "name")
@@ -509,6 +517,18 @@ class AsyaWatchProvider : MainAPI() {
                             }
                         }
                         .firstOrNull() ?: inheritedLanguage
+                    val kind = sequenceOf("kind", "type")
+                        .mapNotNull { key ->
+                            value.optString(key).takeIf {
+                                it.isNotBlank() && !it.equals("null", ignoreCase = true)
+                            }
+                        }
+                        .firstOrNull().orEmpty()
+                    val currentSubtitleContext = subtitleContext ||
+                        parentKey.contains("subtitle", true) ||
+                        parentKey.contains("caption", true) ||
+                        kind.contains("subtitle", true) ||
+                        kind.contains("caption", true)
 
                     val keys = value.keys()
                     while (keys.hasNext()) {
@@ -522,11 +542,14 @@ class AsyaWatchProvider : MainAPI() {
                                 candidate.startsWith("/") ||
                                 candidate.startsWith("./") ||
                                 candidate.startsWith("../")
-                            if (looksLikeUrl && (candidate.matches(Regex(
-                                    """(?is).*\.(?:vtt|srt|ass|ssa|ttml|dfxp)(?:[?#].*)?$"""
-                                )) || isSubtitleField)
+                            val hasSubtitleExtension = candidate.matches(
+                                Regex("""(?is).*\.(?:vtt|srt|ass|ssa|ttml|dfxp)(?:[?#].*)?$""")
+                            )
+                            if (looksLikeUrl &&
+                                (hasSubtitleExtension || isSubtitleField || currentSubtitleContext)
                             ) {
-                                absoluteUrl(candidate, baseUrl)?.let { subtitle ->
+                                val subtitle = absoluteUrl(candidate, baseUrl)
+                                if (subtitle != null) {
                                     emitSubtitle(
                                         subtitle,
                                         language ?: "Türkçe",
@@ -537,13 +560,20 @@ class AsyaWatchProvider : MainAPI() {
                                 }
                             }
                         } else {
-                            visit(child, key, language)
+                            visit(
+                                child,
+                                key,
+                                language,
+                                currentSubtitleContext ||
+                                    key.contains("subtitle", true) ||
+                                    key.contains("caption", true),
+                            )
                         }
                     }
                 }
                 is JSONArray -> {
                     for (index in 0 until value.length()) {
-                        visit(value.opt(index), parentKey, inheritedLanguage)
+                        visit(value.opt(index), parentKey, inheritedLanguage, subtitleContext)
                     }
                 }
                 is String -> {
@@ -552,12 +582,16 @@ class AsyaWatchProvider : MainAPI() {
                         candidate.startsWith("/") ||
                         candidate.startsWith("./") ||
                         candidate.startsWith("../")
-                    if (looksLikeUrl && (candidate.matches(Regex(
-                            """(?is).*\.(?:vtt|srt|ass|ssa|ttml|dfxp)(?:[?#].*)?$"""
-                        )) || parentKey.contains("subtitle", true) ||
+                    val hasSubtitleExtension = candidate.matches(
+                        Regex("""(?is).*\.(?:vtt|srt|ass|ssa|ttml|dfxp)(?:[?#].*)?$""")
+                    )
+                    if (looksLikeUrl &&
+                        (hasSubtitleExtension || subtitleContext ||
+                            parentKey.contains("subtitle", true) ||
                             parentKey.contains("caption", true))
                     ) {
-                        absoluteUrl(candidate, baseUrl)?.let { subtitle ->
+                        val subtitle = absoluteUrl(candidate, baseUrl)
+                        if (subtitle != null) {
                             emitSubtitle(
                                 subtitle,
                                 inheritedLanguage ?: "Türkçe",
@@ -573,7 +607,7 @@ class AsyaWatchProvider : MainAPI() {
         if (json != null) visit(json)
     }
 
-    private fun emitSubtitle(
+    private suspend fun emitSubtitle(
         url: String,
         language: String,
         referer: String,
