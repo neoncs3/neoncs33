@@ -277,7 +277,6 @@ class AsyaWatchProvider : MainAPI() {
         }.replace("\\/", "/")
 
         var found = false
-        val subtitleTexts = mutableListOf(pageText)
 
         val iframeCandidates = document.select(
             "iframe[src], iframe[data-src], video[src], video source[src], source[src]"
@@ -326,7 +325,6 @@ class AsyaWatchProvider : MainAPI() {
 
             if (sourceResponse?.isSuccessful == true) {
                 val sourceText = sourceResponse.text.replace("\\/", "/")
-                subtitleTexts += sourceText
                 val streams = buildSet {
                     mediaRegex.findAll(sourceText).forEach { add(cleanUrl(it.value)) }
                     playerUrlRegex.findAll(sourceText).forEach {
@@ -379,32 +377,6 @@ class AsyaWatchProvider : MainAPI() {
                         )
                     }
                 )
-            }
-        }
-
-        // Altyazı URL'lerini sadece video bağlantıları çözüldükten sonra tara.
-        // Bu işlem başarısız olsa bile video linklerinin sonucunu etkilemez.
-        val subtitleRegex = Regex(
-            """(?i)(?:(?:https?:)?//|/|\./|\.\./)[^"'<>\s]+?\.(?:vtt|srt|ass|ssa|ttml|dfxp)(?:\?[^"'<>\s]*)?"""
-        )
-        val emittedSubtitles = mutableSetOf<String>()
-        for (sourceText in subtitleTexts) {
-            for (match in subtitleRegex.findAll(sourceText)) {
-                val subtitle = absoluteUrl(cleanUrl(match.value), data) ?: continue
-                if (!emittedSubtitles.add(subtitle)) continue
-                runCatching {
-                    subtitleCallback(
-                        newSubtitleFile(
-                            lang = "Türkçe",
-                            url = subtitle,
-                        ) {
-                            headers = mapOf(
-                                "User-Agent" to ua,
-                                "Referer" to data,
-                            )
-                        }
-                    )
-                }
             }
         }
 
