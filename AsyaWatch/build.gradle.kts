@@ -1,4 +1,4 @@
-version = 7
+version = 11
 cloudstream {
     description = "AsyaWatch film ve dizi sağlayıcısı"
     authors = listOf("neoncs3")
