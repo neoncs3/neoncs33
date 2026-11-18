@@ -1,10 +1,10 @@
 [
     {
         "iconUrl": "https://asyawatch.com/favicon.ico",
-        "fileHash": "sha256-eb8dda611a60d344ff7ce8b44de600fa5408e0436479e82f17e11892189fb43f",
+        "fileHash": "sha256-720aa1b810314d643127874068102edcd5a99aea0ddabd33f3ae477da76b018f",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 68627,
+        "fileSize": 62552,
         "status": 1,
         "language": "tr",
         "authors": [
