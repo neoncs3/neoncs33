@@ -385,7 +385,7 @@ class AsyaWatchProvider : MainAPI() {
         // Altyazı URL'lerini sadece video bağlantıları çözüldükten sonra tara.
         // Bu işlem başarısız olsa bile video linklerinin sonucunu etkilemez.
         val subtitleRegex = Regex(
-            """(?i)(?:(?:https?:)?//|/|\\./|\\.\\./)[^"'<>\\s]+?\\.(?:vtt|srt|ass|ssa|ttml|dfxp)(?:\\?[^"'<>\\s]*)?"""
+            """(?i)(?:(?:https?:)?//|/|\./|\.\./)[^"'<>\s]+?\.(?:vtt|srt|ass|ssa|ttml|dfxp)(?:\?[^"'<>\s]*)?"""
         )
         val emittedSubtitles = mutableSetOf<String>()
         for (sourceText in subtitleTexts) {
