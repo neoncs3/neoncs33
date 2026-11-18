@@ -237,7 +237,7 @@ class AsyaWatchProvider : MainAPI() {
         }
     }
 
-    private fun readActors(ld: JSONObject?): List<ActorData> {
+    private fun readActors(ld: JSONObject?): List<Actor> {
         val raw = ld?.opt("actor") ?: return emptyList()
         val values = when (raw) {
             is JSONArray -> (0 until raw.length()).mapNotNull { raw.opt(it) }
@@ -251,7 +251,7 @@ class AsyaWatchProvider : MainAPI() {
                 else -> ""
             }.trim()
 
-            actorName.takeIf { it.isNotBlank() }?.let { ActorData(Actor(it)) }
+            actorName.takeIf { it.isNotBlank() }?.let { Actor(it) }
         }
     }
 
