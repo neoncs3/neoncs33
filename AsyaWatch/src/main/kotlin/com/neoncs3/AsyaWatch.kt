@@ -317,15 +317,20 @@ class AsyaWatchProvider : MainAPI() {
             }
 
             // Embed sunucusunu kendi domain'i ve referer'iyle aç.
+            var candidateFound = false
             val embed = runCatching {
                 app.get(candidate, headers = headers, referer = "$mainUrl/").text
-            }.getOrNull() ?: run {
+            }.getOrNull()
+
+            if (embed.isNullOrBlank()) {
+                var extractorFound = false
                 runCatching {
                     loadExtractor(candidate, data, subtitleCallback) { link ->
                         callback(link)
-                        found = true
+                        extractorFound = true
                     }
                 }
+                if (extractorFound) found = true
                 continue
             }
 
@@ -382,6 +387,7 @@ class AsyaWatchProvider : MainAPI() {
                                     )
                                 }
                             )
+                            candidateFound = true
                             found = true
                         }
                     }
@@ -416,14 +422,16 @@ class AsyaWatchProvider : MainAPI() {
                         )
                     }
                 )
+                candidateFound = true
                 found = true
             }
 
             // Pichive dışındaki embed sağlayıcıları CloudStream extractor'larına bırak.
-            if (!found) {
+            if (!candidateFound) {
                 runCatching {
                     loadExtractor(candidate, data, subtitleCallback) { link ->
                         callback(link)
+                        candidateFound = true
                         found = true
                     }
                 }
