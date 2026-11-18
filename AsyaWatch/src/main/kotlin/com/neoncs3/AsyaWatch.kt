@@ -7,6 +7,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.jsoup.nodes.Element
 import java.net.URI
+import java.security.MessageDigest
 import java.net.URLEncoder
 
 /**
@@ -261,36 +262,165 @@ class AsyaWatchProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
-        val response = runCatching {
-            app.get(data, headers = headers, referer = mainUrl + "/")
+        val pageResponse = runCatching {
+            app.get(data, headers = headers, referer = "$mainUrl/")
         }.getOrNull() ?: return false
 
-        val document = response.document
-        val pageText = buildString {
-            append(response.text)
-            append('\n')
-            append(document.html())
-            document.select("script").forEach {
-                append('\n')
-                append(it.data())
+        val pageText = pageResponse.text
+            .replace("\\\"", "\"")
+            .replace("\\/", "/")
+        val document = pageResponse.document
+        val candidates = linkedSetOf<String>()
+
+        // AsyaWatch sayfasındaki JSON player tanımlarından embed adreslerini al.
+        Regex("""(?i)["'](?:src|master)["']\s*:\s*["'](https?://[^"']+)["']""")
+            .findAll(pageText)
+            .map { cleanUrl(it.groupValues[1]) }
+            .filter {
+                it.contains("pichive", true) ||
+                    it.contains("hotlinger", true) ||
+                    it.contains("playru", true) ||
+                    it.isMediaUrl()
             }
-        }.replace("\\/", "/")
+            .forEach(candidates::add)
+
+        // Bazı sayfalarda iframe URL'si yalnızca HTML niteliğinde yer alıyor.
+        document.select(
+            "iframe[src], iframe[data-src], video[src], video source[src], source[src]"
+        ).forEach { element ->
+            val raw = sequenceOf(element.attr("src"), element.attr("data-src"))
+                .firstOrNull { it.isNotBlank() }
+            absoluteUrl(raw, data)?.let(candidates::add)
+        }
 
         var found = false
 
-        val iframeCandidates = document.select(
-            "iframe[src], iframe[data-src], video[src], video source[src], source[src]"
-        ).mapNotNull { element ->
-            sequenceOf(
-                element.attr("src"),
-                element.attr("data-src"),
-            ).firstOrNull { it.isNotBlank() }?.let { absoluteUrl(it, data) }
-        }.filterNotNull().distinct()
-
-        for (candidate in iframeCandidates) {
+        for (candidate in candidates) {
             if (candidate.isMediaUrl()) {
-                if (emitMedia(candidate, data, callback)) found = true
-            } else {
+                val path = candidate.substringBefore('?').lowercase()
+                val type = if (path.endsWith(".mp4") || path.endsWith(".webm")) {
+                    ExtractorLinkType.VIDEO
+                } else if (path.endsWith(".mpd")) {
+                    ExtractorLinkType.DASH
+                } else {
+                    ExtractorLinkType.M3U8
+                }
+                callback(
+                    newExtractorLink(name, "AsyaWatch", candidate, type) {
+                        this.referer = "$mainUrl/"
+                        this.quality = Qualities.Unknown.value
+                        this.headers = mapOf("User-Agent" to ua, "Referer" to "$mainUrl/")
+                    }
+                )
+                found = true
+                continue
+            }
+
+            // Embed sunucusunu kendi domain'i ve referer'iyle aç.
+            val embed = runCatching {
+                app.get(candidate, headers = headers, referer = "$mainUrl/").text
+            }.getOrNull() ?: run {
+                runCatching {
+                    loadExtractor(candidate, data, subtitleCallback) { link ->
+                        callback(link)
+                        found = true
+                    }
+                }
+                continue
+            }
+
+            val origin = Regex("""^https?://[^/]+""")
+                .find(candidate)?.value
+            val token = Regex("""(?i)openPlayer\s*\(\s*['"]([^'"]+)""")
+                .find(embed)?.groupValues?.getOrNull(1)
+
+            // Asıl kaynak API'si bölüm sayfasının değil embed sunucusunun domain'inde.
+            if (!origin.isNullOrBlank() && !token.isNullOrBlank()) {
+                val sourceText = runCatching {
+                    app.get(
+                        "$origin/source2.php?v=$token",
+                        headers = headers + mapOf("Accept" to "application/json"),
+                        referer = candidate,
+                    ).text.replace("\\/", "/")
+                }.getOrNull().orEmpty()
+
+                val playlistArray = runCatching {
+                    JSONObject(sourceText).optJSONArray("playlist")
+                }.getOrNull()
+
+                if (playlistArray != null) {
+                    for (i in 0 until playlistArray.length()) {
+                        val item = playlistArray.optJSONObject(i) ?: continue
+                        val label = item.optString("title").trim().ifBlank { "AsyaWatch" }
+                        val sources = item.optJSONArray("sources") ?: continue
+
+                        for (j in 0 until sources.length()) {
+                            val rawFile = sources.optJSONObject(j)
+                                ?.optString("file")
+                                ?.takeIf { it.startsWith("http", true) }
+                                ?: continue
+                            val master = if (rawFile.contains("m.php", ignoreCase = true)) {
+                                rawFile.replace("m.php", "master.m3u8", ignoreCase = true)
+                            } else {
+                                rawFile
+                            }
+                            val path = master.substringBefore('?').lowercase()
+                            val type = if (path.endsWith(".mp4") || path.endsWith(".webm")) {
+                                ExtractorLinkType.VIDEO
+                            } else if (path.endsWith(".mpd")) {
+                                ExtractorLinkType.DASH
+                            } else {
+                                ExtractorLinkType.M3U8
+                            }
+                            callback(
+                                newExtractorLink(name, label, master, type) {
+                                    this.referer = candidate
+                                    this.quality = Qualities.Unknown.value
+                                    this.headers = mapOf(
+                                        "User-Agent" to ua,
+                                        "Referer" to candidate,
+                                    )
+                                }
+                            )
+                            found = true
+                        }
+                    }
+                }
+            }
+
+            // Pichive player'larında master/file URL'si proof-of-work imzası ister.
+            val rawMasters = Regex(
+                """"(?:master|file)"\s*:\s*"(https?://[^"]+)"""",
+                RegexOption.IGNORE_CASE,
+            ).findAll(embed).map { it.groupValues[1].replace("\\/", "/") }.distinct()
+
+            for (rawMaster in rawMasters) {
+                val master = pichiveSign(embed, rawMaster)
+                val playlist = runCatching {
+                    app.get(master, headers = headers, referer = candidate).text
+                }.getOrNull().orEmpty()
+
+                if (!playlist.startsWith("#EXTM3U") &&
+                    !master.contains("pichive.online", ignoreCase = true)
+                ) {
+                    continue
+                }
+
+                callback(
+                    newExtractorLink(name, "AsyaWatch", master, ExtractorLinkType.M3U8) {
+                        this.referer = candidate
+                        this.quality = Qualities.Unknown.value
+                        this.headers = mapOf(
+                            "User-Agent" to ua,
+                            "Referer" to candidate,
+                        )
+                    }
+                )
+                found = true
+            }
+
+            // Pichive dışındaki embed sağlayıcıları CloudStream extractor'larına bırak.
+            if (!found) {
                 runCatching {
                     loadExtractor(candidate, data, subtitleCallback) { link ->
                         callback(link)
@@ -300,66 +430,45 @@ class AsyaWatchProvider : MainAPI() {
             }
         }
 
-        val videoId = sequenceOf(
-            Regex("""(?i)window\.openPlayer\s*\(\s*['"]([^'"]+)['"]""")
-                .find(pageText)?.groupValues?.getOrNull(1),
-            Regex("""(?i)[?&]v=([\w-]+)""")
-                .find(pageText)?.groupValues?.getOrNull(1),
-            Regex("""(?i)(?:videoId|video_id|data-video-id)\s*[:=]\s*['"]?([\w-]+)""")
-                .find(pageText)?.groupValues?.getOrNull(1),
-        ).firstOrNull { !it.isNullOrBlank() }
+        // Eski sayfa tipinde player token'ı bölüm sayfasında doğrudan bulunabiliyor.
+        // Yeni embed çözümlemesi bağlantı bulamadıysa geriye dönük uyumluluk olarak dene.
+        if (!found) {
+            val videoId = sequenceOf(
+                Regex("""(?i)window\.openPlayer\s*\(\s*['"]([^'"]+)['"]""")
+                    .find(pageText)?.groupValues?.getOrNull(1),
+                Regex("""(?i)[?&]v=([\w-]+)""")
+                    .find(pageText)?.groupValues?.getOrNull(1),
+                Regex("""(?i)(?:videoId|video_id|data-video-id)\s*[:=]\s*['"]?([\w-]+)""")
+                    .find(pageText)?.groupValues?.getOrNull(1),
+            ).firstOrNull { !it.isNullOrBlank() }
 
-        if (!videoId.isNullOrBlank()) {
-            val sourceUrl = mainUrl + "/source2.php?v=" +
-                URLEncoder.encode(videoId, "UTF-8")
-            val sourceResponse = runCatching {
-                app.get(
-                    sourceUrl,
-                    headers = headers + mapOf(
-                        "Referer" to data,
-                        "Accept" to "application/json,text/plain,*/*",
-                    ),
-                    referer = data,
-                )
-            }.getOrNull()
+            if (!videoId.isNullOrBlank()) {
+                val sourceUrl = "$mainUrl/source2.php?v=$videoId"
+                val sourceText = runCatching {
+                    app.get(
+                        sourceUrl,
+                        headers = headers + mapOf("Accept" to "application/json"),
+                        referer = data,
+                    ).text.replace("\\/", "/")
+                }.getOrNull().orEmpty()
 
-            if (sourceResponse?.isSuccessful == true) {
-                val sourceText = sourceResponse.text.replace("\\/", "/")
                 val streams = buildSet {
                     mediaRegex.findAll(sourceText).forEach { add(cleanUrl(it.value)) }
-                    playerUrlRegex.findAll(sourceText).forEach {
-                        add(cleanUrl(it.groupValues[1]))
-                    }
-
+                    playerUrlRegex.findAll(sourceText).forEach { add(cleanUrl(it.groupValues[1])) }
                     runCatching { JSONObject(sourceText) }.getOrNull()?.let { json ->
                         listOf("src", "master", "file", "url").forEach { key ->
                             json.optString(key).takeIf { it.isNotBlank() }?.let(::add)
                         }
                     }
                 }
-
                 for (stream in streams) {
-                    if (stream.isMediaUrl() && emitMedia(stream, data, callback)) {
-                        found = true
-                    }
-                }
-
-                val sourceIframe = playerUrlRegex.find(sourceText)
-                    ?.groupValues?.getOrNull(1)
-                if (!sourceIframe.isNullOrBlank() && !sourceIframe.isMediaUrl()) {
-                    val iframeUrl = absoluteUrl(sourceIframe, data)
-                    if (iframeUrl != null) {
-                        runCatching {
-                            loadExtractor(iframeUrl, data, subtitleCallback) { link ->
-                                callback(link)
-                                found = true
-                            }
-                        }
-                    }
+                    if (!stream.isMediaUrl()) continue
+                    if (emitMedia(stream, data, callback)) found = true
                 }
             }
         }
 
+        // Mevcut sayfa içi track altyazıları video çözümleme sonrasında raporlanır.
         document.select("track[src], track[data-src]").forEach { track ->
             val raw = track.attr("src").ifBlank { track.attr("data-src") }
             val subtitle = absoluteUrl(raw, data) ?: return@forEach
@@ -371,16 +480,97 @@ class AsyaWatchProvider : MainAPI() {
                         },
                         url = subtitle,
                     ) {
-                        headers = mapOf(
-                            "User-Agent" to ua,
-                            "Referer" to data,
-                        )
+                        headers = mapOf("User-Agent" to ua, "Referer" to data)
                     }
                 )
             }
         }
 
         return found
+    }
+
+    private fun pichiveGateNonce(html: String): String? {
+        val gate = Regex(
+            """"gate"\s*:\s*\{\s*"n"\s*:\s*"([^"]+)"(?:\s*,\s*"b"\s*:\s*(\d+))?"""
+        ).find(html) ?: return null
+        val n = gate.groupValues[1]
+        val bits = gate.groupValues[2].toIntOrNull() ?: 12
+        val digest = MessageDigest.getInstance("SHA-256")
+
+        fun wordAt(message: String, index: Int): Long {
+            val bytes = digest.digest(message.toByteArray(Charsets.UTF_8))
+            val offset = index.coerceIn(0, 7) * 4
+            return ((bytes[offset].toLong() and 0xff) shl 24) or
+                ((bytes[offset + 1].toLong() and 0xff) shl 16) or
+                ((bytes[offset + 2].toLong() and 0xff) shl 8) or
+                (bytes[offset + 3].toLong() and 0xff)
+        }
+
+        val function = Regex(
+            """window\.NP_GATE\s*=\s*function\(\s*(\w+)\s*,\s*(\w+)\s*\)\s*\{([\s\S]*?)\};"""
+        ).find(html)
+
+        if (function == null) {
+            if (bits !in 1..32) return null
+            for (i in 0 until 50_000_000) {
+                if (wordAt("$n:$i", 0) ushr (32 - bits) == 0L) return i.toString()
+            }
+            return null
+        }
+
+        val nonceVariable = function.groupValues[1]
+        val body = function.groupValues[3]
+        val charMatch = Regex(
+            """var\s+(\w+)\s*=\s*String\.fromCharCode\(([\d,\s]+)\)"""
+        ).find(body) ?: return null
+        val saltVariable = charMatch.groupValues[1]
+        val salt = charMatch.groupValues[2].split(',')
+            .map { it.trim().toInt().toChar() }.joinToString("")
+
+        val nonceMatch = Regex(
+            """var\s+(\w+)\s*=\s*(?:\w+\.toString\((\d*)\)|String\(\w+\))"""
+        ).find(body) ?: return null
+        val nonceValueVariable = nonceMatch.groupValues[1]
+        val radix = nonceMatch.groupValues[2].toIntOrNull()?.coerceIn(2, 36) ?: 10
+
+        val maskMatch = Regex(
+            """\(\s*\w+\(([^)]+)\)\[(\d+)\]\s*(>>>|&)\s*(\d+)\s*\)\s*===?\s*0"""
+        ).find(body) ?: return null
+        val parts = maskMatch.groupValues[1].split('+').map { it.trim() }
+        val wordIndex = maskMatch.groupValues[2].toIntOrNull() ?: return null
+        val operation = maskMatch.groupValues[3]
+        val rhs = maskMatch.groupValues[4].toLongOrNull() ?: return null
+        if (rhs !in 0L..31L) return null
+
+        for (i in 0 until 50_000_000) {
+            val nonce = java.lang.Long.toString(i.toLong(), radix)
+            val message = buildString {
+                for (part in parts) {
+                    when (part) {
+                        nonceVariable -> append(n)
+                        saltVariable -> append(salt)
+                        nonceValueVariable -> append(nonce)
+                        else -> append(part.trim('\'', '"'))
+                    }
+                }
+            }
+            val word = wordAt(message, wordIndex)
+            val valid = if (operation == ">>>") {
+                (word ushr rhs.toInt()) == 0L
+            } else {
+                (word and rhs) == 0L
+            }
+            if (valid) return nonce
+        }
+        return null
+    }
+
+    private fun pichiveSign(html: String, url: String): String {
+        if (!(url.contains("/nm.php") || url.contains("/nsub.php")) || url.contains("&p=")) {
+            return url
+        }
+        val nonce = pichiveGateNonce(html) ?: return url
+        return "$url&p=$nonce"
     }
 
     private suspend fun emitMedia(
