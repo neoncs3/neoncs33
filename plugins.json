@@ -1,5 +1,26 @@
 [
     {
+        "iconUrl": "https://asyawatch.com/favicon.ico",
+        "fileHash": "sha256-cb147d4ff11ac962d7b475375866c318416f819733ba437728f015e59e73cbe6",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
+        "fileSize": 61283,
+        "status": 1,
+        "language": "tr",
+        "authors": [
+            "neoncs3"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 2,
+        "internalName": "AsyaWatch",
+        "description": "AsyaWatch film ve dizi sa\u011flay\u0131c\u0131s\u0131",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/AsyaWatch.cs3",
+        "name": "AsyaWatch"
+    },
+    {
         "iconUrl": "https://daddylive.app/favicon.ico",
         "fileHash": "sha256-775bd72bd04958e60d4df2f3dd6ccb1e2602266d23e02d046be4d259811c2863",
         "apiVersion": 1,
