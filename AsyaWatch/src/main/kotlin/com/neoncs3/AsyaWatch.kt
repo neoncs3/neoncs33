@@ -658,25 +658,6 @@ class AsyaWatchProvider : MainAPI() {
         return runCatching { JSONObject(match.groupValues[1].trim()) }.getOrNull()
     }
 
-    private fun pichiveGateProof(config: JSONObject?): String? {
-        val gate = config?.optJSONObject("gate") ?: return null
-        val challenge = gate.optString("n").trim().takeIf { it.isNotBlank() } ?: return null
-        val digest = runCatching { MessageDigest.getInstance("SHA-256") }.getOrNull() ?: return null
-        val salt = "5h1vdRsV-2"
-
-        for (nonce in 0L until 100_000_000L) {
-            val input = salt + challenge + "." + nonce.toString()
-            val hash = digest.digest(input.toByteArray(Charsets.UTF_8))
-            val firstWord =
-                ((hash[0].toInt() and 0xff) shl 24) or
-                    ((hash[1].toInt() and 0xff) shl 16) or
-                    ((hash[2].toInt() and 0xff) shl 8) or
-                    (hash[3].toInt() and 0xff)
-            if ((firstWord ushr 20) == 0) return nonce.toString()
-        }
-        return null
-    }
-
     private fun appendQueryParameter(url: String, key: String, value: String): String {
         if (Regex("""(?i)(?:[?&])${Regex.escape(key)}=""").containsMatchIn(url)) return url
         val separator = if (url.contains("?")) "&" else "?"
@@ -716,7 +697,8 @@ class AsyaWatchProvider : MainAPI() {
         val html = response.text
         val config = parseNpConfig(html) ?: return false
         val gate = config.optJSONObject("gate")
-        val proof = if (gate != null) pichiveGateProof(config) else null
+        // Çalışan AsyaWatch DEX sürümündeki NP_GATE / SHA-256 çözümleyicisi.
+        val proof = if (gate != null) pichiveGateNonce(html) else null
         if (gate != null && proof == null) return false
 
         val origin = runCatching {
