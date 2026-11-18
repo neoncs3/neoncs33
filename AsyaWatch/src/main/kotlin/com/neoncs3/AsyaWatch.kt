@@ -129,7 +129,10 @@ class AsyaWatchProvider : MainAPI() {
             throw ErrorLoadingException("AsyaWatch içerik sayfası açılamadı")
         }
 
-        val ld = readJsonLd(document)
+        val isSeries = url.contains("/dizi/", ignoreCase = true)
+        // Önce gerçek TVSeries/Movie JSON-LD düğümünü seç; Article/CreativeWork
+        // düğümü bölüm listesini gölgelememeli.
+        val ld = readJsonLd(document, isSeries)
         val title = ld?.optString("name")?.takeIf { it.isNotBlank() }
             ?: document.selectFirst("h1")?.text()?.takeIf { it.isNotBlank() }
             ?: throw ErrorLoadingException("Başlık okunamadı")
@@ -144,7 +147,7 @@ class AsyaWatchProvider : MainAPI() {
         val rawPoster = imageValue?.takeIf { it.isNotBlank() }
             ?: document.selectFirst("meta[property=og:image]")?.attr("content")
             ?: document.selectFirst("meta[name=twitter:image]")?.attr("content")
-        val poster = rawPoster?.let { absoluteUrl(it) }
+        val poster = rawPoster?.let { absoluteUrl(it, url) }
 
         val plot = ld?.optString("description")?.takeIf { it.isNotBlank() }
             ?: document.selectFirst("meta[property=og:description]")?.attr("content")
@@ -154,24 +157,64 @@ class AsyaWatchProvider : MainAPI() {
             ?.takeIf { it.isNotBlank() }
 
         val actors = readActors(ld)
-        val recommendations = document.select(cardSelector)
-            .mapNotNull { it.toHtmlCard() }
-            .filterNot { it.url == url }
-            .distinctBy { it.url }
 
-        val episodes = if (url.contains("/dizi/", ignoreCase = true)) {
-            document.select("a.simr[href]").mapNotNull { anchor ->
-                val href = absoluteUrl(anchor.attr("href"))
-                    ?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                val label = anchor.text().ifBlank {
-                    href.substringAfterLast("/")
+        // AsyaWatch sayfasındaki a.simr kartları öneri içerikleridir;
+        // gerçek bölümler JSON-LD containsSeason.episode alanında listelenir.
+        val recommendations = document.select("a.simr[href]").mapNotNull { anchor ->
+            val href = absoluteUrl(anchor.attr("href"), url) ?: return@mapNotNull null
+            val recommendationName = anchor.selectFirst("b")?.text()?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: anchor.text().trim().takeIf { it.isNotBlank() }
+                ?: return@mapNotNull null
+            newTvSeriesSearchResponse(recommendationName, href, TvType.TvSeries) {
+                posterUrl = absoluteUrl(anchor.selectFirst("img")?.attr("src"), url)
+            }
+        }.distinctBy { it.url }
+
+        val seasonNodes = when (val rawSeasons = ld?.opt("containsSeason")) {
+            is JSONObject -> listOf(rawSeasons)
+            is JSONArray -> (0 until rawSeasons.length()).mapNotNull { rawSeasons.optJSONObject(it) }
+            else -> emptyList()
+        }
+
+        val jsonLdEpisodes = seasonNodes.flatMap { seasonNode ->
+            val seasonNumber = seasonNode.optString("seasonNumber").toIntOrNull()
+                ?: Regex("""(?i)(?:season|sezon)[\\s-]*(\\d+)""")
+                    .find(seasonNode.optString("name"))?.groupValues?.getOrNull(1)?.toIntOrNull()
+                ?: 1
+            val episodeArray = seasonNode.optJSONArray("episode") ?: JSONArray()
+            (0 until episodeArray.length()).mapNotNull { index ->
+                val episodeNode = episodeArray.optJSONObject(index) ?: return@mapNotNull null
+                val episodeUrl = absoluteUrl(episodeNode.optString("url"), url)
+                    ?: return@mapNotNull null
+                val episodeName = episodeNode.optString("name").ifBlank { "Bölüm" }
+                val episodeNumber = episodeNode.opt("episodeNumber")?.toString()?.toIntOrNull()
+                    ?: Regex("""(\\d+)""").find(episodeName)
+                        ?.groupValues?.getOrNull(1)?.toIntOrNull()
+
+                newEpisode(episodeUrl) {
+                    name = episodeName
+                    season = seasonNumber
+                    episode = episodeNumber
+                    posterUrl = poster
                 }
+            }
+        }.distinctBy { it.data }
 
+        // Geriye dönük uyumluluk: JSON-LD eksikse yalnızca URL'si açıkça bölüm
+        // belirten simr bağlantılarını yedek olarak kullan; öneri dizilerini bölüm sayma.
+        val fallbackEpisodes = if (jsonLdEpisodes.isEmpty()) {
+            document.select("a.simr[href]").mapNotNull { anchor ->
+                val href = absoluteUrl(anchor.attr("href"), url) ?: return@mapNotNull null
+                if (!href.contains("bolum-", true) && !href.contains("/episode/", true)) {
+                    return@mapNotNull null
+                }
+                val label = anchor.text().trim().ifBlank { "Bölüm" }
                 newEpisode(href) {
                     name = label
-                    season = Regex("""(?i)sezon-(\d+)""")
+                    season = Regex("""(?i)sezon-(\\d+)""")
                         .find(href)?.groupValues?.getOrNull(1)?.toIntOrNull()
-                    episode = Regex("""(?i)bolum-(\d+)""")
+                    episode = Regex("""(?i)bolum-(\\d+)""")
                         .find(href)?.groupValues?.getOrNull(1)?.toIntOrNull()
                     posterUrl = poster
                 }
@@ -179,8 +222,9 @@ class AsyaWatchProvider : MainAPI() {
         } else {
             emptyList()
         }
+        val episodes = if (jsonLdEpisodes.isNotEmpty()) jsonLdEpisodes else fallbackEpisodes
 
-        return if (url.contains("/dizi/", ignoreCase = true)) {
+        return if (isSeries) {
             newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 posterUrl = poster
                 this.plot = plot
@@ -199,7 +243,10 @@ class AsyaWatchProvider : MainAPI() {
         }
     }
 
-    private fun readJsonLd(document: org.jsoup.nodes.Document): JSONObject? {
+    private fun readJsonLd(
+        document: org.jsoup.nodes.Document,
+        preferSeries: Boolean,
+    ): JSONObject? {
         val candidates = mutableListOf<JSONObject>()
 
         document.select("script[type=application/ld+json]").forEach { script ->
@@ -227,15 +274,24 @@ class AsyaWatchProvider : MainAPI() {
             }
         }
 
-        return candidates.firstOrNull { item ->
-            when (val type = item.opt("@type")) {
-                is String -> type in setOf("Movie", "TVSeries", "CreativeWork", "Article")
+        fun hasType(item: JSONObject, expected: String): Boolean {
+            return when (val type = item.opt("@type")) {
+                is String -> type.contains(expected, ignoreCase = true)
                 is JSONArray -> (0 until type.length()).any {
-                    type.optString(it) in setOf("Movie", "TVSeries", "CreativeWork", "Article")
+                    type.optString(it).contains(expected, ignoreCase = true)
                 }
                 else -> false
             }
         }
+
+        val preferredType = if (preferSeries) "TVSeries" else "Movie"
+        return candidates.firstOrNull { hasType(it, preferredType) }
+            ?: candidates.firstOrNull {
+                hasType(it, "TVSeries") || hasType(it, "Movie")
+            }
+            ?: candidates.firstOrNull {
+                hasType(it, "CreativeWork") || hasType(it, "Article")
+            }
     }
 
     private fun readActors(ld: JSONObject?): List<Actor> {
