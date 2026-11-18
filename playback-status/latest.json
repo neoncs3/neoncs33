@@ -1,7 +1,16 @@
 {
-  "results": [],
+  "results": [
+    {
+      "provider": "AsyaWatch",
+      "status": "BLOCKED",
+      "query": null,
+      "item": null,
+      "links": 0,
+      "positionMs": 0,
+      "error": "Provider origin erişimi engellendi HTTP 403"
+    }
+  ],
   "pass": 0,
-  "blocked": 0,
-  "fail": 1,
-  "error": "Playback raporu alınamadı ve logcat içinde NEON_PLAYBACK sonucu bulunamadı"
+  "blocked": 1,
+  "fail": 0
 }
