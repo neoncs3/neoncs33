@@ -638,7 +638,7 @@ class AsyaWatchProvider : MainAPI() {
     }
 
     private fun appendQueryParameter(url: String, key: String, value: String): String {
-        if (Regex("""(?i)(?:[?&])\${Regex.escape(key)}=""").containsMatchIn(url)) return url
+        if (Regex("""(?i)(?:[?&])${Regex.escape(key)}=""").containsMatchIn(url)) return url
         val separator = if (url.contains("?")) "&" else "?"
         return "$url$separator$key=$value"
     }
