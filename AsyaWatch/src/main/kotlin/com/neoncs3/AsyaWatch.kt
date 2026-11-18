@@ -271,6 +271,7 @@ class AsyaWatchProvider : MainAPI() {
             .replace("\\/", "/")
         val document = pageResponse.document
         val candidates = linkedSetOf<String>()
+        candidates.addAll(extractPageCandidates(pageText, data))
         candidates.addAll(extractPageSourceEmbeds(document, data))
 
         // AsyaWatch sayfasındaki JSON player tanımlarından embed adreslerini al.
@@ -514,6 +515,45 @@ class AsyaWatchProvider : MainAPI() {
         }
 
         return found
+    }
+
+    private fun looksLikePlayerUrl(url: String): Boolean {
+        val value = url.lowercase()
+        return isMediaUrl(url) ||
+            listOf(
+                "iframe",
+                "player",
+                "four.pichive.online",
+                "pichive.online",
+                "nm.php",
+                "nl.php",
+                "iframe.php",
+                "hotlinger",
+                "playru",
+            ).any(value::contains)
+    }
+
+    private fun extractPageCandidates(raw: String, baseUrl: String): List<String> {
+        if (raw.isBlank()) return emptyList()
+        val normalized = raw
+            .replace("\\/", "/")
+            .replace("\\u0026", "&")
+            .replace("&amp;", "&")
+        val candidates = linkedSetOf<String>()
+        val parsed = runCatching { org.jsoup.Jsoup.parse(normalized, baseUrl) }.getOrNull()
+        parsed?.select("iframe, video, source, embed")?.forEach { element ->
+            for (attribute in listOf("src", "data-src", "data-url", "data-embed", "href")) {
+                absoluteUrl(element.attr(attribute), baseUrl)?.let(candidates::add)
+            }
+        }
+        Regex("""(?i)(?:https?:)?//[^"'<>\\\s]+""")
+            .findAll(normalized)
+            .forEach { match ->
+                val rawUrl = match.value.trimEnd('\\', ')', ']', ',', ';', '"')
+                val absolute = absoluteUrl(rawUrl, baseUrl) ?: return@forEach
+                if (looksLikePlayerUrl(absolute)) candidates.add(absolute)
+            }
+        return candidates.toList()
     }
 
     private fun extractPageSourceEmbeds(
