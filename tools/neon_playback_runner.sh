@@ -39,7 +39,7 @@ echo ">>> External storage kontrolü:"
 adb shell mkdir -p "${PLUGIN_DIR}" || true
 adb shell ls -ld "/sdcard" "/sdcard/Cloudstream3" "${PLUGIN_DIR}" || true
 
-echo "=== Tek NeonHub eklentisi indiriliyor ve doğrulanıyor ==="
+echo "=== NeonHub ve AsyaWatch eklentileri indiriliyor ve doğrulanıyor ==="
 MANIFEST="${RUNNER_TEMP}/neoncs-plugins.json"
 curl -fsSL "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/plugins.json" -o "${MANIFEST}"
 
@@ -74,6 +74,113 @@ for name, expected_url in expected.items():
 PY
 
 while IFS=
+adb shell ls -lah "${PLUGIN_DIR}"
+adb shell "run-as ${APP_ID} ls -lah ${PLUGIN_DIR}" || true
+
+echo "=== Gerçek CloudStream / ExoPlayer testi ==="
+set +e
+./gradlew :app:connectedPrereleaseDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=com.lagradost.cloudstream3.NeonPlaybackSmokeTest \
+  -Pandroid.testInstrumentationRunnerArguments.providers=NeonHub,AsyaWatch \
+  --no-daemon --stacktrace 2>&1 | tee "${RUNNER_TEMP}/instrumentation.log"
+TEST_EXIT="${PIPESTATUS[0]}"
+set -e
+
+cp "${RUNNER_TEMP}/instrumentation.log" "${INSTRUMENTATION_LOG}" || true
+
+echo "=== Playback raporu alınıyor ==="
+rm -f "${REPORT}" "${GITHUB_WORKSPACE}/neon-playback-report.json"
+
+# Prefer the app-private report when run-as is available. GitHub emulator images
+# can reject run-as; in that case format_playback_report.py will reconstruct the
+# report directly from playback-status/logcat.txt.
+adb exec-out run-as "${APP_ID}" cat files/neon-playback-report.json > "${REPORT}" 2>/dev/null || true
+if [ -s "${REPORT}" ]; then
+  if python3 -c 'import json,sys; from pathlib import Path; p=Path(sys.argv[1]); d=json.loads(p.read_text(encoding="utf-8")); sys.exit(0 if isinstance(d,dict) and isinstance(d.get("results"),list) else 1)' "${REPORT}" 2>/dev/null; then
+    cp "${REPORT}" "${GITHUB_WORKSPACE}/neon-playback-report.json"
+    cat "${REPORT}"
+  else
+    echo "UYARI: run-as raporu geçerli JSON değil; logcat raporu kullanılacak."
+    rm -f "${REPORT}"
+  fi
+else
+  echo "UYARI: run-as rapor dosyasına erişilemedi; logcat raporu kullanılacak."
+fi
+
+echo "=== TEST_EXIT=${TEST_EXIT} ==="
+exit "${TEST_EXIT}"
+\t' read -r plugin url expected_hash expected_size; do
+  [[ -n "${plugin}" ]] || continue
+  file="${RUNNER_TEMP}/${plugin}.cs3"
+  echo ">>> ${plugin}.cs3 indiriliyor"
+  curl -fsSL "${url}" -o "${file}"
+  test -s "${file}"
+
+  actual_size="$(stat -c '%s' "${file}")"
+  actual_hash="sha256-$(sha256sum "${file}" | awk '{print $1}')"
+  if [[ "${actual_size}" != "${expected_size}" || "${actual_hash}" != "${expected_hash}" ]]; then
+    echo "::error::${plugin}.cs3 manifest hash/boyut kontrolünden geçemedi."
+    exit 1
+  fi
+
+  adb push "${file}" "${PLUGIN_DIR}/${plugin}.cs3"
+  echo "${plugin}.cs3 manifest hash ve boyut kontrolünden geçti."
+done < "${RUNNER_TEMP}/neon-plugins-manifest.tsv"
+
+echo "=== Emulator plugin dosyaları ==="
+adb shell ls -lah "${PLUGIN_DIR}"
+adb shell "run-as ${APP_ID} ls -lah ${PLUGIN_DIR}" || true
+
+echo "=== Gerçek CloudStream / ExoPlayer testi ==="
+set +e
+./gradlew :app:connectedPrereleaseDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=com.lagradost.cloudstream3.NeonPlaybackSmokeTest \
+  -Pandroid.testInstrumentationRunnerArguments.providers=NeonHub \
+  --no-daemon --stacktrace 2>&1 | tee "${RUNNER_TEMP}/instrumentation.log"
+TEST_EXIT="${PIPESTATUS[0]}"
+set -e
+
+cp "${RUNNER_TEMP}/instrumentation.log" "${INSTRUMENTATION_LOG}" || true
+
+echo "=== Playback raporu alınıyor ==="
+rm -f "${REPORT}" "${GITHUB_WORKSPACE}/neon-playback-report.json"
+
+# Prefer the app-private report when run-as is available. GitHub emulator images
+# can reject run-as; in that case format_playback_report.py will reconstruct the
+# report directly from playback-status/logcat.txt.
+adb exec-out run-as "${APP_ID}" cat files/neon-playback-report.json > "${REPORT}" 2>/dev/null || true
+if [ -s "${REPORT}" ]; then
+  if python3 -c 'import json,sys; from pathlib import Path; p=Path(sys.argv[1]); d=json.loads(p.read_text(encoding="utf-8")); sys.exit(0 if isinstance(d,dict) and isinstance(d.get("results"),list) else 1)' "${REPORT}" 2>/dev/null; then
+    cp "${REPORT}" "${GITHUB_WORKSPACE}/neon-playback-report.json"
+    cat "${REPORT}"
+  else
+    echo "UYARI: run-as raporu geçerli JSON değil; logcat raporu kullanılacak."
+    rm -f "${REPORT}"
+  fi
+else
+  echo "UYARI: run-as rapor dosyasına erişilemedi; logcat raporu kullanılacak."
+fi
+
+echo "=== TEST_EXIT=${TEST_EXIT} ==="
+exit "${TEST_EXIT}"
+\t' read -r plugin url expected_hash expected_size; do
+  [[ -n "\${plugin}" ]] || continue
+  file="\${RUNNER_TEMP}/\${plugin}.cs3"
+  echo ">>> \${plugin}.cs3 indiriliyor"
+  curl -fsSL "\${url}" -o "\${file}"
+  test -s "\${file}"
+
+  actual_size="$(stat -c '%s' "\${file}")"
+  actual_hash="sha256-$(sha256sum "\${file}" | awk '{print $1}')"
+  if [[ "\${actual_size}" != "\${expected_size}" || "\${actual_hash}" != "\${expected_hash}" ]]; then
+    echo "::error::\${plugin}.cs3 manifest hash/boyut kontrolünden geçemedi."
+    exit 1
+  fi
+
+  adb push "\${file}" "\${PLUGIN_DIR}/\${plugin}.cs3"
+  echo "\${plugin}.cs3 manifest hash ve boyut kontrolünden geçti."
+done < "\${RUNNER_TEMP}/neon-plugins-manifest.tsv"
+
 echo "=== Emulator plugin dosyaları ==="
 adb shell ls -lah "${PLUGIN_DIR}"
 adb shell "run-as ${APP_ID} ls -lah ${PLUGIN_DIR}" || true
