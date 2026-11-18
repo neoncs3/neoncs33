@@ -1,7 +1,7 @@
 [
     {
         "iconUrl": "https://asyawatch.com/favicon.ico",
-        "fileHash": "sha256-14f6f041fb072d6ac0c55494d55b4d3e671f169ce9c94eb3f69403e7342f2b9c",
+        "fileHash": "sha256-519c1501210ff3bf41cb2a57c7210a61aeae62f6435add05a7184f98c6293124",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
         "fileSize": 78365,
@@ -14,7 +14,7 @@
             "Movie",
             "TvSeries"
         ],
-        "version": 4,
+        "version": 5,
         "internalName": "AsyaWatch",
         "description": "AsyaWatch film ve dizi sa\u011flay\u0131c\u0131s\u0131",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/AsyaWatch.cs3",
