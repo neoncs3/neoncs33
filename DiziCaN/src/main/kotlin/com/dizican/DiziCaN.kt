@@ -226,7 +226,7 @@ class DiziCaNProvider : MainAPI() {
                 if (!absolute.contains("embed") && !absolute.contains(".mp4") && !absolute.contains(".m3u8")) continue
                 if (isVidmolyUrl(absolute)) {
                     if (handledVidmoly.add(absolute) &&
-                        loadExtractor(absolute, pageUrl, subtitleCallback, callback)
+                        loadExtractor(vidmolyExtractorUrl(absolute), pageUrl, subtitleCallback, callback)
                     ) found = true
                     continue
                 }
@@ -241,7 +241,7 @@ class DiziCaNProvider : MainAPI() {
             for (frame in frames) {
                 if (isVidmolyUrl(frame)) {
                     if (handledVidmoly.add(frame) &&
-                        loadExtractor(frame, pageUrl, subtitleCallback, callback)
+                        loadExtractor(vidmolyExtractorUrl(frame), pageUrl, subtitleCallback, callback)
                     ) found = true
                     continue
                 }
@@ -423,6 +423,17 @@ private fun isAdvertisementResource(rawUrl: String): Boolean {
     return uri.rawQuery.orEmpty().split('&')
         .map { it.substringBefore('=').lowercase() }
         .any { it in adQueryKeys }
+}
+
+private fun vidmolyExtractorUrl(rawUrl: String): String {
+    val host = runCatching { URI(rawUrl).host?.lowercase().orEmpty() }.getOrDefault("")
+    // vidmoly.net embed pages currently redirect to vidmoly.biz.
+    // Start from .biz so CloudStream selects Vidmolybiz and resolves relative media URLs correctly.
+    return if (host == "vidmoly.net") {
+        rawUrl.replace("://vidmoly.net", "://vidmoly.biz", ignoreCase = true)
+    } else {
+        rawUrl
+    }
 }
 
 private fun isVidmolyUrl(rawUrl: String): Boolean {
