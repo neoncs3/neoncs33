@@ -7,7 +7,6 @@ package com.neoncs3.newtvlive
 // kimlik doğrulama adımları (playlist-token, newkso.ru) BİLEREK yazılmadı.
 // ============================================================================
 
-import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.ErrorLoadingException
 import com.lagradost.cloudstream3.HomePageList
 import com.lagradost.cloudstream3.HomePageResponse
@@ -19,6 +18,7 @@ import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.app
+import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.network.WebViewResolver
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newLiveSearchResponse
@@ -29,17 +29,12 @@ import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.json.JSONArray
 import java.net.URI
 
 private const val USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
         "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-
-data class NtlChannel(
-    @JsonProperty("channel_id") val channelId: String? = null,
-    @JsonProperty("channel_name") val channelName: String? = null,
-    @JsonProperty("logo_url") val logoUrl: String? = null
-)
 
 class NewTVLive : MainAPI() {
     override var mainUrl = "https://tv.newtane.com"
@@ -97,23 +92,62 @@ class NewTVLive : MainAPI() {
         }
     }
 
-    private suspend fun fetchChannels(): List<LiveSearchResponse> {
-        val list = runCatching {
-            app.get("$API/channels", headers = headers("$mainUrl/"), timeout = 20)
-                .parsedSafe<Array<NtlChannel>>()
-        }.getOrNull() ?: return emptyList()
+    private val cfKiller = CloudflareKiller()
+    private var lastError = ""
 
-        return list.mapNotNull { ch ->
-            val id = ch.channelId?.trim()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            val title = ch.channelName?.trim()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            newLiveSearchResponse(title, "$mainUrl/live/$id", TvType.Live) {
-                this.posterUrl = ch.logoUrl?.takeIf { it.isNotBlank() }
+    // API Cloudflare arkasında; tarayıcı gibi başlıklar gönder
+    private fun apiHeaders() = mapOf(
+        "User-Agent" to USER_AGENT,
+        "Accept" to "application/json, text/plain, */*",
+        "Accept-Language" to "tr-TR,tr;q=0.9,en;q=0.8",
+        "Origin" to mainUrl,
+        "Referer" to "$mainUrl/live",
+        "Sec-Fetch-Dest" to "empty",
+        "Sec-Fetch-Mode" to "cors",
+        "Sec-Fetch-Site" to "same-site"
+    )
+
+    private suspend fun requestChannels(useKiller: Boolean): JSONArray? {
+        val resp = runCatching {
+            if (useKiller) {
+                app.get("$API/channels", headers = apiHeaders(), interceptor = cfKiller, timeout = 30)
+            } else {
+                app.get("$API/channels", headers = apiHeaders(), timeout = 20)
             }
-        }.distinctBy { it.url }.sortedBy { it.name.lowercase() }
+        }.onFailure { lastError = "İstek hatası: ${it.message}" }.getOrNull() ?: return null
+
+        if (resp.code !in 200..299) {
+            lastError = "HTTP ${resp.code}"
+            return null
+        }
+        return runCatching { JSONArray(resp.text) }.getOrNull()
+            ?: run { lastError = "JSON okunamadı: ${resp.text.take(80)}"; null }
+    }
+
+    private suspend fun fetchChannels(): List<LiveSearchResponse> {
+        // Önce düz istek, olmazsa Cloudflare çözücüyle tekrar dene
+        val arr = requestChannels(false) ?: requestChannels(true) ?: return emptyList()
+
+        val out = ArrayList<LiveSearchResponse>()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val id = o.optString("channel_id").trim().takeIf { it.isNotBlank() && it != "null" } ?: continue
+            val title = o.optString("channel_name").trim().takeIf { it.isNotBlank() && it != "null" } ?: continue
+            val logo = o.optString("logo_url").takeIf { it.isNotBlank() && it != "null" }
+            out.add(
+                newLiveSearchResponse(title, "$mainUrl/live/$id", TvType.Live) {
+                    this.posterUrl = logo
+                }
+            )
+        }
+        return out.distinctBy { it.url }.sortedBy { it.name.lowercase() }
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val channels = getChannels()
+        if (channels.isEmpty()) {
+            throw ErrorLoadingException("Kanal listesi alınamadı ($lastError)")
+        }
         val start = (page.coerceAtLeast(1) - 1) * PAGE_SIZE
         val pageChannels = channels.drop(start).take(PAGE_SIZE)
         return newHomePageResponse(
