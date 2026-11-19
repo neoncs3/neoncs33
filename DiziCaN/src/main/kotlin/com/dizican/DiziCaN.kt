@@ -356,7 +356,7 @@ private fun Element.posterSrcLazy(): String? {
 }
 
 private val HLS_RES = Regex("""RESOLUTION=\d+x(\d+)""", RegexOption.IGNORE_CASE)
-private val HLS_NAME = Regex("NAME=\\\"(\\d{3,4})p?\\\"", RegexOption.IGNORE_CASE)
+private val HLS_NAME = Regex("""NAME=\"(\d{3,4})p?\"""", RegexOption.IGNORE_CASE)
 
 private fun parseHlsVariants(masterUrl: String, m3u8Text: String): List<Pair<Int, String>> {
     if (!m3u8Text.contains("#EXT-X-STREAM-INF") ||
