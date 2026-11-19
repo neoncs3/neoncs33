@@ -26,16 +26,6 @@ import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.json.JSONObject
-import android.app.Activity
-import android.app.AlertDialog
-import android.content.Context
-import android.content.SharedPreferences
-import android.widget.ArrayAdapter
-import android.widget.CheckBox
-import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.Spinner
-import android.widget.TextView
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URI
@@ -57,8 +47,7 @@ class DiziCaNProvider : MainAPI() {
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
     override val hasMainPage = true
-    override val mainPage get() = ROWS.mapNotNull { rowName ->
-        if (!Settings.rowEnabled(rowName)) return@mapNotNull null
+    override val mainPage get() = ROWS.map { rowName ->
         MainPageData(rowName, when (rowName) {
             "BL" -> "https://dizican.cc/category/bl-filmleri-izle/"
             "Fantastik" -> "https://dizican.cc/category/fantastik-filmleri-izle/"
@@ -198,17 +187,15 @@ class DiziCaNProvider : MainAPI() {
         var found = false
         val seen = mutableSetOf<String>()
         suspend fun emit(stream: String, label: String, referer: String, explicitQuality: Int? = null) {
-            if (!stream.startsWith("http") || !seen.add(stream)) return
+            if (!stream.startsWith("http") || isAdvertisementResource(stream) || !seen.add(stream)) return
             val isM3u8 = stream.contains(".m3u8")
             val type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
             val quality = explicitQuality ?: if (isM3u8) Qualities.Unknown.value else getQualityFromName(label)
-            if (Settings.qualityAllowed(quality)) {
-                callback.invoke(newExtractorLink(name, label, stream, type) {
-                    this.referer = referer
-                    this.quality = quality
-                })
-                found = true
-            }
+            callback.invoke(newExtractorLink(name, label, stream, type) {
+                this.referer = referer
+                this.quality = quality
+            })
+            found = true
             if (isM3u8 && explicitQuality == null) {
                 val playlist = runCatching { app.get(stream, headers = uaHeaders, referer = referer).text }.getOrNull().orEmpty()
                 for ((h, vUrl) in parseHlsVariants(stream, playlist)) {
@@ -241,7 +228,7 @@ class DiziCaNProvider : MainAPI() {
             val frames = (resp.document.select("iframe").mapNotNull {
                 val raw = it.attr("src").ifBlank { it.attr("data-src") }.ifBlank { it.attr("vdo-src") }
                 fixUrlNull(raw)
-            } + regexFrames).distinct()
+            } + regexFrames).distinct().filterNot(::isAdvertisementResource)
             for (frame in frames) {
                 if (!frame.startsWith("http") || frame.endsWith("/embed/") || frame.endsWith("/video/") ||
                     frame.contains("vzaar.com") || frame.contains("youtu")) continue
@@ -270,14 +257,14 @@ class DiziCaNProvider : MainAPI() {
                     }
                     for (sub in Regex("""<iframe[^>]+(?:src|data-src)="([^"]+)""").findAll(innerText)) {
                         val subUrl = fixUrl(sub.groupValues[1])
-                        if (loadExtractor(subUrl, frame, subtitleCallback, callback)) found = true
+                        if (!isAdvertisementResource(subUrl) && loadExtractor(subUrl, frame, subtitleCallback, callback)) found = true
                     }
                 }
                 if (seen.size == seenBefore && loadExtractor(frame, "$mainUrl/", subtitleCallback, callback)) found = true
             }
             val subs = Regex("""https?://[^"'\s<>]+?\.(?:vtt|srt)(?:\?[^"'\s<>]*)""").findAll(text)
             for (m in subs) {
-                if (Settings.subtitleAllowed("tr")) subtitleCallback.invoke(SubtitleFile("tr", m.value))
+                subtitleCallback.invoke(SubtitleFile("tr", m.value))
             }
         }
         if (!found) {
@@ -299,7 +286,7 @@ class DiziCaNProvider : MainAPI() {
         var found = false
         for (i in 0 until videos.length()) {
             val item = videos.optJSONObject(i) ?: continue
-            val stream = item.optString("url").takeIf { it.startsWith("http") } ?: continue
+            val stream = item.optString("url").takeIf { it.startsWith("http") && !isAdvertisementResource(it) } ?: continue
             val label = item.optString("name").ifBlank { "OkRu" }
             val q = when (label.lowercase()) {
                 "mobile", "lowest" -> 240
@@ -309,7 +296,6 @@ class DiziCaNProvider : MainAPI() {
                 "full" -> 1080
                 else -> getQualityFromName(label.uppercase())
             }
-            if (!Settings.qualityAllowed(q)) continue
             callback.invoke(
                 newExtractorLink(name, "OkRu $label", stream, ExtractorLinkType.VIDEO) {
                     this.referer = "https://ok.ru/"
@@ -396,103 +382,31 @@ private fun parseHlsVariants(masterUrl: String, m3u8Text: String): List<Pair<Int
 }
 
 /**
- * DiziCaN ayarları: kalite sınırı, altyazı tercihi ve ana sayfa satırları.
- * Bu ayar katmanı yalnızca bu eklentiye aittir.
+ * Açıkça reklam olarak işaretlenmiş medya adreslerini ele.
+ * Aynı dosyanın içine birleştirilmiş (server-side stitched) reklamları bu kontrol ayıramaz.
  */
-object Settings {
-    private var prefs: SharedPreferences? = null
-    private val qualityLabels = arrayOf("Sınırsız", "1080p", "720p", "480p", "360p")
-    private val qualityValues = intArrayOf(0, 1080, 720, 480, 360)
-    private val subtitleLabels = arrayOf("Tümü", "Türkçe", "İngilizce", "Kapalı")
-    private val subtitleValues = arrayOf("all", "tr", "en", "off")
+private fun isAdvertisementResource(rawUrl: String): Boolean {
+    val uri = runCatching { URI(rawUrl) }.getOrNull() ?: return false
+    val host = uri.host.orEmpty().lowercase()
+    val knownAdHosts = listOf(
+        "doubleclick.net",
+        "googlesyndication.com",
+        "googleadservices.com",
+        "adservice.google.com",
+        "amazon-adsystem.com",
+        "adnxs.com",
+        "taboola.com",
+        "outbrain.com",
+        "propellerads.com",
+    )
+    if (knownAdHosts.any { host == it || host.endsWith(".$it") }) return true
 
-    fun init(context: Context) {
-        prefs = context.applicationContext.getSharedPreferences("bigbull_dizican", Context.MODE_PRIVATE)
-    }
+    val adPathSegments = setOf("ad", "ads", "advert", "advertisement", "preroll", "pre-roll", "vast", "vpaid", "commercial")
+    if (uri.rawPath.orEmpty().lowercase().split('/').any { it in adPathSegments }) return true
 
-    var qualityCap: Int
-        get() = prefs?.getInt("quality_cap", 0) ?: 0
-        set(value) { prefs?.edit()?.putInt("quality_cap", value)?.apply() }
-
-    var subtitleLang: String
-        get() = prefs?.getString("subtitle_lang", "all") ?: "all"
-        set(value) { prefs?.edit()?.putString("subtitle_lang", value)?.apply() }
-
-    fun qualityAllowed(quality: Int): Boolean {
-        val cap = qualityCap
-        return cap == 0 || quality <= 0 || quality <= cap
-    }
-
-    fun subtitleAllowed(language: String?): Boolean {
-        val preference = subtitleLang
-        if (preference == "off") return false
-        if (preference == "all") return true
-        val label = language?.lowercase().orEmpty()
-        return when (preference) {
-            "tr" -> label.contains("tr") || label.contains("türk") || label.contains("turk")
-            "en" -> label.contains("en") || label.contains("ingiliz") || label.contains("english")
-            else -> true
-        }
-    }
-
-    fun rowEnabled(name: String): Boolean =
-        prefs?.getStringSet(ROW_KEY, null)?.contains(name) != true
-
-    private fun setRows(names: Collection<String>, enabled: Set<String>) {
-        prefs?.edit()?.putStringSet(ROW_KEY, names.filterNot { it in enabled }.toSet())?.apply()
-    }
-
-    fun showDialog(context: Context, title: String = "Ayarlar", rows: List<String> = emptyList()) {
-        val activity = context as? Activity ?: return
-        val layout = LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(64, 40, 64, 16)
-        }
-        layout.addView(TextView(activity).apply { text = "Kalite üst sınırı" })
-        val qualitySpinner = Spinner(activity).apply {
-            adapter = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, qualityLabels)
-            setSelection(qualityValues.indexOf(qualityCap).coerceAtLeast(0))
-        }
-        layout.addView(qualitySpinner)
-        layout.addView(TextView(activity).apply { text = "Altyazı" })
-        val subtitleSpinner = Spinner(activity).apply {
-            adapter = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, subtitleLabels)
-            setSelection(subtitleValues.indexOf(subtitleLang).coerceAtLeast(0))
-        }
-        layout.addView(subtitleSpinner)
-
-        val checks = if (rows.isNotEmpty()) {
-            layout.addView(TextView(activity).apply { text = "Ana sayfa kategorileri" })
-            val list = rows.map { row ->
-                CheckBox(activity).apply {
-                    text = row
-                    isChecked = rowEnabled(row)
-                }
-            }
-            layout.addView(ScrollView(activity).apply {
-                addView(LinearLayout(activity).apply {
-                    orientation = LinearLayout.VERTICAL
-                    list.forEach { addView(it) }
-                })
-            })
-            list
-        } else {
-            emptyList()
-        }
-
-        AlertDialog.Builder(activity)
-            .setTitle(title)
-            .setView(layout)
-            .setPositiveButton("Kaydet") { _, _ ->
-                qualityCap = qualityValues[qualitySpinner.selectedItemPosition]
-                subtitleLang = subtitleValues[subtitleSpinner.selectedItemPosition]
-                if (rows.isNotEmpty()) {
-                    setRows(rows, checks.filter { it.isChecked }.map { it.text.toString() }.toSet())
-                }
-            }
-            .setNegativeButton("İptal", null)
-            .show()
-    }
-
-    private const val ROW_KEY = "rows"
+    val adQueryKeys = setOf("ad", "adtag", "ad_tag", "vast", "vasturl", "preroll", "advertisement")
+    return uri.rawQuery.orEmpty().split('&')
+        .map { it.substringBefore('=').lowercase() }
+        .any { it in adQueryKeys }
 }
+
