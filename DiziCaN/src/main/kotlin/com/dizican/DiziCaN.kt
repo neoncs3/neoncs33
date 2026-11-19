@@ -215,16 +215,10 @@ class DiziCaNProvider : MainAPI() {
                 fixUrlNull(raw)
             }
             val frames = (domFrames + regexFrames).distinct().filterNot(::isAdvertisementResource)
-            val hasVidmolyPlayer = (embeds.map(::fixUrl) + frames).any(::isVidmolyUrl)
+            // Page-level raw media URLs are intentionally not emitted as "Direct".
+            // DiziCaN includes short preroll/ad clips beside the real player URL.
+            // Resolve iframe/embed URLs through their provider extractors instead.
             val handledVidmoly = mutableSetOf<String>()
-
-            // DiziCaN pages with Vidmoly embeds can also contain a short preroll MP4
-            // in the page HTML. Never offer that "Direct" clip when the real player exists.
-            // Use CloudStream's Vidmoly extractor first; it reads JWPlayer's actual sources.
-            if (!hasVidmolyPlayer) {
-                val media = Regex("""https?://[^"'\s<>]+?\.(?:m3u8|mp4)(?:\?[^"'\s<>]*)?""").findAll(text)
-                for (m in media) emit(m.value, "Direct", pageUrl)
-            }
 
             for (embed in embeds) {
                 val absolute = fixUrl(embed)
