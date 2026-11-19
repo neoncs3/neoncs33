@@ -156,15 +156,19 @@ class DaddyLive : MainAPI() {
             "hub"       // Player 7
         )
 
-        var found = false
+        var emittedLinks = 0
         for (folder in playerFolders) {
             val playerUrl = data.replace("{folder}", folder)
-            val loaded = runCatching {
-                loadExtractor(playerUrl, mainUrl, subtitleCallback, callback)
-            }.getOrDefault(false)
-            found = found || loaded
+            runCatching {
+                loadExtractor(playerUrl, mainUrl, subtitleCallback) { link ->
+                    callback(link)
+                    emittedLinks++
+                }
+            }
+            // Stop at the first player that actually returns a playable link.
+            if (emittedLinks > 0) break
         }
-        return found
+        return emittedLinks > 0
     }
 }
 
@@ -238,6 +242,9 @@ class DaddyLivePlayerExtractor : ExtractorApi() {
             app.get(url, headers = headers(referer ?: "$mainUrl/"))
         }.getOrNull() ?: return
 
+        // A missing player path should not trigger iframe/WebView resolution.
+        if (response.code !in 200..299) return
+
         val document = response.document
         val normalizedHtml = response.text
             .replace("\\/", "/")
@@ -287,7 +294,7 @@ class DaddyLivePlayerExtractor : ExtractorApi() {
                     headers = headers(url),
                     interceptor = WebViewResolver(
                         interceptUrl = Regex("""(?i)\.m3u8(?:\?|$)"""),
-                        timeout = 30_000L
+                        timeout = 8_000L
                     )
                 ).url
             }.getOrNull()
