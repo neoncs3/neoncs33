@@ -2,7 +2,8 @@ package com.neoncs3.newtvlive
 
 import android.util.Base64
 import android.util.Log
-import okhttp3.Request
+import okhttp3.Request as OkHttpRequest
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.ByteArrayInputStream
@@ -12,11 +13,11 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.util.UUID
-import java.util.ArrayDeque
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.zip.GZIPInputStream
@@ -47,30 +48,6 @@ import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import org.json.JSONArray
-import android.util.Base64
-import android.util.Log
-import okhttp3.Request as OkHttpRequest
-import java.io.BufferedReader
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import java.io.InputStreamReader
-import java.net.InetAddress
-import java.net.InetSocketAddress
-import java.net.ServerSocket
-import java.net.Socket
-import java.net.URI
-import java.net.URLDecoder
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
-import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executors
-import java.util.zip.GZIPInputStream
-import java.util.zip.InflaterInputStream
-import javax.crypto.Cipher
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 private const val USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
@@ -285,7 +262,7 @@ class NewTVLive : MainAPI() {
         )
     }
 
-    private fun emitLocal(
+    private suspend fun emitLocal(
         mediaUrl: String,
         referer: String,
         callback: (ExtractorLink) -> Unit
@@ -660,9 +637,12 @@ private object NewTVLiveProxy {
             }
 
             val json = runCatching {
-                org.json.JSONObject(String(result.second, StandardCharsets.UTF_8))
-            }.getOrNull()
-            val freshToken = json?.optString("token").orEmpty()
+                JSONObject(String(result.second, StandardCharsets.UTF_8))
+            }.getOrNull() ?: run {
+                session.retryAfter = now + 15_000L
+                return session.token?.let { token -> withToken(url, token) } ?: url
+            }
+            val freshToken = json.optString("token")
             if (freshToken.isBlank() || freshToken == "null") {
                 session.retryAfter = now + 15_000L
                 return session.token?.let { token -> withToken(url, token) } ?: url
