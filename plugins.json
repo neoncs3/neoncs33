@@ -91,10 +91,10 @@
     },
     {
         "iconUrl": "https://tv.newtane.com/favicon.ico",
-        "fileHash": "sha256-cb889b4f5be595356e3fb921ca9270131adb37dd3b02d9cb4cfd564ca4975444",
+        "fileHash": "sha256-36e97aec0ad59fed59ffefe945997ed8a085cda8b412edd027c6e7ddeffe1b6f",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 55746,
+        "fileSize": 55989,
         "status": 1,
         "language": "tr",
         "authors": [
