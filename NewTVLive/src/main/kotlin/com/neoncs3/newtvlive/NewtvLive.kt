@@ -12,6 +12,8 @@ package com.neoncs3.newtvlive
 // ============================================================================
 
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.lagradost.cloudstream3.ErrorLoadingException
 import com.lagradost.cloudstream3.HomePageList
 import com.lagradost.cloudstream3.HomePageResponse
@@ -23,7 +25,7 @@ import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.app
-import com.lagradost.cloudstream3.fixUrl
+import com.lagradost.cloudstream3.network.WebViewResolver
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newLiveSearchResponse
 import com.lagradost.cloudstream3.newLiveStreamLoadResponse
@@ -33,6 +35,7 @@ import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.jsoup.nodes.Document
 import java.net.URI
 
 private const val USER_AGENT =
@@ -69,6 +72,20 @@ class NewTVLive : MainAPI() {
                 "a[href*='/cast/stream-'], a[href*='/watch/stream-'], [data-url*='/stream-']"
 
         private val idRegex = Regex("""(?:id=|stream-)(\d+)""")
+        private val linkRegex = Regex("""stream-\d+|[?&]id=\d+""")
+
+        // Geniş tarama: kanal bağlantısı gibi görünen her öğe
+        private const val GENERIC_SELECTOR = "a[href], [data-url], [data-href]"
+
+        // Ana site boş/erişilemezse kullanılan DaddyLive katalog adresleri
+        private val DL_DOMAINS = listOf(
+            "https://daddylive.pk",
+            "https://dlhd.pk",
+            "https://dlhd.st",
+            "https://dlstreams.st",
+            "https://dlive.sx"
+        )
+        private const val DL_SELECTOR = "div.grid > a, a.card, a[href*='watch.php?id=']"
 
         // Dex'te görülen yayın adresi kalıpları
         private val m3u8Quoted = Regex("""["'](https?://[^\s"'<>]+\.m3u8[^\s"'<>]*)["']""")
@@ -161,28 +178,37 @@ class NewTVLive : MainAPI() {
         }
     }
 
-    private suspend fun fetchRows(): List<Row> {
-        val document = app.get(mainUrl, headers = headers("$mainUrl/")).document
-        val logoDb = logos()
-        val rows = linkedMapOf<String, Row>()
-
-        for (el in document.select(CHANNEL_SELECTOR)) {
-            val href = el.attr("href").ifBlank { el.attr("data-url") }
+    private fun collect(
+        doc: Document,
+        base: String,
+        selector: String,
+        defaultSection: String,
+        logoDb: Map<String, String>,
+        rows: MutableMap<String, Row>
+    ) {
+        for (el in doc.select(selector)) {
+            val href = listOf("href", "data-url", "data-href")
+                .map { el.attr(it) }
+                .firstOrNull { linkRegex.containsMatchIn(it) } ?: continue
             val id = idRegex.find(href)?.groupValues?.getOrNull(1) ?: continue
             if (rows.containsKey(id)) continue
 
-            val title = el.selectFirst("img[alt]")?.attr("alt")?.trim()?.takeIf { it.isNotBlank() }
+            val title = el.selectFirst(
+                ".card__title, .card-title, .channel-title, .channel-name, .se-stream__name"
+            )?.text()?.trim()?.takeIf { it.isNotBlank() }
+                ?: el.selectFirst("img[alt]")?.attr("alt")?.trim()?.takeIf { it.isNotBlank() }
                 ?: el.attr("title").trim().takeIf { it.isNotBlank() }
                 ?: el.text().trim().takeIf { it.isNotBlank() }
                 ?: continue
 
-            val url = fixUrl(href)
+            val url = if (href.startsWith("http")) href
+            else runCatching { URI(base).resolve(href).toString() }.getOrDefault(fixUrl(href))
 
             // Bölüm adı: en yakın <section>'ın başlığı veya data-m-sport değeri
             val sec = el.parents().firstOrNull { it.tagName() == "section" }
             val section = sec?.selectFirst("h1, h2, h3")?.text()?.trim()?.takeIf { it.isNotBlank() }
                 ?: sec?.attr("data-m-sport")?.trim()?.takeIf { it.isNotBlank() }
-                ?: "Kanallar"
+                ?: defaultSection
 
             val pageImg = el.selectFirst("img")?.let { i ->
                 i.absUrl("data-src").ifBlank { i.absUrl("src") }
@@ -193,6 +219,93 @@ class NewTVLive : MainAPI() {
                 section,
                 newLiveSearchResponse(title, url, TvType.Live) { this.posterUrl = poster }
             )
+        }
+    }
+
+    // --- /live sayfası JavaScript ile yüklendiği için sayfanın yaptığı /api/ isteklerini yakala
+    private val mapper = ObjectMapper()
+
+    private fun walk(node: JsonNode, out: MutableList<JsonNode>) {
+        if (node.isObject) {
+            out.add(node)
+            node.elements().forEach { walk(it, out) }
+        } else if (node.isArray) {
+            node.forEach { walk(it, out) }
+        }
+    }
+
+    private fun JsonNode.str(vararg keys: String): String? =
+        keys.firstNotNullOfOrNull { k ->
+            get(k)?.takeIf { it.isTextual || it.isNumber }?.asText()?.trim()
+                ?.takeIf { it.isNotBlank() && it != "null" }
+        }
+
+    private suspend fun sniffLiveRows(logoDb: Map<String, String>): List<Row> {
+        val resolver = WebViewResolver(
+            interceptUrl = Regex("""a^"""), // hiç eşleşmez; tüm istekleri additionalUrls ile topla
+            additionalUrls = listOf(Regex("""newtane\.com/api/(?!playlist-token)""")),
+            timeout = 15_000L
+        )
+        val requests = runCatching {
+            resolver.resolveUsingWebView("$mainUrl/live", "$mainUrl/").second
+        }.getOrDefault(emptyList())
+
+        val rows = linkedMapOf<String, Row>()
+        for (req in requests.distinctBy { it.url.toString() }) {
+            val body = runCatching {
+                app.get(req.url.toString(), headers = req.headers.toMap(), timeout = 15).text
+            }.getOrNull() ?: continue
+            val root = runCatching { mapper.readTree(body) }.getOrNull() ?: continue
+
+            val nodes = mutableListOf<JsonNode>()
+            walk(root, nodes)
+            for (n in nodes) {
+                val title = n.str("name", "title", "channel_name", "channelName") ?: continue
+                val slug = n.str("slug", "channel_id", "channelId", "id") ?: continue
+                val logo = n.str("logo", "image", "poster", "thumbnail", "icon", "logo_url")
+                // Sadece id+ad taşıyan kayıtlar (tür listesi vb.) kanal sayılmaz
+                if (n.str("slug") == null && logo == null) continue
+                if (rows.containsKey(slug)) continue
+                val section = n.str("category", "group", "genre", "type") ?: "Canlı"
+                val poster = logo?.let { fixUrlNull(it) } ?: logoDb[normalize(title)]
+                rows[slug] = Row(
+                    section,
+                    newLiveSearchResponse(title, "$mainUrl/live/$slug", TvType.Live) {
+                        this.posterUrl = poster
+                    }
+                )
+            }
+            if (rows.isNotEmpty()) break
+        }
+        return rows.values.toList()
+    }
+
+    private suspend fun fetchRows(): List<Row> {
+        val logoDb = runCatching { logos() }.getOrDefault(emptyMap())
+        val rows = linkedMapOf<String, Row>()
+
+        // 1) /live sayfasının kendi isteklerinden (JSON API)
+        sniffLiveRows(logoDb).forEach { rows[it.item.url] = it }
+
+        // 2) Statik HTML (eski seçiciler)
+        if (rows.isEmpty()) {
+            runCatching { app.get("$mainUrl/live", headers = headers("$mainUrl/")).document }
+                .getOrNull()?.let { doc ->
+                    collect(doc, mainUrl, CHANNEL_SELECTOR, "Kanallar", logoDb, rows)
+                    if (rows.isEmpty()) collect(doc, mainUrl, GENERIC_SELECTOR, "Kanallar", logoDb, rows)
+                }
+        }
+
+        // 3) Boşsa DaddyLive 24/7 kataloğu
+        if (rows.isEmpty()) {
+            for (d in DL_DOMAINS) {
+                val doc = runCatching {
+                    app.get("$d/24-7-channels.php", headers = headers("$d/"), timeout = 15).document
+                }.getOrNull() ?: continue
+                collect(doc, d, DL_SELECTOR, "24/7 Kanallar", logoDb, rows)
+                if (rows.isEmpty()) collect(doc, d, GENERIC_SELECTOR, "24/7 Kanallar", logoDb, rows)
+                if (rows.isNotEmpty()) break
+            }
         }
         return rows.values.toList()
     }
@@ -212,7 +325,7 @@ class NewTVLive : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
-        idRegex.find(url) ?: throw ErrorLoadingException("Kanal ID bulunamadı")
+        if (url.isBlank()) throw ErrorLoadingException("Kanal adresi boş")
         val known = runCatching { getRows().firstOrNull { it.item.url == url }?.item }.getOrNull()
         val title = known?.name ?: runCatching {
             app.get(url, headers = headers("$mainUrl/")).document
@@ -294,6 +407,30 @@ class NewTVLive : MainAPI() {
                 extractM3u8(text).firstOrNull()?.let {
                     emit(it, url, callback); return true
                 }
+            }
+        }
+
+        // 3) Son çare: sayfanın kendi oynatıcısını WebView'da çalıştır ve normal
+        //    .m3u8 isteğini gözlemle (doğrulamayı oynatıcı kendisi yapar)
+        val candidates = buildList {
+            add(data)
+            if (id != null) EMBEDS.forEach { add("$it$id") }
+        }
+        for (candidate in candidates) {
+            val sniffed = runCatching {
+                app.get(
+                    candidate,
+                    referer = "$mainUrl/",
+                    headers = headers("$mainUrl/"),
+                    interceptor = WebViewResolver(
+                        interceptUrl = Regex("""(?i)\.m3u8(?:\?|$)"""),
+                        timeout = 10_000L
+                    )
+                ).url
+            }.getOrNull()
+            if (!sniffed.isNullOrBlank() && sniffed.contains(".m3u8", ignoreCase = true)) {
+                emit(sniffed, candidate, callback)
+                return true
             }
         }
         return false
