@@ -6,7 +6,6 @@ cloudstream {
     status = 3
     tvTypes = listOf("Live")
     language = "en"
-    iconUrl = "https://thedaddy.li/favicon.ico"
 }
 
 android {
