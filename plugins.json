@@ -91,10 +91,10 @@
     },
     {
         "iconUrl": "https://tv.newtane.com/favicon.ico",
-        "fileHash": "sha256-36e97aec0ad59fed59ffefe945997ed8a085cda8b412edd027c6e7ddeffe1b6f",
+        "fileHash": "sha256-374796e9d52672c10e7a33c882f776d262ad847429a14ff865537bbc15e6007c",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 55989,
+        "fileSize": 78837,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -103,7 +103,7 @@
         "tvTypes": [
             "Live"
         ],
-        "version": 1,
+        "version": 2,
         "internalName": "NewTVLive",
         "description": "NewTV Live \u2014 tv.newtane.com canl\u0131 yay\u0131n sa\u011flay\u0131c\u0131s\u0131",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/NewTVLive.cs3",
