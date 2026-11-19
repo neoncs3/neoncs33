@@ -39,7 +39,7 @@ echo ">>> External storage kontrolü:"
 adb shell mkdir -p "${PLUGIN_DIR}" || true
 adb shell ls -ld "/sdcard" "/sdcard/Cloudstream3" "${PLUGIN_DIR}" || true
 
-echo "=== NeonHub ve AsyaWatch eklentileri indiriliyor ve doğrulanıyor ==="
+echo "=== NeonHub, AsyaWatch ve DiziCaN eklentileri indiriliyor ve doğrulanıyor ==="
 MANIFEST="${RUNNER_TEMP}/neoncs-plugins.json"
 curl -fsSL "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/plugins.json" -o "${MANIFEST}"
 
@@ -54,6 +54,7 @@ with open(sys.argv[1], encoding="utf-8") as f:
 expected = {
     "NeonHub": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/NeonHub.cs3",
     "AsyaWatch": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/AsyaWatch.cs3",
+    "DiziCaN": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/DiziCaN.cs3",
 }
 for name, expected_url in expected.items():
     matches = [item for item in manifest if item.get("internalName") == name]
@@ -70,6 +71,8 @@ for name, expected_url in expected.items():
         raise SystemExit(f"{name} dosya boyutu geçersiz")
     if name == "AsyaWatch" and int(item.get("version", 0)) < 4:
         raise SystemExit("AsyaWatch sürüm 4 ve üzeri bekleniyor")
+    if name == "DiziCaN" and int(item.get("version", 0)) < 12:
+        raise SystemExit("DiziCaN sürüm 12 ve üzeri bekleniyor")
     print(f"{name}|{expected_url}|{file_hash}|{file_size}")
 PY
 
@@ -99,7 +102,7 @@ echo "=== Gerçek CloudStream / ExoPlayer testi ==="
 set +e
 ./gradlew :app:connectedPrereleaseDebugAndroidTest \
   -Pandroid.testInstrumentationRunnerArguments.class=com.lagradost.cloudstream3.NeonPlaybackSmokeTest \
-  -Pandroid.testInstrumentationRunnerArguments.providers=AsyaWatch \
+  -Pandroid.testInstrumentationRunnerArguments.providers=DiziCaN \
   --no-daemon --stacktrace 2>&1 | tee "${RUNNER_TEMP}/instrumentation.log"
 TEST_EXIT="${PIPESTATUS[0]}"
 set -e
