@@ -1,13 +1,13 @@
 {
   "provider": "JetFilmizle",
   "player": "DPlayer Worker / VideoPark",
-  "status": "green",
-  "checked_at_utc": "2026-11-19T10:52:11+00:00",
-  "api_status": 200,
-  "hls_status": 200,
-  "hls_type": "hls",
-  "source_count": 1,
+  "status": "yellow",
+  "checked_at_utc": "2026-11-19T12:06:26+00:00",
+  "api_status": 500,
+  "hls_status": null,
+  "hls_type": null,
+  "source_count": 0,
   "subtitle_count": 0,
-  "media_host": "dplayer.erikkalinina1994.workers.dev",
-  "message": "Worker API ve HLS playlist yanıtı doğrulandı"
+  "media_host": null,
+  "message": "Worker API HTTP 500"
 }
