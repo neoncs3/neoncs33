@@ -1,4 +1,4 @@
-version = 1
+version = 2
 
 cloudstream {
     description = "NewTV Live — tv.newtane.com canlı yayın sağlayıcısı"
