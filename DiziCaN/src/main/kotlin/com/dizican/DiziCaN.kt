@@ -23,6 +23,8 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.getQualityFromName
+import com.lagradost.cloudstream3.extractors.helper.JwPlayerHelper
+import com.lagradost.cloudstream3.utils.JsUnpacker
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.json.JSONObject
@@ -225,9 +227,11 @@ class DiziCaNProvider : MainAPI() {
                 if (absolute == pageUrl) continue
                 if (!absolute.contains("embed") && !absolute.contains(".mp4") && !absolute.contains(".m3u8")) continue
                 if (isVidmolyUrl(absolute)) {
-                    if (handledVidmoly.add(absolute) &&
-                        loadExtractor(vidmolyExtractorUrl(absolute), pageUrl, subtitleCallback, callback)
-                    ) found = true
+                    if (handledVidmoly.add(absolute)) {
+                        val extracted = loadVidmolySources(absolute, pageUrl, subtitleCallback, callback)
+                        if (extracted) found = true
+                        else if (loadExtractor(vidmolyExtractorUrl(absolute), pageUrl, subtitleCallback, callback)) found = true
+                    }
                     continue
                 }
                 if (absolute.contains(".mp4") || absolute.contains(".m3u8")) {
@@ -240,9 +244,11 @@ class DiziCaNProvider : MainAPI() {
             }
             for (frame in frames) {
                 if (isVidmolyUrl(frame)) {
-                    if (handledVidmoly.add(frame) &&
-                        loadExtractor(vidmolyExtractorUrl(frame), pageUrl, subtitleCallback, callback)
-                    ) found = true
+                    if (handledVidmoly.add(frame)) {
+                        val extracted = loadVidmolySources(frame, pageUrl, subtitleCallback, callback)
+                        if (extracted) found = true
+                        else if (loadExtractor(vidmolyExtractorUrl(frame), pageUrl, subtitleCallback, callback)) found = true
+                    }
                     continue
                 }
                 if (!frame.startsWith("http") || frame.endsWith("/embed/") || frame.endsWith("/video/") ||
@@ -284,6 +290,96 @@ class DiziCaNProvider : MainAPI() {
         }
         if (!found) {
             throw ErrorLoadingException("$name: oynatılabilir akış yok")
+        }
+        return found
+    }
+
+    /**
+     * Vidmoly bazen HLS adresini JWPlayer setup betiğinden ayrı bir betikte tutar.
+     * Resmî çıkarıcı yalnızca sources: bulunan ilk betiği okuduğu için bu betikler atlanabilir.
+     * Tüm betikleri JWPlayer yardımcısından geçir; ayrıca canlı ve imzalı vmpx HLS adresini
+     * sayfa açıldığı anda yakala. İmzalı URL kalıcı olarak saklanmaz.
+     */
+    private suspend fun loadVidmolySources(
+        rawEmbed: String,
+        pageReferer: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit,
+    ): Boolean {
+        val embedUrl = vidmolyExtractorUrl(rawEmbed)
+        val requestHeaders = mapOf(
+            "user-agent" to browserHeaders.getValue("user-agent"),
+            "Sec-Fetch-Dest" to "iframe",
+        )
+        val response = runCatching {
+            app.get(embedUrl, headers = requestHeaders, referer = pageReferer)
+        }.getOrNull() ?: return false
+
+        val embedHost = runCatching {
+            val uri = URI(embedUrl)
+            "${uri.scheme}://${uri.host}/"
+        }.getOrDefault("https://vidmoly.biz/")
+
+        var found = false
+        val emitted = mutableSetOf<String>()
+
+        fun emitLink(link: ExtractorLink) {
+            val stream = link.url
+            if (!stream.startsWith("http") || isAdvertisementResource(stream) || !emitted.add(stream)) return
+            link.referer = embedUrl
+            link.headers = link.headers + requestHeaders
+            callback(link)
+            found = true
+        }
+
+        val scripts = response.document.select("script").map { it.data() }.filter { it.isNotBlank() }
+        for (rawScript in scripts) {
+            val candidates = linkedSetOf<String>()
+            candidates.add(rawScript)
+            candidates.add(
+                rawScript.replace("\\/", "/")
+                    .replace("\\u0026", "&")
+                    .replace("\\u003d", "=")
+                    .replace("&amp;", "&")
+            )
+            runCatching { JsUnpacker(rawScript).unpack() }.getOrNull()
+                ?.takeIf { it.isNotBlank() && it != rawScript }
+                ?.let { candidates.add(it) }
+
+            for (script in candidates) {
+                runCatching {
+                    JwPlayerHelper.extractStreamLinks(
+                        script,
+                        "Vidmoly",
+                        embedHost,
+                        { link -> emitLink(link) },
+                        subtitleCallback,
+                    )
+                }
+            }
+        }
+
+        // Vidmoly's hls2 URL may be present outside the JWPlayer sources array.
+        // Extract it dynamically from the current embed response; signed query values expire.
+        val normalizedHtml = response.text
+            .replace("\\/", "/")
+            .replace("\\u0026", "&")
+            .replace("\\u003d", "=")
+            .replace("&amp;", "&")
+        val vmpxHls = Regex(
+            """https?://[^"'\s<>]*vmpx\.online/[^"'\s<>]+?(?:\.m3u8|master\.txt)(?:\?[^"'\s<>]*)?""",
+            RegexOption.IGNORE_CASE,
+        )
+        for (match in vmpxHls.findAll(normalizedHtml)) {
+            val stream = match.value.trimEnd(',', ';', ')', ']')
+            if (stream.isBlank() || isAdvertisementResource(stream) || !emitted.add(stream)) continue
+            callback(
+                newExtractorLink(name, "Vidmoly HLS", stream, ExtractorLinkType.M3U8) {
+                    this.referer = embedUrl
+                    this.headers = requestHeaders
+                }
+            )
+            found = true
         }
         return found
     }
