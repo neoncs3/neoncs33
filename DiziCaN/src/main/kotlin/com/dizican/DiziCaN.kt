@@ -74,7 +74,7 @@ class DiziCaNProvider : MainAPI() {
     }
 
     companion object {
-        val ROWS = listOf("BL", "Fantastik", "Gençlik", "Gerilim", "Aksiyon", "Dram",
+        val ROWS = listOf("Fantastik", "Gençlik", "Gerilim", "Aksiyon", "Dram",
             "Komedi", "Korku", "Romantik", "Bilim Kurgu", "Gizem", "Suç")
     }
 
