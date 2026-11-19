@@ -44,10 +44,10 @@
     },
     {
         "iconUrl": "https://dizican.cc/favicon.ico",
-        "fileHash": "sha256-ed026233400ab6af29de1fc475751a9d169bb9616bf7b4069c13d64a23a5878d",
+        "fileHash": "sha256-5906971ea4f2096b0bee833efd35714803b12aaa8460effafb0a6b11b14ba09b",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 71874,
+        "fileSize": 77146,
         "status": 1,
         "language": "tr",
         "authors": [
@@ -58,7 +58,7 @@
             "Movie",
             "TvSeries"
         ],
-        "version": 17,
+        "version": 18,
         "internalName": "DiziCaN",
         "description": "DiziCaN \u2014 T\u00fcrk\u00e7e altyaz\u0131l\u0131 Asya dizileri ve filmler",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/DiziCaN.cs3",
