@@ -72,6 +72,24 @@ class NeonPlaybackSmokeTest {
             apiName = "AsyaWatch",
         ),
         Target(
+            name = "DiziCaN • Dizi profili / bölüm listesi",
+            queries = listOf("Blossom in Darkness", "The Veil", "Tale of the Nine Tailed"),
+            directUrls = listOf("https://dizican.cc/dizi/blossom-in-darkness/"),
+            pluginInternalName = "DiziCaN",
+            apiName = "DiziCaN",
+        ),
+        Target(
+            name = "DiziCaN • Gerçek bölüm oynatması",
+            queries = emptyList(),
+            directUrls = listOf(
+                "https://dizican.cc/bolum/blossom-in-darkness-10-bolum/",
+                "https://dizican.cc/bolum/blossom-in-darkness-11-bolum/",
+            ),
+            pluginInternalName = "DiziCaN",
+            directOnly = true,
+            apiName = "DiziCaN",
+        ),
+        Target(
             name = "DiziDad • Tyson afişleri",
             queries = emptyList(),
             directUrls = listOf("https://www.dizidad.com/diziler/tyson-izle/"),
@@ -1058,11 +1076,12 @@ class NeonPlaybackSmokeTest {
                 " names=" + autoTargets.joinToString(",") { it.name },
         )
 
-        // Site providers are normally bundled in NeonHub; AsyaWatch is also
-        // installed standalone here so its own playback resolver gets real ExoPlayer coverage.
+        // Site providers are normally bundled in NeonHub; standalone providers such as
+        // AsyaWatch and DiziCaN are installed separately for real ExoPlayer coverage.
         val expectedPlugins = buildSet {
             if (localPlugins.any { it.equals("NeonHub", true) }) add("NeonHub")
             if (requestedProviders.any { it.equals("AsyaWatch", true) }) add("AsyaWatch")
+            if (requestedProviders.any { it.equals("DiziCaN", true) }) add("DiziCaN")
             if (isEmpty()) addAll(activeTargets.map { it.pluginInternalName ?: it.name })
         }
         val missingPlugins = expectedPlugins - localPlugins.toSet()
