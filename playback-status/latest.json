@@ -10,6 +10,15 @@
       "error": "Provider origin erişimi engellendi HTTP 200 (anti-bot challenge)"
     },
     {
+      "provider": "DiziCaN • Film reklam kontrolü",
+      "status": "BLOCKED",
+      "query": null,
+      "item": null,
+      "links": 0,
+      "positionMs": 0,
+      "error": "Provider origin erişimi engellendi HTTP 200 (anti-bot challenge)"
+    },
+    {
       "provider": "DiziCaN • Gerçek bölüm oynatması",
       "status": "BLOCKED",
       "query": null,
@@ -20,6 +29,6 @@
     }
   ],
   "pass": 0,
-  "blocked": 2,
+  "blocked": 3,
   "fail": 0
 }
