@@ -66,6 +66,12 @@ class NeonPlaybackSmokeTest {
 
     private val targets = listOf(
         Target(
+            name = "NewTVLive • canlı yayın testi",
+            queries = listOf("TRT", "Spor", "beIN"),
+            pluginInternalName = "NewTVLive",
+            apiName = "NewTV Live",
+        ),
+        Target(
             name = "AsyaWatch",
             queries = listOf("Hidden Love", "Moving", "Alchemy of Souls", "Squid Game"),
             pluginInternalName = "AsyaWatch",
@@ -1106,6 +1112,7 @@ class NeonPlaybackSmokeTest {
             if (localPlugins.any { it.equals("NeonHub", true) }) add("NeonHub")
             if (requestedProviders.any { it.equals("AsyaWatch", true) }) add("AsyaWatch")
             if (requestedProviders.any { it.equals("DiziCaN", true) }) add("DiziCaN")
+            if (requestedProviders.any { it.equals("NewTV Live", true) }) add("NewTVLive")
             if (isEmpty()) addAll(activeTargets.map { it.pluginInternalName ?: it.name })
         }
         val missingPlugins = expectedPlugins - localPlugins.toSet()

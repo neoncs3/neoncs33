@@ -55,6 +55,7 @@ expected = {
     "NeonHub": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/NeonHub.cs3",
     "AsyaWatch": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/AsyaWatch.cs3",
     "DiziCaN": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/DiziCaN.cs3",
+    "NewTVLive": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/NewTVLive.cs3",
 }
 for name, expected_url in expected.items():
     matches = [item for item in manifest if item.get("internalName") == name]
@@ -102,7 +103,7 @@ echo "=== Gerçek CloudStream / ExoPlayer testi ==="
 set +e
 ./gradlew :app:connectedPrereleaseDebugAndroidTest \
   -Pandroid.testInstrumentationRunnerArguments.class=com.lagradost.cloudstream3.NeonPlaybackSmokeTest \
-  -Pandroid.testInstrumentationRunnerArguments.providers=DiziCaN \
+  -Pandroid.testInstrumentationRunnerArguments.providers='NewTV Live' \
   --no-daemon --stacktrace 2>&1 | tee "${RUNNER_TEMP}/instrumentation.log"
 TEST_EXIT="${PIPESTATUS[0]}"
 set -e
