@@ -1,6 +1,5 @@
 package com.neoncs3.daddylive
 
-import android.content.Context
 import com.lagradost.cloudstream3.HomePageList
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LiveSearchResponse
@@ -16,8 +15,6 @@ import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newLiveSearchResponse
 import com.lagradost.cloudstream3.newLiveStreamLoadResponse
 import com.lagradost.cloudstream3.network.WebViewResolver
-import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
-import com.lagradost.cloudstream3.plugins.Plugin
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
@@ -306,10 +303,3 @@ class DaddyLivePlayerExtractor : ExtractorApi() {
     }
 }
 
-@CloudstreamPlugin
-class DaddyLivePlugin : Plugin() {
-    override fun load(context: Context) {
-        registerMainAPI(DaddyLive())
-        registerExtractorAPI(DaddyLivePlayerExtractor())
-    }
-}
