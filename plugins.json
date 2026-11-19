@@ -91,10 +91,10 @@
     },
     {
         "iconUrl": "https://thedaddy.li/favicon.ico",
-        "fileHash": "sha256-bb40877e25478eb9f873e223fd34402cc13cb966cd0c9c33d759a623b4e737e6",
+        "fileHash": "sha256-3af9e7235f6cc061e18b03fa38514e143fde785aa09e8a068327db3d6045fdea",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 54718,
+        "fileSize": 54752,
         "status": 3,
         "language": "en",
         "authors": [
