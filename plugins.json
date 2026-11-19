@@ -90,11 +90,10 @@
         "name": "NeonHub"
     },
     {
-        "iconUrl": "https://thedaddy.li/favicon.ico",
-        "fileHash": "sha256-0bd4860d16e9317e5d375b625be7f3f2377eddfbf4150db5c66adef9788b2aa7",
+        "fileHash": "sha256-d73c66de1abb23386052e74425b03e4d6cd82c45091187e13f1499a2611fd4a8",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 54775,
+        "fileSize": 54997,
         "status": 3,
         "language": "en",
         "authors": [
