@@ -43,6 +43,28 @@
         "name": "AutoDaddyliveApp"
     },
     {
+        "iconUrl": "https://dizican.cc/favicon.ico",
+        "fileHash": "sha256-0104a8df8943acd603b74986510e3ce7fd716a43a48a5a47211b1d938de64fb7",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
+        "fileSize": 81850,
+        "status": 1,
+        "language": "tr",
+        "authors": [
+            "F0Rextasy",
+            "neoncs3"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 12,
+        "internalName": "DiziCaN",
+        "description": "DiziCaN \u2014 T\u00fcrk\u00e7e altyaz\u0131l\u0131 Asya dizileri ve filmler",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/DiziCaN.cs3",
+        "name": "DiziCaN"
+    },
+    {
         "iconUrl": "https://raw.githubusercontent.com/neoncs3/neoncs33/master/1792415151509.jpg?v=18",
         "fileHash": "sha256-c6588163ab653d59ef366fe3d749df0afe171ccb1f75fae5c0d75211a9d514fc",
         "apiVersion": 1,
