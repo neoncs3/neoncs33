@@ -1,8 +1,10 @@
 # 🎬 NeonCS Gerçek Oynatma Durumu
 
-**PASS:** 0  **BLOCKED:** 0  **FAIL:** 1
+**PASS:** 0  **BLOCKED:** 2  **FAIL:** 0
 
-**Hata:** Playback raporu alınamadı ve logcat içinde NEON_PLAYBACK sonucu bulunamadı
+
 
 | Provider | Durum | Link | Position | Sorgu | İçerik | Hata |
 |---|---|---:|---:|---|---|---|
+| **DiziCaN • Dizi profili / bölüm listesi** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin erişimi engellendi HTTP 200 (anti-bot challenge) |
+| **DiziCaN • Gerçek bölüm oynatması** | 🟡 BLOCKED | 0 | 0 ms | - | - | Provider origin erişimi engellendi HTTP 200 (anti-bot challenge) |
