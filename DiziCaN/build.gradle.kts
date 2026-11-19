@@ -1,4 +1,4 @@
-version = 17
+version = 18
 cloudstream {
     description = "DiziCaN — Türkçe altyazılı Asya dizileri ve filmler"
     authors = listOf("F0Rextasy", "neoncs3")
