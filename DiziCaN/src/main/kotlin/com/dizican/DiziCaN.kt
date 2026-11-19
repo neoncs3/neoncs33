@@ -1,8 +1,5 @@
 package com.dizican
 
-import com.bigbull.common.browserHeaders
-import com.bigbull.common.parseHlsVariants
-import com.bigbull.common.posterSrcLazy
 import com.lagradost.cloudstream3.ErrorLoadingException
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
@@ -29,7 +26,19 @@ import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.json.JSONObject
+import android.app.Activity
+import android.app.AlertDialog
+import android.content.Context
+import android.content.SharedPreferences
+import android.widget.ArrayAdapter
+import android.widget.CheckBox
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.Spinner
+import android.widget.TextView
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
+import java.net.URI
 
 private fun cleanTitle(raw: String?): String = (raw ?: "")
     .replace(Regex("""\s*\|.*$"""), "")
@@ -311,4 +320,179 @@ class DiziCaNProvider : MainAPI() {
         }
         return found
     }
+}
+
+
+// -----------------------------------------------------------------------------
+// DiziCaN'a özel küçük yardımcılar. Başka modüllere bağlı değildir.
+// -----------------------------------------------------------------------------
+
+private val browserHeaders: Map<String, String> = mapOf(
+    "user-agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "accept-language" to "tr-TR,tr;q=0.9",
+)
+
+private val PLACEHOLDER_IMG = Regex(
+    """^(data:|about:|javascript:)|/(pixel|blank|lazy|placeholder|empty|spacer|transparent|altyazi|dublaj|tr-flag|en-flag)\\.(png|gif|jpg|jpeg|svg|webp)""",
+    RegexOption.IGNORE_CASE,
+)
+private val BG_URL = Regex("""url\\(['"]?([^'")\\s]+)['"]?\\)""", RegexOption.IGNORE_CASE)
+
+private fun Element.posterSrcLazy(): String? {
+    for (attrName in listOf("data-src", "data-original", "data-lazy-src", "data-wpfc-original-src", "data-lazy", "data-bg", "data-background", "data-image", "data-poster", "src")) {
+        val value = attr(attrName).trim()
+        if (value.isNotEmpty() && !PLACEHOLDER_IMG.containsMatchIn(value)) return value
+    }
+    for (attrName in listOf("data-srcset", "srcset")) {
+        val value = attr(attrName).trim().substringBefore(',').trim().substringBefore(' ').trim()
+        if (value.isNotEmpty() && !PLACEHOLDER_IMG.containsMatchIn(value)) return value
+    }
+    val style = attr("style").trim()
+    if (style.isNotEmpty()) {
+        val background = BG_URL.find(style)?.groupValues?.get(1)?.trim().orEmpty()
+        if (background.isNotEmpty() && !PLACEHOLDER_IMG.containsMatchIn(background)) return background
+    }
+    return null
+}
+
+private val HLS_RES = Regex("""RESOLUTION=\\d+x(\\d+)""", RegexOption.IGNORE_CASE)
+private val HLS_NAME = Regex("NAME=\\\"(\\d{3,4})p?\\\"", RegexOption.IGNORE_CASE)
+
+private fun parseHlsVariants(masterUrl: String, m3u8Text: String): List<Pair<Int, String>> {
+    if (!m3u8Text.contains("#EXT-X-STREAM-INF") ||
+        m3u8Text.contains("TYPE=AUDIO", ignoreCase = true) ||
+        m3u8Text.contains("AUDIO=", ignoreCase = true)
+    ) return emptyList()
+
+    val base = runCatching { URI(masterUrl.trim()) }.getOrNull() ?: return emptyList()
+    val lines = m3u8Text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+    val variants = ArrayList<Pair<Int, String>>()
+    val seen = HashSet<String>()
+    var index = 0
+
+    while (index < lines.size) {
+        val line = lines[index]
+        if (line.startsWith("#EXT-X-STREAM-INF", ignoreCase = true)) {
+            val height = HLS_RES.find(line)?.groupValues?.get(1)?.toIntOrNull()
+                ?: HLS_NAME.find(line)?.groupValues?.get(1)?.toIntOrNull()
+                ?: 0
+            var next = index + 1
+            while (next < lines.size && lines[next].startsWith("#")) next++
+            if (next < lines.size) {
+                val target = runCatching {
+                    val raw = lines[next]
+                    if (raw.startsWith("http://") || raw.startsWith("https://")) raw
+                    else base.resolve(raw).toString()
+                }.getOrNull()
+                if (!target.isNullOrBlank() && height > 0 && seen.add("$height|$target")) {
+                    variants.add(height to target)
+                }
+                index = next
+            }
+        }
+        index++
+    }
+    return variants.sortedByDescending { it.first }
+}
+
+/**
+ * DiziCaN ayarları: kalite sınırı, altyazı tercihi ve ana sayfa satırları.
+ * Bu ayar katmanı yalnızca bu eklentiye aittir.
+ */
+object Settings {
+    private var prefs: SharedPreferences? = null
+    private val qualityLabels = arrayOf("Sınırsız", "1080p", "720p", "480p", "360p")
+    private val qualityValues = intArrayOf(0, 1080, 720, 480, 360)
+    private val subtitleLabels = arrayOf("Tümü", "Türkçe", "İngilizce", "Kapalı")
+    private val subtitleValues = arrayOf("all", "tr", "en", "off")
+
+    fun init(context: Context) {
+        prefs = context.applicationContext.getSharedPreferences("bigbull_dizican", Context.MODE_PRIVATE)
+    }
+
+    var qualityCap: Int
+        get() = prefs?.getInt("quality_cap", 0) ?: 0
+        set(value) { prefs?.edit()?.putInt("quality_cap", value)?.apply() }
+
+    var subtitleLang: String
+        get() = prefs?.getString("subtitle_lang", "all") ?: "all"
+        set(value) { prefs?.edit()?.putString("subtitle_lang", value)?.apply() }
+
+    fun qualityAllowed(quality: Int): Boolean {
+        val cap = qualityCap
+        return cap == 0 || quality <= 0 || quality <= cap
+    }
+
+    fun subtitleAllowed(language: String?): Boolean {
+        val preference = subtitleLang
+        if (preference == "off") return false
+        if (preference == "all") return true
+        val label = language?.lowercase().orEmpty()
+        return when (preference) {
+            "tr" -> label.contains("tr") || label.contains("türk") || label.contains("turk")
+            "en" -> label.contains("en") || label.contains("ingiliz") || label.contains("english")
+            else -> true
+        }
+    }
+
+    fun rowEnabled(name: String): Boolean =
+        prefs?.getStringSet(ROW_KEY, null)?.contains(name) != true
+
+    private fun setRows(names: Collection<String>, enabled: Set<String>) {
+        prefs?.edit()?.putStringSet(ROW_KEY, names.filterNot { it in enabled }.toSet())?.apply()
+    }
+
+    fun showDialog(context: Context, title: String = "Ayarlar", rows: List<String> = emptyList()) {
+        val activity = context as? Activity ?: return
+        val layout = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(64, 40, 64, 16)
+        }
+        layout.addView(TextView(activity).apply { text = "Kalite üst sınırı" })
+        val qualitySpinner = Spinner(activity).apply {
+            adapter = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, qualityLabels)
+            setSelection(qualityValues.indexOf(qualityCap).coerceAtLeast(0))
+        }
+        layout.addView(qualitySpinner)
+        layout.addView(TextView(activity).apply { text = "Altyazı" })
+        val subtitleSpinner = Spinner(activity).apply {
+            adapter = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, subtitleLabels)
+            setSelection(subtitleValues.indexOf(subtitleLang).coerceAtLeast(0))
+        }
+        layout.addView(subtitleSpinner)
+
+        val checks = if (rows.isNotEmpty()) {
+            layout.addView(TextView(activity).apply { text = "Ana sayfa kategorileri" })
+            val list = rows.map { row ->
+                CheckBox(activity).apply {
+                    text = row
+                    isChecked = rowEnabled(row)
+                }
+            }
+            layout.addView(ScrollView(activity).apply {
+                addView(LinearLayout(activity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    list.forEach { addView(it) }
+                })
+            })
+            list
+        } else {
+            emptyList()
+        }
+
+        AlertDialog.Builder(activity)
+            .setTitle(title)
+            .setView(layout)
+            .setPositiveButton("Kaydet") { _, _ ->
+                qualityCap = qualityValues[qualitySpinner.selectedItemPosition]
+                subtitleLang = subtitleValues[subtitleSpinner.selectedItemPosition]
+                if (rows.isNotEmpty()) {
+                    setRows(rows, checks.filter { it.isChecked }.map { it.text.toString() }.toSet())
+                }
+            }
+            .setNegativeButton("İptal", null)
+            .show()
+    }
+
+    private const val ROW_KEY = "rows"
 }

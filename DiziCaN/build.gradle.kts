@@ -1,4 +1,4 @@
-version = 12
+version = 13
 
 cloudstream {
     description = "DiziCaN — Türkçe altyazılı Asya dizileri ve filmler"
