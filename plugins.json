@@ -90,10 +90,10 @@
         "name": "NeonHub"
     },
     {
-        "fileHash": "sha256-d73c66de1abb23386052e74425b03e4d6cd82c45091187e13f1499a2611fd4a8",
+        "fileHash": "sha256-cebac6202be10d91ceae053ecd649382ca27c367f50a9e7209cacc2885a82e7b",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 54997,
+        "fileSize": 62488,
         "status": 3,
         "language": "en",
         "authors": [
@@ -102,7 +102,7 @@
         "tvTypes": [
             "Live"
         ],
-        "version": 1,
+        "version": 2,
         "internalName": "TheDaddyLive",
         "description": "DaddyLive 24/7 canl\u0131 TV kanallar\u0131 (thedaddy.li)",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/TheDaddyLive.cs3",
