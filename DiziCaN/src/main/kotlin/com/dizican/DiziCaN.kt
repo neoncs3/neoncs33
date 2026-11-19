@@ -48,8 +48,7 @@ class DiziCaNProvider : MainAPI() {
 
     override val hasMainPage = true
     override val mainPage get() = ROWS.map { rowName ->
-        MainPageData(rowName, when (rowName) {
-            "BL" -> "https://dizican.cc/category/bl-filmleri-izle/"
+        MainPageData(rowName, when (rowName) {           
             "Fantastik" -> "https://dizican.cc/category/fantastik-filmleri-izle/"
             "Gençlik" -> "https://dizican.cc/category/genclik/"
             "Gerilim" -> "$mainUrl/category/gerilim-filmleri-izle/"
