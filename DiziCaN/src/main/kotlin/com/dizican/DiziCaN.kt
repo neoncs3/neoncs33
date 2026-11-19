@@ -333,10 +333,10 @@ private val browserHeaders: Map<String, String> = mapOf(
 )
 
 private val PLACEHOLDER_IMG = Regex(
-    """^(data:|about:|javascript:)|/(pixel|blank|lazy|placeholder|empty|spacer|transparent|altyazi|dublaj|tr-flag|en-flag)\\.(png|gif|jpg|jpeg|svg|webp)""",
+    """^(data:|about:|javascript:)|/(pixel|blank|lazy|placeholder|empty|spacer|transparent|altyazi|dublaj|tr-flag|en-flag)\.(png|gif|jpg|jpeg|svg|webp)""",
     RegexOption.IGNORE_CASE,
 )
-private val BG_URL = Regex("""url\\(['"]?([^'")\\s]+)['"]?\\)""", RegexOption.IGNORE_CASE)
+private val BG_URL = Regex("""url\(['"]?([^'")\s]+)['"]?\)""", RegexOption.IGNORE_CASE)
 
 private fun Element.posterSrcLazy(): String? {
     for (attrName in listOf("data-src", "data-original", "data-lazy-src", "data-wpfc-original-src", "data-lazy", "data-bg", "data-background", "data-image", "data-poster", "src")) {
@@ -355,7 +355,7 @@ private fun Element.posterSrcLazy(): String? {
     return null
 }
 
-private val HLS_RES = Regex("""RESOLUTION=\\d+x(\\d+)""", RegexOption.IGNORE_CASE)
+private val HLS_RES = Regex("""RESOLUTION=\d+x(\d+)""", RegexOption.IGNORE_CASE)
 private val HLS_NAME = Regex("NAME=\\\"(\\d{3,4})p?\\\"", RegexOption.IGNORE_CASE)
 
 private fun parseHlsVariants(masterUrl: String, m3u8Text: String): List<Pair<Int, String>> {
