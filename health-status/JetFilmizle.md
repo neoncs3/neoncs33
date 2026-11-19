@@ -1,14 +1,14 @@
-# 🟡 JetFilmizle
+# 🟢 JetFilmizle
 
 Kodda kayıtlı domain: https://jetfilmizle.app
 
 Son HTTP URL: https://jetfilmizle.app
 
-HTTP: ❌ 403
+HTTP: ✅ 200
 
-Anti-bot engeli: evet
+Anti-bot engeli: hayır
 
-Sayfa başlığı: Access denied | jetfilmizle.app used Cloudflare to restrict access | jetfilmizle.app | Cloudflare
+Sayfa başlığı: JetFilmizle - Film İzle, Türkçe Dublaj, Altyazılı ve Yerli Filmler
 
 Canlı medya ipucu: 0 media URL, 0 iframe
 
