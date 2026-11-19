@@ -90,6 +90,26 @@
         "name": "NeonHub"
     },
     {
+        "iconUrl": "https://tv.newtane.com/favicon.ico",
+        "fileHash": "sha256-4c189a3fcdada2952fd93f7b3cf94f7083613425076fbd4aa29d04621885f886",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
+        "fileSize": 60371,
+        "status": 1,
+        "language": "tr",
+        "authors": [
+            "neoncs3"
+        ],
+        "tvTypes": [
+            "Live"
+        ],
+        "version": 1,
+        "internalName": "NewTVLive",
+        "description": "NewTV Live \u2014 tv.newtane.com canl\u0131 yay\u0131n sa\u011flay\u0131c\u0131s\u0131",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/NewTVLive.cs3",
+        "name": "NewTVLive"
+    },
+    {
         "fileHash": "sha256-cebac6202be10d91ceae053ecd649382ca27c367f50a9e7209cacc2885a82e7b",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
