@@ -206,15 +206,37 @@ class DiziCaNProvider : MainAPI() {
         for (pageUrl in partUrls) {
             val resp = if (pageUrl == data) firstResp else runCatching { app.get(pageUrl, headers = uaHeaders, referer = data) }.getOrNull() ?: continue
             val text = resp.text.replace("\\/", "/").replace("\\\"", "\"")
-            val media = Regex("""https?://[^"'\s<>]+?\.(?:m3u8|mp4)(?:\?[^"'\s<>]*)?""").findAll(text)
-            for (m in media) emit(m.value, "Direct", pageUrl)
             val embeds = Regex(""""(?:embedUrl|contentUrl|embed_url|player_url)"\s*:\s*"([^"]+)""")
                 .findAll(text).map { it.groupValues[1] }.toList()
+            val regexFrames = Regex("""<iframe\b[^>]*?\b(?:src|data-src|vdo-src)\s*=\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+                .findAll(text).mapNotNull { fixUrlNull(it.groupValues[1]?.replace("&amp;", "&")) }.toList()
+            val domFrames = resp.document.select("iframe").mapNotNull {
+                val raw = it.attr("src").ifBlank { it.attr("data-src") }.ifBlank { it.attr("vdo-src") }
+                fixUrlNull(raw)
+            }
+            val frames = (domFrames + regexFrames).distinct().filterNot(::isAdvertisementResource)
+            val hasVidmolyPlayer = (embeds.map(::fixUrl) + frames).any(::isVidmolyUrl)
+            val handledVidmoly = mutableSetOf<String>()
+
+            // DiziCaN pages with Vidmoly embeds can also contain a short preroll MP4
+            // in the page HTML. Never offer that "Direct" clip when the real player exists.
+            // Use CloudStream's Vidmoly extractor first; it reads JWPlayer's actual sources.
+            if (!hasVidmolyPlayer) {
+                val media = Regex("""https?://[^"'\s<>]+?\.(?:m3u8|mp4)(?:\?[^"'\s<>]*)?""").findAll(text)
+                for (m in media) emit(m.value, "Direct", pageUrl)
+            }
+
             for (embed in embeds) {
                 val absolute = fixUrl(embed)
                 if (absolute == pageUrl) continue
                 if (!absolute.contains("embed") && !absolute.contains(".mp4") && !absolute.contains(".m3u8")) continue
-                if (absolute.matches(Regex(""".*\.(?:mp4|m3u8).*"""))) {
+                if (isVidmolyUrl(absolute)) {
+                    if (handledVidmoly.add(absolute) &&
+                        loadExtractor(absolute, pageUrl, subtitleCallback, callback)
+                    ) found = true
+                    continue
+                }
+                if (absolute.contains(".mp4") || absolute.contains(".m3u8")) {
                     emit(absolute, "Embed", pageUrl)
                     continue
                 }
@@ -222,13 +244,13 @@ class DiziCaNProvider : MainAPI() {
                 val innerMedia = Regex("""https?://[^"'\s<>]+?\.(?:m3u8|mp4)(?:\?[^"'\s<>]*)?""").findAll(inner)
                 for (m in innerMedia) emit(m.value, "Embed", absolute)
             }
-            val regexFrames = Regex("""<iframe\b[^>]*?\b(?:src|data-src|vdo-src)\s*=\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
-                .findAll(text).mapNotNull { fixUrlNull(it.groupValues[1]?.replace("&amp;", "&")) }.toList()
-            val frames = (resp.document.select("iframe").mapNotNull {
-                val raw = it.attr("src").ifBlank { it.attr("data-src") }.ifBlank { it.attr("vdo-src") }
-                fixUrlNull(raw)
-            } + regexFrames).distinct().filterNot(::isAdvertisementResource)
             for (frame in frames) {
+                if (isVidmolyUrl(frame)) {
+                    if (handledVidmoly.add(frame) &&
+                        loadExtractor(frame, pageUrl, subtitleCallback, callback)
+                    ) found = true
+                    continue
+                }
                 if (!frame.startsWith("http") || frame.endsWith("/embed/") || frame.endsWith("/video/") ||
                     frame.contains("vzaar.com") || frame.contains("youtu")) continue
                 Regex("""[?&]video=([^&#"'\s]+)""").find(frame)?.groupValues?.get(1)?.let { enc ->
@@ -254,7 +276,7 @@ class DiziCaNProvider : MainAPI() {
                     for (m in Regex("""https?://[^"'\s<>]+?\.(?:m3u8|mp4)(?:\?[^"'\s<>]*)?""").findAll(innerText)) {
                         emit(m.value, "Embed", frame)
                     }
-                    for (sub in Regex("""<iframe[^>]+(?:src|data-src)="([^"]+)""").findAll(innerText)) {
+                    for (sub in Regex("""<iframe[^>]+(?:src|data-src)="([^"]+)"""").findAll(innerText)) {
                         val subUrl = fixUrl(sub.groupValues[1])
                         if (!isAdvertisementResource(subUrl) && loadExtractor(subUrl, frame, subtitleCallback, callback)) found = true
                     }
@@ -409,3 +431,8 @@ private fun isAdvertisementResource(rawUrl: String): Boolean {
         .any { it in adQueryKeys }
 }
 
+private fun isVidmolyUrl(rawUrl: String): Boolean {
+    val host = runCatching { URI(rawUrl).host?.lowercase().orEmpty() }.getOrDefault("")
+    return listOf("vidmoly.net", "vidmoly.to", "vidmoly.biz", "vidmoly.me")
+        .any { host == it || host.endsWith(".$it") }
+}
