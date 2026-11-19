@@ -1,5 +1,7 @@
 package com.neoncs3.daddylive
 
+import com.fasterxml.jackson.annotation.JsonProperty
+import com.lagradost.cloudstream3.ErrorLoadingException
 import com.lagradost.cloudstream3.HomePageList
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LiveSearchResponse
@@ -11,25 +13,42 @@ import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.VPNStatus
 import com.lagradost.cloudstream3.app
+import com.lagradost.cloudstream3.network.WebViewResolver
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newLiveSearchResponse
 import com.lagradost.cloudstream3.newLiveStreamLoadResponse
-import com.lagradost.cloudstream3.network.WebViewResolver
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.net.URI
-import java.util.concurrent.ConcurrentHashMap
+
+private const val USER_AGENT =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+        "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+
+// iptv-org API şemasının kullandığımız kısmı (https://iptv-org.github.io/api/)
+data class DlIptvChannel(
+    val id: String? = null,
+    val name: String? = null,
+    @JsonProperty("alt_names") val altNames: List<String>? = null
+)
+
+data class DlIptvLogo(
+    val channel: String? = null,
+    val url: String? = null
+)
 
 /**
- * DaddyLive 24/7 channel catalogue.
+ * DaddyLive 24/7 kanal kataloğu.
  *
- * The site's JSON channels endpoint requires a private API key, so this provider
- * reads the public HTML catalogue instead. It does not attempt to bypass the
- * protected API or any player authentication.
+ * Sitenin JSON kanal uç noktası özel API anahtarı istediği için herkese açık
+ * HTML kataloğu okunur. Korumalı API'yi veya oynatıcı doğrulamasını atlatmaya
+ * çalışmaz.
  */
 class DaddyLive : MainAPI() {
     override var mainUrl = "https://thedaddy.li"
@@ -41,32 +60,128 @@ class DaddyLive : MainAPI() {
     override val instantLinkLoading = true
     override val vpnStatus = VPNStatus.MightBeNeeded
 
-    private val requestHeaders: Map<String, String>
-        get() = mapOf(
-            "User-Agent" to USER_AGENT,
-            "Referer" to "$mainUrl/"
-        )
-
     companion object {
         private const val PAGE_SIZE = 100
-        private const val USER_AGENT =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        private const val CACHE_TTL_MS = 10 * 60 * 1000L
 
-        private val channelNames = ConcurrentHashMap<String, String>()
+        // İlk çalışan adres kullanılır
+        private val DOMAINS = listOf(
+            "https://thedaddy.li",
+            "https://daddylive.pk",
+            "https://dlhd.pk",
+            "https://dlhd.st",
+            "https://dlstreams.st",
+            "https://dlive.sx"
+        )
+
         private val channelIdRegex = Regex("""[?&]id=(\d+)""")
+
+        // Afiş eşleştirmede atılan ekler
+        private val DROP_TOKENS = setOf(
+            "hd", "fhd", "sd", "uhd", "4k", "tv", "live", "canli", "channel", "kanal",
+            "uk", "usa", "us", "tr", "turkey", "de", "fr", "es"
+        )
     }
 
+    private fun requestHeaders(base: String): Map<String, String> = mapOf(
+        "User-Agent" to USER_AGENT,
+        "Referer" to "$base/"
+    )
+
+    // ------------------------------------------------------------------ alan adı
+    private var resolvedBase: String? = null
+
+    private suspend fun baseUrl(): String {
+        resolvedBase?.let { return it }
+        for (d in (listOf(mainUrl) + DOMAINS).distinct()) {
+            val ok = runCatching {
+                app.get(d, headers = requestHeaders(d), timeout = 8).code in 200..399
+            }.getOrDefault(false)
+            if (ok) {
+                resolvedBase = d
+                return d
+            }
+        }
+        return mainUrl
+    }
+
+    // ------------------------------------------------------------------ afişler
+    private fun normalize(name: String): String {
+        val n = java.text.Normalizer.normalize(name.lowercase(), java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "")
+            .replace("ı", "i")
+        return n.split(Regex("[^a-z0-9]+"))
+            .filter { it.isNotEmpty() && it !in DROP_TOKENS }
+            .joinToString("")
+    }
+
+    private val logoMutex = Mutex()
+    private var logoMap: Map<String, String>? = null
+
+    private suspend fun logos(): Map<String, String> {
+        logoMap?.let { return it }
+        return logoMutex.withLock {
+            logoMap ?: buildLogoMap().also { if (it.isNotEmpty()) logoMap = it }
+        }
+    }
+
+    private suspend fun buildLogoMap(): Map<String, String> = runCatching {
+        val base = "https://iptv-org.github.io/api"
+        val channels = app.get("$base/channels.json", timeout = 30)
+            .parsedSafe<Array<DlIptvChannel>>() ?: return@runCatching emptyMap<String, String>()
+
+        val logoById = HashMap<String, String>()
+        app.get("$base/logos.json", timeout = 30)
+            .parsedSafe<Array<DlIptvLogo>>()?.forEach {
+                val c = it.channel
+                val u = it.url
+                if (!c.isNullOrBlank() && !u.isNullOrBlank()) logoById.putIfAbsent(c, u)
+            }
+
+        val out = HashMap<String, String>()
+        for (ch in channels) {
+            val url = logoById[ch.id ?: continue] ?: continue
+            for (n in listOfNotNull(ch.name) + (ch.altNames ?: emptyList())) {
+                val key = normalize(n)
+                if (key.length >= 3) out.putIfAbsent(key, url)
+            }
+        }
+        out
+    }.getOrDefault(emptyMap())
+
+    // ------------------------------------------------------------------ katalog
+    private val cacheMutex = Mutex()
+    private var cache: List<LiveSearchResponse> = emptyList()
+    private var cacheTime = 0L
+
+    private fun cacheFresh() =
+        cache.isNotEmpty() && System.currentTimeMillis() - cacheTime < CACHE_TTL_MS
+
     private suspend fun getChannels(): List<LiveSearchResponse> {
+        if (cacheFresh()) return cache
+        return cacheMutex.withLock {
+            if (cacheFresh()) return@withLock cache
+            val fresh = fetchChannels()
+            if (fresh.isNotEmpty()) {
+                cache = fresh
+                cacheTime = System.currentTimeMillis()
+            }
+            if (fresh.isNotEmpty()) fresh else cache
+        }
+    }
+
+    private suspend fun fetchChannels(): List<LiveSearchResponse> {
+        val base = baseUrl()
         val document = app.get(
-            "$mainUrl/24-7-channels.php",
-            headers = requestHeaders
+            "$base/24-7-channels.php",
+            headers = requestHeaders(base)
         ).document
 
         val cards = document.select(
             "div.grid > a, a.card, a[href*='watch.php?id=']"
         )
 
+        val logoDb = logos()
         val uniqueChannels = linkedMapOf<String, LiveSearchResponse>()
         for (card in cards) {
             val href = card.attr("href").ifBlank {
@@ -86,15 +201,22 @@ class DaddyLive : MainAPI() {
             if (channelName.isBlank()) continue
 
             val channelUrl = card.absUrl("href").ifBlank {
-                "$mainUrl/${href.trimStart('/')}"
+                "$base/${href.trimStart('/')}"
             }
 
-            channelNames[channelUrl] = channelName
+            // Afiş: önce sayfadaki görsel, yoksa iptv-org logosu
+            val pageImg = card.selectFirst("img")?.let { i ->
+                i.absUrl("data-src").ifBlank { i.absUrl("src") }
+            }?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
+            val poster = pageImg ?: logoDb[normalize(channelName)]
+
             uniqueChannels[channelId] = newLiveSearchResponse(
                 channelName,
                 channelUrl,
                 TvType.Live
-            )
+            ) {
+                this.posterUrl = poster
+            }
         }
 
         return uniqueChannels.values.sortedBy { it.name.lowercase() }
@@ -123,10 +245,17 @@ class DaddyLive : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         val channelId = channelIdRegex.find(url)?.groupValues?.getOrNull(1)
-            ?: throw IllegalArgumentException("DaddyLive channel ID not found")
+            ?: throw ErrorLoadingException("DaddyLive kanal ID bulunamadı")
 
-        val title = channelNames[url] ?: runCatching {
-            app.get(url, headers = requestHeaders)
+        val known = runCatching {
+            getChannels().firstOrNull {
+                channelIdRegex.find(it.url)?.groupValues?.getOrNull(1) == channelId
+            }
+        }.getOrNull()
+
+        val base = baseUrl()
+        val title = known?.name ?: runCatching {
+            app.get(url, headers = requestHeaders(base))
                 .document
                 .selectFirst("h1, h2")
                 ?.text()
@@ -135,9 +264,11 @@ class DaddyLive : MainAPI() {
                 ?.takeIf { it.isNotBlank() }
         }.getOrNull() ?: "Channel $channelId"
 
-        // The site documents six public folders, all using stream-<id>.php.
-        val playerTemplate = "$mainUrl/{folder}/stream-$channelId.php"
-        return newLiveStreamLoadResponse(title, url, playerTemplate)
+        // Oynatıcı klasörleri loadLinks içinde sırayla denenir.
+        val playerTemplate = "$base/{folder}/stream-$channelId.php"
+        return newLiveStreamLoadResponse(title, url, playerTemplate) {
+            this.posterUrl = known?.posterUrl
+        }
     }
 
     override suspend fun loadLinks(
@@ -146,6 +277,7 @@ class DaddyLive : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        val base = baseUrl()
         val playerFolders = listOf(
             "stream",   // Player 1
             "cast",     // Player 2
@@ -156,16 +288,18 @@ class DaddyLive : MainAPI() {
             "hub"       // Player 7
         )
 
+        // Alan adı yedeklemesi nedeniyle loadExtractor'a güvenmeden doğrudan çağır
+        val extractor = DaddyLivePlayerExtractor()
         var emittedLinks = 0
         for (folder in playerFolders) {
             val playerUrl = data.replace("{folder}", folder)
             runCatching {
-                loadExtractor(playerUrl, mainUrl, subtitleCallback) { link ->
+                extractor.getUrl(playerUrl, "$base/", subtitleCallback) { link ->
                     callback(link)
                     emittedLinks++
                 }
             }
-            // Stop at the first player that actually returns a playable link.
+            // İlk çalışan oynatıcıda dur
             if (emittedLinks > 0) break
         }
         return emittedLinks > 0
@@ -173,9 +307,9 @@ class DaddyLive : MainAPI() {
 }
 
 /**
- * Handles the public DaddyLive player pages. It first looks for direct media
- * URLs, then delegates known embeds to CloudStream extractors, and finally
- * uses WebViewResolver to observe ordinary .m3u8 requests from the player.
+ * DaddyLive oynatıcı sayfalarını çözer: önce doğrudan medya adresi arar, sonra
+ * bilinen embed'leri CloudStream extractor'larına devreder, en son
+ * WebViewResolver ile oynatıcının normal .m3u8 isteğini yakalar.
  */
 class DaddyLivePlayerExtractor : ExtractorApi() {
     override val mainUrl = "https://thedaddy.li"
@@ -183,10 +317,6 @@ class DaddyLivePlayerExtractor : ExtractorApi() {
     override val requiresReferer = false
 
     companion object {
-        private const val USER_AGENT =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-
         private val m3u8Regex = Regex(
             """https?://[^\s"'<>\\]+?\.m3u8(?:\?[^\s"'<>\\]*)?""",
             RegexOption.IGNORE_CASE
@@ -199,6 +329,12 @@ class DaddyLivePlayerExtractor : ExtractorApi() {
         "Accept" to "text/html,application/xhtml+xml,*/*;q=0.8"
     )
 
+    private fun originOf(url: String): String? = runCatching {
+        val uri = URI(url)
+        if (uri.scheme.isNullOrBlank() || uri.host.isNullOrBlank()) null
+        else "${uri.scheme}://${uri.host}"
+    }.getOrNull()
+
     private fun absoluteUrl(raw: String, base: String): String? {
         if (raw.isBlank()) return null
         return runCatching { URI(base).resolve(raw).toString() }.getOrNull()
@@ -206,13 +342,11 @@ class DaddyLivePlayerExtractor : ExtractorApi() {
 
     private suspend fun emitM3u8(
         mediaUrl: String,
-        referer: String,
+        pageUrl: String,
         callback: (ExtractorLink) -> Unit
     ) {
-        val origin = runCatching {
-            val uri = URI(mediaUrl)
-            "${uri.scheme}://${uri.host}"
-        }.getOrDefault(mainUrl)
+        // CDN'ler Origin olarak genelde oynatıcı sayfasının adresini bekler
+        val origin = originOf(pageUrl) ?: originOf(mediaUrl) ?: mainUrl
 
         callback(
             newExtractorLink(
@@ -221,11 +355,11 @@ class DaddyLivePlayerExtractor : ExtractorApi() {
                 url = mediaUrl,
                 type = ExtractorLinkType.M3U8
             ) {
-                this.referer = referer
+                this.referer = pageUrl
                 this.quality = Qualities.Unknown.value
                 this.headers = mapOf(
                     "User-Agent" to USER_AGENT,
-                    "Referer" to referer,
+                    "Referer" to pageUrl,
                     "Origin" to origin
                 )
             }
@@ -242,7 +376,7 @@ class DaddyLivePlayerExtractor : ExtractorApi() {
             app.get(url, headers = headers(referer ?: "$mainUrl/"))
         }.getOrNull() ?: return
 
-        // A missing player path should not trigger iframe/WebView resolution.
+        // Olmayan oynatıcı yolu iframe/WebView çözümlemesini tetiklemesin
         if (response.code !in 200..299) return
 
         val document = response.document
@@ -269,24 +403,21 @@ class DaddyLivePlayerExtractor : ExtractorApi() {
         }
 
         val iframeUrls = document.select("iframe[src]")
-            .mapNotNull { element ->
-                absoluteUrl(element.attr("src"), url)
-            }
+            .mapNotNull { element -> absoluteUrl(element.attr("src"), url) }
             .distinct()
 
         for (iframeUrl in iframeUrls) {
             var emitted = 0
-            val delegated = runCatching {
+            runCatching {
                 loadExtractor(iframeUrl, url, subtitleCallback) {
                     callback(it)
                     emitted++
                 }
-            }.getOrDefault(false)
-
+            }
             if (emitted > 0) return
 
-            // Generic embeds (including dembed player pages) may not have a
-            // registered extractor. Observe their normal HLS request instead.
+            // Kayıtlı extractor'u olmayan embed'ler (dembed dahil) için normal
+            // HLS isteğini gözlemle
             val sniffedUrl = runCatching {
                 app.get(
                     iframeUrl,
@@ -305,9 +436,18 @@ class DaddyLivePlayerExtractor : ExtractorApi() {
                 emitM3u8(sniffedUrl, iframeUrl, callback)
                 return
             }
-
-            if (delegated) continue
         }
     }
 }
 
+/*
+ * Plugin sınıfında şu kadarı yeterli (extractor'u ayrıca kaydetmek gerekmez,
+ * loadLinks doğrudan çağırıyor):
+ *
+ * @CloudstreamPlugin
+ * class DaddyLivePlugin : Plugin() {
+ *     override fun load(context: Context) {
+ *         registerMainAPI(DaddyLive())
+ *     }
+ * }
+ */
