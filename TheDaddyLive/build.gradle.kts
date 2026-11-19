@@ -1,4 +1,4 @@
-version = 1
+version = 2
 
 cloudstream {
     description = "DaddyLive 24/7 canlı TV kanalları (thedaddy.li)"
