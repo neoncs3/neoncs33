@@ -87,6 +87,14 @@ class NeonPlaybackSmokeTest {
             apiName = "DiziCaN",
         ),
         Target(
+            name = "DiziCaN • Revelations Vidmoly yönlendirme testi",
+            queries = emptyList(),
+            directUrls = listOf("https://dizican.cc/revelations/"),
+            pluginInternalName = "DiziCaN",
+            directOnly = true,
+            apiName = "DiziCaN",
+        ),
+        Target(
             name = "DiziCaN • Film reklam kontrolü",
             queries = emptyList(),
             directUrls = listOf("https://dizican.cc/cinle-anlasma/"),
