@@ -147,12 +147,13 @@ class DaddyLive : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val playerFolders = listOf(
-            "stream",
-            "cast",
-            "watch",
-            "plus",
-            "casting",
-            "player"
+            "stream",   // Player 1
+            "cast",     // Player 2
+            "watch",    // Player 3
+            "plus",     // Player 4
+            "casting",  // Player 5
+            "player",   // Player 6
+            "hub"       // Player 7
         )
 
         var found = false
