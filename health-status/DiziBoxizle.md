@@ -1,14 +1,14 @@
-# 🔴 DiziBoxizle
+# 🟢 DiziBoxizle
 
 Kodda kayıtlı domain: https://diziboxizle.com
 
 Son HTTP URL: https://diziboxizle.com
 
-HTTP: ❌ 
+HTTP: ✅ 200
 
 Anti-bot engeli: hayır
 
-Sayfa başlığı: -
+Sayfa başlığı: Dizibox İzle - Güncel Yabancı Dizi izle, HD Diziler izle
 
 Canlı medya ipucu: 0 media URL, 0 iframe
 
@@ -26,5 +26,3 @@ Not: Bu rapor kaynak kodunun yapısını ve site HTTP erişimini ölçer; gerçe
 - TMDB playback yasağı: ✅
 
 Kaynak: DiziBoxizle/src/main/kotlin/com/neoncs3/DiziBoxizle.kt
-
-Hata: ReadTimeout: HTTPSConnectionPool(host='diziboxizle.com', port=443): Read timed out. (read timeout=20)

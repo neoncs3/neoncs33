@@ -95,7 +95,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://www.hdfilmdiziizle.com",
-        "bytes": 5679,
+        "bytes": 5615,
         "title": "Just a moment...",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -183,19 +183,20 @@
     },
     {
       "provider": "DiziBoxizle",
-      "status": "red",
+      "status": "green",
       "domain": "https://diziboxizle.com",
       "configured_domain": "https://diziboxizle.com",
       "live_domain": "https://diziboxizle.com",
       "live": {
-        "ok": false,
-        "status_code": null,
+        "ok": true,
+        "anti_bot_blocked": false,
+        "status_code": 200,
         "final_url": "https://diziboxizle.com",
-        "bytes": 0,
-        "title": "",
+        "bytes": 287295,
+        "title": "Dizibox İzle - Güncel Yabancı Dizi izle, HD Diziler izle",
         "media_hints": 0,
         "iframe_hints": 0,
-        "error": "ReadTimeout: HTTPSConnectionPool(host='diziboxizle.com', port=443): Read timed out. (read timeout=20)"
+        "error": null
       },
       "pipelines": {
         "load": true,
@@ -304,7 +305,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://dramadizilerim1.com",
-        "bytes": 221358,
+        "bytes": 221307,
         "title": "Drama İzle — Türkçe Dublaj &amp; Altyazılı Kısa Mini Dizi İzle | Drama Dizilerim",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -417,7 +418,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://www.setfilmizle.ltd",
-        "bytes": 110834,
+        "bytes": 110849,
         "title": "Set Film izle | HD Film | Yabancı Dizi",
         "media_hints": 1,
         "iframe_hints": 0,
@@ -501,7 +502,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://webdramaturkey2.com",
-        "bytes": 5718,
+        "bytes": 5676,
         "title": "Just a moment...",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -520,7 +521,7 @@
       "source": "WebDramaTurkey/src/main/kotlin/com/neoncs3/WebDramaTurkey.kt"
     }
   ],
-  "green": 5,
+  "green": 6,
   "yellow": 18,
-  "red": 1
+  "red": 0
 }
