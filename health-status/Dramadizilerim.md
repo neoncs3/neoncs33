@@ -8,7 +8,7 @@ HTTP: ✅ 200
 
 Anti-bot engeli: hayır
 
-Sayfa başlığı: Drama İzle — Türkçe Dublaj &amp; Altyazılı Kısa Mini Dizi İzle | Drama Dizilerim
+Sayfa başlığı: Drama İzle – Türkçe Dublaj &amp; Altyazılı Kısa Dizi, Çin &amp; Kore Drama Full HD | Drama Dizilerim
 
 Canlı medya ipucu: 0 media URL, 0 iframe
 
