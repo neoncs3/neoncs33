@@ -7,7 +7,7 @@ Bu rapor tools/provider_health.py tarafından otomatik güncellenir.
 | **AsyaFilmIzle** | 🟡 | https://asyafilmizle.com | https://asyafilmizle.com | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **AsyaWatch** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **AutoDaddyliveApp** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
-| **AutoDdizimagCom** | 🟢 | https://dizimag.onl | https://dizimag.best | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **AutoDdizimagCom** | 🟡 | https://dizimag.onl | https://dizimag.best | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **AutoHdfilmdiziizleCom** | 🟡 | https://www.hdfilmdiziizle.com | https://www.hdfilmdiziizle.com | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **AutoKlubnichkaLive** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **AutoTvdizilerTv** | 🟢 | https://tvdiziler.tv | https://tvdiziler.tv | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
@@ -20,7 +20,7 @@ Bu rapor tools/provider_health.py tarafından otomatik güncellenir.
 | **DiziPal** | 🟡 | https://dizipal1586.com | https://dizipal1597.com | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **Dramadizilerim** | 🟢 | https://dramadizilerim.com | https://dramadizilerim1.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **FilmModu** | 🟢 | https://www.filmmodu.one | https://www.filmmodu.one | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
-| **JetFilmizle** | 🟢 | https://jetfilmizle.app | https://jetfilmizle.app | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **JetFilmizle** | 🔴 | https://jetfilmizle.app | https://jetfilmizle.app | ❌ (404) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **NeonHub** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **NewTVLive** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **SetFilmIzle** | 🟢 | https://www.setfilmizle.ltd | https://www.setfilmizle.ltd | ✅ (200) | 1 / 0 | ✅ | ✅ | ✅ | ✅ |

@@ -1,14 +1,14 @@
-# 🟢 AutoDdizimagCom
+# 🟡 AutoDdizimagCom
 
 Kodda kayıtlı domain: https://dizimag.onl
 
 Son HTTP URL: https://dizimag.best
 
-HTTP: ✅ 200
+HTTP: ❌ 403
 
-Anti-bot engeli: hayır
+Anti-bot engeli: evet
 
-Sayfa başlığı: Dizimag | Yabancı Dizi Film İzle – Türkçe Altyazılı HD
+Sayfa başlığı: Just a moment...
 
 Canlı medya ipucu: 0 media URL, 0 iframe
 
@@ -26,3 +26,6 @@ Not: Bu rapor kaynak kodunun yapısını ve site HTTP erişimini ölçer; gerçe
 - TMDB playback yasağı: ✅
 
 Kaynak: AutoDdizimagCom/src/main/kotlin/com/neoncs3/AutoDdizimagCom.kt
+
+Ana sayfa yavaş/yanıtsız: HTTP 403
+Yedek katalog kontrolü: https://dizimag.best
