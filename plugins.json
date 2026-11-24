@@ -65,6 +65,29 @@
         "name": "DiziCaN"
     },
     {
+        "iconUrl": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh3vCp6N1K4bECoYRQD-cisJF2_6V_Hk01ZhDmoPR2JuM8O5qr4MqrPO1munM9cRlleBBSK6odYhLtDBWv4E3vhPhynlmS5hVVtJZShHoGA5REQ8_3v8SIlccTEqzVQu2UJyNYQdJNrKIfWy66RQeT0D-CcmFCbHPz5023H6p2v5fv4NVloZ5Rqo_yGrIY/s320/iNat-Box-App.png",
+        "fileHash": "sha256-ec6b5ed748e85dcf6dadc188c46fa795d3d04addd8e552a2c7e0521334b16990",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
+        "fileSize": 120416,
+        "status": 3,
+        "language": "tr",
+        "authors": [
+            "JustRelaxable",
+            "Kayracs3"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Live"
+        ],
+        "version": 20,
+        "internalName": "InatBox",
+        "description": "\u0130natBox cloudstream eklentisidir. Sevdi\u011finiz yay\u0131n platformlar\u0131n\u0131 ve canl\u0131 ma\u00e7lar\u0131 burada bulabilirsiniz.",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/InatBox.cs3",
+        "name": "InatBox"
+    },
+    {
         "iconUrl": "https://raw.githubusercontent.com/neoncs3/neoncs33/master/1792415151509.jpg?v=18",
         "fileHash": "sha256-c6588163ab653d59ef366fe3d749df0afe171ccb1f75fae5c0d75211a9d514fc",
         "apiVersion": 1,
