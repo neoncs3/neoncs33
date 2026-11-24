@@ -2224,8 +2224,7 @@ class InatBox : MainAPI() {
                     headers.putAll(signRequest("GET", requestUrl, ""))
 
                     val response = app.get(requestUrl, headers = headers)
-                    val serverTime = response.headers.entries
-                        .firstOrNull { it.key.equals("x-st", true) }?.value
+                    val serverTime = response.headers["x-st"]
                     val correctedClock = serverTime
                         ?.takeIf { Regex("^\\d{1,12}$").matches(it) }
                         ?.toLongOrNull()
