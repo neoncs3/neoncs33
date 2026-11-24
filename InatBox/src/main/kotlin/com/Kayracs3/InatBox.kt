@@ -624,7 +624,9 @@ class InatBox : MainAPI() {
         private const val MAX_CACHED_CATALOGS = 16
         private const val MAX_CACHED_CATALOG_ITEMS = 2500
         private const val MAX_CATALOG_CACHE_AGE_MS = 30 * 60 * 1000L
+        // Verified against the APK v16 libmain.so HmkData::deriveHmk implementation.
         private const val HMK = "x7kkk0qmqz63kj68tla5i7u26192v7zqnnddhjgm"
+        @Volatile private var serverClockOffsetSeconds = 0L
         private const val LEGACY_AES_KEY = "ywevqtjrurkwtqgz"
         private val SECURE_RANDOM = SecureRandom()
         private val HEX_CHARS = "0123456789abcdef".toCharArray()
@@ -809,7 +811,7 @@ class InatBox : MainAPI() {
                 "/"
             }
 
-            val timestamp = (System.currentTimeMillis() / 1000).toString()
+            val timestamp = (System.currentTimeMillis() / 1000 + serverClockOffsetSeconds).toString()
             val nonceBytes = ByteArray(16)
             SECURE_RANDOM.nextBytes(nonceBytes)
             val nonce = bytesToHex(nonceBytes)
@@ -999,8 +1001,24 @@ class InatBox : MainAPI() {
         url.contains("4k.filmizleeeee.cfd", ignoreCase = true) &&
             url.contains("catalog-exo.php", ignoreCase = true)
 
+    /**
+     * InatBox rotates its catalogue hosts without changing the CDN paths.
+     * Keep the original URL first and retry only against the observed alternate.
+     */
+    private fun alternateInatUrl(url: String): String? {
+        val uri = runCatching { URI(url) }.getOrNull() ?: return null
+        val host = uri.host?.lowercase(Locale.ROOT) ?: return null
+        val alternate = when (host) {
+            "diziboxen.help" -> "dizilabmedia.click"
+            "4k.filmizleeeee.cfd" -> "str.filmizleeeee.cfd"
+            else -> return null
+        }
+        return url.replaceFirst(uri.host, alternate, ignoreCase = true)
+            .takeIf { it != url }
+    }
+
     private suspend fun loadCatalogResponse(url: String): String? {
-        // Normal InatBox API path.
+        // Try the configured endpoint first, then its known host rotation.
         makeInatPostRequest(url)?.let { response ->
             if (response.isNotBlank()) return response
         }
@@ -2154,62 +2172,81 @@ class InatBox : MainAPI() {
         url: String,
         retryCount: Int = 2
     ): String? {
-        val hostName = try {
-            URI(url).host ?: "speedrestapi.com"
-        } catch (_: Exception) {
-            "speedrestapi.com"
-        }
+        val requestUrls = buildList {
+            add(url)
+            alternateInatUrl(url)?.let { add(it) }
+        }.distinct()
 
-        repeat(retryCount) { attempt ->
-            try {
-                val dynamicKey = generateRandomKey(16)
-                val requestBody = "1=$dynamicKey&0=$dynamicKey"
+        for (requestUrl in requestUrls) {
+            val hostName = runCatching { URI(requestUrl).host }
+                .getOrNull()
+                .orEmpty()
+                .ifBlank { "speedrestapi.com" }
 
-                val headers = mutableMapOf(
-                    "User-Agent" to "speedrestapi",
-                    "X-Requested-With" to "com.bp.box",
-                    "Referer" to "https://speedrestapi.com/",
-                    "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
-                    "Cache-Control" to "no-cache",
-                    "Host" to hostName
-                )
+            for (attempt in 0 until retryCount.coerceAtLeast(1)) {
+                try {
+                    val dynamicKey = generateRandomKey(16)
+                    val requestBody = "1=$dynamicKey&0=$dynamicKey"
 
-                headers.putAll(
-                    signRequest(
-                        "POST",
-                        url,
-                        requestBody
+                    val headers = mutableMapOf(
+                        "User-Agent" to "speedrestapi",
+                        "X-Requested-With" to "com.bp.box",
+                        "Referer" to "https://speedrestapi.com/",
+                        "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
+                        "Cache-Control" to "no-cache",
+                        "Host" to hostName
                     )
-                )
+                    headers.putAll(signRequest("POST", requestUrl, requestBody))
 
-                val response = app.post(
-                    url = url,
-                    headers = headers,
-                    requestBody = requestBody.toRequestBody(
-                        "application/x-www-form-urlencoded; charset=UTF-8".toMediaType()
-                    )
-                )
-
-                if (
-                    response.isSuccessful &&
-                    response.text.isNotBlank()
-                ) {
-                    val decrypted = decryptDoubleAes(
-                        response.text,
-                        dynamicKey
+                    val response = app.post(
+                        url = requestUrl,
+                        headers = headers,
+                        requestBody = requestBody.toRequestBody(
+                            "application/x-www-form-urlencoded; charset=UTF-8".toMediaType()
+                        )
                     )
 
-                    if (!decrypted.isNullOrBlank()) {
-                        return decrypted
+                    // The official client returns the server clock in x-st. Correct
+                    // local clock skew once and sign the retried request with that offset.
+                    val serverTime = response.headers["x-st"]
+                    val correctedClock = serverTime
+                        ?.takeIf { Regex("^\\d{1,12}$").matches(it) }
+                        ?.toLongOrNull()
+                        ?.let { serverSeconds ->
+                            val newOffset = serverSeconds - System.currentTimeMillis() / 1000
+                            val changed = kotlin.math.abs(newOffset - serverClockOffsetSeconds) > 2
+                            if (changed) serverClockOffsetSeconds = newOffset
+                            changed
+                        } ?: false
+
+                    if (response.code == 403 && correctedClock && attempt == 0) {
+                        continue
                     }
-                }
-            } catch (e: Exception) {
-                if (attempt == retryCount - 1) {
-                    Log.e(
-                        "InatBox",
-                        "Post request failed for $url: ${e.message}",
-                        e
-                    )
+
+                    if (response.code == 403 || response.code == 520) {
+                        Log.w(
+                            "InatBox",
+                            "Catalogue host rejected the request (HTTP " + response.code + "); trying the configured alternate if available"
+                        )
+                        break
+                    }
+
+                    if (response.isSuccessful && response.text.isNotBlank()) {
+                        val decrypted = decryptDoubleAes(response.text, dynamicKey)
+                        if (!decrypted.isNullOrBlank()) {
+                            if (requestUrl != url) {
+                                Log.i("InatBox", "Catalogue request succeeded through the alternate host")
+                            }
+                            return decrypted
+                        }
+                    }
+                } catch (e: Exception) {
+                    if (attempt == retryCount - 1) {
+                        Log.w(
+                            "InatBox",
+                            "Post request failed for " + hostName + ": " + e.message
+                        )
+                    }
                 }
             }
         }
@@ -2252,13 +2289,17 @@ class InatBox : MainAPI() {
             value.startsWith("about:", true)
         ) return null
 
-        if (value.startsWith("//")) return "https:$value"
+        if (value.startsWith("//")) {
+            val absolute = "https:$value"
+            return alternateInatUrl(absolute) ?: absolute
+        }
         if (value.startsWith("https://", true) || value.startsWith("http://", true)) {
-            return value
+            return alternateInatUrl(value) ?: value
         }
 
         if (Regex("""(?i)^[a-z0-9.-]+\.[a-z]{2,}(?::\d+)?/""").containsMatchIn(value)) {
-            return "https://$value"
+            val absolute = "https://$value"
+            return alternateInatUrl(absolute) ?: absolute
         }
 
         val base = runCatching { URI(sourceUrl.orEmpty()) }.getOrNull() ?: return null
@@ -2266,6 +2307,7 @@ class InatBox : MainAPI() {
         return runCatching { base.resolve(value).toString() }
             .getOrNull()
             ?.takeIf { it.startsWith("https://", true) || it.startsWith("http://", true) }
+            ?.let { alternateInatUrl(it) ?: it }
     }
 
     private fun isArtworkField(key: String): Boolean {
