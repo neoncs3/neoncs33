@@ -2375,17 +2375,16 @@ class InatBox : MainAPI() {
             value.startsWith("about:", true)
         ) return null
 
-        if (value.startsWith("//")) {
-            val absolute = "https:$value"
-            return alternateInatUrl(absolute) ?: absolute
-        }
+        // Artwork may be served from a different host than the catalogue API.
+        // Preserve the URL supplied by InatBox; only normalize protocol-relative
+        // and relative paths. API host rotation is handled separately for requests.
+        if (value.startsWith("//")) return "https:$value"
         if (value.startsWith("https://", true) || value.startsWith("http://", true)) {
-            return alternateInatUrl(value) ?: value
+            return value
         }
 
-        if (Regex("""(?i)^[a-z0-9.-]+\.[a-z]{2,}(?::\d+)?/""").containsMatchIn(value)) {
-            val absolute = "https://$value"
-            return alternateInatUrl(absolute) ?: absolute
+        if (Regex("""(?i)^[a-z0-9.-]+\\.[a-z]{2,}(?::\\d+)?/""").containsMatchIn(value)) {
+            return "https://$value"
         }
 
         val base = runCatching { URI(sourceUrl.orEmpty()) }.getOrNull() ?: return null
@@ -2393,7 +2392,6 @@ class InatBox : MainAPI() {
         return runCatching { base.resolve(value).toString() }
             .getOrNull()
             ?.takeIf { it.startsWith("https://", true) || it.startsWith("http://", true) }
-            ?.let { alternateInatUrl(it) ?: it }
     }
 
     private fun isArtworkField(key: String): Boolean {
@@ -2569,8 +2567,15 @@ class InatBox : MainAPI() {
         }.getOrNull()
     }
 
-    private fun hasStandardInatFields(item: JSONObject): Boolean =
-        item.has("diziType") || (item.has("chName") && item.has("chUrl"))
+    private fun hasStandardInatFields(item: JSONObject): Boolean {
+        val hasName = listOf(
+            "chName", "bolumName", "filmName", "diziName", "title", "name"
+        ).any { item.has(it) && item.optString(it).isNotBlank() }
+        val hasUrl = listOf(
+            "chUrl", "bolumUrl", "filmUrl", "diziUrl", "url", "link", "href", "streamUrl"
+        ).any { item.has(it) && item.optString(it).isNotBlank() }
+        return item.has("diziType") || item.has("filmType") || (hasName && hasUrl)
+    }
 
     private fun normalizeGeneric4kItem(item: JSONObject): JSONObject? {
         fun firstNonBlank(vararg keys: String): String =
