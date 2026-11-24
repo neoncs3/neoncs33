@@ -17,9 +17,10 @@ Bu rapor tools/provider_health.py tarafından otomatik güncellenir.
 | **DiziCaN** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **DiziDad** | 🟡 | https://www.dizidad.com | https://www.dizidad.com | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **Dizigecesi** | 🟡 | https://dizigecesi.com | https://dizigecesi.com | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
-| **DiziPal** | 🟡 | https://dizipal1586.com | https://dizipal1597.com | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **DiziPal** | 🟡 | https://dizipal1586.com | https://dizipal1598.com | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **Dramadizilerim** | 🟢 | https://dramadizilerim.com | https://dramadizilerim1.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **FilmModu** | 🟢 | https://www.filmmodu.one | https://www.filmmodu.one | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **InatBox** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **JetFilmizle** | 🔴 | https://jetfilmizle.app | https://jetfilmizle.app | ❌ (404) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **NeonHub** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **NewTVLive** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
