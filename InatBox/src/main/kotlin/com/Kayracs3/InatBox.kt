@@ -10,6 +10,7 @@ import com.lagradost.cloudstream3.LiveStreamLoadResponse
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageRequest
+import com.lagradost.cloudstream3.MainPageData
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SeasonData
 import com.lagradost.cloudstream3.SubtitleFile
@@ -569,6 +570,67 @@ private object InatHlsProxy {
 
 }
 
+
+private data class InatCatalogPageConfig(
+    val name: String,
+    val url: String,
+    val dataType: String = "tv_mode",
+    val live: Boolean = false
+) {
+    fun toRequestData(): String = JSONObject().apply {
+        put("url", url)
+        put("dataType", dataType)
+        put("live", live)
+    }.toString()
+}
+
+private val LIVE_CATALOG_NAMES = setOf(
+    "Liste 1 - TR", "Liste 2 - GLB", "Liste 3 - TR",
+    "Spor", "Belgesel Kanalları", "Ulusal Kanallar",
+    "Haber Kanalları", "EBA TV", "Çocuk Kanalları", "Dini Kanallar"
+)
+
+/**
+ * InatBox v16 catalogue endpoints. Each page carries the catDataType request
+ * mode supplied by the APK; raw_mode must not be sent through the POST path.
+ */
+private val INAT_CATALOG_PAGES = listOf(
+    InatCatalogPageConfig("Liste 1 - TR", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/list1.php", live = true),
+    InatCatalogPageConfig("Liste 2 - GLB", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/list2.php", live = true),
+    InatCatalogPageConfig("Liste 3 - TR", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/list3.php", "raw_mode", true),
+    InatCatalogPageConfig("Spor", "https://sprboxs.bar/CDN/001/SPR/v2/spor_v3.php", live = true),
+    InatCatalogPageConfig("Derbiler", "https://sprboxs.bar/CDN/001/SPR/v2/derbiler.php"),
+    InatCatalogPageConfig("Sinema", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/sinema.php"),
+    InatCatalogPageConfig("Belgesel Kanalları", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/belgesel.php", live = true),
+    InatCatalogPageConfig("Ulusal Kanallar", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/ulusal.php", live = true),
+    InatCatalogPageConfig("Haber Kanalları", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/haber.php", live = true),
+    InatCatalogPageConfig("EBA TV", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/eba.php", live = true),
+    InatCatalogPageConfig("Çocuk Kanalları", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/cocuk.php", live = true),
+    InatCatalogPageConfig("Dini Kanallar", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/dini.php", live = true),
+    InatCatalogPageConfig("Exxen", "https://diziboxen.help/CDN/001/002/dizibox/v2/ex/index.php"),
+    InatCatalogPageConfig("Gain", "https://diziboxen.help/CDN/001/002/dizibox/v2/ga/index.php"),
+    InatCatalogPageConfig("Netflix", "https://diziboxen.help/CDN/001/002/dizibox/v2/nf/index.php"),
+    InatCatalogPageConfig("BluTV & HBO", "https://diziboxen.help/CDN/001/002/dizibox/v2/hb/index.php"),
+    InatCatalogPageConfig("Disney+", "https://diziboxen.help/CDN/001/002/dizibox/v2/dsny/index.php"),
+    InatCatalogPageConfig("Amazon Prime", "https://diziboxen.help/CDN/001/002/dizibox/v2/amz/index.php"),
+    InatCatalogPageConfig("Tabii", "https://diziboxen.help/CDN/001/002/dizibox/v2/tbi/index.php"),
+    InatCatalogPageConfig("Mubi", "https://diziboxen.help/CDN/001/002/dizibox/v2/film/mubi.php"),
+    InatCatalogPageConfig("TOD", "https://sprboxs.bar/CDN/001/SPR/v2/ccc/a/index.php"),
+    InatCatalogPageConfig("Yabancı Diziler", "https://diziboxen.help/CDN/001/002/dizibox/v2/yabanci-dizi/index.php"),
+    InatCatalogPageConfig("Yerli Diziler", "https://diziboxen.help/CDN/001/002/dizibox/v2/yerli-dizi/index.php"),
+    InatCatalogPageConfig("Yerli Filmler", "https://diziboxen.help/CDN/001/002/dizibox/v2/film/yerli-filmler.php"),
+    InatCatalogPageConfig("4K Film 01 | Exo", "https://4k.filmizleeeee.cfd/4k/01/public/catalog-exo.php"),
+    InatCatalogPageConfig("4K Film 01 | Web", "https://4k.filmizleeeee.cfd/4k/01/public/catalog-web.php"),
+    InatCatalogPageConfig("4K Film 02 | Web", "https://4k.filmizleeeee.cfd/4k/02/public/catalog-web.php"),
+    InatCatalogPageConfig("4K Film 03 | Exo", "https://4k.filmizleeeee.cfd/4k/03/public/catalog-exo.php"),
+    InatCatalogPageConfig("4K Film 03 | Web", "https://4k.filmizleeeee.cfd/4k/03/public/catalog-web.php"),
+    InatCatalogPageConfig("4K Film 04 | Exo", "https://4k.filmizleeeee.cfd/4k/04/public/catalog-exo.php"),
+    InatCatalogPageConfig("4K Film 04 | Web", "https://4k.filmizleeeee.cfd/4k/04/public/catalog-web.php"),
+    InatCatalogPageConfig("4K Film 06 | Exo", "https://4k.filmizleeeee.cfd/4k/06/public/catalog-exo.php"),
+    InatCatalogPageConfig("4K Film 06 | Web", "https://4k.filmizleeeee.cfd/4k/06/public/catalog-web.php"),
+    InatCatalogPageConfig("4K Film 07 | Web", "https://4k.filmizleeeee.cfd/4k/07/public/catalog-web.php")
+)
+
 class InatBox : MainAPI() {
 
     override var name = "InatBox"
@@ -626,6 +688,7 @@ class InatBox : MainAPI() {
         private const val MAX_CATALOG_CACHE_AGE_MS = 30 * 60 * 1000L
         // Verified against the APK v16 libmain.so HmkData::deriveHmk implementation.
         private const val HMK = "x7kkk0qmqz63kj68tla5i7u26192v7zqnnddhjgm"
+        private const val RAW_RESPONSE_KEY = "a4osa8x1yl4w3vrk"
         @Volatile private var serverClockOffsetSeconds = 0L
         private const val LEGACY_AES_KEY = "ywevqtjrurkwtqgz"
         private val SECURE_RANDOM = SecureRandom()
@@ -893,32 +956,20 @@ class InatBox : MainAPI() {
         }
     }
 
-    override val mainPage = mainPageOf(
-        "https://sprboxs.bar/CDN/001/SPR/v2/spor_v3.php" to "Spor",
-        "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/ulusal.php" to "Ulusal Kanallar",
-        "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/haber.php" to "Haber Kanalları",
-        "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/cocuk.php" to "Çocuk Kanalları",
-        "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/sinema.php" to "Sinema Kanalları",
-        "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/belgesel.php" to "Belgesel Kanalları",
-        "https://diziboxen.help/CDN/001/002/dizibox/v2/ex/index.php" to "Exxen",
-        "https://diziboxen.help/CDN/001/002/dizibox/v2/nf/index.php" to "Netflix",
-        "https://sprboxs.bar/CDN/001/SPR/v2/ccc/a/index.php" to "TOD",
-        "https://diziboxen.help/CDN/001/002/dizibox/v2/hb/index.php" to "BluTV & HBO",
-        "https://diziboxen.help/CDN/001/002/dizibox/v2/dsny/index.php" to "Disney+",
-        "https://diziboxen.help/CDN/001/002/dizibox/v2/ga/index.php" to "Gain",
-        "https://diziboxen.help/CDN/001/002/dizibox/v2/amz/index.php" to "Amazon Prime",
-        "https://diziboxen.help/CDN/001/002/dizibox/v2/tbi/index.php" to "Tabii",
-        "https://diziboxen.help/CDN/001/002/dizibox/v2/yerli-dizi/index.php" to "Yerli Diziler",
-        "https://diziboxen.help/CDN/001/002/dizibox/v2/yabanci-dizi/index.php" to "Yabancı Diziler",
-        "https://diziboxen.help/CDN/001/002/dizibox/v2/film/yerli-filmler.php" to "Yerli Filmler",
-        "https://diziboxen.help/CDN/001/002/dizibox/v2/film/mubi.php" to "Mubi",
-    )
+    override val mainPage: List<MainPageData> =
+        INAT_CATALOG_PAGES.map { MainPageData(it.name, it.toRequestData()) }
 
     override suspend fun getMainPage(
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
-        val url = request.data
+        val requestConfig = runCatching { JSONObject(request.data) }.getOrNull()
+        val url = requestConfig?.optString("url")?.takeIf { it.isNotBlank() } ?: request.data
+        val dataType = requestConfig?.optString("dataType")?.takeIf { it.isNotBlank() }
+            ?: if (url.contains("list3.php", true)) "raw_mode" else "tv_mode"
+        val isLiveCategory = requestConfig?.optBoolean("live")
+            ?: (request.name in LIVE_CATALOG_NAMES)
+        val allowGeneric4k = is4kCatalogUrl(url)
         val now = System.currentTimeMillis()
         val cached = tabCache[url]
 
@@ -929,14 +980,20 @@ class InatBox : MainAPI() {
         ) {
             cached.second
         } else {
-            val jsonResponse = loadCatalogResponse(url)
+            val jsonResponse = if (dataType == "raw_mode") {
+                makeInatRawGetRequest(url)
+            } else {
+                loadCatalogResponse(url)
+            }
+
             if (jsonResponse.isNullOrBlank()) {
                 cached?.second ?: emptyList()
             } else {
                 val results = getSearchResponseList(
                     jsonResponse,
                     sourceUrl = url,
-                    allowGeneric4k = is4kCatalogUrl(url)
+                    allowGeneric4k = allowGeneric4k,
+                    defaultLiveCategory = isLiveCategory
                 )
                 if (results.isNotEmpty()) {
                     rememberCatalog(url, System.currentTimeMillis(), results)
@@ -949,25 +1006,10 @@ class InatBox : MainAPI() {
             return newHomePageResponse(request.name, emptyList(), hasNext = false)
         }
 
-        val isLiveCategory = request.name in listOf(
-            "Spor",
-            "Ulusal Kanallar",
-            "Haber Kanalları",
-            "Çocuk Kanalları",
-            "Sinema Kanalları",
-            "Belgesel Kanalları"
-        )
-
         if (allResults.size <= 150) {
             return if (page == 1) {
                 newHomePageResponse(
-                    listOf(
-                        HomePageList(
-                            request.name,
-                            allResults,
-                            isHorizontalImages = isLiveCategory
-                        )
-                    ),
+                    listOf(HomePageList(request.name, allResults, isHorizontalImages = isLiveCategory)),
                     hasNext = false
                 )
             } else {
@@ -977,29 +1019,22 @@ class InatBox : MainAPI() {
 
         val pageSize = 50
         val startIndex = (page - 1) * pageSize
-
         if (startIndex >= allResults.size) {
             return newHomePageResponse(request.name, emptyList(), hasNext = false)
         }
-
         val endIndex = minOf(startIndex + pageSize, allResults.size)
         val pagedList = allResults.subList(startIndex, endIndex)
 
         return newHomePageResponse(
-            listOf(
-                HomePageList(
-                    request.name,
-                    pagedList,
-                    isHorizontalImages = isLiveCategory
-                )
-            ),
+            listOf(HomePageList(request.name, pagedList, isHorizontalImages = isLiveCategory)),
             hasNext = endIndex < allResults.size
         )
     }
 
     private fun is4kCatalogUrl(url: String): Boolean =
-        url.contains("4k.filmizleeeee.cfd", ignoreCase = true) &&
-            url.contains("catalog-exo.php", ignoreCase = true)
+        (url.contains("4k.filmizleeeee.cfd", ignoreCase = true) ||
+            url.contains("str.filmizleeeee.cfd", ignoreCase = true)) &&
+            url.contains("catalog-", ignoreCase = true)
 
     /**
      * InatBox rotates its catalogue hosts without changing the CDN paths.
@@ -2168,6 +2203,57 @@ class InatBox : MainAPI() {
         }.getOrNull()
     }
 
+    private suspend fun makeInatRawGetRequest(
+        url: String,
+        retryCount: Int = 2
+    ): String? {
+        val requestUrls = buildList {
+            add(url)
+            alternateInatUrl(url)?.let { add(it) }
+        }.distinct()
+
+        for (requestUrl in requestUrls) {
+            for (attempt in 0 until retryCount.coerceAtLeast(1)) {
+                try {
+                    val headers = mutableMapOf(
+                        "User-Agent" to "speedrestapi",
+                        "X-Requested-With" to "com.bp.box",
+                        "Referer" to "https://speedrestapi.com/",
+                        "Cache-Control" to "no-cache"
+                    )
+                    headers.putAll(signRequest("GET", requestUrl, ""))
+
+                    val response = app.get(requestUrl, headers = headers)
+                    val serverTime = response.headers.entries
+                        .firstOrNull { it.key.equals("x-st", true) }?.value
+                    val correctedClock = serverTime
+                        ?.takeIf { Regex("^\\d{1,12}$").matches(it) }
+                        ?.toLongOrNull()
+                        ?.let { serverSeconds ->
+                            val newOffset = serverSeconds - System.currentTimeMillis() / 1000
+                            val changed = kotlin.math.abs(newOffset - serverClockOffsetSeconds) > 2
+                            if (changed) serverClockOffsetSeconds = newOffset
+                            changed
+                        } ?: false
+
+                    if (response.code == 403 && correctedClock && attempt == 0) {
+                        continue
+                    }
+
+                    if (response.isSuccessful && response.text.isNotBlank()) {
+                        val decoded = decryptDoubleAes(response.text, RAW_RESPONSE_KEY)
+                        if (!decoded.isNullOrBlank()) return decoded
+                    }
+                } catch (e: Exception) {
+                    if (attempt == retryCount - 1) {
+                        Log.w("InatBox", "raw_mode GET failed for " + requestUrl + ": " + e.message)
+                    }
+                }
+            }
+        }
+        return null
+    }
+
     private suspend fun makeInatPostRequest(
         url: String,
         retryCount: Int = 2
@@ -2313,8 +2399,9 @@ class InatBox : MainAPI() {
     private fun isArtworkField(key: String): Boolean {
         val normalized = key.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]"), "")
         return normalized in setOf(
-            "diziimg", "diziimage", "diziimageurl", "diziposter", "diziposterurl",
-            "chimg", "chimage", "chimageurl", "poster", "posterurl", "posterpath",
+            "diziimg", "diziimage", "diziimageurl", "diziposter", "diziposterurl", "diziresim",
+            "filmimg", "filmresim", "chimg", "chimage", "chimageurl", "chresim",
+            "bolumimg", "bolumresim", "resim", "poster", "posterurl", "posterpath",
             "posterimage", "image", "imageurl", "imagepath", "img", "imgurl",
             "thumbnail", "thumbnailurl", "thumb", "thumburl", "cover", "coverurl",
             "coverimage", "afis", "afisurl", "picture", "pictureurl", "photourl"
@@ -2360,8 +2447,9 @@ class InatBox : MainAPI() {
         val source = sourceUrl?.takeIf { it.isNotBlank() }
             ?: item.optString("__inat_source_url").takeIf { it.isNotBlank() }
         val knownKeys = (preferredKeys + listOf(
-            "diziImg", "diziImage", "dizi_image", "dizi_image_url", "diziPoster", "diziPosterUrl",
-            "chImg", "chImage", "ch_image", "ch_image_url", "poster", "posterUrl", "poster_url",
+            "diziImg", "diziImage", "dizi_image", "dizi_image_url", "diziPoster", "diziPosterUrl", "diziResim",
+            "filmImg", "filmResim", "chImg", "chImage", "ch_image", "ch_image_url", "chResim",
+            "bolumImg", "bolumResim", "resim", "poster", "posterUrl", "poster_url",
             "posterPath", "poster_path", "posterImage", "poster_image",
             "image", "imageUrl", "image_url", "imagePath", "image_path",
             "img", "imgUrl", "thumbnail", "thumbnailUrl", "thumbnail_url",
@@ -2517,135 +2605,205 @@ class InatBox : MainAPI() {
         }
     }
 
+    private fun firstInatText(item: JSONObject, vararg keys: String): String =
+        keys.asSequence()
+            .map { item.optString(it).trim() }
+            .firstOrNull { it.isNotBlank() && !it.equals("null", true) && it != "0" }
+            .orEmpty()
+
+    private fun findCatalogueArray(value: Any?, depth: Int = 0): JSONArray? {
+        if (value == null || depth > 5) return null
+        return when (value) {
+            is JSONArray -> value
+            is JSONObject -> {
+                val preferredKeys = listOf(
+                    "data", "result", "results", "items", "list", "rows",
+                    "channels", "movies", "films", "catalog", "content"
+                )
+                for (key in preferredKeys) {
+                    val nested = value.opt(key) ?: continue
+                    findCatalogueArray(nested, depth + 1)?.let { return it }
+                }
+                val keys = value.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    if (key in preferredKeys) continue
+                    findCatalogueArray(value.opt(key), depth + 1)?.let { return it }
+                }
+                if (hasStandardInatFields(value) || value.has("name") || value.has("title")) {
+                    JSONArray().put(value)
+                } else {
+                    null
+                }
+            }
+            is String -> {
+                val candidate = value.trim()
+                if (candidate.startsWith("[") || candidate.startsWith("{")) {
+                    val parsed = runCatching {
+                        if (candidate.startsWith("[")) JSONArray(candidate) else JSONObject(candidate)
+                    }.getOrNull()
+                    findCatalogueArray(parsed, depth + 1)
+                } else null
+            }
+            else -> null
+        }
+    }
+
+    private fun normalizeInatCatalogItem(
+        raw: JSONObject,
+        sourceUrl: String?,
+        defaultLiveCategory: Boolean,
+        allowGeneric4k: Boolean
+    ): JSONObject? {
+        val item = runCatching { JSONObject(raw.toString()) }.getOrElse { raw }
+
+        val hasSeriesFields = item.has("diziType") || item.has("filmType") ||
+            item.has("diziName") || item.has("filmName") ||
+            item.has("diziUrl") || item.has("filmUrl")
+
+        if (hasSeriesFields) {
+            val name = firstInatText(item, "diziName", "filmName", "title", "name", "chName")
+            val url = firstInatText(item, "diziUrl", "filmUrl", "url", "link", "href", "chUrl")
+            if (name.isNotBlank() && url.isNotBlank()) {
+                val type = firstInatText(item, "diziType", "filmType")
+                    .ifBlank { if (item.has("filmName") || item.has("filmUrl")) "film" else "dizi" }
+                val poster = posterUrlFrom(
+                    item,
+                    sourceUrl,
+                    listOf(
+                        "diziImg", "diziImage", "diziResim",
+                        "filmImg", "filmResim", "poster", "posterUrl", "image"
+                    )
+                ).orEmpty()
+                item.put("diziName", name)
+                item.put("diziUrl", url)
+                item.put("diziType", type)
+                item.put("diziImg", poster)
+                return enrichInatItem(item, sourceUrl)
+            }
+        }
+
+        val name = firstInatText(item, "chName", "bolumName", "title", "name", "filmName", "diziName")
+        val url = firstInatText(item, "chUrl", "bolumUrl", "filmUrl", "diziUrl", "url", "link", "href", "streamUrl")
+        if (name.isNotBlank() && url.isNotBlank()) {
+            val poster = posterUrlFrom(
+                item,
+                sourceUrl,
+                listOf(
+                    "chImg", "chImage", "chResim",
+                    "bolumImg", "bolumResim",
+                    "filmImg", "filmResim",
+                    "diziImg", "diziImage", "diziResim",
+                    "poster", "posterUrl", "image", "img", "resim"
+                )
+            ).orEmpty()
+            val type = firstInatText(item, "chType", "bolumType", "type", "filmType")
+                .ifBlank { if (defaultLiveCategory) "live_url" else "film" }
+
+            item.put("chName", name)
+            item.put("chUrl", url)
+            item.put("chImg", poster)
+            item.put("chType", type)
+            return enrichInatItem(item, sourceUrl)
+        }
+
+        if (allowGeneric4k && !hasStandardInatFields(item)) {
+            return normalizeGeneric4kItem(item)?.let { enrichInatItem(it, sourceUrl) }
+        }
+        return null
+    }
+
     private fun getSearchResponseList(
         jsonResponse: String,
         sourceUrl: String? = null,
-        allowGeneric4k: Boolean = false
+        allowGeneric4k: Boolean = false,
+        defaultLiveCategory: Boolean = false
     ): List<SearchResponse> {
         val searchResults = mutableListOf<SearchResponse>()
 
         try {
-            val trimmedJson = jsonResponse.trimStart()
-            val itemsArray = if (trimmedJson.startsWith("[")) {
-                JSONArray(jsonResponse)
-            } else if (allowGeneric4k && trimmedJson.startsWith("{")) {
-                val root = JSONObject(jsonResponse)
-                sequenceOf("data", "results", "items", "movies", "films", "catalog")
-                    .mapNotNull { key -> root.optJSONArray(key) }
-                    .firstOrNull()
-                    ?: JSONArray().apply {
-                        if (hasStandardInatFields(root) || root.has("name") || root.has("title")) {
-                            put(root)
-                        }
-                    }
-            } else {
-                JSONArray()
-            }
+            val extracted = extractJsonPayload(jsonResponse) ?: jsonResponse.trim()
+            val parsed = runCatching {
+                when {
+                    extracted.startsWith("[") -> JSONArray(extracted)
+                    extracted.startsWith("{") -> JSONObject(extracted)
+                    else -> null
+                }
+            }.getOrNull()
+            val itemsArray = findCatalogueArray(parsed) ?: JSONArray()
 
             for (i in 0 until itemsArray.length()) {
                 val rawItem = itemsArray.optJSONObject(i) ?: continue
-                if (!inatContentAllowed(rawItem)) continue
+                val item = normalizeInatCatalogItem(
+                    raw = rawItem,
+                    sourceUrl = sourceUrl,
+                    defaultLiveCategory = defaultLiveCategory,
+                    allowGeneric4k = allowGeneric4k
+                ) ?: continue
 
-                val item = if (allowGeneric4k && !hasStandardInatFields(rawItem)) {
-                    normalizeGeneric4kItem(rawItem) ?: continue
-                } else {
-                    rawItem
-                }.let { enrichInatItem(it, sourceUrl) }
+                if (!inatContentAllowed(item)) continue
 
                 if (item.has("diziType")) {
-                    val name = item.optString("diziName", "İsimsiz")
+                    val name = item.optString("diziName").ifBlank { "İsimsiz" }
                     val type = item.optString("diziType")
                     val posterUrl = posterUrlFrom(
                         item,
                         sourceUrl,
-                        listOf("diziImg", "diziImage", "poster", "posterUrl", "image")
+                        listOf("diziImg", "diziImage", "diziResim", "filmImg", "filmResim", "poster", "posterUrl", "image")
                     ).orEmpty()
 
                     when {
-                        type.contains("dizi", ignoreCase = true) -> {
+                        type.contains("dizi", ignoreCase = true) ||
+                            type.contains("series", ignoreCase = true) -> {
                             searchResults.add(
-                                newTvSeriesSearchResponse(
-                                    name,
-                                    item.toString()
-                                ) {
+                                newTvSeriesSearchResponse(name, item.toString(), TvType.TvSeries) {
                                     this.posterUrl = posterUrl
                                 }
                             )
                         }
-
-                        type.contains("film", ignoreCase = true) -> {
+                        type.contains("film", ignoreCase = true) ||
+                            type.contains("movie", ignoreCase = true) -> {
                             searchResults.add(
-                                newMovieSearchResponse(
-                                    name,
-                                    item.toString()
-                                ) {
+                                newMovieSearchResponse(name, item.toString(), TvType.Movie) {
                                     this.posterUrl = posterUrl
                                 }
                             )
                         }
                     }
-
                     continue
                 }
 
-                if (
-                    item.has("chName") &&
-                    item.has("chUrl") &&
-                    item.has("chImg")
-                ) {
-                    val name = item.optString("chName", "İsimsiz")
+                if (item.has("chName") && item.has("chUrl")) {
+                    val name = item.optString("chName").ifBlank { "İsimsiz" }
                     val posterUrl = posterUrlFrom(
                         item,
                         sourceUrl,
-                        listOf("chImg", "chImage", "poster", "posterUrl", "image")
+                        listOf("chImg", "chImage", "chResim", "bolumImg", "bolumResim", "poster", "posterUrl", "image", "resim")
                     ).orEmpty()
                     val chType = item.optString("chType")
                     val chUrl = item.optString("chUrl")
 
                     when {
-                        chType.contains("live", ignoreCase = true) -> {
+                        chType.contains("live", ignoreCase = true) ||
+                            chType.contains("cable", ignoreCase = true) ||
+                            (chType.contains("tekli", ignoreCase = true) && !chUrl.contains("filmizleeeee", true)) -> {
                             searchResults.add(
-                                newLiveSearchResponse(
-                                    name,
-                                    item.toString(),
-                                    TvType.Live
-                                ) {
+                                newLiveSearchResponse(name, item.toString(), TvType.Live) {
                                     this.posterUrl = posterUrl
                                 }
                             )
                         }
-
-                        chType.contains("cable", ignoreCase = true) -> {
+                        chType.contains("dizi", ignoreCase = true) ||
+                            chType.contains("sezon", ignoreCase = true) -> {
                             searchResults.add(
-                                newLiveSearchResponse(
-                                    name,
-                                    item.toString(),
-                                    TvType.Live
-                                ) {
+                                newTvSeriesSearchResponse(name, item.toString(), TvType.TvSeries) {
                                     this.posterUrl = posterUrl
                                 }
                             )
                         }
-
-                        chType.contains("tekli", ignoreCase = true) &&
-                            !chUrl.contains("filmizleeeee", ignoreCase = true) -> {
-                            searchResults.add(
-                                newLiveSearchResponse(
-                                    name,
-                                    item.toString(),
-                                    TvType.Live
-                                ) {
-                                    this.posterUrl = posterUrl
-                                }
-                            )
-                        }
-
                         else -> {
                             searchResults.add(
-                                newMovieSearchResponse(
-                                    name,
-                                    item.toString()
-                                ) {
+                                newMovieSearchResponse(name, item.toString(), TvType.Movie) {
                                     this.posterUrl = posterUrl
                                 }
                             )
@@ -2654,15 +2812,12 @@ class InatBox : MainAPI() {
                 }
             }
         } catch (e: Exception) {
-            Log.e(
-                "InatBox",
-                "Failed to parse JSON response: ${e.message}",
-                e
-            )
+            Log.e("InatBox", "Failed to parse catalogue JSON: " + e.message, e)
         }
 
         return searchResults
     }
+
 }
 
 
