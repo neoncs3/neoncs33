@@ -980,9 +980,16 @@ class InatBox : MainAPI() {
                     rememberCatalog(url, System.currentTimeMillis(), results)
                 }
                 val posterCount = results.count { !it.posterUrl.isNullOrBlank() }
+                val posterHosts = results.mapNotNull { result ->
+                    runCatching { URI(result.posterUrl.orEmpty()).host }.getOrNull()
+                }.distinct().take(3).joinToString(",")
+                val posterSamples = results.take(3).joinToString(" | ") { result ->
+                    val host = runCatching { URI(result.posterUrl.orEmpty()).host }.getOrNull()
+                    "${result.name.take(28)}:${host ?: if (result.posterUrl.isNullOrBlank()) "missing" else "relative"}"
+                }
                 Log.i(
                     "InatBox",
-                    "Catalogue mapped: section=${request.name}, items=${results.size}, posters=$posterCount"
+                    "Catalogue mapped: section=${request.name}, items=${results.size}, posters=$posterCount, posterHosts=$posterHosts, samples=$posterSamples"
                 )
                 results
             }
@@ -2407,16 +2414,32 @@ class InatBox : MainAPI() {
 
     private fun isArtworkField(key: String): Boolean {
         val normalized = key.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]"), "")
-        return normalized in setOf(
-            "diziimg", "diziimage", "diziimageurl", "diziposter", "diziposterurl", "diziresim",
-            "filmimg", "filmresim", "chimg", "chimage", "chimageurl", "chresim",
-            "bolumimg", "bolumresim", "resim", "poster", "posterurl", "posterpath",
-            "posterimage", "image", "imageurl", "imagepath", "img", "imgurl",
-            "thumbnail", "thumbnailurl", "thumb", "thumburl", "cover", "coverurl",
-            "coverimage", "afis", "afisurl", "picture", "pictureurl", "photourl"
-        ) || listOf("poster", "thumbnail", "cover", "afis").any { normalized.contains(it) }
+        val artworkTokens = listOf(
+            "poster", "thumbnail", "thumb", "cover", "afis", "resim",
+            "image", "img", "picture", "photo", "banner", "backdrop", "logo", "icon"
+        )
+        return artworkTokens.any { normalized.contains(it) }
     }
 
+    private fun looksLikeArtworkUrl(raw: String): Boolean {
+        val value = raw.trim().lowercase(Locale.ROOT)
+        if (value.isBlank() || value == "null" || value == "0") return false
+        if (value.startsWith("data:") || value.startsWith("javascript:")) return false
+        if (value.contains(".m3u8") || value.contains(".mpd") ||
+            value.contains(".mp4") || value.contains(".mkv") ||
+            value.contains(".webm") || value.contains(".ts?")
+        ) return false
+
+        val path = runCatching {
+            URI(if (value.startsWith("//")) "https:$value" else value).path.orEmpty()
+        }.getOrDefault(value)
+        return Regex("""(?i)\\.(jpg|jpeg|png|webp|gif|avif|bmp)(?:$|/)""").containsMatchIn(path) ||
+            path.contains("/content/") ||
+            path.contains("/images/") ||
+            path.contains("/image/") ||
+            path.contains("/poster/") ||
+            path.contains("/thumb/")
+    }
     private fun posterCandidate(value: Any?, sourceUrl: String?, depth: Int = 0): String? {
         if (value == null || depth > 4) return null
 
@@ -2470,11 +2493,29 @@ class InatBox : MainAPI() {
             posterCandidate(item.opt(key), source)?.let { return it }
         }
 
-        val keys = item.keys()
-        while (keys.hasNext()) {
-            val key = keys.next()
+        val keys = item.keys().asSequence().toList()
+
+        // First search all known artwork-named fields (including provider-specific names).
+        for (key in keys) {
             if (!isArtworkField(key)) continue
             posterCandidate(item.opt(key), source)?.let { return it }
+        }
+
+        // Some InatBox catalogue revisions rename the poster field. As a fallback,
+        // accept only URL-like values that look like image/content paths; explicitly
+        // ignore playback URL fields so a stream is never mistaken for a poster.
+        val playbackKeys = setOf(
+            "churl", "diziurl", "filmurl", "bolumurl", "streamurl",
+            "url", "link", "href", "playurl", "video", "source"
+        )
+        for (key in keys) {
+            if (key.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]"), "") in playbackKeys) continue
+            val value = item.opt(key)
+            if (value is String && looksLikeArtworkUrl(value)) {
+                normalizePosterUrl(value, source)?.let { return it }
+            } else if (value is JSONObject || value is JSONArray) {
+                posterCandidate(value, source)?.let { return it }
+            }
         }
         return null
     }
@@ -2767,6 +2808,11 @@ class InatBox : MainAPI() {
                         sourceUrl,
                         listOf("diziImg", "diziImage", "diziResim", "filmImg", "filmResim", "poster", "posterUrl", "image", "catImg", "catImage")
                     ).orEmpty()
+                    if (searchResults.size < 3) {
+                        val fields = item.keys().asSequence().filter { isArtworkField(it) }.take(10).joinToString(",")
+                        val host = runCatching { URI(posterUrl).host }.getOrNull() ?: "missing"
+                        Log.d("InatBox", "Poster mapping sample: title=${name.take(28)}, host=$host, artworkFields=$fields")
+                    }
 
                     when {
                         type.contains("dizi", ignoreCase = true) ||
