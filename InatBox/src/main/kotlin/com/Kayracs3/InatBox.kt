@@ -594,24 +594,24 @@ private val LIVE_CATALOG_NAMES = setOf(
  * Keep the familiar 18 groups; each uses the signed tv_mode request.
  */
 private val INAT_CATALOG_PAGES = listOf(
-    InatCatalogPageConfig("Spor", "https://sprboxs.bar/CDN/001/SPR/v2/spor_v3.php", live = true),
-    InatCatalogPageConfig("Ulusal Kanallar", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/ulusal.php", live = true),
-    InatCatalogPageConfig("Haber Kanalları", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/haber.php", live = true),
-    InatCatalogPageConfig("Çocuk Kanalları", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/cocuk.php", live = true),
-    InatCatalogPageConfig("Sinema Kanalları", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/sinema.php", live = true),
-    InatCatalogPageConfig("Belgesel Kanalları", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/belgesel.php", live = true),
-    InatCatalogPageConfig("Exxen", "https://diziboxen.help/CDN/001/002/dizibox/v2/ex/index.php"),
-    InatCatalogPageConfig("Netflix", "https://diziboxen.help/CDN/001/002/dizibox/v2/nf/index.php"),
-    InatCatalogPageConfig("TOD", "https://sprboxs.bar/CDN/001/SPR/v2/ccc/a/index.php"),
-    InatCatalogPageConfig("BluTV & HBO", "https://diziboxen.help/CDN/001/002/dizibox/v2/hb/index.php"),
-    InatCatalogPageConfig("Disney+", "https://diziboxen.help/CDN/001/002/dizibox/v2/dsny/index.php"),
-    InatCatalogPageConfig("Gain", "https://diziboxen.help/CDN/001/002/dizibox/v2/ga/index.php"),
-    InatCatalogPageConfig("Amazon Prime", "https://diziboxen.help/CDN/001/002/dizibox/v2/amz/index.php"),
-    InatCatalogPageConfig("Tabii", "https://diziboxen.help/CDN/001/002/dizibox/v2/tbi/index.php"),
-    InatCatalogPageConfig("Yerli Diziler", "https://diziboxen.help/CDN/001/002/dizibox/v2/yerli-dizi/index.php"),
-    InatCatalogPageConfig("Yabancı Diziler", "https://diziboxen.help/CDN/001/002/dizibox/v2/yabanci-dizi/index.php"),
-    InatCatalogPageConfig("Yerli Filmler", "https://diziboxen.help/CDN/001/002/dizibox/v2/film/yerli-filmler.php"),
-    InatCatalogPageConfig("Mubi", "https://diziboxen.help/CDN/001/002/dizibox/v2/film/mubi.php")
+    InatCatalogPageConfig("Spor", "https://sprbox.top/CDN/001/SPR/v2/spor_v3.php", live = true),
+    InatCatalogPageConfig("Ulusal Kanallar", "https://diziboxen.top/CDN/001/002/dizibox/v2/tv/ulusal.php", live = true),
+    InatCatalogPageConfig("Haber Kanalları", "https://diziboxen.top/CDN/001/002/dizibox/v2/tv/haber.php", live = true),
+    InatCatalogPageConfig("Çocuk Kanalları", "https://diziboxen.top/CDN/001/002/dizibox/v2/tv/cocuk.php", live = true),
+    InatCatalogPageConfig("Sinema Kanalları", "https://diziboxen.top/CDN/001/002/dizibox/v2/tv/sinema.php", live = true),
+    InatCatalogPageConfig("Belgesel Kanalları", "https://diziboxen.top/CDN/001/002/dizibox/v2/tv/belgesel.php", live = true),
+    InatCatalogPageConfig("Exxen", "https://diziboxen.top/CDN/001/002/dizibox/v2/ex/index.php"),
+    InatCatalogPageConfig("Netflix", "https://diziboxen.top/CDN/001/002/dizibox/v2/nf/index.php"),
+    InatCatalogPageConfig("TOD", "https://sprbox.top/CDN/001/SPR/v2/ccc/a/index.php"),
+    InatCatalogPageConfig("BluTV & HBO", "https://diziboxen.top/CDN/001/002/dizibox/v2/hb/index.php"),
+    InatCatalogPageConfig("Disney+", "https://diziboxen.top/CDN/001/002/dizibox/v2/dsny/index.php"),
+    InatCatalogPageConfig("Gain", "https://diziboxen.top/CDN/001/002/dizibox/v2/ga/index.php"),
+    InatCatalogPageConfig("Amazon Prime", "https://diziboxen.top/CDN/001/002/dizibox/v2/amz/index.php"),
+    InatCatalogPageConfig("Tabii", "https://diziboxen.top/CDN/001/002/dizibox/v2/tbi/index.php"),
+    InatCatalogPageConfig("Yerli Diziler", "https://diziboxen.top/CDN/001/002/dizibox/v2/yerli-dizi/index.php"),
+    InatCatalogPageConfig("Yabancı Diziler", "https://diziboxen.top/CDN/001/002/dizibox/v2/yabanci-dizi/index.php"),
+    InatCatalogPageConfig("Yerli Filmler", "https://diziboxen.top/CDN/001/002/dizibox/v2/film/yerli-filmler.php"),
+    InatCatalogPageConfig("Mubi", "https://diziboxen.top/CDN/001/002/dizibox/v2/film/mubi.php")
 )
 
 class InatBox : MainAPI() {
@@ -1037,16 +1037,30 @@ class InatBox : MainAPI() {
      * InatBox rotates its catalogue hosts without changing the CDN paths.
      * Keep the original URL first and retry only against the observed alternate.
      */
-    private fun alternateInatUrl(url: String): String? {
-        val uri = runCatching { URI(url) }.getOrNull() ?: return null
-        val host = uri.host?.lowercase(Locale.ROOT) ?: return null
-        val alternate = when (host) {
-            "diziboxen.help" -> "dizilabmedia.click"
-            "4k.filmizleeeee.cfd" -> "str.filmizleeeee.cfd"
-            else -> return null
+    /**
+     * InatBox rotated its catalogue API domains. Use the latest Kayra repo
+     * domains first, then try the previous observed hosts as fallbacks.
+     */
+    private fun inatRequestUrls(url: String): List<String> {
+        val uri = runCatching { URI(url) }.getOrNull() ?: return listOf(url)
+        val host = uri.host?.lowercase(Locale.ROOT) ?: return listOf(url)
+        val alternatives = when (host) {
+            "diziboxen.top" -> listOf("diziboxen.help", "dizilabmedia.click")
+            "diziboxen.help" -> listOf("diziboxen.top", "dizilabmedia.click")
+            "dizilabmedia.click" -> listOf("diziboxen.top", "diziboxen.help")
+            "sprbox.top" -> listOf("sprboxs.bar")
+            "sprboxs.bar" -> listOf("sprbox.top")
+            "4k.filmizleeeee.cfd" -> listOf("str.filmizleeeee.cfd")
+            "str.filmizleeeee.cfd" -> listOf("4k.filmizleeeee.cfd")
+            else -> emptyList()
         }
-        return url.replaceFirst(uri.host, alternate, ignoreCase = true)
-            .takeIf { it != url }
+
+        return buildList {
+            add(url)
+            alternatives.forEach { alternate ->
+                add(url.replaceFirst(uri.host, alternate, ignoreCase = true))
+            }
+        }.distinct()
     }
 
     private suspend fun loadCatalogResponse(url: String): String? {
@@ -1137,12 +1151,12 @@ class InatBox : MainAPI() {
         if (q.isBlank()) return emptyList()
 
         val keyUrls = listOf(
-            "https://sprboxs.bar/CDN/001/SPR/v2/spor_v3.php",
-            "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/ulusal.php",
-            "https://diziboxen.help/CDN/001/002/dizibox/v2/nf/index.php",
-            "https://diziboxen.help/CDN/001/002/dizibox/v2/yerli-dizi/index.php",
-            "https://diziboxen.help/CDN/001/002/dizibox/v2/yabanci-dizi/index.php",
-            "https://diziboxen.help/CDN/001/002/dizibox/v2/film/yerli-filmler.php"
+            "https://sprbox.top/CDN/001/SPR/v2/spor_v3.php",
+            "https://diziboxen.top/CDN/001/002/dizibox/v2/tv/ulusal.php",
+            "https://diziboxen.top/CDN/001/002/dizibox/v2/nf/index.php",
+            "https://diziboxen.top/CDN/001/002/dizibox/v2/yerli-dizi/index.php",
+            "https://diziboxen.top/CDN/001/002/dizibox/v2/yabanci-dizi/index.php",
+            "https://diziboxen.top/CDN/001/002/dizibox/v2/film/yerli-filmler.php"
         )
         val now = System.currentTimeMillis()
         val cacheDuration = 15 * 60 * 1000L
@@ -2204,10 +2218,7 @@ class InatBox : MainAPI() {
         url: String,
         retryCount: Int = 2
     ): String? {
-        val requestUrls = buildList {
-            add(url)
-            alternateInatUrl(url)?.let { add(it) }
-        }.distinct()
+        val requestUrls = inatRequestUrls(url)
 
         for (requestUrl in requestUrls) {
             for (attempt in 0 until retryCount.coerceAtLeast(1)) {
@@ -2273,10 +2284,7 @@ class InatBox : MainAPI() {
     ): String? {
         // Use CloudStream's form-data POST path (same wire format as the official
         // Inat client) instead of a hand-built RequestBody with an overridden Host.
-        val requestUrls = buildList {
-            add(url)
-            alternateInatUrl(url)?.let { add(it) }
-        }.distinct()
+        val requestUrls = inatRequestUrls(url)
 
         for (requestUrl in requestUrls) {
             for (attempt in 0 until retryCount.coerceAtLeast(1)) {
