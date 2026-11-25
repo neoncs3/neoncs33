@@ -2479,25 +2479,6 @@ class InatBox : MainAPI() {
         return null
     }
 
-    /**
-     * InatBox's image CDN can reject requests without browser-like headers.
-     * CloudStream supports posterHeaders independently from playback headers.
-     */
-    private fun posterHeadersFor(posterUrl: String?, sourceUrl: String?): Map<String, String>? {
-        if (posterUrl.isNullOrBlank()) return null
-        val referer = runCatching {
-            val source = URI(sourceUrl.orEmpty())
-            if (source.scheme.isNullOrBlank() || source.host.isNullOrBlank()) null
-            else "${source.scheme}://${source.host}/"
-        }.getOrNull() ?: "https://speedrestapi.com/"
-
-        return mapOf(
-            "User-Agent" to "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36",
-            "Referer" to referer,
-            "Accept" to "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
-        )
-    }
-
     private fun enrichInatItem(
         rawItem: JSONObject,
         sourceUrl: String?
@@ -2793,7 +2774,6 @@ class InatBox : MainAPI() {
                             searchResults.add(
                                 newTvSeriesSearchResponse(name, item.toString(), TvType.TvSeries) {
                                     this.posterUrl = posterUrl
-                                    this.posterHeaders = posterHeadersFor(posterUrl, sourceUrl)
                                 }
                             )
                         }
@@ -2802,7 +2782,6 @@ class InatBox : MainAPI() {
                             searchResults.add(
                                 newMovieSearchResponse(name, item.toString(), TvType.Movie) {
                                     this.posterUrl = posterUrl
-                                    this.posterHeaders = posterHeadersFor(posterUrl, sourceUrl)
                                 }
                             )
                         }
@@ -2827,7 +2806,6 @@ class InatBox : MainAPI() {
                             searchResults.add(
                                 newLiveSearchResponse(name, item.toString(), TvType.Live) {
                                     this.posterUrl = posterUrl
-                                    this.posterHeaders = posterHeadersFor(posterUrl, sourceUrl)
                                 }
                             )
                         }
@@ -2836,7 +2814,6 @@ class InatBox : MainAPI() {
                             searchResults.add(
                                 newTvSeriesSearchResponse(name, item.toString(), TvType.TvSeries) {
                                     this.posterUrl = posterUrl
-                                    this.posterHeaders = posterHeadersFor(posterUrl, sourceUrl)
                                 }
                             )
                         }
@@ -2844,7 +2821,6 @@ class InatBox : MainAPI() {
                             searchResults.add(
                                 newMovieSearchResponse(name, item.toString(), TvType.Movie) {
                                     this.posterUrl = posterUrl
-                                    this.posterHeaders = posterHeadersFor(posterUrl, sourceUrl)
                                 }
                             )
                         }
