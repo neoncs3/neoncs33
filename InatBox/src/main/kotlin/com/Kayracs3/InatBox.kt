@@ -986,6 +986,10 @@ class InatBox : MainAPI() {
         }
 
         if (allResults.isEmpty()) {
+            Log.w(
+                "InatBox",
+                "Home page is empty: name=${request.name}, url=$url, dataType=$dataType. Check the catalogue request/decryption logs above."
+            )
             return newHomePageResponse(request.name, emptyList(), hasNext = false)
         }
 
@@ -2199,10 +2203,10 @@ class InatBox : MainAPI() {
             for (attempt in 0 until retryCount.coerceAtLeast(1)) {
                 try {
                     val headers = mutableMapOf(
-                        "User-Agent" to "speedrestapi",
-                        "X-Requested-With" to "com.bp.box",
-                        "Referer" to "https://speedrestapi.com/",
-                        "Cache-Control" to "no-cache"
+                        "user-agent" to "speedrestapi",
+                        "x-requested-with" to "com.bp.box",
+                        "referer" to "https://speedrestapi.com/",
+                        "cache-control" to "no-cache"
                     )
                     headers.putAll(signRequest("GET", requestUrl, ""))
 
@@ -2222,14 +2226,31 @@ class InatBox : MainAPI() {
                         continue
                     }
 
-                    if (response.isSuccessful && response.text.isNotBlank()) {
-                        val decoded = decryptDoubleAes(response.text, RAW_RESPONSE_KEY)
-                        if (!decoded.isNullOrBlank()) return decoded
+                    if (!response.isSuccessful) {
+                        Log.w("InatBox", "raw_mode GET HTTP \${response.code} for \$requestUrl")
+                        break
                     }
+
+                    if (response.text.isBlank()) {
+                        Log.w("InatBox", "raw_mode GET returned an empty body for \$requestUrl")
+                        break
+                    }
+
+                    val decoded = decryptDoubleAes(response.text, RAW_RESPONSE_KEY)
+                    if (!decoded.isNullOrBlank()) {
+                        Log.d("InatBox", "raw_mode response decoded: \${decoded.length} chars from \$requestUrl")
+                        return decoded
+                    }
+
+                    Log.w(
+                        "InatBox",
+                        "raw_mode response could not be AES-decoded (\${response.text.length} chars) from \$requestUrl"
+                    )
                 } catch (e: Exception) {
-                    if (attempt == retryCount - 1) {
-                        Log.w("InatBox", "raw_mode GET failed for " + requestUrl + ": " + e.message)
-                    }
+                    Log.w(
+                        "InatBox",
+                        "raw_mode GET attempt \${attempt + 1} failed for \$requestUrl: \${e.message}"
+                    )
                 }
             }
         }
@@ -2240,42 +2261,37 @@ class InatBox : MainAPI() {
         url: String,
         retryCount: Int = 2
     ): String? {
+        // Use CloudStream's form-data POST path (same wire format as the official
+        // Inat client) instead of a hand-built RequestBody with an overridden Host.
         val requestUrls = buildList {
             add(url)
             alternateInatUrl(url)?.let { add(it) }
         }.distinct()
 
         for (requestUrl in requestUrls) {
-            val hostName = runCatching { URI(requestUrl).host }
-                .getOrNull()
-                .orEmpty()
-                .ifBlank { "speedrestapi.com" }
-
             for (attempt in 0 until retryCount.coerceAtLeast(1)) {
                 try {
                     val dynamicKey = generateRandomKey(16)
-                    val requestBody = "1=$dynamicKey&0=$dynamicKey"
-
+                    val form = linkedMapOf(
+                        "1" to dynamicKey,
+                        "0" to dynamicKey
+                    )
+                    val requestBody = form.entries.joinToString("&") { "\${it.key}=\${it.value}" }
                     val headers = mutableMapOf(
-                        "User-Agent" to "speedrestapi",
-                        "X-Requested-With" to "com.bp.box",
-                        "Referer" to "https://speedrestapi.com/",
-                        "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
-                        "Cache-Control" to "no-cache",
-                        "Host" to hostName
+                        "user-agent" to "speedrestapi",
+                        "x-requested-with" to "com.bp.box",
+                        "referer" to "https://speedrestapi.com/",
+                        "content-type" to "application/x-www-form-urlencoded; charset=UTF-8",
+                        "cache-control" to "no-cache"
                     )
                     headers.putAll(signRequest("POST", requestUrl, requestBody))
 
                     val response = app.post(
                         url = requestUrl,
-                        headers = headers,
-                        requestBody = requestBody.toRequestBody(
-                            "application/x-www-form-urlencoded; charset=UTF-8".toMediaType()
-                        )
+                        data = form,
+                        headers = headers
                     )
 
-                    // The official client returns the server clock in x-st. Correct
-                    // local clock skew once and sign the retried request with that offset.
                     val serverTime = response.headers["x-st"]
                     val correctedClock = serverTime
                         ?.takeIf { Regex("^\\d{1,12}$").matches(it) }
@@ -2291,30 +2307,40 @@ class InatBox : MainAPI() {
                         continue
                     }
 
-                    if (response.code == 403 || response.code == 520) {
+                    if (!response.isSuccessful) {
                         Log.w(
                             "InatBox",
-                            "Catalogue host rejected the request (HTTP " + response.code + "); trying the configured alternate if available"
+                            "Catalogue POST HTTP \${response.code} for \$requestUrl"
                         )
                         break
                     }
 
-                    if (response.isSuccessful && response.text.isNotBlank()) {
-                        val decrypted = decryptDoubleAes(response.text, dynamicKey)
-                        if (!decrypted.isNullOrBlank()) {
-                            if (requestUrl != url) {
-                                Log.i("InatBox", "Catalogue request succeeded through the alternate host")
-                            }
-                            return decrypted
+                    if (response.text.isBlank()) {
+                        Log.w("InatBox", "Catalogue POST returned an empty body for \$requestUrl")
+                        break
+                    }
+
+                    val decrypted = decryptDoubleAes(response.text, dynamicKey)
+                    if (!decrypted.isNullOrBlank()) {
+                        if (requestUrl != url) {
+                            Log.i("InatBox", "Catalogue request succeeded through the alternate host")
                         }
-                    }
-                } catch (e: Exception) {
-                    if (attempt == retryCount - 1) {
-                        Log.w(
+                        Log.d(
                             "InatBox",
-                            "Post request failed for " + hostName + ": " + e.message
+                            "Catalogue response decoded: \${decrypted.length} chars from \$requestUrl"
                         )
+                        return decrypted
                     }
+
+                    Log.w(
+                        "InatBox",
+                        "Catalogue response could not be AES-decoded (HTTP \${response.code}, \${response.text.length} chars) from \$requestUrl"
+                    )
+                } catch (e: Exception) {
+                    Log.w(
+                        "InatBox",
+                        "Catalogue POST attempt \${attempt + 1} failed for \$requestUrl: \${e.message}"
+                    )
                 }
             }
         }
