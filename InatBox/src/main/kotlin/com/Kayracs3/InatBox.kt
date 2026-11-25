@@ -2433,7 +2433,7 @@ class InatBox : MainAPI() {
         val path = runCatching {
             URI(if (value.startsWith("//")) "https:$value" else value).path.orEmpty()
         }.getOrDefault(value)
-        return Regex("""(?i)\\.(jpg|jpeg|png|webp|gif|avif|bmp)(?:$|/)""").containsMatchIn(path) ||
+        return Regex("""(?i)\.(jpg|jpeg|png|webp|gif|avif|bmp)(?:$|/)""").containsMatchIn(path) ||
             path.contains("/content/") ||
             path.contains("/images/") ||
             path.contains("/image/") ||
