@@ -2227,29 +2227,29 @@ class InatBox : MainAPI() {
                     }
 
                     if (!response.isSuccessful) {
-                        Log.w("InatBox", "raw_mode GET HTTP \${response.code} for \$requestUrl")
+                        Log.w("InatBox", "raw_mode GET HTTP ${response.code} for $requestUrl")
                         break
                     }
 
                     if (response.text.isBlank()) {
-                        Log.w("InatBox", "raw_mode GET returned an empty body for \$requestUrl")
+                        Log.w("InatBox", "raw_mode GET returned an empty body for $requestUrl")
                         break
                     }
 
                     val decoded = decryptDoubleAes(response.text, RAW_RESPONSE_KEY)
                     if (!decoded.isNullOrBlank()) {
-                        Log.d("InatBox", "raw_mode response decoded: \${decoded.length} chars from \$requestUrl")
+                        Log.d("InatBox", "raw_mode response decoded: ${decoded.length} chars from $requestUrl")
                         return decoded
                     }
 
                     Log.w(
                         "InatBox",
-                        "raw_mode response could not be AES-decoded (\${response.text.length} chars) from \$requestUrl"
+                        "raw_mode response could not be AES-decoded (${response.text.length} chars) from $requestUrl"
                     )
                 } catch (e: Exception) {
                     Log.w(
                         "InatBox",
-                        "raw_mode GET attempt \${attempt + 1} failed for \$requestUrl: \${e.message}"
+                        "raw_mode GET attempt ${attempt + 1} failed for $requestUrl: ${e.message}"
                     )
                 }
             }
@@ -2276,7 +2276,7 @@ class InatBox : MainAPI() {
                         "1" to dynamicKey,
                         "0" to dynamicKey
                     )
-                    val requestBody = form.entries.joinToString("&") { "\${it.key}=\${it.value}" }
+                    val requestBody = form.entries.joinToString("&") { "${it.key}=${it.value}" }
                     val headers = mutableMapOf(
                         "user-agent" to "speedrestapi",
                         "x-requested-with" to "com.bp.box",
@@ -2310,13 +2310,13 @@ class InatBox : MainAPI() {
                     if (!response.isSuccessful) {
                         Log.w(
                             "InatBox",
-                            "Catalogue POST HTTP \${response.code} for \$requestUrl"
+                            "Catalogue POST HTTP ${response.code} for $requestUrl"
                         )
                         break
                     }
 
                     if (response.text.isBlank()) {
-                        Log.w("InatBox", "Catalogue POST returned an empty body for \$requestUrl")
+                        Log.w("InatBox", "Catalogue POST returned an empty body for $requestUrl")
                         break
                     }
 
@@ -2327,19 +2327,19 @@ class InatBox : MainAPI() {
                         }
                         Log.d(
                             "InatBox",
-                            "Catalogue response decoded: \${decrypted.length} chars from \$requestUrl"
+                            "Catalogue response decoded: ${decrypted.length} chars from $requestUrl"
                         )
                         return decrypted
                     }
 
                     Log.w(
                         "InatBox",
-                        "Catalogue response could not be AES-decoded (HTTP \${response.code}, \${response.text.length} chars) from \$requestUrl"
+                        "Catalogue response could not be AES-decoded (HTTP ${response.code}, ${response.text.length} chars) from $requestUrl"
                     )
                 } catch (e: Exception) {
                     Log.w(
                         "InatBox",
-                        "Catalogue POST attempt \${attempt + 1} failed for \$requestUrl: \${e.message}"
+                        "Catalogue POST attempt ${attempt + 1} failed for $requestUrl: ${e.message}"
                     )
                 }
             }
