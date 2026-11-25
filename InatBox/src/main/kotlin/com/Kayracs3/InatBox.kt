@@ -54,6 +54,7 @@ import javax.crypto.Cipher
 import javax.crypto.Mac
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
+import kotlinx.coroutines.delay
 
 
 private object InatHlsProxy {
@@ -622,8 +623,8 @@ class InatBox : MainAPI() {
     override val hasQuickSearch = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Live)
     override var sequentialMainPage = true
-    override var sequentialMainPageDelay = 150L
-    override var sequentialMainPageScrollDelay = 150L
+    override var sequentialMainPageDelay = 500L
+    override var sequentialMainPageScrollDelay = 350L
     override val getMainPageTimeoutMs = 30_000L
 
     private val tabCache = ConcurrentHashMap<String, Pair<Long, List<SearchResponse>>>()
@@ -675,6 +676,48 @@ class InatBox : MainAPI() {
         @Volatile private var serverClockOffsetSeconds = 0L
         private const val LEGACY_AES_KEY = "ywevqtjrurkwtqgz"
         private val SECURE_RANDOM = SecureRandom()
+        private val preferredInatHosts = ConcurrentHashMap<String, String>()
+
+        private fun inatHostFamily(host: String): String? = when (host.lowercase(Locale.ROOT)) {
+            "diziboxen.top", "diziboxen.help", "dizilabmedia.click" -> "diziboxen"
+            "sprbox.top", "sprboxs.bar" -> "sprbox"
+            "4k.filmizleeeee.cfd", "str.filmizleeeee.cfd" -> "filmizleeeee"
+            else -> null
+        }
+
+        internal fun inatRequestUrlsFor(url: String): List<String> {
+            val uri = runCatching { URI(url) }.getOrNull() ?: return listOf(url)
+            val host = uri.host?.lowercase(Locale.ROOT) ?: return listOf(url)
+            val family = inatHostFamily(host)
+            val alternatives = when (host) {
+                "diziboxen.top" -> listOf("diziboxen.help", "dizilabmedia.click")
+                "diziboxen.help" -> listOf("diziboxen.top", "dizilabmedia.click")
+                "dizilabmedia.click" -> listOf("diziboxen.top", "diziboxen.help")
+                "sprbox.top" -> listOf("sprboxs.bar")
+                "sprboxs.bar" -> listOf("sprbox.top")
+                "4k.filmizleeeee.cfd" -> listOf("str.filmizleeeee.cfd")
+                "str.filmizleeeee.cfd" -> listOf("4k.filmizleeeee.cfd")
+                else -> emptyList()
+            }
+
+            val hosts = linkedSetOf<String>()
+            family?.let { preferredInatHosts[it] }?.let(hosts::add)
+            hosts.add(host)
+            hosts.addAll(alternatives)
+
+            return hosts.map { candidate ->
+                url.replaceFirst(uri.host, candidate, ignoreCase = true)
+            }.distinct()
+        }
+
+        internal fun rememberSuccessfulInatHost(url: String) {
+            val host = runCatching { URI(url).host?.lowercase(Locale.ROOT) }.getOrNull() ?: return
+            val family = inatHostFamily(host) ?: return
+            preferredInatHosts[family] = host
+        }
+
+        internal fun shouldRetryInatHttp(code: Int): Boolean =
+            code == 403 || code == 408 || code == 425 || code == 429 || code in 500..599
         private val HEX_CHARS = "0123456789abcdef".toCharArray()
 
         fun generateRandomKey(length: Int = 16): String {
@@ -718,61 +761,64 @@ class InatBox : MainAPI() {
             url: String,
             retryCount: Int = 2
         ): String? {
-            val hostName = try {
-                URI(url).host ?: "speedrestapi.com"
-            } catch (_: Exception) {
-                "speedrestapi.com"
-            }
+            for (requestUrl in inatRequestUrlsFor(url)) {
+                val hostName = runCatching { URI(requestUrl).host }
+                    .getOrNull() ?: "speedrestapi.com"
 
-            repeat(retryCount) { attempt ->
-                try {
-                    val dynamicKey = generateRandomKey(16)
-                    val requestBody = "1=$dynamicKey&0=$dynamicKey"
-                    val headers = mutableMapOf(
-                        "User-Agent" to "speedrestapi",
-                        "X-Requested-With" to "com.bp.box",
-                        "Referer" to "https://speedrestapi.com/",
-                        "Cache-Control" to "no-cache",
-                        "Host" to hostName
-                    )
-                    headers.putAll(signRequest("POST", url, requestBody))
-
-                    val request = Request.Builder()
-                        .url(url)
-                        .post(
-                            requestBody.toRequestBody(
-                                "application/x-www-form-urlencoded; charset=UTF-8".toMediaType()
-                            )
+                repeat(retryCount.coerceAtLeast(1)) { attempt ->
+                    try {
+                        val dynamicKey = generateRandomKey(16)
+                        val requestBody = "1=$dynamicKey&0=$dynamicKey"
+                        val headers = mutableMapOf(
+                            "User-Agent" to "speedrestapi",
+                            "X-Requested-With" to "com.bp.box",
+                            "Referer" to "https://speedrestapi.com/",
+                            "Cache-Control" to "no-cache",
+                            "Host" to hostName
                         )
-                        .apply {
-                            headers.forEach { (key, value) ->
-                                addHeader(key, value)
+                        headers.putAll(signRequest("POST", requestUrl, requestBody))
+
+                        val request = Request.Builder()
+                            .url(requestUrl)
+                            .post(
+                                requestBody.toRequestBody(
+                                    "application/x-www-form-urlencoded; charset=UTF-8".toMediaType()
+                                )
+                            )
+                            .apply {
+                                headers.forEach { (key, value) ->
+                                    addHeader(key, value)
+                                }
+                            }
+                            .build()
+
+                        proxyHttpClient.newCall(request).execute().use { response ->
+                            if (!response.isSuccessful) {
+                                Log.w("InatBox", "Proxy refresh HTTP ${response.code} for $requestUrl")
+                                return@use
+                            }
+                            val body = response.body?.bytes() ?: return@use
+                            if (body.isEmpty()) return@use
+
+                            val decrypted = decryptDoubleAes(
+                                String(body, StandardCharsets.UTF_8),
+                                dynamicKey
+                            )
+
+                            if (!decrypted.isNullOrBlank()) {
+                                rememberSuccessfulInatHost(requestUrl)
+                                throw ProxyResult(decrypted)
                             }
                         }
-                        .build()
-
-                    proxyHttpClient.newCall(request).execute().use { response ->
-                        if (!response.isSuccessful) return@use
-                        val body = response.body?.bytes() ?: return@use
-                        if (body.isEmpty()) return@use
-
-                        val decrypted = decryptDoubleAes(
-                            String(body, StandardCharsets.UTF_8),
-                            dynamicKey
-                        )
-
-                        if (!decrypted.isNullOrBlank()) {
-                            throw ProxyResult(decrypted)
+                    } catch (result: ProxyResult) {
+                        return result.value
+                    } catch (e: Exception) {
+                        if (attempt == retryCount - 1) {
+                            Log.w(
+                                "InatBox",
+                                "Proxy refresh request failed for $requestUrl: ${e.message}"
+                            )
                         }
-                    }
-                } catch (result: ProxyResult) {
-                    return result.value
-                } catch (e: Exception) {
-                    if (attempt == retryCount - 1) {
-                        Log.w(
-                            "InatBox",
-                            "Proxy refresh request failed: ${e.message}"
-                        )
                     }
                 }
             }
@@ -1041,27 +1087,8 @@ class InatBox : MainAPI() {
      * InatBox rotated its catalogue API domains. Use the latest Kayra repo
      * domains first, then try the previous observed hosts as fallbacks.
      */
-    private fun inatRequestUrls(url: String): List<String> {
-        val uri = runCatching { URI(url) }.getOrNull() ?: return listOf(url)
-        val host = uri.host?.lowercase(Locale.ROOT) ?: return listOf(url)
-        val alternatives = when (host) {
-            "diziboxen.top" -> listOf("diziboxen.help", "dizilabmedia.click")
-            "diziboxen.help" -> listOf("diziboxen.top", "dizilabmedia.click")
-            "dizilabmedia.click" -> listOf("diziboxen.top", "diziboxen.help")
-            "sprbox.top" -> listOf("sprboxs.bar")
-            "sprboxs.bar" -> listOf("sprbox.top")
-            "4k.filmizleeeee.cfd" -> listOf("str.filmizleeeee.cfd")
-            "str.filmizleeeee.cfd" -> listOf("4k.filmizleeeee.cfd")
-            else -> emptyList()
-        }
-
-        return buildList {
-            add(url)
-            alternatives.forEach { alternate ->
-                add(url.replaceFirst(uri.host, alternate, ignoreCase = true))
-            }
-        }.distinct()
-    }
+    private fun inatRequestUrls(url: String): List<String> =
+        inatRequestUrlsFor(url)
 
     private suspend fun loadCatalogResponse(url: String): String? {
         // Try the configured endpoint first, then its known host rotation.
@@ -2244,21 +2271,28 @@ class InatBox : MainAPI() {
                         } ?: false
 
                     if (response.code == 403 && correctedClock && attempt == 0) {
+                        delay(150L)
                         continue
                     }
 
                     if (!response.isSuccessful) {
                         Log.w("InatBox", "raw_mode GET HTTP ${response.code} for $requestUrl")
+                        if (shouldRetryInatHttp(response.code) && attempt < retryCount - 1) {
+                            delay(350L * (attempt + 1))
+                            continue
+                        }
                         break
                     }
 
                     if (response.text.isBlank()) {
                         Log.w("InatBox", "raw_mode GET returned an empty body for $requestUrl")
-                        break
+                        if (attempt < retryCount - 1) delay(300L * (attempt + 1))
+                        continue
                     }
 
                     val decoded = decryptDoubleAes(response.text, RAW_RESPONSE_KEY)
                     if (!decoded.isNullOrBlank()) {
+                        rememberSuccessfulInatHost(requestUrl)
                         Log.d("InatBox", "raw_mode response decoded: ${decoded.length} chars from $requestUrl")
                         return decoded
                     }
@@ -2267,6 +2301,7 @@ class InatBox : MainAPI() {
                         "InatBox",
                         "raw_mode response could not be AES-decoded (${response.text.length} chars) from $requestUrl"
                     )
+                    if (attempt < retryCount - 1) delay(300L * (attempt + 1))
                 } catch (e: Exception) {
                     Log.w(
                         "InatBox",
@@ -2322,6 +2357,7 @@ class InatBox : MainAPI() {
                         } ?: false
 
                     if (response.code == 403 && correctedClock && attempt == 0) {
+                        delay(150L)
                         continue
                     }
 
@@ -2330,16 +2366,22 @@ class InatBox : MainAPI() {
                             "InatBox",
                             "Catalogue POST HTTP ${response.code} for $requestUrl"
                         )
+                        if (shouldRetryInatHttp(response.code) && attempt < retryCount - 1) {
+                            delay(350L * (attempt + 1))
+                            continue
+                        }
                         break
                     }
 
                     if (response.text.isBlank()) {
                         Log.w("InatBox", "Catalogue POST returned an empty body for $requestUrl")
-                        break
+                        if (attempt < retryCount - 1) delay(300L * (attempt + 1))
+                        continue
                     }
 
                     val decrypted = decryptDoubleAes(response.text, dynamicKey)
                     if (!decrypted.isNullOrBlank()) {
+                        rememberSuccessfulInatHost(requestUrl)
                         if (requestUrl != url) {
                             Log.i("InatBox", "Catalogue request succeeded through the alternate host")
                         }
@@ -2354,6 +2396,7 @@ class InatBox : MainAPI() {
                         "InatBox",
                         "Catalogue response could not be AES-decoded (HTTP ${response.code}, ${response.text.length} chars) from $requestUrl"
                     )
+                    if (attempt < retryCount - 1) delay(300L * (attempt + 1))
                 } catch (e: Exception) {
                     Log.w(
                         "InatBox",
