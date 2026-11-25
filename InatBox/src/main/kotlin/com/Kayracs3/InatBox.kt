@@ -939,19 +939,17 @@ class InatBox : MainAPI() {
         }
     }
 
+    // Match the original provider contract: MainPageData carries the endpoint URL directly.
     override val mainPage: List<MainPageData> =
-        INAT_CATALOG_PAGES.map { MainPageData(it.name, it.toRequestData()) }
+        INAT_CATALOG_PAGES.map { MainPageData(it.name, it.url) }
 
     override suspend fun getMainPage(
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
-        val requestConfig = runCatching { JSONObject(request.data) }.getOrNull()
-        val url = requestConfig?.optString("url")?.takeIf { it.isNotBlank() } ?: request.data
-        val dataType = requestConfig?.optString("dataType")?.takeIf { it.isNotBlank() }
-            ?: if (url.contains("list3.php", true)) "raw_mode" else "tv_mode"
-        val isLiveCategory = requestConfig?.optBoolean("live")
-            ?: (request.name in LIVE_CATALOG_NAMES)
+        val url = request.data
+        val dataType = if (url.contains("list3.php", true)) "raw_mode" else "tv_mode"
+        val isLiveCategory = request.name in LIVE_CATALOG_NAMES
         val allowGeneric4k = is4kCatalogUrl(url)
         val now = System.currentTimeMillis()
         val cached = tabCache[url]
