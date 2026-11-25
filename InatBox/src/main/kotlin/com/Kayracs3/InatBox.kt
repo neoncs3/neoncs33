@@ -979,6 +979,11 @@ class InatBox : MainAPI() {
                 if (results.isNotEmpty()) {
                     rememberCatalog(url, System.currentTimeMillis(), results)
                 }
+                val posterCount = results.count { !it.posterUrl.isNullOrBlank() }
+                Log.i(
+                    "InatBox",
+                    "Catalogue mapped: section=${request.name}, items=${results.size}, posters=$posterCount"
+                )
                 results
             }
         }
