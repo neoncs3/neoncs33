@@ -585,50 +585,33 @@ private data class InatCatalogPageConfig(
 }
 
 private val LIVE_CATALOG_NAMES = setOf(
-    "Liste 1 - TR", "Liste 2 - GLB", "Liste 3 - TR",
-    "Spor", "Belgesel Kanalları", "Ulusal Kanallar",
-    "Haber Kanalları", "EBA TV", "Çocuk Kanalları", "Dini Kanallar"
+    "Spor", "Ulusal Kanallar", "Haber Kanalları",
+    "Çocuk Kanalları", "Sinema Kanalları", "Belgesel Kanalları"
 )
 
 /**
- * InatBox v16 catalogue endpoints. Each page carries the catDataType request
- * mode supplied by the APK; raw_mode must not be sent through the POST path.
+ * Original InatBox home-page sections restored from the pre-v24 provider.
+ * Keep the familiar 18 groups; each uses the signed tv_mode request.
  */
 private val INAT_CATALOG_PAGES = listOf(
-    InatCatalogPageConfig("Liste 1 - TR", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/list1.php", live = true),
-    InatCatalogPageConfig("Liste 2 - GLB", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/list2.php", live = true),
-    InatCatalogPageConfig("Liste 3 - TR", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/list3.php", "raw_mode", true),
     InatCatalogPageConfig("Spor", "https://sprboxs.bar/CDN/001/SPR/v2/spor_v3.php", live = true),
-    InatCatalogPageConfig("Derbiler", "https://sprboxs.bar/CDN/001/SPR/v2/derbiler.php"),
-    InatCatalogPageConfig("Sinema", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/sinema.php"),
-    InatCatalogPageConfig("Belgesel Kanalları", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/belgesel.php", live = true),
     InatCatalogPageConfig("Ulusal Kanallar", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/ulusal.php", live = true),
     InatCatalogPageConfig("Haber Kanalları", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/haber.php", live = true),
-    InatCatalogPageConfig("EBA TV", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/eba.php", live = true),
     InatCatalogPageConfig("Çocuk Kanalları", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/cocuk.php", live = true),
-    InatCatalogPageConfig("Dini Kanallar", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/dini.php", live = true),
+    InatCatalogPageConfig("Sinema Kanalları", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/sinema.php", live = true),
+    InatCatalogPageConfig("Belgesel Kanalları", "https://diziboxen.help/CDN/001/002/dizibox/v2/tv/belgesel.php", live = true),
     InatCatalogPageConfig("Exxen", "https://diziboxen.help/CDN/001/002/dizibox/v2/ex/index.php"),
-    InatCatalogPageConfig("Gain", "https://diziboxen.help/CDN/001/002/dizibox/v2/ga/index.php"),
     InatCatalogPageConfig("Netflix", "https://diziboxen.help/CDN/001/002/dizibox/v2/nf/index.php"),
+    InatCatalogPageConfig("TOD", "https://sprboxs.bar/CDN/001/SPR/v2/ccc/a/index.php"),
     InatCatalogPageConfig("BluTV & HBO", "https://diziboxen.help/CDN/001/002/dizibox/v2/hb/index.php"),
     InatCatalogPageConfig("Disney+", "https://diziboxen.help/CDN/001/002/dizibox/v2/dsny/index.php"),
+    InatCatalogPageConfig("Gain", "https://diziboxen.help/CDN/001/002/dizibox/v2/ga/index.php"),
     InatCatalogPageConfig("Amazon Prime", "https://diziboxen.help/CDN/001/002/dizibox/v2/amz/index.php"),
     InatCatalogPageConfig("Tabii", "https://diziboxen.help/CDN/001/002/dizibox/v2/tbi/index.php"),
-    InatCatalogPageConfig("Mubi", "https://diziboxen.help/CDN/001/002/dizibox/v2/film/mubi.php"),
-    InatCatalogPageConfig("TOD", "https://sprboxs.bar/CDN/001/SPR/v2/ccc/a/index.php"),
-    InatCatalogPageConfig("Yabancı Diziler", "https://diziboxen.help/CDN/001/002/dizibox/v2/yabanci-dizi/index.php"),
     InatCatalogPageConfig("Yerli Diziler", "https://diziboxen.help/CDN/001/002/dizibox/v2/yerli-dizi/index.php"),
+    InatCatalogPageConfig("Yabancı Diziler", "https://diziboxen.help/CDN/001/002/dizibox/v2/yabanci-dizi/index.php"),
     InatCatalogPageConfig("Yerli Filmler", "https://diziboxen.help/CDN/001/002/dizibox/v2/film/yerli-filmler.php"),
-    InatCatalogPageConfig("4K Film 01 | Exo", "https://4k.filmizleeeee.cfd/4k/01/public/catalog-exo.php"),
-    InatCatalogPageConfig("4K Film 01 | Web", "https://4k.filmizleeeee.cfd/4k/01/public/catalog-web.php"),
-    InatCatalogPageConfig("4K Film 02 | Web", "https://4k.filmizleeeee.cfd/4k/02/public/catalog-web.php"),
-    InatCatalogPageConfig("4K Film 03 | Exo", "https://4k.filmizleeeee.cfd/4k/03/public/catalog-exo.php"),
-    InatCatalogPageConfig("4K Film 03 | Web", "https://4k.filmizleeeee.cfd/4k/03/public/catalog-web.php"),
-    InatCatalogPageConfig("4K Film 04 | Exo", "https://4k.filmizleeeee.cfd/4k/04/public/catalog-exo.php"),
-    InatCatalogPageConfig("4K Film 04 | Web", "https://4k.filmizleeeee.cfd/4k/04/public/catalog-web.php"),
-    InatCatalogPageConfig("4K Film 06 | Exo", "https://4k.filmizleeeee.cfd/4k/06/public/catalog-exo.php"),
-    InatCatalogPageConfig("4K Film 06 | Web", "https://4k.filmizleeeee.cfd/4k/06/public/catalog-web.php"),
-    InatCatalogPageConfig("4K Film 07 | Web", "https://4k.filmizleeeee.cfd/4k/07/public/catalog-web.php")
+    InatCatalogPageConfig("Mubi", "https://diziboxen.help/CDN/001/002/dizibox/v2/film/mubi.php")
 )
 
 class InatBox : MainAPI() {
@@ -2382,7 +2365,7 @@ class InatBox : MainAPI() {
             return value
         }
 
-        if (Regex("""(?i)^[a-z0-9.-]+\\.[a-z]{2,}(?::\\d+)?/""").containsMatchIn(value)) {
+        if (Regex("""(?i)^[a-z0-9.-]+\.[a-z]{2,}(?::\d+)?/""").containsMatchIn(value)) {
             return "https://$value"
         }
 
@@ -2444,7 +2427,7 @@ class InatBox : MainAPI() {
         val source = sourceUrl?.takeIf { it.isNotBlank() }
             ?: item.optString("__inat_source_url").takeIf { it.isNotBlank() }
         val knownKeys = (preferredKeys + listOf(
-            "diziImg", "diziImage", "dizi_image", "dizi_image_url", "diziPoster", "diziPosterUrl", "diziResim",
+            "diziImg", "diziImage", "dizi_image", "dizi_image_url", "diziPoster", "diziPosterUrl", "diziResim", "catImg", "catImage",
             "filmImg", "filmResim", "chImg", "chImage", "ch_image", "ch_image_url", "chResim",
             "bolumImg", "bolumResim", "resim", "poster", "posterUrl", "poster_url",
             "posterPath", "poster_path", "posterImage", "poster_image",
@@ -2676,7 +2659,7 @@ class InatBox : MainAPI() {
                     sourceUrl,
                     listOf(
                         "diziImg", "diziImage", "diziResim",
-                        "filmImg", "filmResim", "poster", "posterUrl", "image"
+                        "filmImg", "filmResim", "poster", "posterUrl", "image", "catImg", "catImage"
                     )
                 ).orEmpty()
                 item.put("diziName", name)
@@ -2698,7 +2681,7 @@ class InatBox : MainAPI() {
                     "bolumImg", "bolumResim",
                     "filmImg", "filmResim",
                     "diziImg", "diziImage", "diziResim",
-                    "poster", "posterUrl", "image", "img", "resim"
+                    "poster", "posterUrl", "image", "img", "resim", "catImg", "catImage"
                 )
             ).orEmpty()
             val type = firstInatText(item, "chType", "bolumType", "type", "filmType")
@@ -2753,7 +2736,7 @@ class InatBox : MainAPI() {
                     val posterUrl = posterUrlFrom(
                         item,
                         sourceUrl,
-                        listOf("diziImg", "diziImage", "diziResim", "filmImg", "filmResim", "poster", "posterUrl", "image")
+                        listOf("diziImg", "diziImage", "diziResim", "filmImg", "filmResim", "poster", "posterUrl", "image", "catImg", "catImage")
                     ).orEmpty()
 
                     when {
@@ -2782,7 +2765,7 @@ class InatBox : MainAPI() {
                     val posterUrl = posterUrlFrom(
                         item,
                         sourceUrl,
-                        listOf("chImg", "chImage", "chResim", "bolumImg", "bolumResim", "poster", "posterUrl", "image", "resim")
+                        listOf("chImg", "chImage", "chResim", "bolumImg", "bolumResim", "poster", "posterUrl", "image", "resim", "catImg", "catImage")
                     ).orEmpty()
                     val chType = item.optString("chType")
                     val chUrl = item.optString("chUrl")
