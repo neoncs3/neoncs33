@@ -66,10 +66,10 @@
     },
     {
         "iconUrl": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh3vCp6N1K4bECoYRQD-cisJF2_6V_Hk01ZhDmoPR2JuM8O5qr4MqrPO1munM9cRlleBBSK6odYhLtDBWv4E3vhPhynlmS5hVVtJZShHoGA5REQ8_3v8SIlccTEqzVQu2UJyNYQdJNrKIfWy66RQeT0D-CcmFCbHPz5023H6p2v5fv4NVloZ5Rqo_yGrIY/s320/iNat-Box-App.png",
-        "fileHash": "sha256-4e97c0662a61bb320c9cbceca46d900ddb701c60bfa3ca199a824b49a3867957",
+        "fileHash": "sha256-42445e8397e727a6d743f125c7df77cbaf5ae698882360a5fda1d3dd08d38a0c",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 127903,
+        "fileSize": 127974,
         "status": 3,
         "language": "tr",
         "authors": [
@@ -81,7 +81,7 @@
             "TvSeries",
             "Live"
         ],
-        "version": 25,
+        "version": 26,
         "internalName": "InatBox",
         "description": "\u0130natBox cloudstream eklentisidir. Sevdi\u011finiz yay\u0131n platformlar\u0131n\u0131 ve canl\u0131 ma\u00e7lar\u0131 burada bulabilirsiniz.",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/InatBox.cs3",
