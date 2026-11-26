@@ -98,7 +98,7 @@
         "anti_bot_blocked": true,
         "status_code": 403,
         "final_url": "https://www.hdfilmdiziizle.com",
-        "bytes": 5636,
+        "bytes": 5615,
         "title": "Just a moment...",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -140,7 +140,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://tvdiziler.tv",
-        "bytes": 82312,
+        "bytes": 82276,
         "title": "Dizi izle, Yerli ve Full HD Diziler, Dizi Seyret | TvDiziler.tv",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -308,7 +308,7 @@
         "anti_bot_blocked": false,
         "status_code": 200,
         "final_url": "https://dramadizilerim1.com",
-        "bytes": 201327,
+        "bytes": 201607,
         "title": "Drama İzle – Türkçe Dublaj &amp; Altyazılı Kısa Dizi | Drama Dizilerim",
         "media_hints": 0,
         "iframe_hints": 0,
@@ -328,17 +328,17 @@
     },
     {
       "provider": "FilmModu",
-      "status": "green",
+      "status": "yellow",
       "domain": "https://www.filmmodu.one",
       "configured_domain": "https://www.filmmodu.one",
       "live_domain": "https://www.filmmodu.one",
       "live": {
-        "ok": true,
-        "anti_bot_blocked": false,
-        "status_code": 200,
+        "ok": false,
+        "anti_bot_blocked": true,
+        "status_code": 403,
         "final_url": "https://www.filmmodu.one",
-        "bytes": 108038,
-        "title": "Filmmodu: Film izle, 1080p Kalitesinde HD Film izle",
+        "bytes": 7136,
+        "title": "Access denied | www.filmmodu.one used Cloudflare to restrict access | www.filmmodu.one | Cloudflare",
         "media_hints": 0,
         "iframe_hints": 0,
         "error": null
@@ -370,17 +370,17 @@
     },
     {
       "provider": "JetFilmizle",
-      "status": "red",
+      "status": "yellow",
       "domain": "https://jetfilmizle.app",
       "configured_domain": "https://jetfilmizle.app",
       "live_domain": "https://jetfilmizle.app",
       "live": {
         "ok": false,
-        "anti_bot_blocked": false,
-        "status_code": 404,
+        "anti_bot_blocked": true,
+        "status_code": 403,
         "final_url": "https://jetfilmizle.app",
-        "bytes": 513,
-        "title": "404 Not Found",
+        "bytes": 7133,
+        "title": "Access denied | jetfilmizle.app used Cloudflare to restrict access | jetfilmizle.app | Cloudflare",
         "media_hints": 0,
         "iframe_hints": 0,
         "error": null
@@ -550,7 +550,7 @@
       "source": "WebDramaTurkey/src/main/kotlin/com/neoncs3/WebDramaTurkey.kt"
     }
   ],
-  "green": 6,
-  "yellow": 19,
-  "red": 1
+  "green": 5,
+  "yellow": 21,
+  "red": 0
 }
