@@ -1,5 +1,6 @@
 package com.neoncs3
 
+import android.util.Base64
 import android.util.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -70,6 +71,25 @@ class SeyirTURK : MainAPI() {
         .replace("\\u0026", "&")
         .trim()
 
+
+    /**
+     * SeyirTURK's Android client decodes API responses by reversing the
+     * response text and then Base64-decoding it. The web API uses this for
+     * rootcheck as well as catalogue/detail/stream endpoints.
+     */
+    private fun decodeApiResponse(raw: String): String {
+        val value = raw.trim()
+        if (value.isBlank()) return ""
+
+        return runCatching {
+            val decoded = Base64.decode(value.reversed(), Base64.DEFAULT)
+            String(decoded, Charsets.UTF_8).trim()
+        }.getOrElse {
+            // Keep plain JSON/M3U responses usable if an endpoint is changed.
+            value
+        }
+    }
+
     private fun normalizeRoot(value: String): String? {
         var candidate = clean(value).trim('"', '\'', ' ', '\n', '\r', '\t')
         if (candidate.isBlank()) return null
@@ -97,9 +117,10 @@ class SeyirTURK : MainAPI() {
         )
 
         for (checkUrl in checks) {
-            val body = runCatching {
+            val rawBody = runCatching {
                 app.get(checkUrl, headers = requestHeaders, timeout = 8000).text
             }.getOrNull().orEmpty()
+            val body = decodeApiResponse(rawBody)
             if (body.isBlank()) continue
 
             val rootValue = runCatching {
@@ -146,9 +167,10 @@ class SeyirTURK : MainAPI() {
                 continue
             }
 
-            val body = response.text.trim()
+            val rawBody = response.text
+            val body = decodeApiResponse(rawBody)
             if (body.isNotBlank()) {
-                Log.d(name, "API yanıtı alındı: " + cleanPath + " (" + body.length + " karakter)")
+                Log.d(name, "API yanıtı çözüldü: " + cleanPath + " (" + body.length + " karakter)")
                 return body
             }
         }
