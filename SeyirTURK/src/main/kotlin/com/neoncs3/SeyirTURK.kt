@@ -172,7 +172,7 @@ class SeyirTURK : MainAPI() {
                     (normalizeRoot(candidate) ?: normalizeRoot(decodeApiResponse(candidate)))
                 }?.let(discovered::add)
 
-                Regex("""(?i)https?://[A-Za-z0-9.-]+(?::\\d+)?(?:/[^\\s"'<>]*)?""")
+                Regex("""(?i)https?://[A-Za-z0-9.-]+(?::\d+)?(?:/[^\s"'<>]*)?""")
                     .findAll(body)
                     .mapNotNull { normalizeRoot(it.value) }
                     .forEach(discovered::add)
