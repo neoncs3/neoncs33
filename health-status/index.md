@@ -25,6 +25,7 @@ Bu rapor tools/provider_health.py tarafından otomatik güncellenir.
 | **NeonHub** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **NewTVLive** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **SetFilmIzle** | 🟢 | https://www.setfilmizle.ltd | https://www.setfilmizle.ltd | ✅ (200) | 1 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **SeyirTURK** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **SinemaCX** | 🟢 | https://sinemacc.com | https://sinemacc.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **TheDaddyLive** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **TiZam** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
