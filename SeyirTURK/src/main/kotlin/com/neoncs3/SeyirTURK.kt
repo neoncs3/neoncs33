@@ -336,8 +336,8 @@ class SeyirTURK : MainAPI() {
         val kind = string(original, "__seyir_kind").ifBlank { getType(original) }
         val id = getId(original)
         val title = getName(original)
-        val poster = getPoster(original).ifBlank { null }
-        val summary = getSummary(original).ifBlank { null }
+        val poster = getPoster(original).takeIf { it.isNotBlank() }
+        val summary = getSummary(original).takeIf { it.isNotBlank() }
         val year = string(original, "ReleaseDate", "releaseDate", "Year", "year")
             .take(4).toIntOrNull()
 
