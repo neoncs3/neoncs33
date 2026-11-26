@@ -32,38 +32,45 @@ class SeyirTURK : MainAPI() {
             "Accept" to "application/json,text/plain,*/*",
             "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
             "Referer" to "https://seyirturk.net/",
-            "X-Requested-With" to "XMLHttpRequest"
+            "X-Requested-With" to "XMLHttpRequest",
+            "bety" to "jughead"
         )
 
     @Volatile
     private var cachedRoots: List<String>? = null
 
     override val mainPage: List<MainPageData> = listOf(
-        MainPageData("Ana Sayfa", "back/mainpage.php"),
-        MainPageData("Yeni Çıkan Filmler", "back/show.php?type=all"),
-        MainPageData("Popüler Filmler", "back/show.php?type=pop"),
-        MainPageData("IMDb Top 250", "back/show.php?type=top"),
-        MainPageData("Vizyon Filmleri", "back/show.php?type=vizyon"),
-        MainPageData("Yeni Bölümü Eklenen Diziler", "back/show.php?type=all&p_type=TV"),
-        MainPageData("Yerli Diziler", "back/show.php?type=tr_tv&size=200"),
-        MainPageData("Yabancı Diziler", "back/show.php?type=en_tv&size=200"),
-        MainPageData("Yerli Filmler", "back/show.php?type=genre&size=200&genre=Yerli"),
-        MainPageData("Türkçe Altyazılı Filmler", "back/show.php?type=genre&size=200&genre=TRSUB"),
-        MainPageData("Türkçe Dublaj Filmler", "back/show.php?type=genre&size=200&genre=TRDUB"),
-        MainPageData("Aksiyon Filmleri", "back/show.php?type=genre&size=200&genre=Action"),
-        MainPageData("Bilimkurgu Filmleri", "back/show.php?type=genre&size=200&genre=Sci-Fi"),
-        MainPageData("Komedi Filmleri", "back/show.php?type=genre&size=200&genre=Comedy"),
-        MainPageData("Dram Filmleri", "back/show.php?type=genre&size=200&genre=Drama"),
-        MainPageData("Romantik Filmler", "back/show.php?type=genre&size=200&genre=Romance"),
-        MainPageData("Korku Filmleri", "back/show.php?type=genre&size=200&genre=Horror"),
-        MainPageData("Aksiyon Dizileri", "back/show.php?type=genre&size=200&p_type=TV&genre=Action"),
-        MainPageData("Bilimkurgu Dizileri", "back/show.php?type=genre&size=200&p_type=TV&genre=Sci-Fi"),
-        MainPageData("Komedi Dizileri", "back/show.php?type=genre&size=200&p_type=TV&genre=Comedy"),
-        MainPageData("IPTV", "kodi/iptv.php"),
-        MainPageData("Radyo", "kodi/radyo.php")
+        MainPageData("Yeni Bölümü Eklenenler", "back/mainpage.php#first"),
+        MainPageData("İzlemeye Devam Et", "back/mainpage.php#second"),
+        MainPageData("Popüler İçerikler", "back/mainpage.php#third"),
+        MainPageData("Canlı Kanallar", "kodi/iptv.php"),
+        MainPageData("Radyo", "kodi/radyo.php?")
     )
 
     private fun encoded(value: String): String = URLEncoder.encode(value, "UTF-8")
+
+    // Values used by the supplied APK (versionCode 1005; guest defaults id=0/email="").
+    private fun addApkRequestParameters(path: String): String {
+        val value = path.trim()
+        val isMenuRequest = value.startsWith("back/menu.php", true) ||
+            value.startsWith("back/yearmenu.php", true) ||
+            value.startsWith("back/ulkeler.php", true) ||
+            value.startsWith("kodi/studios", true) ||
+            value.startsWith("kodi/sites", true) ||
+            value.startsWith("back/v2/menuler.php", true)
+
+        if (isMenuRequest || !value.contains(".php", true)) return value
+        val separator = if (value.endsWith(".php", true)) "?" else "&"
+        return value + separator + "u_id=0&cmail=&vn=1005"
+    }
+
+    private fun decodeRootCheck(raw: String): String? {
+        val firstLine = raw.lineSequence().firstOrNull()?.trim().orEmpty()
+        if (firstLine.isBlank()) return null
+        return runCatching {
+            String(Base64.decode(firstLine.reversed(), Base64.DEFAULT), Charsets.UTF_8).trim()
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+    }
 
     private fun clean(value: String?): String = value.orEmpty()
         .replace("\\/", "/")
@@ -157,6 +164,7 @@ class SeyirTURK : MainAPI() {
             }.getOrNull().orEmpty().trim()
             if (rawBody.isBlank()) continue
 
+            decodeRootCheck(rawBody)?.let(::normalizeRoot)?.let(discovered::add)
             val bodies = listOf(rawBody, decodeApiResponse(rawBody)).distinct()
             for (body in bodies) {
                 val rootValue = runCatching {
@@ -181,10 +189,11 @@ class SeyirTURK : MainAPI() {
             }
         }
 
-        val roots = (discovered + listOf(
-            "https://habba.cloud",
-            "https://seyirturk.net"
-        )).mapNotNull(::normalizeRoot).distinct()
+        // This is the APK's own configured default API root. seyirturk.net is
+        // only the root-check host, not a confirmed catalogue backend.
+        val roots = (discovered + listOf("https://habba.cloud/"))
+            .mapNotNull(::normalizeRoot)
+            .distinct()
 
         cachedRoots = roots
         Log.i(name, "API sunucuları bulundu: " + roots.joinToString(","))
@@ -196,9 +205,10 @@ class SeyirTURK : MainAPI() {
         for (root in apiRoots()) {
             val rootBase = root.trimEnd('/')
             val apiBase = if (rootBase.endsWith("/sey", true)) rootBase else "$rootBase/sey"
+            val adjustedPath = addApkRequestParameters(cleanPath)
             val urls = listOf(
-                "$apiBase/$cleanPath",
-                "$rootBase/$cleanPath"
+                "$apiBase/$adjustedPath",
+                "$rootBase/$adjustedPath"
             ).distinct()
 
             for (url in urls) {
@@ -220,11 +230,20 @@ class SeyirTURK : MainAPI() {
                 if (rawBody.isBlank()) continue
 
                 val body = decodeApiResponse(rawBody)
-                if (body != rawBody.trim()) {
-                    Log.d(name, "API ters-Base64 yanıtı çözüldü: " + cleanPath + " (" + body.length + " karakter)")
-                } else {
-                    Log.d(name, "API ham yanıtı kullanıldı: " + cleanPath + " (" + body.length + " karakter)")
+                val lowerBody = body.lowercase(Locale.ROOT)
+                val isReconnectMessage = lowerBody.contains("yeniden bağlanın") ||
+                    lowerBody.contains("yeniden baglanin") ||
+                    lowerBody.contains("reconnect")
+                val isStructuredResponse = body.startsWith("{") ||
+                    body.startsWith("[") ||
+                    body.startsWith("#EXTM3U", true) ||
+                    body.startsWith("http://", true) ||
+                    body.startsWith("https://", true)
+                if (isReconnectMessage || !isStructuredResponse) {
+                    Log.w(name, "API kullanılabilir veri döndürmedi: " + url)
+                    continue
                 }
+                Log.d(name, "API yanıtı alındı: " + cleanPath + " (" + body.length + " karakter)")
                 return body
             }
         }
@@ -369,18 +388,35 @@ class SeyirTURK : MainAPI() {
         }
     }
 
+    private fun parseHomeRail(raw: String?, rail: String): List<JSONObject> {
+        val body = raw?.trim().orEmpty()
+        if (body.isBlank()) return emptyList()
+        val root = runCatching { JSONObject(body) }.getOrNull() ?: return parseItems(body)
+        val keys = when (rail.lowercase(Locale.ROOT)) {
+            "first" -> listOf("first", "first_alt")
+            "second" -> listOf("second")
+            "third" -> listOf("third")
+            else -> emptyList()
+        }
+        if (keys.isEmpty()) return parseItems(body)
+
+        val merged = JSONArray()
+        for (key in keys) {
+            val array = root.optJSONArray(key) ?: continue
+            for (index in 0 until array.length()) merged.put(array.opt(index))
+        }
+        return objectsFromJson(merged.toString())
+    }
+
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         if (page > 1) return newHomePageResponse(request.name, emptyList(), false)
-        val items = parseItems(apiGet(request.data))
-
-        val kindHint = when {
-            request.data.contains("iptv", true) || request.data.contains("radyo", true) -> "iptv"
-            request.data.contains("p_type=TV", true) ||
-                request.data.contains("tr_tv", true) ||
-                request.data.contains("en_tv", true) -> "tv"
-            else -> ""
-        }
-
+        val endpoint = request.data.substringBefore('#')
+        val rail = request.data.substringAfter('#', "")
+        val raw = apiGet(endpoint)
+        val items = if (rail.isNotBlank()) parseHomeRail(raw, rail) else parseItems(raw)
+        val kindHint = if (
+            request.data.contains("iptv", true) || request.data.contains("radyo", true)
+        ) "iptv" else ""
         val results = items.mapNotNull { searchResponse(it, kindHint) }
         Log.i(name, "Ana sayfa bölümü: " + request.name + ", kayıt: " + results.size)
         return newHomePageResponse(request.name, results, false)
