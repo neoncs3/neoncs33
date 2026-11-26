@@ -3,6 +3,7 @@ package com.neoncs3
 import android.util.Base64
 import android.util.Log
 import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
@@ -145,7 +146,7 @@ class SeyirTURK : MainAPI() {
             }
         }
 
-        val roots = (discovered + listOf("https://cekke44.tk/", "https://habba.cloud/"))
+        val roots = (discovered + listOf("https://habba.cloud/"))
             .mapNotNull(::normalizeRoot)
             .distinct()
         cachedRoots = roots
