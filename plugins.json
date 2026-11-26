@@ -133,27 +133,6 @@
         "name": "NewTVLive"
     },
     {
-        "iconUrl": "https://seyirturk.net/favicon.ico",
-        "fileHash": "sha256-b76c98519e4468eab2fb7c220125ab1720742ff76adccc9328d14cbc58418709",
-        "apiVersion": 1,
-        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 66070,
-        "status": 3,
-        "language": "tr",
-        "authors": [
-            "neoncs3"
-        ],
-        "tvTypes": [
-            "TvSeries",
-            "Live"
-        ],
-        "version": 9,
-        "internalName": "SeyirTURK",
-        "description": "SeyirTURK IPTV ve radyo sa\u011flay\u0131c\u0131s\u0131 (beta)",
-        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/SeyirTURK.cs3",
-        "name": "SeyirTURK"
-    },
-    {
         "fileHash": "sha256-cebac6202be10d91ceae053ecd649382ca27c367f50a9e7209cacc2885a82e7b",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
