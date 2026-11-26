@@ -1,4 +1,4 @@
-version = 8
+version = 9
 cloudstream {
     description = "SeyirTURK IPTV ve radyo sağlayıcısı (beta)"
     authors = listOf("neoncs3")
