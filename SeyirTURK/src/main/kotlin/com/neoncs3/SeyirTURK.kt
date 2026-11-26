@@ -284,10 +284,10 @@ class SeyirTURK : MainAPI() {
         val visited = HashSet<String>()
 
         fun addObject(obj: JSONObject) {
-            val title = string(obj, "Name", "name", "title", "Title")
-            val id = string(obj, "ID", "id", "movie_id", "episode_id", "channel_id")
-            val link = string(obj, "Link", "link", "url", "Url")
-            if (title.isBlank() || (id.isBlank() && link.isBlank())) return
+            val title = getName(obj)
+            val id = getId(obj)
+            val link = getStreamUrl(obj)
+            if (title == "İsimsiz içerik" || (id.isBlank() && link.isBlank())) return
             val key = id + "|" + title + "|" + link
             if (visited.add(key)) result.add(obj)
         }
@@ -365,7 +365,11 @@ class SeyirTURK : MainAPI() {
             .ifBlank { "İsimsiz içerik" }
 
     private fun getId(item: JSONObject): String =
-        string(item, "ID", "Id", "id", "movie_id", "m_id", "channel_id", "channelId", "radio_id", "radioId")
+        string(
+            item, "ID", "Id", "id", "movie_id", "movieId", "m_id",
+            "episode_id", "episodeId", "series_id", "seriesId",
+            "channel_id", "channelId", "radio_id", "radioId"
+        )
 
     private fun getPoster(item: JSONObject): String =
         string(item, "Image", "image", "poster", "Poster", "Backdrop", "backdrop", "Logo", "logo", "tvg-logo")
