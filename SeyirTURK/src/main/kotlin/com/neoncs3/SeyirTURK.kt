@@ -592,11 +592,26 @@ class SeyirTURK : MainAPI() {
                 is JSONObject -> {
                     val link = getStreamUrl(value)
                     if (link.isNotBlank()) addLink(link, value)
+                    val streamKeys = setOf(
+                        "link", "url", "stream", "stream_url", "streamurl",
+                        "file", "src", "source", "play_url", "playurl",
+                        "video_url", "videourl", "m3u", "playlist"
+                    )
                     val keys = value.keys()
                     while (keys.hasNext()) {
-                        val child = value.opt(keys.next())
-                        if (child is JSONArray || child is JSONObject || child is String) {
-                            walk(child, depth + 1)
+                        val key = keys.next()
+                        val child = value.opt(key)
+                        when (child) {
+                            is JSONArray, is JSONObject -> walk(child, depth + 1)
+                            is String -> {
+                                if (key.lowercase(Locale.ROOT) in streamKeys) {
+                                    addLink(child, value)
+                                } else if (child.trim().startsWith("{") ||
+                                    child.trim().startsWith("[")
+                                ) {
+                                    walk(child, depth + 1)
+                                }
+                            }
                         }
                     }
                 }
