@@ -81,63 +81,104 @@ class SeyirTURK : MainAPI() {
         val value = raw.trim()
         if (value.isBlank()) return ""
 
+        // Plain responses must be preserved. The Android Base64 decoder can
+        // be permissive, so always validate the decoded payload before using it.
+        if (
+            value.startsWith("{") ||
+            value.startsWith("[") ||
+            value.startsWith("#EXTM3U", true) ||
+            value.startsWith("http://", true) ||
+            value.startsWith("https://", true) ||
+            value.startsWith("<")
+        ) return value
+
+        val compact = value.replace(Regex("\\s+"), "")
+        if (compact.length < 8 ||
+            !Regex("^[A-Za-z0-9+/=_-]+$").matches(compact)
+        ) return value
+
         return runCatching {
-            val decoded = Base64.decode(value.reversed(), Base64.DEFAULT)
-            String(decoded, Charsets.UTF_8).trim()
-        }.getOrElse {
-            // Keep plain JSON/M3U responses usable if an endpoint is changed.
-            value
-        }
+            val decoded = String(
+                Base64.decode(compact.reversed(), Base64.DEFAULT),
+                Charsets.UTF_8
+            ).trim()
+
+            val readable =
+                decoded.startsWith("{") ||
+                decoded.startsWith("[") ||
+                decoded.startsWith("#EXTM3U", true) ||
+                decoded.startsWith("http://", true) ||
+                decoded.startsWith("https://", true) ||
+                Regex("(?i)^[a-z0-9.-]+\\.[a-z]{2,}(?::\\d+)?(?:/.*)?$").matches(decoded)
+
+            if (readable) decoded else value
+        }.getOrDefault(value)
     }
 
     private fun normalizeRoot(value: String): String? {
         var candidate = clean(value).trim('"', '\'', ' ', '\n', '\r', '\t')
         if (candidate.isBlank()) return null
         if (candidate.startsWith("//")) candidate = "https:" + candidate
+
         if (!candidate.startsWith("http://", true) &&
             !candidate.startsWith("https://", true)
-        ) candidate = "https://" + candidate
-        val host = runCatching { URI(candidate).host }.getOrNull() ?: return null
-        if (host.isBlank()) return null
+        ) {
+            // The root-check endpoint can return a bare hostname. Reject
+            // arbitrary messages and JSON instead of treating them as hosts.
+            if (!Regex("(?i)^[a-z0-9.-]+(?::\\d+)?(?:/.*)?$").matches(candidate)) {
+                return null
+            }
+            candidate = "https://" + candidate
+        }
+
+        val uri = runCatching { URI(candidate) }.getOrNull() ?: return null
+        val host = uri.host ?: return null
+        if (!host.contains('.') || !Regex("(?i)^[a-z0-9.-]+$").matches(host)) return null
         return candidate.trimEnd('/')
     }
 
     /**
-     * The APK requests rootcheck/android.php and reads a Root value.
-     * If that public endpoint cannot be reached, only hostnames found in the
-     * supplied application are tried as fallbacks.
+     * The APK uses http://seyirturk.net/rootcheck/android.php first.
+     * Read that response as a server address (raw JSON/text), not as a
+     * catalogue payload. Try decoded text only as a secondary representation.
      */
     private suspend fun apiRoots(): List<String> {
         cachedRoots?.let { return it }
         val discovered = mutableListOf<String>()
 
         val checks = listOf(
-            "https://seyirturk.net/rootcheck/android.php",
-            "http://seyirturk.net/rootcheck/android.php"
+            "http://seyirturk.net/rootcheck/android.php",
+            "https://seyirturk.net/rootcheck/android.php"
         )
 
         for (checkUrl in checks) {
             val rawBody = runCatching {
                 app.get(checkUrl, headers = requestHeaders, timeout = 8000).text
-            }.getOrNull().orEmpty()
-            val body = decodeApiResponse(rawBody)
-            if (body.isBlank()) continue
+            }.getOrNull().orEmpty().trim()
+            if (rawBody.isBlank()) continue
 
-            val rootValue = runCatching {
-                val json = JSONObject(body)
-                sequenceOf("Root", "root", "url", "Url", "baseUrl", "BaseUrl", "server")
-                    .mapNotNull { key ->
-                        json.optString(key).takeIf { it.isNotBlank() && it != "null" }
-                    }
-                    .firstOrNull()
-            }.getOrNull()
+            val bodies = listOf(rawBody, decodeApiResponse(rawBody)).distinct()
+            for (body in bodies) {
+                val rootValue = runCatching {
+                    val json = JSONObject(body)
+                    sequenceOf("Root", "root", "url", "Url", "baseUrl", "BaseUrl", "server")
+                        .mapNotNull { key ->
+                            json.optString(key).takeIf { it.isNotBlank() && it != "null" }
+                        }
+                        .firstOrNull()
+                }.getOrNull()
 
-            rootValue?.let { normalizeRoot(it) }?.let(discovered::add)
-            Regex("""https?://[A-Za-z0-9.-]+(?::\d+)?/?""")
-                .findAll(body)
-                .mapNotNull { normalizeRoot(it.value) }
-                .forEach(discovered::add)
-            normalizeRoot(body)?.let(discovered::add)
+                rootValue?.let { candidate ->
+                    (normalizeRoot(candidate) ?: normalizeRoot(decodeApiResponse(candidate)))
+                }?.let(discovered::add)
+
+                Regex("""(?i)https?://[A-Za-z0-9.-]+(?::\\d+)?(?:/[^\\s"'<>]*)?""")
+                    .findAll(body)
+                    .mapNotNull { normalizeRoot(it.value) }
+                    .forEach(discovered::add)
+
+                normalizeRoot(body)?.let(discovered::add)
+            }
         }
 
         val roots = (discovered + listOf(
@@ -146,34 +187,48 @@ class SeyirTURK : MainAPI() {
         )).mapNotNull(::normalizeRoot).distinct()
 
         cachedRoots = roots
+        Log.i(name, "API sunucuları bulundu: " + roots.joinToString(","))
         return roots
     }
 
     private suspend fun apiGet(path: String): String? {
         val cleanPath = path.trimStart('/')
         for (root in apiRoots()) {
-            val url = root + "/sey/" + cleanPath
-            val response = runCatching {
-                app.get(
-                    url,
-                    headers = requestHeaders + ("Referer" to (root + "/")),
-                    timeout = 12000,
-                    allowRedirects = true
-                )
-            }.getOrNull() ?: continue
+            val rootBase = root.trimEnd('/')
+            val apiBase = if (rootBase.endsWith("/sey", true)) rootBase else "$rootBase/sey"
+            val urls = listOf(
+                "$apiBase/$cleanPath",
+                "$rootBase/$cleanPath"
+            ).distinct()
 
-            if (!response.isSuccessful) {
-                Log.w(name, "API HTTP " + response.code + ": " + url)
-                continue
-            }
+            for (url in urls) {
+                val response = runCatching {
+                    app.get(
+                        url,
+                        headers = requestHeaders + ("Referer" to (rootBase + "/")),
+                        timeout = 12000,
+                        allowRedirects = true
+                    )
+                }.getOrNull() ?: continue
 
-            val rawBody = response.text
-            val body = decodeApiResponse(rawBody)
-            if (body.isNotBlank()) {
-                Log.d(name, "API yanıtı çözüldü: " + cleanPath + " (" + body.length + " karakter)")
+                if (!response.isSuccessful) {
+                    Log.w(name, "API HTTP " + response.code + ": " + url)
+                    continue
+                }
+
+                val rawBody = response.text
+                if (rawBody.isBlank()) continue
+
+                val body = decodeApiResponse(rawBody)
+                if (body != rawBody.trim()) {
+                    Log.d(name, "API ters-Base64 yanıtı çözüldü: " + cleanPath + " (" + body.length + " karakter)")
+                } else {
+                    Log.d(name, "API ham yanıtı kullanıldı: " + cleanPath + " (" + body.length + " karakter)")
+                }
                 return body
             }
         }
+
         Log.w(name, "Genel API yanıtı alınamadı: " + cleanPath)
         return null
     }
