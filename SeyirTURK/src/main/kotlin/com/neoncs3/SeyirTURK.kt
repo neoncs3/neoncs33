@@ -465,19 +465,26 @@ class SeyirTURK : MainAPI() {
                 allChannels.filter { getGroup(it).equals(group, true) }
             }
 
-            // Keep a distinct second-level list; channel cards are not episodes.
-            val channelCards = channels.map(::iptvChannelResponse)
-            val poster = channels.map { getPoster(it) }.firstOrNull { it.isNotBlank() }
+            // Render the second-level IPTV list as actual vertical channel entries.
+            // Each episode carries its own channel payload and opens the live player.
+            val episodes = channels.mapIndexed { index, channel ->
+                newEpisode(asPayload(channel, "iptv_channel")) {
+                    name = getName(channel)
+                    posterUrl = getPoster(channel).takeIf { it.isNotBlank() }
+                    season = 1
+                    episode = index + 1
+                }
+            }
 
+            Log.i(name, "IPTV Listesi [$group]: ${episodes.size} canlı kanal satırı")
             return newTvSeriesLoadResponse(
                 "IPTV Listesi",
                 url,
                 TvType.TvSeries,
-                emptyList()
+                episodes
             ) {
-                posterUrl = poster
-                plot = "$group grubunda ${channels.size} canlı kanal."
-                recommendations = channelCards
+                posterUrl = channels.map { getPoster(it) }.firstOrNull { it.isNotBlank() }
+                plot = "$group grubunda ${episodes.size} canlı kanal."
             }
         }
 
