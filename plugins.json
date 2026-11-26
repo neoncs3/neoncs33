@@ -134,10 +134,10 @@
     },
     {
         "iconUrl": "https://seyirturk.net/favicon.ico",
-        "fileHash": "sha256-da25b3b061ecbb60ee11356e07e14897d0604513e82e8aaca501b663c6b05d8b",
+        "fileHash": "sha256-489369890c3faef7b4e58a2fb3358390f78dbcd6ec1ce96bff78137c499f12f9",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 64472,
+        "fileSize": 65614,
         "status": 3,
         "language": "tr",
         "authors": [
