@@ -274,7 +274,7 @@ class SeyirTURK : MainAPI() {
     private fun searchResponse(item: JSONObject, kindHint: String = ""): SearchResponse? {
         val title = getName(item)
         val kind = getType(item, kindHint)
-        val poster = getPoster(item).ifBlank { null }
+        val poster = getPoster(item).takeIf { it.isNotBlank() }
         val payload = asPayload(item, kind)
 
         return when {
@@ -355,8 +355,8 @@ class SeyirTURK : MainAPI() {
             ?: original
 
         val resolvedTitle = getName(detail).ifBlank { title }
-        val resolvedPoster = getPoster(detail).ifBlank { poster.orEmpty() }.ifBlank { null }
-        val resolvedSummary = getSummary(detail).ifBlank { summary.orEmpty() }.ifBlank { null }
+        val resolvedPoster = getPoster(detail).ifBlank { poster.orEmpty() }.takeIf { it.isNotBlank() }
+        val resolvedSummary = getSummary(detail).ifBlank { summary.orEmpty() }.takeIf { it.isNotBlank() }
         val resolvedYear = string(detail, "ReleaseDate", "releaseDate", "Year", "year")
             .take(4).toIntOrNull() ?: year
 
@@ -372,7 +372,7 @@ class SeyirTURK : MainAPI() {
 
                 newEpisode(episodeData) {
                     name = getName(episodeItem).ifBlank { "Bölüm " + (index + 1) }
-                    posterUrl = getPoster(episodeItem).ifBlank { resolvedPoster.orEmpty() }.ifBlank { null }
+                    posterUrl = getPoster(episodeItem).ifBlank { resolvedPoster.orEmpty() }.takeIf { it.isNotBlank() }
                     season = int(episodeItem, 1, "Season", "season", "SeasonNumber", "seasonNumber")
                     episode = int(episodeItem, index + 1, "Episode", "episode", "EpisodeNumber", "episodeNumber")
                 }
