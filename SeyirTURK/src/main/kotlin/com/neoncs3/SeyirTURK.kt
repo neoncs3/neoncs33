@@ -15,9 +15,8 @@ import java.net.URLEncoder
 import java.util.Locale
 
 /**
- * Public guest-facing SeyirTURK catalogue adapter.
- * It deliberately does not reproduce account/VIP checks, private identifiers,
- * undocumented tokens, or protected-stream mechanisms.
+ * SeyirTURK integration limited to its public IPTV and radio catalogues.
+ * Film/series catalogue and protected/account-only playback flows are not used.
  */
 class SeyirTURK : MainAPI() {
     override var mainUrl = "https://seyirturk.net"
@@ -25,7 +24,12 @@ class SeyirTURK : MainAPI() {
     override var lang = "tr"
     override val hasMainPage = true
     override val hasQuickSearch = true
-    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Live)
+    override val supportedTypes = setOf(TvType.TvSeries, TvType.Live)
+
+    override val mainPage: List<MainPageData> = listOf(
+        MainPageData("IPTV", "iptv"),
+        MainPageData("Radyo", "radio")
+    )
 
     private val requestHeaders: Map<String, String>
         get() = mapOf(
@@ -40,33 +44,13 @@ class SeyirTURK : MainAPI() {
     @Volatile
     private var cachedRoots: List<String>? = null
 
-    override val mainPage: List<MainPageData> = listOf(
-        MainPageData("Yeni Bölümü Eklenenler", "back/mainpage.php#first"),
-        MainPageData("İzlemeye Devam Et", "back/mainpage.php#second"),
-        MainPageData("Popüler İçerikler", "back/mainpage.php#third"),
-        MainPageData("Canlı Kanallar", "kodi/iptv.php"),
-        MainPageData("Radyo", "kodi/radyo.php?")
-    )
-
     private fun encoded(value: String): String = URLEncoder.encode(value, "UTF-8")
 
-    // Values used by the supplied APK (versionCode 1005; guest defaults id=0/email="").
-    private fun addApkRequestParameters(path: String): String {
-        val value = path.trim()
-        val isMenuRequest = value.startsWith("back/menu.php", true) ||
-            value.startsWith("back/yearmenu.php", true) ||
-            value.startsWith("back/ulkeler.php", true) ||
-            value.startsWith("kodi/studios", true) ||
-            value.startsWith("kodi/sites", true) ||
-            value.startsWith("back/v2/menuler.php", true)
-
-        if (isMenuRequest || !value.contains(".php", true)) return value
-        // The Android app builds these query parameters after the endpoint's
-        // own query string. Strip a dangling '?' so radyo.php does not become ?&u_id=...
-        val base = value.trimEnd('?', '&')
-        val separator = if (base.contains("?")) "&" else "?"
-        return base + separator + "u_id=0&cmail=&vn=1005"
-    }
+    private fun clean(value: String?): String = value.orEmpty()
+        .replace("\\/", "/")
+        .replace("&amp;", "&")
+        .replace("\\u0026", "&")
+        .trim()
 
     private fun decodeRootCheck(raw: String): String? {
         val firstLine = raw.lineSequence().firstOrNull()?.trim().orEmpty()
@@ -76,27 +60,11 @@ class SeyirTURK : MainAPI() {
         }.getOrNull()?.takeIf { it.isNotBlank() }
     }
 
-    private fun clean(value: String?): String = value.orEmpty()
-        .replace("\\/", "/")
-        .replace("&amp;", "&")
-        .replace("\\u0026", "&")
-        .trim()
-
-
-    /**
-     * SeyirTURK's Android client decodes API responses by reversing the
-     * response text and then Base64-decoding it. The web API uses this for
-     * rootcheck as well as catalogue/detail/stream endpoints.
-     */
     private fun decodeApiResponse(raw: String): String {
         val value = raw.trim()
         if (value.isBlank()) return ""
-
-        // Plain responses must be preserved. The Android Base64 decoder can
-        // be permissive, so always validate the decoded payload before using it.
         if (
-            value.startsWith("{") ||
-            value.startsWith("[") ||
+            value.startsWith("{") || value.startsWith("[") ||
             value.startsWith("#EXTM3U", true) ||
             value.startsWith("http://", true) ||
             value.startsWith("https://", true) ||
@@ -104,24 +72,21 @@ class SeyirTURK : MainAPI() {
         ) return value
 
         val compact = value.replace(Regex("\\s+"), "")
-        if (compact.length < 8 ||
-            !Regex("^[A-Za-z0-9+/=_-]+$").matches(compact)
-        ) return value
+        if (compact.length < 8 || !Regex("^[A-Za-z0-9+/=_-]+$").matches(compact)) {
+            return value
+        }
 
         return runCatching {
             val decoded = String(
                 Base64.decode(compact.reversed(), Base64.DEFAULT),
                 Charsets.UTF_8
             ).trim()
-
             val readable =
-                decoded.startsWith("{") ||
-                decoded.startsWith("[") ||
+                decoded.startsWith("{") || decoded.startsWith("[") ||
                 decoded.startsWith("#EXTM3U", true) ||
                 decoded.startsWith("http://", true) ||
                 decoded.startsWith("https://", true) ||
                 Regex("(?i)^[a-z0-9.-]+\\.[a-z]{2,}(?::\\d+)?(?:/.*)?$").matches(decoded)
-
             if (readable) decoded else value
         }.getOrDefault(value)
     }
@@ -134,8 +99,6 @@ class SeyirTURK : MainAPI() {
         if (!candidate.startsWith("http://", true) &&
             !candidate.startsWith("https://", true)
         ) {
-            // The root-check endpoint can return a bare hostname. Reject
-            // arbitrary messages and JSON instead of treating them as hosts.
             if (!Regex("(?i)^[a-z0-9.-]+(?::\\d+)?(?:/.*)?$").matches(candidate)) {
                 return null
             }
@@ -148,31 +111,25 @@ class SeyirTURK : MainAPI() {
         return candidate.trimEnd('/')
     }
 
-    /**
-     * The APK uses http://seyirturk.net/rootcheck/android.php first.
-     * Read that response as a server address (raw JSON/text), not as a
-     * catalogue payload. Try decoded text only as a secondary representation.
-     */
     private suspend fun apiRoots(): List<String> {
         cachedRoots?.let { return it }
         val discovered = mutableListOf<String>()
-
         val checks = listOf(
             "http://seyirturk.net/rootcheck/android.php",
             "https://seyirturk.net/rootcheck/android.php"
         )
 
         for (checkUrl in checks) {
-            val rawBody = runCatching {
-                app.get(checkUrl, headers = requestHeaders, timeout = 8000).text
-            }.getOrNull().orEmpty().trim()
-            if (rawBody.isBlank()) continue
+            val body = runCatching {
+                app.get(checkUrl, headers = requestHeaders, timeout = 8000).text.trim()
+            }.getOrDefault("")
+            if (body.isBlank()) continue
 
-            decodeRootCheck(rawBody)?.let(::normalizeRoot)?.let(discovered::add)
-            val bodies = listOf(rawBody, decodeApiResponse(rawBody)).distinct()
-            for (body in bodies) {
-                val rootValue = runCatching {
-                    val json = JSONObject(body)
+            decodeRootCheck(body)?.let(::normalizeRoot)?.let(discovered::add)
+            val candidates = listOf(body, decodeApiResponse(body)).distinct()
+            for (candidateBody in candidates) {
+                val jsonRoot = runCatching {
+                    val json = JSONObject(candidateBody)
                     sequenceOf("Root", "root", "url", "Url", "baseUrl", "BaseUrl", "server")
                         .mapNotNull { key ->
                             json.optString(key).takeIf { it.isNotBlank() && it != "null" }
@@ -180,39 +137,44 @@ class SeyirTURK : MainAPI() {
                         .firstOrNull()
                 }.getOrNull()
 
-                rootValue?.let { candidate ->
-                    (normalizeRoot(candidate) ?: normalizeRoot(decodeApiResponse(candidate)))
-                }?.let(discovered::add)
-
+                jsonRoot?.let { normalizeRoot(it) }?.let(discovered::add)
                 Regex("""(?i)https?://[A-Za-z0-9.-]+(?::\d+)?(?:/[^\s"'<>]*)?""")
-                    .findAll(body)
+                    .findAll(candidateBody)
                     .mapNotNull { normalizeRoot(it.value) }
                     .forEach(discovered::add)
-
-                normalizeRoot(body)?.let(discovered::add)
+                normalizeRoot(candidateBody)?.let(discovered::add)
             }
         }
 
-        // This is the APK's own configured default API root. seyirturk.net is
-        // only the root-check host, not a confirmed catalogue backend.
         val roots = (discovered + listOf("https://habba.cloud/"))
             .mapNotNull(::normalizeRoot)
             .distinct()
-
         cachedRoots = roots
-        Log.i(name, "API sunucuları bulundu: " + roots.joinToString(","))
+        Log.i(name, "API sunucuları: " + roots.joinToString(","))
         return roots
+    }
+
+    /**
+     * The supplied Android APK appends these guest request parameters in
+     * GetsPack.GetMovies.getUrlContent(). Existing endpoint query values are
+     * retained, including the IPTV endpoint's own u_id parameter.
+     */
+    private fun addGuestParameters(path: String): String {
+        val base = path.trim().trimEnd('?', '&')
+        val separator = if (base.contains('?')) "&" else "?"
+        return base + separator + "u_id=0&vidid=&cmail=&vn=1005"
     }
 
     private suspend fun apiGet(path: String): String? {
         val cleanPath = path.trimStart('/')
+        val requestPath = addGuestParameters(cleanPath)
+
         for (root in apiRoots()) {
             val rootBase = root.trimEnd('/')
-            val apiBase = if (rootBase.endsWith("/sey", true)) rootBase else "$rootBase/sey"
-            val adjustedPath = addApkRequestParameters(cleanPath)
+            val apiBase = if (rootBase.endsWith("/sey", true)) rootBase else rootBase + "/sey"
             val urls = listOf(
-                "$apiBase/$adjustedPath",
-                "$rootBase/$adjustedPath"
+                apiBase + "/" + requestPath,
+                rootBase + "/" + requestPath
             ).distinct()
 
             for (url in urls) {
@@ -220,46 +182,46 @@ class SeyirTURK : MainAPI() {
                     app.get(
                         url,
                         headers = requestHeaders + ("Referer" to (rootBase + "/")),
-                        timeout = 12000,
+                        timeout = 15000,
                         allowRedirects = true
                     )
                 }.getOrNull() ?: continue
 
                 if (!response.isSuccessful) {
-                    Log.w(name, "API HTTP " + response.code + ": " + url)
+                    Log.w(name, "API HTTP " + response.code + ": " + cleanPath)
                     continue
                 }
 
-                val rawBody = response.text
-                if (rawBody.isBlank()) continue
+                val raw = response.text
+                if (raw.isBlank()) continue
+                val body = decodeApiResponse(raw)
+                val lower = body.lowercase(Locale.ROOT)
+                if (
+                    lower.contains("yeniden bağlanın") ||
+                    lower.contains("yeniden baglanin") ||
+                    lower.contains("reconnect")
+                ) {
+                    Log.w(name, "API yeniden bağlanma yanıtı verdi: " + cleanPath)
+                    continue
+                }
 
-                val body = decodeApiResponse(rawBody)
-                val lowerBody = body.lowercase(Locale.ROOT)
-                val isReconnectMessage = lowerBody.contains("yeniden bağlanın") ||
-                    lowerBody.contains("yeniden baglanin") ||
-                    lowerBody.contains("reconnect")
-                val isStructuredResponse = body.startsWith("{") ||
-                    body.startsWith("[") ||
+                val structured =
+                    body.startsWith("{") || body.startsWith("[") ||
                     body.startsWith("#EXTM3U", true) ||
                     body.startsWith("http://", true) ||
                     body.startsWith("https://", true) ||
-                    body.startsWith("\"") ||
-                    (body.startsWith("<") && (
-                        body.contains("<iframe", true) ||
-                        body.contains("<source", true) ||
-                        body.contains("<video", true) ||
-                        body.contains("jwplayer", true)
-                    ))
-                if (isReconnectMessage || !isStructuredResponse) {
-                    Log.w(name, "API kullanılabilir veri döndürmedi: " + url)
+                    body.startsWith("\"")
+                if (!structured) {
+                    Log.w(name, "API beklenmeyen yanıt verdi: " + cleanPath)
                     continue
                 }
+
                 Log.d(name, "API yanıtı alındı: " + cleanPath + " (" + body.length + " karakter)")
                 return body
             }
         }
 
-        Log.w(name, "Genel API yanıtı alınamadı: " + cleanPath)
+        Log.w(name, "API yanıtı alınamadı: " + cleanPath)
         return null
     }
 
@@ -271,83 +233,57 @@ class SeyirTURK : MainAPI() {
         return ""
     }
 
-    private fun int(item: JSONObject, fallback: Int, vararg keys: String): Int {
-        for (key in keys) {
-            val value = item.optInt(key, Int.MIN_VALUE)
-            if (value != Int.MIN_VALUE && value >= 0) return value
-        }
-        return fallback
-    }
+    private fun getName(item: JSONObject): String =
+        string(item, "Name", "name", "Title", "title", "ChannelName", "channelName", "RadioName", "radioName")
+            .ifBlank { "İsimsiz yayın" }
 
-    private fun objectsFromJson(raw: String): List<JSONObject> {
-        val result = mutableListOf<JSONObject>()
-        val visited = HashSet<String>()
+    private fun getId(item: JSONObject): String =
+        string(item, "ID", "Id", "id", "K_ID", "channel_id", "channelId", "radio_id", "radioId")
 
-        fun addObject(obj: JSONObject) {
-            val title = getName(obj)
-            val id = getId(obj)
-            val link = getStreamUrl(obj)
-            if (title == "İsimsiz içerik" || (id.isBlank() && link.isBlank())) return
-            val key = id + "|" + title + "|" + link
-            if (visited.add(key)) result.add(obj)
-        }
+    private fun getPoster(item: JSONObject): String =
+        string(item, "Image", "image", "Logo", "logo", "tvg-logo", "poster", "Poster", "icon")
 
-        fun walk(value: Any?, depth: Int) {
-            if (depth > 5 || value == null || value == JSONObject.NULL) return
-            when (value) {
-                is JSONArray -> {
-                    for (i in 0 until value.length()) walk(value.opt(i), depth + 1)
-                }
-                is JSONObject -> {
-                    addObject(value)
-                    val keys = value.keys()
-                    while (keys.hasNext()) {
-                        val child = value.opt(keys.next())
-                        if (child is JSONArray || child is JSONObject) walk(child, depth + 1)
-                    }
-                }
-            }
-        }
+    private fun getGroup(item: JSONObject): String =
+        string(item, "Group", "group", "Category", "category", "categoryName", "groupName", "Genres", "genres")
+            .ifBlank { "Gruplandırılmamış" }
 
-        val body = raw.trim()
-        runCatching {
-            when {
-                body.startsWith("[") -> walk(JSONArray(body), 0)
-                body.startsWith("{") -> walk(JSONObject(body), 0)
-            }
-        }
-        return result
-    }
+    private fun getStreamUrl(item: JSONObject): String =
+        string(
+            item,
+            "LinkTV", "linkTV", "LinkTv", "Link", "link", "url", "Url", "URL",
+            "stream", "Stream", "stream_url", "streamUrl", "file", "File",
+            "src", "Src", "source", "Source", "play_url", "playUrl",
+            "video_url", "videoUrl", "m3u", "M3U", "playlist", "Playlist"
+        )
 
     private fun parseM3u(raw: String): List<JSONObject> {
         if (!raw.contains("#EXTINF", true)) return emptyList()
         val result = mutableListOf<JSONObject>()
-        var currentInfo = ""
+        var info = ""
 
         for (lineValue in raw.lines()) {
             val line = lineValue.trim()
             if (line.startsWith("#EXTINF", true)) {
-                currentInfo = line
+                info = line
                 continue
             }
-            if (line.isBlank() || line.startsWith("#") || currentInfo.isBlank()) continue
+            if (line.isBlank() || line.startsWith("#") || info.isBlank()) continue
 
-            val title = currentInfo.substringAfterLast(',', "").trim()
+            val title = info.substringAfterLast(',', "").trim()
                 .ifBlank { "Canlı yayın " + (result.size + 1) }
-            val image = Regex("""(?i)tvg-logo=["']([^"']+)["']""")
-                .find(currentInfo)?.groupValues?.getOrNull(1).orEmpty()
+            val logo = Regex("""(?i)tvg-logo=["']([^"']+)["']""")
+                .find(info)?.groupValues?.getOrNull(1).orEmpty()
             val group = Regex("""(?i)group-title=["']([^"']+)["']""")
-                .find(currentInfo)?.groupValues?.getOrNull(1).orEmpty()
+                .find(info)?.groupValues?.getOrNull(1).orEmpty()
 
             result.add(JSONObject().apply {
-                put("ID", "iptv_" + result.size)
+                put("ID", "m3u_" + result.size)
                 put("Name", title)
-                put("Image", clean(image))
-                put("Link", clean(line))
-                put("Type", "IPTV")
-                put("Group", group)
+                put("Image", clean(logo))
+                put("LinkTV", clean(line))
+                put("Group", group.ifBlank { "Gruplandırılmamış" })
             })
-            currentInfo = ""
+            info = ""
         }
         return result
     }
@@ -355,410 +291,242 @@ class SeyirTURK : MainAPI() {
     private fun parseItems(raw: String?): List<JSONObject> {
         val body = raw?.trim().orEmpty()
         if (body.isBlank()) return emptyList()
+
         val m3u = parseM3u(body)
         if (m3u.isNotEmpty()) return m3u
-        return objectsFromJson(body)
-    }
-
-    private fun getName(item: JSONObject): String =
-        string(item, "Name", "name", "Title", "title", "ChannelName", "channelName", "RadioName", "radioName")
-            .ifBlank { "İsimsiz içerik" }
-
-    private fun getId(item: JSONObject): String =
-        string(
-            item, "ID", "Id", "id", "movie_id", "movieId", "m_id",
-            "episode_id", "episodeId", "series_id", "seriesId",
-            "channel_id", "channelId", "radio_id", "radioId"
-        )
-
-    private fun getPoster(item: JSONObject): String =
-        string(item, "Image", "image", "poster", "Poster", "Backdrop", "backdrop", "Logo", "logo", "tvg-logo")
-
-    private fun getSummary(item: JSONObject): String =
-        string(item, "Summary", "summary", "Description", "description", "plot")
-
-    private fun getType(item: JSONObject, fallback: String = ""): String =
-        string(item, "Type", "type", "p_type", "MediaType", "mediaType", "category")
-            .ifBlank { fallback }
-            .lowercase(Locale.ROOT)
-
-    private fun isLiveKind(kind: String): Boolean =
-        kind.contains("iptv") || kind.contains("live") ||
-            kind.contains("channel") || kind.contains("radio") ||
-            kind.contains("radyo") || kind.contains("audio")
-
-    private fun getStreamUrl(item: JSONObject): String =
-        string(
-            item,
-            "Link", "link", "url", "Url", "URL",
-            "stream", "Stream", "stream_url", "streamUrl",
-            "file", "File", "src", "Src", "source", "Source",
-            "play_url", "playUrl", "video_url", "videoUrl",
-            "m3u", "M3U", "playlist", "Playlist"
-        )
-
-    private fun asPayload(item: JSONObject, kind: String): String =
-        JSONObject(item.toString()).apply { put("__seyir_kind", kind) }.toString()
-
-    private fun searchResponse(item: JSONObject, kindHint: String = ""): SearchResponse? {
-        val title = getName(item)
-        val kind = getType(item, kindHint)
-        val poster = getPoster(item).takeIf { it.isNotBlank() }
-        val payload = asPayload(item, kind)
-
-        return when {
-            isLiveKind(kind) -> newLiveSearchResponse(title, payload, TvType.Live) {
-                posterUrl = poster
-            }
-            kind.contains("tv") || kind.contains("series") ||
-                kind.contains("dizi") -> newTvSeriesSearchResponse(title, payload, TvType.TvSeries) {
-                    posterUrl = poster
-                }
-            else -> newMovieSearchResponse(title, payload, TvType.Movie) {
-                posterUrl = poster
-            }
-        }
-    }
-
-    private fun parseHomeRail(raw: String?, rail: String): List<JSONObject> {
-        val body = raw?.trim().orEmpty()
-        if (body.isBlank()) return emptyList()
-        val root = runCatching { JSONObject(body) }.getOrNull() ?: return parseItems(body)
-        val keys = when (rail.lowercase(Locale.ROOT)) {
-            "first" -> listOf("first", "first_alt")
-            "second" -> listOf("second")
-            "third" -> listOf("third")
-            else -> emptyList()
-        }
-        if (keys.isEmpty()) return parseItems(body)
-
-        val merged = JSONArray()
-        for (key in keys) {
-            val array = root.optJSONArray(key) ?: continue
-            for (index in 0 until array.length()) merged.put(array.opt(index))
-        }
-        return objectsFromJson(merged.toString())
-    }
-
-    override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        if (page > 1) return newHomePageResponse(request.name, emptyList(), false)
-        val endpoint = request.data.substringBefore('#')
-        val rail = request.data.substringAfter('#', "")
-        val raw = apiGet(endpoint)
-        val items = if (rail.isNotBlank()) parseHomeRail(raw, rail) else parseItems(raw)
-        val kindHint = if (
-            request.data.contains("iptv", true) || request.data.contains("radyo", true)
-        ) "iptv" else ""
-        val results = items.mapNotNull { searchResponse(it, kindHint) }
-        Log.i(name, "Ana sayfa bölümü: " + request.name + ", kayıt: " + results.size)
-        return newHomePageResponse(request.name, results, false)
-    }
-
-    override suspend fun search(query: String): List<SearchResponse> {
-        val q = query.trim()
-        if (q.length < 2) return emptyList()
-
-        val encodedQuery = encoded(q)
-        val results = linkedMapOf<String, SearchResponse>()
-        val requests = listOf(
-            Pair("back/search.php?name=" + encodedQuery, ""),
-            Pair("back/search.php?p_type=TV&name=" + encodedQuery, "tv")
-        )
-
-        for ((path, hint) in requests) {
-            for (item in parseItems(apiGet(path))) {
-                val response = searchResponse(item, hint) ?: continue
-                results.putIfAbsent(response.url, response)
-            }
-        }
-        return results.values.toList()
-    }
-
-    override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
-
-    override suspend fun load(url: String): LoadResponse? {
-        val original = runCatching { JSONObject(url) }.getOrNull() ?: return null
-        val kind = string(original, "__seyir_kind").ifBlank { getType(original) }
-        val id = getId(original)
-        val title = getName(original)
-        val poster = getPoster(original).takeIf { it.isNotBlank() }
-        val summary = getSummary(original).takeIf { it.isNotBlank() }
-        val year = string(original, "ReleaseDate", "releaseDate", "Year", "year")
-            .take(4).toIntOrNull()
-
-        if (isLiveKind(kind)) {
-            val payload = asPayload(original, "iptv")
-            return newLiveStreamLoadResponse(title, payload, payload) {
-                posterUrl = poster
-            }
-        }
-        if (id.isBlank()) return null
-
-        val detailRaw = apiGet("back/show.php?type=single&id=" + encoded(id))
-        val detail = parseItems(detailRaw).firstOrNull()
-            ?: runCatching { detailRaw?.let { JSONObject(it) } }.getOrNull()
-            ?: original
-
-        val resolvedTitle = getName(detail).ifBlank { title }
-        val resolvedPoster = getPoster(detail).ifBlank { poster.orEmpty() }.takeIf { it.isNotBlank() }
-        val resolvedSummary = getSummary(detail).ifBlank { summary.orEmpty() }.takeIf { it.isNotBlank() }
-        val resolvedYear = string(detail, "ReleaseDate", "releaseDate", "Year", "year")
-            .take(4).toIntOrNull() ?: year
-
-        if (kind.contains("tv") || kind.contains("series") || kind.contains("dizi")) {
-            val episodeItems = parseItems(apiGet("back/episodes.php?id=" + encoded(id)))
-            val episodes = episodeItems.mapIndexed { index, episodeItem ->
-                val episodeId = getId(episodeItem)
-                val episodeData = JSONObject(episodeItem.toString()).apply {
-                    put("__seyir_kind", "episode")
-                    put("__seyir_parent_id", id)
-                    put("__seyir_episode_id", episodeId)
-                }.toString()
-
-                newEpisode(episodeData) {
-                    name = getName(episodeItem).ifBlank { "Bölüm " + (index + 1) }
-                    posterUrl = getPoster(episodeItem).ifBlank { resolvedPoster.orEmpty() }.takeIf { it.isNotBlank() }
-                    season = int(episodeItem, 1, "Season", "season", "SeasonNumber", "seasonNumber")
-                    episode = int(episodeItem, index + 1, "Episode", "episode", "EpisodeNumber", "episodeNumber")
-                }
-            }
-
-            return newTvSeriesLoadResponse(
-                resolvedTitle,
-                asPayload(detail, "tv"),
-                TvType.TvSeries,
-                episodes
-            ) {
-                posterUrl = resolvedPoster
-                plot = resolvedSummary
-                this.year = resolvedYear
-            }
-        }
-
-        val payload = asPayload(detail, "movie")
-        return newMovieLoadResponse(
-            resolvedTitle,
-            payload,
-            TvType.Movie,
-            payload
-        ) {
-            posterUrl = resolvedPoster
-            plot = resolvedSummary
-            this.year = resolvedYear
-        }
-    }
-
-    private fun isDirectMedia(url: String): Boolean {
-        val value = url.lowercase(Locale.ROOT)
-        return value.contains(".m3u8") || value.contains(".mp4") ||
-            value.contains(".mpd") || value.contains(".mp3") ||
-            value.contains(".m4a") || value.contains(".aac") ||
-            value.contains(".ogg") || value.contains(".opus") ||
-            value.contains(".wav") || value.contains(".flac") ||
-            value.contains(".ts") || value.contains("/hls/") ||
-            value.contains("/manifest") || value.contains("/live/") ||
-            value.contains("/movie/") || value.contains("/series/") ||
-            value.contains("output=mpegts") || value.contains("type=m3u")
-    }
-
-    private fun parseStreamItems(raw: String?): List<JSONObject> {
-        val body = raw?.trim().orEmpty()
-        if (body.isBlank()) return emptyList()
 
         val result = mutableListOf<JSONObject>()
         val seen = HashSet<String>()
 
-        fun addLink(linkValue: String, source: JSONObject? = null) {
-            val link = clean(linkValue).trim('"', '\'', ' ')
-            if (!link.startsWith("http", true) || !seen.add(link)) return
-            val item = source?.let { JSONObject(it.toString()) } ?: JSONObject()
-            if (getStreamUrl(item).isBlank()) item.put("Link", link)
-            result.add(item)
-        }
-
         fun walk(value: Any?, depth: Int) {
             if (depth > 7 || value == null || value == JSONObject.NULL) return
             when (value) {
-                is String -> {
-                    val text = value.trim()
-                    if (text.startsWith("http", true)) addLink(text)
-                    else if (text.startsWith("#EXTM3U", true)) {
-                        parseM3u(text).forEach { addLink(getStreamUrl(it), it) }
-                    } else {
-                        // Some API responses put stream URLs inside escaped JSON strings.
-                        val nested = runCatching { JSONTokener(text).nextValue() }.getOrNull()
-                        if (nested is JSONObject || nested is JSONArray) walk(nested, depth + 1)
-                    }
-                }
                 is JSONArray -> {
-                    for (i in 0 until value.length()) walk(value.opt(i), depth + 1)
+                    for (index in 0 until value.length()) walk(value.opt(index), depth + 1)
                 }
                 is JSONObject -> {
+                    val title = getName(value)
+                    val id = getId(value)
                     val link = getStreamUrl(value)
-                    if (link.isNotBlank()) addLink(link, value)
-                    val streamKeys = setOf(
-                        "link", "url", "stream", "stream_url", "streamurl",
-                        "file", "src", "source", "play_url", "playurl",
-                        "video_url", "videourl", "m3u", "playlist"
-                    )
+                    if (title != "İsimsiz yayın" && (id.isNotBlank() || link.isNotBlank() || value.has("Group"))) {
+                        val key = id + "|" + title + "|" + link + "|" + getGroup(value)
+                        if (seen.add(key)) result.add(JSONObject(value.toString()))
+                    }
+
+                    val keys = value.keys()
+                    while (keys.hasNext()) {
+                        val child = value.opt(keys.next())
+                        if (child is JSONArray || child is JSONObject) walk(child, depth + 1)
+                    }
+                }
+                is String -> {
+                    val nested = value.trim()
+                    if (nested.startsWith("{") || nested.startsWith("[")) {
+                        val parsed = runCatching { JSONTokener(nested).nextValue() }.getOrNull()
+                        if (parsed is JSONArray || parsed is JSONObject) walk(parsed, depth + 1)
+                    } else if (nested.startsWith("http", true)) {
+                        val obj = JSONObject().put("Name", nested.substringAfterLast('/').ifBlank { "Canlı yayın" })
+                            .put("LinkTV", nested)
+                        val key = getId(obj) + "|" + getName(obj) + "|" + getStreamUrl(obj)
+                        if (seen.add(key)) result.add(obj)
+                    }
+                }
+            }
+        }
+
+        runCatching {
+            val parsed = JSONTokener(body).nextValue()
+            walk(parsed, 0)
+        }.onFailure {
+            Log.w(name, "JSON liste çözümlenemedi: " + (it.message ?: "bilinmeyen hata"))
+        }
+
+        return result
+    }
+
+    private fun asPayload(item: JSONObject, kind: String): String =
+        JSONObject(item.toString()).put("__seyir_kind", kind).toString()
+
+    private suspend fun loadIptvItems(): List<JSONObject> {
+        // The APK loads both the general IPTV list and the user-ID variant.
+        val general = parseItems(apiGet("kodi/iptv.php"))
+        val userList = parseItems(apiGet("kodi/iptv.php?u_id=0"))
+        val merged = linkedMapOf<String, JSONObject>()
+
+        for (item in general + userList) {
+            val key = getId(item) + "|" + getName(item) + "|" + getStreamUrl(item)
+            merged.putIfAbsent(key, item)
+        }
+
+        Log.i(name, "IPTV kanal sayısı: " + merged.size)
+        return merged.values.toList()
+    }
+
+    private suspend fun loadRadioItems(): List<JSONObject> {
+        val items = parseItems(apiGet("kodi/radyo.php?"))
+        Log.i(name, "Radyo sayısı: " + items.size)
+        return items
+    }
+
+    private fun groupResponse(group: String, channels: List<JSONObject>): SearchResponse {
+        val firstPoster = channels.firstNotNullOfOrNull { getPoster(it).takeIf(String::isNotBlank) }
+        val payload = JSONObject()
+            .put("__seyir_kind", "iptv_group")
+            .put("__seyir_group", group)
+            .toString()
+
+        return newTvSeriesSearchResponse(group, payload, TvType.TvSeries) {
+            posterUrl = firstPoster
+        }
+    }
+
+    private fun radioResponse(item: JSONObject): SearchResponse {
+        val title = getName(item)
+        val poster = getPoster(item).takeIf { it.isNotBlank() }
+        return newLiveSearchResponse(title, asPayload(item, "radio"), TvType.Live) {
+            posterUrl = poster
+        }
+    }
+
+    override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        if (page > 1) return newHomePageResponse(request.name, emptyList(), false)
+
+        val results = when (request.data) {
+            "iptv" -> {
+                val channels = loadIptvItems()
+                val groups = channels.groupBy { getGroup(it) }
+                val names = listOf("Bütün Kanallar") + groups.keys
+                    .filter { it.isNotBlank() && it != "Bütün Kanallar" }
+                    .sortedBy { it.lowercase(Locale.ROOT) }
+
+                names.map { group ->
+                    val members = if (group == "Bütün Kanallar") channels else groups[group].orEmpty()
+                    groupResponse(group, members)
+                }
+            }
+            "radio" -> loadRadioItems().map(::radioResponse)
+            else -> emptyList()
+        }
+
+        Log.i(name, "Ana sayfa " + request.name + ": " + results.size + " kayıt")
+        return newHomePageResponse(request.name, results, false)
+    }
+
+    override suspend fun load(url: String): LoadResponse? {
+        val item = runCatching { JSONObject(url) }.getOrNull() ?: return null
+        val kind = string(item, "__seyir_kind")
+        val title = getName(item)
+
+        if (kind == "iptv_group") {
+            val group = string(item, "__seyir_group").ifBlank { title }
+            val allChannels = loadIptvItems()
+            val channels = if (group == "Bütün Kanallar") {
+                allChannels
+            } else {
+                allChannels.filter { getGroup(it).equals(group, true) }
+            }
+
+            val episodes = channels.mapIndexed { index, channel ->
+                newEpisode(asPayload(channel, "iptv_channel")) {
+                    name = getName(channel)
+                    posterUrl = getPoster(channel).takeIf { it.isNotBlank() }
+                    season = 1
+                    episode = index + 1
+                }
+            }
+
+            return newTvSeriesLoadResponse(
+                group,
+                url,
+                TvType.TvSeries,
+                episodes
+            ) {
+                posterUrl = channels.firstNotNullOfOrNull { getPoster(it).takeIf(String::isNotBlank) }
+            }
+        }
+
+        if (kind == "radio" || kind == "iptv_channel") {
+            val payload = asPayload(item, kind)
+            return newLiveStreamLoadResponse(title, payload, payload) {
+                posterUrl = getPoster(item).takeIf { it.isNotBlank() }
+            }
+        }
+
+        return null
+    }
+
+    private fun collectStreamItems(item: JSONObject): List<JSONObject> {
+        val result = mutableListOf<JSONObject>()
+        val seen = HashSet<String>()
+
+        fun add(value: JSONObject) {
+            val link = getStreamUrl(value)
+            if (!link.startsWith("http", true) || !seen.add(link)) return
+            result.add(JSONObject(value.toString()))
+        }
+
+        fun walk(value: Any?, depth: Int) {
+            if (depth > 6 || value == null || value == JSONObject.NULL) return
+            when (value) {
+                is JSONObject -> {
+                    if (getStreamUrl(value).startsWith("http", true)) add(value)
                     val keys = value.keys()
                     while (keys.hasNext()) {
                         val key = keys.next()
                         val child = value.opt(key)
-                        when (child) {
-                            is JSONArray, is JSONObject -> walk(child, depth + 1)
-                            is String -> {
-                                if (key.lowercase(Locale.ROOT) in streamKeys) {
-                                    addLink(child, value)
-                                } else if (child.trim().startsWith("{") ||
-                                    child.trim().startsWith("[")
-                                ) {
-                                    walk(child, depth + 1)
-                                }
-                            }
+                        if (child is JSONObject || child is JSONArray) {
+                            walk(child, depth + 1)
+                        } else if (child is String &&
+                            key.lowercase(Locale.ROOT) in setOf("linktv", "link", "url", "stream", "file", "src")
+                        ) {
+                            add(JSONObject().put("Name", key).put("LinkTV", child))
                         }
+                    }
+                }
+                is JSONArray -> {
+                    for (index in 0 until value.length()) walk(value.opt(index), depth + 1)
+                }
+                is String -> {
+                    val nested = value.trim()
+                    if (nested.startsWith("http", true)) {
+                        add(JSONObject().put("LinkTV", nested))
+                    } else if (nested.startsWith("{") || nested.startsWith("[")) {
+                        val parsed = runCatching { JSONTokener(nested).nextValue() }.getOrNull()
+                        if (parsed is JSONObject || parsed is JSONArray) walk(parsed, depth + 1)
                     }
                 }
             }
         }
 
-        when {
-            body.startsWith("#EXTM3U", true) -> {
-                parseM3u(body).forEach { addLink(getStreamUrl(it), it) }
-            }
-            body.startsWith("http://", true) || body.startsWith("https://", true) -> {
-                addLink(body)
-            }
-            else -> {
-                runCatching {
-                    val parsed = JSONTokener(body).nextValue()
-                    walk(parsed, 0)
-                }
-                // A few provider pages return HTML containing a direct media URL.
-                if (result.isEmpty() && body.startsWith("<")) {
-                    val urlPattern = Regex(
-                        """(?i)(?:file|src|href|url)\s*[:=]\s*["']?(https?://[^"'\s<>,]+)"""
-                    )
-                    urlPattern.findAll(body).forEach { match ->
-                        addLink(match.groupValues[1])
-                    }
-                }
+        add(item)
+        val keys = item.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            if (key.lowercase(Locale.ROOT) in setOf("streams", "sources", "links", "streamlist")) {
+                walk(item.opt(key), 0)
             }
         }
         return result
     }
 
-    /**
-     * FourPichive uses the public ContentX flow:
-     * iframe.php -> window.openPlayer(id) -> source2.php?v=id -> HLS file.
-     * Some API records contain ?v=ID?l=0; try the normalized ?v=ID&l=0 URL first.
-     */
-    private suspend fun resolvePichive(
-        url: String,
-        referer: String,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        val host = runCatching { URI(url).host?.lowercase(Locale.ROOT).orEmpty() }
-            .getOrDefault("")
-        if (host != "four.pichive.online" && host != "pichive.online") return false
+    private fun isDirectMedia(url: String): Boolean {
+        val value = url.lowercase(Locale.ROOT)
+        return listOf(
+            ".m3u8", ".m3u", ".mp4", ".mpd", ".ts", ".mp3",
+            ".m4a", ".aac", ".ogg", ".opus", ".wav", ".flac",
+            "/hls/", "/manifest", "/live/", "output=mpegts"
+        ).any { value.contains(it) }
+    }
 
-        val candidates = mutableListOf<String>()
-        val firstQuery = url.indexOf('?')
-        if (firstQuery >= 0) {
-            val secondQuery = url.indexOf('?', firstQuery + 1)
-            if (secondQuery >= 0) {
-                candidates.add(url.substring(0, secondQuery) + "&" + url.substring(secondQuery + 1))
-            }
+    private fun linkType(url: String): ExtractorLinkType {
+        val value = url.lowercase(Locale.ROOT)
+        return when {
+            value.contains(".m3u8") || value.contains(".m3u") ||
+                value.contains("/hls/") || value.contains("output=mpegts") ->
+                ExtractorLinkType.M3U8
+            value.contains(".mpd") || value.contains("/manifest") -> ExtractorLinkType.DASH
+            else -> ExtractorLinkType.VIDEO
         }
-        candidates.add(url)
-
-        val extReferer = referer.ifBlank { mainUrl.trimEnd('/') + "/" }
-        val pageHeaders = requestHeaders + ("Referer" to extReferer)
-
-        for (candidate in candidates.distinct()) {
-            val pageResponse = runCatching {
-                app.get(candidate, headers = pageHeaders, timeout = 12000, allowRedirects = true)
-            }.getOrNull() ?: continue
-            val page = pageResponse.text
-            if (page.isBlank()) continue
-
-            val playerId = Regex(
-                """window\.openPlayer\s*\(\s*['"]([^'"]+)['"]"""
-            ).find(page)?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() }
-
-            if (playerId.isNullOrBlank()) {
-                Log.w(name, "Pichive oynatıcı kimliği bulunamadı; HTTP " + pageResponse.code)
-                continue
-            }
-
-            val subtitlePattern = Regex(
-                """["']file["']\s*:\s*["']([^"']+)["']\s*,\s*["']label["']\s*:\s*["']([^"']+)["']"""
-            )
-            for (match in subtitlePattern.findAll(page)) {
-                val subtitleUrl = clean(match.groupValues[1]).replace("\\", "")
-                val subtitleLang = clean(match.groupValues[2])
-                    .replace("\\u0131", "ı")
-                    .replace("\\u0130", "İ")
-                    .replace("\\u00fc", "ü")
-                    .replace("\\u00e7", "ç")
-                if (subtitleUrl.startsWith("http", true)) {
-                    runCatching {
-                        subtitleCallback(newSubtitleFile(subtitleLang, subtitleUrl))
-                    }
-                }
-            }
-
-            val baseUrl = runCatching {
-                val uri = URI(candidate)
-                uri.scheme + "://" + uri.host
-            }.getOrNull() ?: continue
-
-            val sourceResponse = runCatching {
-                app.get(
-                    baseUrl + "/source2.php?v=" + encoded(playerId),
-                    headers = pageHeaders,
-                    timeout = 12000,
-                    allowRedirects = true
-                )
-            }.getOrNull() ?: continue
-
-            val rawMediaUrl = Regex(
-                """["']file["']\s*:\s*["']([^"']+)["']"""
-            ).find(sourceResponse.text)?.groupValues?.getOrNull(1).orEmpty()
-
-            val extracted = clean(rawMediaUrl).replace("\\", "")
-            val mediaUrl = when {
-                extracted.startsWith("http://", true) || extracted.startsWith("https://", true) ->
-                    extracted
-                extracted.startsWith("//") -> "https:$extracted"
-                extracted.isNotBlank() -> runCatching {
-                    URI(baseUrl + "/").resolve(extracted).toString()
-                }.getOrDefault("")
-                else -> ""
-            }
-
-            if (!mediaUrl.startsWith("http", true)) {
-                Log.w(name, "Pichive source2 yanıtında geçerli video adresi bulunamadı")
-                continue
-            }
-
-            callback.invoke(
-                newExtractorLink(
-                    source = name,
-                    name = "SeyirTURK FourPichive",
-                    url = mediaUrl,
-                    type = ExtractorLinkType.M3U8
-                ) {
-                    referer = candidate
-                    headers = requestHeaders + ("Referer" to candidate)
-                }
-            )
-            Log.i(name, "FourPichive bağlantısı doğrudan çözüldü")
-            return true
-        }
-
-        return false
     }
 
     override suspend fun loadLinks(
@@ -768,94 +536,39 @@ class SeyirTURK : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val item = runCatching { JSONObject(data) }.getOrNull() ?: return false
-        val kind = string(item, "__seyir_kind").ifBlank { getType(item) }
-        val episodeId = string(item, "__seyir_episode_id")
-        val parentId = string(item, "__seyir_parent_id")
-        val id = if (episodeId.isNotBlank()) parentId else getId(item)
-
-        val streams = mutableListOf<JSONObject>()
-        val live = isLiveKind(kind)
-
-        // IPTV and radio list entries commonly already carry their playable URL.
-        // Use that URL first; the film/episode streams endpoint is only a fallback.
-        val directItemUrl = getStreamUrl(item)
-        if (directItemUrl.startsWith("http", true)) {
-            streams.add(JSONObject(item.toString()).apply {
-                if (getStreamUrl(this).isBlank()) put("Link", directItemUrl)
-            })
-        }
-
-        if (streams.isEmpty() && id.isNotBlank()) {
-            val path = buildString {
-                append("back/streams.php?id=").append(encoded(id))
-                if (episodeId.isNotBlank()) {
-                    append("&isTv=1&e=").append(encoded(episodeId))
-                }
-            }
-            streams.addAll(parseStreamItems(apiGet(path)))
-        }
-
+        val streams = collectStreamItems(item)
+        val refererDefault = "https://seyirturk.net/"
         var found = false
-        val seen = HashSet<String>()
 
         for (stream in streams) {
             val link = getStreamUrl(stream)
-            if (!link.startsWith("http", true) || !seen.add(link)) continue
+            if (!link.startsWith("http", true)) continue
 
             val label = string(stream, "Provider", "provider", "Name", "name", "Title", "title")
-                .ifBlank { if (live) "Canlı yayın" else "SeyirTURK" }
+                .ifBlank { name }
+            val referer = string(stream, "Referer", "referer", "referrer")
+                .ifBlank { refererDefault }
             val subtitle = string(stream, "Subtitle", "subtitle", "Subtitles", "subtitles")
             if (subtitle.startsWith("http", true)) {
                 runCatching { subtitleCallback(newSubtitleFile("Türkçe", subtitle)) }
             }
 
-            val streamReferer = string(stream, "Referer", "referer", "referrer")
-                .ifBlank { "https://seyirturk.net/" }
-
-            // Prefer a local ContentX-compatible resolver for Pichive embeds.
-            val pichiveResolved = runCatching {
-                resolvePichive(link, streamReferer, subtitleCallback, callback)
-            }.onFailure {
-                Log.w(name, "Pichive çözümleme hatası: " + (it.message ?: it.javaClass.simpleName))
-            }.getOrDefault(false)
-            if (pichiveResolved) {
-                found = true
-                continue
-            }
-
-            if (isDirectMedia(link) || live) {
-                val linkType = when {
-                    link.contains(".m3u8", true) || link.contains("/hls/", true) ->
-                        ExtractorLinkType.M3U8
-                    link.contains(".mpd", true) || link.contains("/manifest", true) ->
-                        ExtractorLinkType.DASH
-                    else -> ExtractorLinkType.VIDEO
-                }
-
+            if (isDirectMedia(link)) {
                 callback.invoke(
                     newExtractorLink(
                         source = name,
                         name = label,
                         url = link,
-                        type = linkType
+                        type = linkType(link)
                     ) {
-                        referer = string(stream, "Referer", "referer", "referrer")
-                            .ifBlank { "https://seyirturk.net/" }
-                        headers = requestHeaders + mapOf(
-                            "Referer" to string(stream, "Referer", "referer", "referrer")
-                                .ifBlank { "https://seyirturk.net/" }
-                        )
+                        this.referer = referer
+                        headers = requestHeaders + ("Referer" to referer)
                     }
                 )
                 found = true
             } else {
                 val extracted = runCatching {
-                    loadExtractor(
-                        link,
-                        string(stream, "Referer", "referer", "referrer")
-                            .ifBlank { "https://seyirturk.net/" },
-                        subtitleCallback
-                    ) {
+                    loadExtractor(link, referer, subtitleCallback) {
                         callback.invoke(it)
                     }
                 }.getOrDefault(false)
@@ -863,7 +576,26 @@ class SeyirTURK : MainAPI() {
             }
         }
 
-        Log.i(name, "Yayın bağlantısı sonucu: " + found + ", kaynak: " + streams.size + ", tip: " + kind)
+        Log.i(name, "Yayın bağlantısı: " + found + ", kaynak sayısı: " + streams.size)
         return found
     }
+
+    override suspend fun search(query: String): List<SearchResponse> {
+        val q = query.trim()
+        if (q.length < 2) return emptyList()
+
+        val results = linkedMapOf<String, SearchResponse>()
+        val endpointItems = parseItems(apiGet("kodi/iptv/search.php?name=" + encoded(q)))
+        val localItems = (loadIptvItems() + loadRadioItems()).filter {
+            getName(it).contains(q, true)
+        }
+
+        for (item in endpointItems + localItems) {
+            val response = radioResponse(item)
+            results.putIfAbsent(response.url, response)
+        }
+        return results.values.toList()
+    }
+
+    override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 }
