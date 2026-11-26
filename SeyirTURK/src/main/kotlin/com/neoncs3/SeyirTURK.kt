@@ -425,6 +425,37 @@ class SeyirTURK : MainAPI() {
             } else {
                 allChannels.filter { getGroup(it).equals(group, true) }
             }
+            val poster = channels.map { getPoster(it) }.firstOrNull { it.isNotBlank() }
+
+            // APK'daki ara listeyi koru: grup açılınca kanalları hemen gösterme.
+            // Önce ayrıca seçilebilir "IPTV Listesi" kartı gösterilir.
+            val listPayload = JSONObject()
+                .put("__seyir_kind", "iptv_list")
+                .put("__seyir_group", group)
+                .toString()
+            val listEntry = newTvSeriesSearchResponse(
+                "IPTV Listesi",
+                listPayload,
+                TvType.TvSeries
+            ) {
+                posterUrl = poster
+            }
+
+            return newMovieLoadResponse(group, url, TvType.TvSeries, url) {
+                posterUrl = poster
+                plot = "Bu gruptaki canlı kanalları görmek için IPTV Listesi'ni açın."
+                recommendations = listOf(listEntry)
+            }
+        }
+
+        if (kind == "iptv_list") {
+            val group = string(item, "__seyir_group").ifBlank { "Bütün Kanallar" }
+            val allChannels = loadIptvItems()
+            val channels = if (group == "Bütün Kanallar") {
+                allChannels
+            } else {
+                allChannels.filter { getGroup(it).equals(group, true) }
+            }
 
             val episodes = channels.mapIndexed { index, channel ->
                 newEpisode(asPayload(channel, "iptv_channel")) {
@@ -436,7 +467,7 @@ class SeyirTURK : MainAPI() {
             }
 
             return newTvSeriesLoadResponse(
-                group,
+                "IPTV Listesi",
                 url,
                 TvType.TvSeries,
                 episodes
