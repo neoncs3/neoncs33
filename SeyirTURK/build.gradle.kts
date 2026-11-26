@@ -1,4 +1,4 @@
-version = 3
+version = 4
 cloudstream {
     description = "SeyirTURK genel katalog, film, dizi ve herkese açık IPTV sağlayıcısı (beta)"
     authors = listOf("neoncs3")
