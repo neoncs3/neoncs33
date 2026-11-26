@@ -21,11 +21,10 @@ Bu rapor tools/provider_health.py tarafından otomatik güncellenir.
 | **Dramadizilerim** | 🟢 | https://dramadizilerim.com | https://dramadizilerim1.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **FilmModu** | 🟢 | https://www.filmmodu.one | https://www.filmmodu.one | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **InatBox** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
-| **JetFilmizle** | 🔴 | https://jetfilmizle.app | https://jetfilmizle.app | ❌ (404) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
+| **JetFilmizle** | 🟡 | https://jetfilmizle.app | https://jetfilmizle.app | ❌ (403) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **NeonHub** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **NewTVLive** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **SetFilmIzle** | 🟢 | https://www.setfilmizle.ltd | https://www.setfilmizle.ltd | ✅ (200) | 1 / 0 | ✅ | ✅ | ✅ | ✅ |
-| **SeyirTURK** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **SinemaCX** | 🟢 | https://sinemacc.com | https://sinemacc.com | ✅ (200) | 0 / 0 | ✅ | ✅ | ✅ | ✅ |
 | **TheDaddyLive** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
 | **TiZam** | 🟡 | - | - | ❌ (-) | 0 / 0 | ❌ | ❌ | ❌ | ❌ |
