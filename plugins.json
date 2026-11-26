@@ -134,10 +134,10 @@
     },
     {
         "iconUrl": "https://seyirturk.net/favicon.ico",
-        "fileHash": "sha256-36e38a408222819511337e099e9168cf70c508ad95803ff7a2ab51f839b0b12f",
+        "fileHash": "sha256-09ed0bbb0081a69b8c41ac4a8fd2f75f99617ec72a7daf0417e3374ce5ddde37",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
-        "fileSize": 63256,
+        "fileSize": 64098,
         "status": 3,
         "language": "tr",
         "authors": [
@@ -148,7 +148,7 @@
             "TvSeries",
             "Live"
         ],
-        "version": 3,
+        "version": 4,
         "internalName": "SeyirTURK",
         "description": "SeyirTURK genel katalog, film, dizi ve herkese a\u00e7\u0131k IPTV sa\u011flay\u0131c\u0131s\u0131 (beta)",
         "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/SeyirTURK.cs3",
