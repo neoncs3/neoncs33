@@ -386,7 +386,7 @@ class SeyirTURK : MainAPI() {
             ) {
                 posterUrl = resolvedPoster
                 plot = resolvedSummary
-                year = resolvedYear
+                this.year = resolvedYear
             }
         }
 
@@ -399,7 +399,7 @@ class SeyirTURK : MainAPI() {
         ) {
             posterUrl = resolvedPoster
             plot = resolvedSummary
-            year = resolvedYear
+            this.year = resolvedYear
         }
     }
 
