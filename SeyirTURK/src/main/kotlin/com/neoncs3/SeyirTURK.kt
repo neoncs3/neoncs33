@@ -297,7 +297,7 @@ class SeyirTURK : MainAPI() {
         val items = parseItems(apiGet(request.data))
 
         val kindHint = when {
-            request.data.contains("iptv", true) -> "iptv"
+            request.data.contains("iptv", true) || request.data.contains("radyo", true) -> "iptv"
             request.data.contains("p_type=TV", true) ||
                 request.data.contains("tr_tv", true) ||
                 request.data.contains("en_tv", true) -> "tv"
@@ -415,17 +415,39 @@ class SeyirTURK : MainAPI() {
         val body = raw?.trim().orEmpty()
         if (body.isBlank()) return emptyList()
 
-        val parsed = parseItems(body)
-        if (parsed.isNotEmpty()) return parsed
+        val result = mutableListOf<JSONObject>()
+        val seen = HashSet<String>()
 
-        return runCatching {
-            val root = JSONObject(body)
-            val array = root.optJSONArray("links")
-                ?: root.optJSONArray("Links")
-                ?: root.optJSONArray("streams")
-            if (array == null) emptyList()
-            else (0 until array.length()).mapNotNull { array.optJSONObject(it) }
-        }.getOrDefault(emptyList())
+        fun addStream(item: JSONObject) {
+            val link = string(item, "Link", "link", "url", "Url")
+            if (!link.startsWith("http", true)) return
+            if (seen.add(link)) result.add(item)
+        }
+
+        fun walk(value: Any?, depth: Int) {
+            if (depth > 5 || value == null || value == JSONObject.NULL) return
+            when (value) {
+                is JSONArray -> {
+                    for (i in 0 until value.length()) walk(value.opt(i), depth + 1)
+                }
+                is JSONObject -> {
+                    addStream(value)
+                    val keys = value.keys()
+                    while (keys.hasNext()) {
+                        val child = value.opt(keys.next())
+                        if (child is JSONArray || child is JSONObject) walk(child, depth + 1)
+                    }
+                }
+            }
+        }
+
+        runCatching {
+            when {
+                body.startsWith("[") -> walk(JSONArray(body), 0)
+                body.startsWith("{") -> walk(JSONObject(body), 0)
+            }
+        }
+        return result
     }
 
     override suspend fun loadLinks(
