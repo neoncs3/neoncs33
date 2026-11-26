@@ -1,9 +1,9 @@
-version = 6
+version = 7
 cloudstream {
-    description = "SeyirTURK genel katalog, film, dizi ve herkese açık IPTV sağlayıcısı (beta)"
+    description = "SeyirTURK IPTV ve radyo sağlayıcısı (beta)"
     authors = listOf("neoncs3")
     status = 3
-    tvTypes = listOf("Movie", "TvSeries", "Live")
+    tvTypes = listOf("TvSeries", "Live")
     language = "tr"
     iconUrl = "https://seyirturk.net/favicon.ico"
 }
