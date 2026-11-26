@@ -388,6 +388,14 @@ class SeyirTURK : MainAPI() {
         }
     }
 
+    private fun iptvChannelResponse(item: JSONObject): SearchResponse {
+        val title = getName(item)
+        val poster = getPoster(item).takeIf { it.isNotBlank() }
+        return newLiveSearchResponse(title, asPayload(item, "iptv_channel"), TvType.Live) {
+            posterUrl = poster
+        }
+    }
+
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         if (page > 1) return newHomePageResponse(request.name, emptyList(), false)
 
@@ -457,22 +465,19 @@ class SeyirTURK : MainAPI() {
                 allChannels.filter { getGroup(it).equals(group, true) }
             }
 
-            val episodes = channels.mapIndexed { index, channel ->
-                newEpisode(asPayload(channel, "iptv_channel")) {
-                    name = getName(channel)
-                    posterUrl = getPoster(channel).takeIf { it.isNotBlank() }
-                    season = 1
-                    episode = index + 1
-                }
-            }
+            // Keep a distinct second-level list; channel cards are not episodes.
+            val channelCards = channels.map(::iptvChannelResponse)
+            val poster = channels.map { getPoster(it) }.firstOrNull { it.isNotBlank() }
 
             return newTvSeriesLoadResponse(
                 "IPTV Listesi",
                 url,
                 TvType.TvSeries,
-                episodes
+                emptyList()
             ) {
-                posterUrl = channels.map { getPoster(it) }.firstOrNull { it.isNotBlank() }
+                posterUrl = poster
+                plot = "$group grubunda ${channels.size} canlı kanal."
+                recommendations = channelCards
             }
         }
 
