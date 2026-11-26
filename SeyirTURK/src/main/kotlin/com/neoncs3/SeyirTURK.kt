@@ -648,6 +648,119 @@ class SeyirTURK : MainAPI() {
         return result
     }
 
+    /**
+     * FourPichive uses the public ContentX flow:
+     * iframe.php -> window.openPlayer(id) -> source2.php?v=id -> HLS file.
+     * Some API records contain ?v=ID?l=0; try the normalized ?v=ID&l=0 URL first.
+     */
+    private suspend fun resolvePichive(
+        url: String,
+        referer: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val host = runCatching { URI(url).host?.lowercase(Locale.ROOT).orEmpty() }
+            .getOrDefault("")
+        if (host != "four.pichive.online" && host != "pichive.online") return false
+
+        val candidates = mutableListOf<String>()
+        val firstQuery = url.indexOf('?')
+        if (firstQuery >= 0) {
+            val secondQuery = url.indexOf('?', firstQuery + 1)
+            if (secondQuery >= 0) {
+                candidates.add(url.substring(0, secondQuery) + "&" + url.substring(secondQuery + 1))
+            }
+        }
+        candidates.add(url)
+
+        val extReferer = referer.ifBlank { mainUrl.trimEnd('/') + "/" }
+        val pageHeaders = requestHeaders + ("Referer" to extReferer)
+
+        for (candidate in candidates.distinct()) {
+            val pageResponse = runCatching {
+                app.get(candidate, headers = pageHeaders, timeout = 12000, allowRedirects = true)
+            }.getOrNull() ?: continue
+            val page = pageResponse.text
+            if (page.isBlank()) continue
+
+            val playerId = Regex(
+                """window\.openPlayer\s*\(\s*['"]([^'"]+)['"]"""
+            ).find(page)?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() }
+
+            if (playerId.isNullOrBlank()) {
+                Log.w(name, "Pichive oynatıcı kimliği bulunamadı; HTTP " + pageResponse.code)
+                continue
+            }
+
+            val subtitlePattern = Regex(
+                """["']file["']\s*:\s*["']([^"']+)["']\s*,\s*["']label["']\s*:\s*["']([^"']+)["']"""
+            )
+            for (match in subtitlePattern.findAll(page)) {
+                val subtitleUrl = clean(match.groupValues[1]).replace("\\", "")
+                val subtitleLang = clean(match.groupValues[2])
+                    .replace("\\u0131", "ı")
+                    .replace("\\u0130", "İ")
+                    .replace("\\u00fc", "ü")
+                    .replace("\\u00e7", "ç")
+                if (subtitleUrl.startsWith("http", true)) {
+                    runCatching {
+                        subtitleCallback(newSubtitleFile(subtitleLang, subtitleUrl))
+                    }
+                }
+            }
+
+            val baseUrl = runCatching {
+                val uri = URI(candidate)
+                uri.scheme + "://" + uri.host
+            }.getOrNull() ?: continue
+
+            val sourceResponse = runCatching {
+                app.get(
+                    baseUrl + "/source2.php?v=" + encoded(playerId),
+                    headers = pageHeaders,
+                    timeout = 12000,
+                    allowRedirects = true
+                )
+            }.getOrNull() ?: continue
+
+            val rawMediaUrl = Regex(
+                """["']file["']\s*:\s*["']([^"']+)["']"""
+            ).find(sourceResponse.text)?.groupValues?.getOrNull(1).orEmpty()
+
+            val extracted = clean(rawMediaUrl).replace("\\", "")
+            val mediaUrl = when {
+                extracted.startsWith("http://", true) || extracted.startsWith("https://", true) ->
+                    extracted
+                extracted.startsWith("//") -> "https:$extracted"
+                extracted.isNotBlank() -> runCatching {
+                    URI(baseUrl + "/").resolve(extracted).toString()
+                }.getOrDefault("")
+                else -> ""
+            }
+
+            if (!mediaUrl.startsWith("http", true)) {
+                Log.w(name, "Pichive source2 yanıtında geçerli video adresi bulunamadı")
+                continue
+            }
+
+            callback.invoke(
+                newExtractorLink(
+                    source = name,
+                    name = "SeyirTURK FourPichive",
+                    url = mediaUrl,
+                    type = ExtractorLinkType.M3U8
+                ) {
+                    referer = candidate
+                    headers = requestHeaders + ("Referer" to candidate)
+                }
+            )
+            Log.i(name, "FourPichive bağlantısı doğrudan çözüldü")
+            return true
+        }
+
+        return false
+    }
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -694,6 +807,20 @@ class SeyirTURK : MainAPI() {
             val subtitle = string(stream, "Subtitle", "subtitle", "Subtitles", "subtitles")
             if (subtitle.startsWith("http", true)) {
                 runCatching { subtitleCallback(newSubtitleFile("Türkçe", subtitle)) }
+            }
+
+            val streamReferer = string(stream, "Referer", "referer", "referrer")
+                .ifBlank { "https://seyirturk.net/" }
+
+            // Prefer a local ContentX-compatible resolver for Pichive embeds.
+            val pichiveResolved = runCatching {
+                resolvePichive(link, streamReferer, subtitleCallback, callback)
+            }.onFailure {
+                Log.w(name, "Pichive çözümleme hatası: " + (it.message ?: it.javaClass.simpleName))
+            }.getOrDefault(false)
+            if (pichiveResolved) {
+                found = true
+                continue
             }
 
             if (isDirectMedia(link) || live) {
