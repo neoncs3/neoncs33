@@ -133,6 +133,28 @@
         "name": "NewTVLive"
     },
     {
+        "iconUrl": "https://seyirturk.net/favicon.ico",
+        "fileHash": "sha256-1e0893268f7d9b8318628501bc20827bce056e7efa46a646e784a9afe1eaa77b",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/neoncs3/neoncs33",
+        "fileSize": 62167,
+        "status": 3,
+        "language": "tr",
+        "authors": [
+            "neoncs3"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Live"
+        ],
+        "version": 1,
+        "internalName": "SeyirTURK",
+        "description": "SeyirTURK genel katalog, film, dizi ve herkese a\u00e7\u0131k IPTV sa\u011flay\u0131c\u0131s\u0131 (beta)",
+        "url": "https://raw.githubusercontent.com/neoncs3/neoncs33/builds/SeyirTURK.cs3",
+        "name": "SeyirTURK"
+    },
+    {
         "fileHash": "sha256-cebac6202be10d91ceae053ecd649382ca27c367f50a9e7209cacc2885a82e7b",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/neoncs3/neoncs33",
