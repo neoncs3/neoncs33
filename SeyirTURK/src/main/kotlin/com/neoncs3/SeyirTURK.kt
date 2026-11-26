@@ -3,7 +3,6 @@ package com.neoncs3
 import android.util.Base64
 import android.util.Log
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
@@ -146,7 +145,7 @@ class SeyirTURK : MainAPI() {
             }
         }
 
-        val roots = (discovered + listOf("https://habba.cloud/"))
+        val roots = (discovered + listOf("https://cekke44.tk/", "https://habba.cloud/"))
             .mapNotNull(::normalizeRoot)
             .distinct()
         cachedRoots = roots
@@ -369,7 +368,7 @@ class SeyirTURK : MainAPI() {
     }
 
     private fun groupResponse(group: String, channels: List<JSONObject>): SearchResponse {
-        val firstPoster = channels.firstNotNullOfOrNull { getPoster(it).takeIf(String::isNotBlank) }
+        val firstPoster = channels.map { getPoster(it) }.firstOrNull { it.isNotBlank() }
         val payload = JSONObject()
             .put("__seyir_kind", "iptv_group")
             .put("__seyir_group", group)
@@ -441,7 +440,7 @@ class SeyirTURK : MainAPI() {
                 TvType.TvSeries,
                 episodes
             ) {
-                posterUrl = channels.firstNotNullOfOrNull { getPoster(it).takeIf(String::isNotBlank) }
+                posterUrl = channels.map { getPoster(it) }.firstOrNull { it.isNotBlank() }
             }
         }
 
